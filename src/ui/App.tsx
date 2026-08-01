@@ -13,6 +13,8 @@ import {
   scaledWorkspaceSize,
 } from "../engine/workspace";
 import { WorkspaceScaleProvider } from "./WorkspaceScale";
+import { useM } from "../state/store";
+import { newProject, openProject, saveProject } from "./fileCommands";
 import { WindowMenu, type MenuItem } from "./WindowMenu";
 import { APP_WINDOWS, type AppWindowId } from "../engine/windows";
 
@@ -93,6 +95,8 @@ export function App() {
   const openWindow = (id: AppWindowId) => window.dispatchEvent(
     new CustomEvent<AppWindowId>("mclone:open-window", { detail: id }),
   );
+  const documentName = useM((s) => s.documentName);
+  const isDirty = useM((s) => s.isDirty);
   const windowItems: MenuItem[] = APP_WINDOWS.map((item) => ({
     label: item.label,
     run: () => openWindow(item.id),
@@ -107,7 +111,11 @@ export function App() {
       <nav className="app__menubar" aria-label="Application menu bar">
         <span className="app__apple" aria-hidden="true">◆</span>
         <WindowMenu label="File" items={[
-          { label: "Project file commands coming later", run: () => undefined, enabled: false },
+          { label: "New", run: newProject, hint: "Start an empty project" },
+          { label: "Open\u2026", run: openProject, hint: "Open a saved .mclone.json project" },
+          "separator",
+          { label: "Save", run: () => saveProject(false), hint: "Save the project" },
+          { label: "Save As\u2026", run: () => saveProject(true), hint: "Save under a new name" },
         ]} />
         <WindowMenu label="Edit" items={[
           { label: "Open Pattern Editor", run: () => openWindow("pattern-editor") },
@@ -132,6 +140,9 @@ export function App() {
           M<span className="app__sub">-Clone</span>
         </h1>
         <p className="app__tag">An Intelligent Musical Instrument — reborn</p>
+        <p className="app__doc" aria-live="polite">
+          {documentName ?? "Untitled"}{isDirty ? " •" : ""}
+        </p>
         <div className="app__views">
           <div className="zoom-control" role="group" aria-label="Application zoom">
             <button type="button" onClick={() => setWorkspaceZoom((value) => clampWorkspaceZoom(value - 10))}

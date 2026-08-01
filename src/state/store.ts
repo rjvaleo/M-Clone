@@ -199,13 +199,21 @@ export type MStore = {
     patternIndex: number,
     command: (pattern: Pattern) => Pattern,
   ) => void;
+  /** File name the piece was last saved or opened as, or null if untitled. */
+  documentName: string | null;
+  /** Whether the music has changed since the last save, open, or New. */
+  isDirty: boolean;
+  /** Bumped whenever the document is wholesale replaced. */
+  documentEpoch: number;
+  /** Record a successful save under `name`. */
+  markSaved: (name: string) => void;
   /** Capture the whole musical document for saving. */
   exportDocument: () => ProjectDocumentV1;
   /**
    * Replace the live musical state from a document. Returns the decode result
    * so the caller can report a bad file or surface repair warnings.
    */
-  importDocument: (raw: unknown) => DecodeResult;
+  importDocument: (raw: unknown, name?: string) => DecodeResult;
   /** Discard the piece and start again from the shipped defaults. */
   newDocument: () => void;
   /** The Edit menu clipboard, holding copied steps. */
@@ -318,6 +326,9 @@ export const useM = create<MStore>((set, get) => ({
   arrows: {},
   patternGroup: 0,
   clipboard: [],
+  documentName: null,
+  isDirty: false,
+  documentEpoch: 0,
   selectedVoice: 0,
   isPlaying: false,
   editingVar: null,
@@ -536,11 +547,18 @@ export const useM = create<MStore>((set, get) => ({
 
   exportDocument: () => encodeDocument(get()),
 
-  importDocument: (raw) => {
+  markSaved: (name) => set({ documentName: name, isDirty: false }),
+
+  importDocument: (raw, name) => {
     const result = decodeDocument(raw);
     if (!result.ok) return result;
     const d = result.document;
-    set({
+    // One atomic update: a two-phase write would look like a user edit to the
+    // dirty-tracking subscription and immediately re-dirty the fresh document.
+    set((s) => ({
+      documentName: name ?? s.documentName,
+      isDirty: false,
+      documentEpoch: s.documentEpoch + 1,
       project: d.project,
       positions: d.positions,
       snapshots: d.snapshots,
@@ -567,13 +585,16 @@ export const useM = create<MStore>((set, get) => ({
       editingVar: null,
       midiViewEvents: [],
       midiViewNextId: 0,
-    });
+    }));
     return result;
   },
 
   newDocument: () => {
     const blank = freshDocument();
-    set({
+    set((s) => ({
+      documentName: null,
+      isDirty: false,
+      documentEpoch: s.documentEpoch + 1,
       ...blank,
       snapshots: Array<Snapshot | null>(SNAPSHOT_COUNT).fill(null),
       currentSnapshot: null,
@@ -588,7 +609,7 @@ export const useM = create<MStore>((set, get) => ({
       editingVar: null,
       midiViewEvents: [],
       midiViewNextId: 0,
-    });
+    }));
   },
 
   setClipboard: (steps) => set({ clipboard: steps.map((s) => ({ pitches: [...s.pitches] })) }),
@@ -873,3 +894,29 @@ export const useM = create<MStore>((set, get) => ({
       ),
     ),
 }));
+
+/**
+ * The musical slices of the store — the same ground the project document
+ * covers. Every mutation is immutable, so a reference comparison is enough to
+ * notice a real edit without walking the data.
+ */
+const MUSICAL_SLICES = [
+  "project", "positions", "snapshots", "currentSnapshot", "snapshotQuantize",
+  "arrows", "patternGroup", "cyclicPositions", "cyclicLengths",
+  "activeCyclicPositions", "tempoRange", "syncRatio", "syncRatioDirection",
+  "robotRange", "robotTimeBase",
+] as const satisfies readonly (keyof MStore)[];
+
+/**
+ * Mark the document dirty when the music changes. Transport, selection and
+ * editor state deliberately don't count. A wholesale replace — Open or New —
+ * bumps `documentEpoch`, which is how this tells "the user edited something"
+ * apart from "the document was swapped out underneath us".
+ */
+useM.subscribe((state, previous) => {
+  if (state.documentEpoch !== previous.documentEpoch) return;
+  if (state.isDirty) return;
+  if (MUSICAL_SLICES.some((key) => state[key] !== previous[key])) {
+    useM.setState({ isDirty: true });
+  }
+});

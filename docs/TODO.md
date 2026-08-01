@@ -7,10 +7,10 @@ Legend: ⬜ open · 🟡 partial · ✅ done · ❓ decision needed
 
 ## Highest-priority open work
 
-1. ⬜ **Project save/load (JSON).** Project, Variable/Cyclic Positions,
-   Patterns (including Scrambled lists), routing, Snapshots, and playback state
-   are not yet serialized as a portable document. Workspace/theme preferences
-   remain local unless deliberately promoted into the document schema.
+1. 🟡 **Project save/load (JSON).** `ProjectDocumentV1` and the File menu are
+   done: New, Open, Save, Save As, defensive decoding, document name and
+   unsaved-changes tracking. Still open — a real file-system picker instead of
+   download/upload, and promoting the format when new subsystems land.
 2. ⬜ **Slideshows and Snapshot editing.** The Snapshot window has 26 working
    A–Z locations, quantized recall, erase, keyboard recall, and Restore. Hold/Do,
    Edit Snapshot, Blink Everything, and Slideshow record/play/loop remain honest
