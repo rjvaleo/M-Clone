@@ -206,7 +206,9 @@ Two smaller carry-overs from save/load:
 - Save As uses an app-owned filename dialog before activating the encoded
   download anchor. The explicit name is committed before download, so
   suppressed prompts or late picker results cannot leave the document as
-  `Untitled`; it is shown in both the application header and transport title.
+  `Untitled`. New saves use `.mclone` (a versioned JSON project document),
+  while legacy `.mclone.json` and `.json` files remain openable. The application
+  header shows the stored filename and the transport title shows its stem.
 - Any new subsystem must be added to `ProjectDocumentV2` (or a versioned
   successor) in the same change.
 

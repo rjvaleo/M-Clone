@@ -8,7 +8,7 @@
 import { useM } from "../state/store";
 import { encodeMovieAsSmf, movieFileName } from "../engine/movie";
 
-const EXTENSION = ".mclone.json";
+const EXTENSION = ".mclone";
 const DEFAULT_NAME = `Untitled${EXTENSION}`;
 
 type ProjectWritable = {
@@ -78,7 +78,10 @@ export async function saveProject(
           suggestedName: name,
           types: [{
             description: "M-Clone project",
-            accept: { "application/json": [".json"] },
+            accept: {
+              "application/x-mclone": [EXTENSION],
+              "application/json": [".json"],
+            },
           }],
         });
       }
@@ -96,7 +99,9 @@ export async function saveProject(
 
   if (explicitName !== undefined) {
     name = explicitName.trim() || DEFAULT_NAME;
-    if (!name.toLowerCase().endsWith(".json")) name += EXTENSION;
+    if (/\.mclone\.json$/i.test(name)) name = name.slice(0, -5);
+    else if (/\.json$/i.test(name)) name = name.slice(0, -5) + EXTENSION;
+    else if (!name.toLowerCase().endsWith(EXTENSION)) name += EXTENSION;
   } else if (saveAs || !state.documentName) {
     // Page prompts are suppressed by some embedded browsers. Let App render
     // an accessible filename dialog instead of silently keeping "Untitled".
@@ -115,13 +120,13 @@ export async function saveProject(
   return "saved";
 }
 
-/** File ▸ Open — picks a JSON file and imports it. */
+/** File ▸ Open — picks a .mclone or legacy JSON project and imports it. */
 export function openProject(): void {
   if (!confirmDiscard("Open another project")) return;
 
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = ".json,application/json";
+  input.accept = ".mclone,.json,application/x-mclone,application/json";
   input.onchange = async () => {
     const file = input.files?.[0];
     if (!file) return;

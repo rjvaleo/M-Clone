@@ -13,11 +13,13 @@ work must follow [`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md) and
 [`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md); none of that planned Studio
 scope should be counted as current implementation.
 
-1. 🟡 **Project save/load (JSON).** `ProjectDocumentV2` and the File menu are
+1. 🟡 **Project save/load (`.mclone`, JSON payload).** `ProjectDocumentV2` and the File menu are
    done: New, Open, Save, Save As, defensive decoding, document name and
    unsaved-changes tracking, including the Conducting/transport title. Save As
    uses an app-owned filename dialog and encoded download so restricted
-   browsers commit the visible document name before downloading.
+   browsers commit the visible document name before downloading. New saves use
+   `.mclone`; legacy `.mclone.json` and `.json` files remain importable, and the
+   transport caption omits the suffix.
    Still open — picker-backed Open/handle persistence and promoting the format
    when new subsystems land.
 2. ✅ **Slideshows and Snapshot editing.** Hold/Do, partial stores, Edit/copy,

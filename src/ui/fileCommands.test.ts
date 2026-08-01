@@ -16,7 +16,7 @@ describe("project file saving", () => {
     const write = vi.fn(async () => {});
     const close = vi.fn(async () => {});
     const showSaveFilePicker = vi.fn(async () => ({
-      name: "Picked.mclone.json",
+      name: "Picked.mclone",
       createWritable: async () => ({ write, close }),
     }));
     vi.stubGlobal("window", { showSaveFilePicker });
@@ -26,11 +26,11 @@ describe("project file saving", () => {
     expect(showSaveFilePicker).toHaveBeenCalledOnce();
     expect(write).toHaveBeenCalledWith(expect.stringContaining('"version": 2'));
     expect(close).toHaveBeenCalledOnce();
-    expect(useM.getState().documentName).toBe("Picked.mclone.json");
+    expect(useM.getState().documentName).toBe("Picked.mclone");
   });
 
   it("uses the app-owned download anchor in the embedded browser", async () => {
-    useM.getState().markSaved("Existing.mclone.json");
+    useM.getState().markSaved("Existing.mclone");
     const click = vi.fn();
     const remove = vi.fn();
     const link = { href: "", download: "", click, remove };
@@ -49,9 +49,9 @@ describe("project file saving", () => {
   });
 
   it("requests an in-app name when the embedded browser cannot show a picker", () => {
-    expect(needsDownloadName(true, "Existing.mclone.json", false)).toBe(true);
+    expect(needsDownloadName(true, "Existing.mclone", false)).toBe(true);
     expect(needsDownloadName(false, null, false)).toBe(true);
-    expect(needsDownloadName(false, "Existing.mclone.json", false)).toBe(false);
+    expect(needsDownloadName(false, "Existing.mclone", false)).toBe(false);
     expect(needsDownloadName(true, null, true)).toBe(false);
   });
 
@@ -59,7 +59,7 @@ describe("project file saving", () => {
     const click = vi.fn();
     const link = { href: "", download: "", click };
     const showSaveFilePicker = vi.fn(async () => ({
-      name: "Late Picker Name.mclone.json",
+      name: "Late Picker Name.mclone",
       createWritable: async () => ({ write: async () => {}, close: async () => {} }),
     }));
     vi.stubGlobal("window", { showSaveFilePicker });
@@ -68,8 +68,8 @@ describe("project file saving", () => {
     await saveProject(true, "Untitled5");
 
     expect(showSaveFilePicker).not.toHaveBeenCalled();
-    expect(link.download).toBe("Untitled5.mclone.json");
-    expect(useM.getState().documentName).toBe("Untitled5.mclone.json");
+    expect(link.download).toBe("Untitled5.mclone");
+    expect(useM.getState().documentName).toBe("Untitled5.mclone");
     expect(useM.getState().isDirty).toBe(false);
     expect(click).toHaveBeenCalledOnce();
   });
