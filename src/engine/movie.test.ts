@@ -157,6 +157,7 @@ describe("Standard MIDI File export", () => {
 
   it("provides a stable MIDI download name", () => {
     expect(movieFileName(null)).toBe("M Movie.mid");
+    expect(movieFileName("Study.mclone")).toBe("Study Movie.mid");
     expect(movieFileName("Study.mclone.json")).toBe("Study Movie.mid");
     expect(movieFileName("Study.json")).toBe("Study Movie.mid");
   });

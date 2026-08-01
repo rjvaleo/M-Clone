@@ -173,6 +173,6 @@ export function encodeMovieAsSmf(movie: Movie): Uint8Array {
 
 export function movieFileName(documentName: string | null): string {
   if (!documentName) return "M Movie.mid";
-  const stem = documentName.replace(/\.mclone\.json$/i, "").replace(/\.json$/i, "");
+  const stem = documentName.replace(/\.(?:mclone(?:\.json)?|json)$/i, "");
   return `${stem} Movie.mid`;
 }

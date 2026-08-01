@@ -23,7 +23,7 @@
 ![Deterministic](https://img.shields.io/badge/generation-seeded_%26_deterministic-795548)
 ![Clean room](https://img.shields.io/badge/reimplementation-clean_room-37474F)
 ![Browser first](https://img.shields.io/badge/platform-browser_first-F57C00)
-![Document format](https://img.shields.io/badge/document_format-JSON_v2-263238?logo=json&logoColor=white)
+![Document format](https://img.shields.io/badge/document_format-.mclone_v2-263238?logo=json&logoColor=white)
 
 ### Planned platform stack
 
@@ -65,6 +65,10 @@ production builds. P3 is complete for the selected scope (Sound Choice remains
 intentionally skipped). Movie capture/SMF export and the focused
 Patterns/Transport/Conductor audit are complete; MIDI import and Sequence
 playback are next.
+
+Projects save as `.mclone` files. Their payload is readable, versioned JSON,
+but it represents the complete musical project—not merely a graph. Legacy
+`.mclone.json` and `.json` project files remain importable.
 
 ## Documentation index
 

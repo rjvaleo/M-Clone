@@ -1,3 +1,4 @@
 export function transportDocumentTitle(documentName: string | null): string {
-  return documentName ?? "Untitled";
+  if (!documentName) return "Untitled";
+  return documentName.replace(/\.(?:mclone(?:\.json)?|json)$/i, "");
 }
