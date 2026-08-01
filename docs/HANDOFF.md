@@ -1,6 +1,26 @@
 # Handoff — read this first
 
-## Latest work
+## Latest work — 2026-08-01
+
+**The working tree is committed.** Three commits now exist on `master`:
+`82b8b94` the multi-session window rebuild checkpoint, `231c372` the project
+document codec, `ccde4dd` the File menu. `git log` is no longer a single
+scaffold commit and there is a green base to fall back to.
+
+**Project save/load is done** — step 1 of `NEXT_STEPS.md`. `ProjectDocumentV1`
+(`src/engine/document.ts`) carries the Project and Pattern material (Original
+and Scrambled), Variable and Cyclic Positions, Snapshots, Conducting Arrows and
+configuration. Workspace geometry, zoom, skin and palette stay local
+preferences. Decoding refuses malformed input, a missing schema version, a
+document from a newer build, and damaged Pattern material; everything else is
+defaulted or clamped and returned as warnings. File ▸ New / Open / Save /
+Save As are wired in `src/ui/fileCommands.ts`, with document name and
+unsaved-changes tracking shown in the header.
+
+**Current suite: 515 tests across 23 files**, 100% coverage on `src/engine` and
+`src/state`, typecheck and both builds clean.
+
+## Earlier work
 
 `VISUAL_AUDIT_AND_THEMING.md` contains the full reference audit. The app now
 has six channel-color presets, editable Voice colors, persisted palette state,
@@ -23,8 +43,8 @@ planned Note On/Off data in timestamped rows, with Follow, Clear, channel
 colors, and bounded history; it no longer has the animated playhead or Pattern
 position/length fields. See `MIDI_VIEW.md`.
 
-**Last audited:** 2026-07-31 · **Branch:** `master` · **Nothing committed yet —
-the whole session is uncommitted working-tree changes.**
+**Last audited:** 2026-08-01 · **Branch:** `master` · **Working tree clean,
+three commits.**
 
 This file is the pick-up-where-we-left-off note. [`TODO.md`](./TODO.md) is the
 backlog, [`STATUS.md`](./STATUS.md) is the feature-by-feature state.
@@ -36,8 +56,9 @@ backlog, [`STATUS.md`](./STATUS.md) is the feature-by-feature state.
 The generative engine was already done. This session was a **fidelity pass over
 the UI**, rebuilding windows against the real M screenshots in
 [`../reference/`](../reference/) and the M 2.7 manual (`reference/M27.pdf`)
-rather than from an impression of them. The current suite is **459 tests across
-22 files**, with 100% coverage held on `src/engine` and `src/state` throughout.
+rather than from an impression of them. The suite is **515 tests across 23
+files**, with 100% coverage held on `src/engine` and `src/state` throughout.
+Technical completion is now underway; project save/load is the first item done.
 
 ## How we've been working — keep doing this
 
@@ -112,9 +133,10 @@ rather than from an impression of them. The current suite is **459 tests across
 
 ## Known gotchas
 
-- **`reference/README.md` lists image filenames that may not match** what's now
-  in the folder. The images were added after that index was written. Reconcile
-  it when convenient.
+- **A dynamic `import()` of the store in the browser console gives you a
+  *second* store instance,** separate from the one React renders. State changes
+  made that way will not update the UI. Drive real controls when verifying, or
+  you will chase a phantom bug.
 - **Screenshot coordinates are 0.625× the CSS viewport** when driving the
   browser tools at 1280×900. Multiply by 1.6 to go from screenshot pixels to
   CSS pixels.
@@ -124,12 +146,27 @@ rather than from an impression of them. The current suite is **459 tests across
 - **Window positions persist in `localStorage`** (`mclone.v2.panel.*`). A stray
   drag while testing will move a window for good; clear the key to reset.
 
-## Start here tomorrow
+## Start here next
 
-The tree is green and builds. Layout is frozen. Follow
-[`NEXT_STEPS.md`](./NEXT_STEPS.md), beginning with a checkpoint commit and then
-portable project save/load. Do not start another broad fidelity pass before the
-technical-completion checklist is closed.
+The tree is green, committed, and builds. Layout is frozen. Follow
+[`NEXT_STEPS.md`](./NEXT_STEPS.md) — step 1 (save/load) is done, so the head of
+the list is **step 2, Snapshot and Slideshow behaviour**: Hold/Do, Edit
+Snapshot, Blink Everything, and Slideshow record/play/pause/loop/stop, which are
+currently honest placeholders.
+
+That one needs a decision before coding: how Slideshow timing interacts with
+Pause, Stop and Robot conducting. The manual does not fully pin it down — see
+the acceptance gate in `NEXT_STEPS.md` §2.
+
+Two smaller carry-overs from save/load:
+
+- Save uses a browser download, not a real file-system picker, so "Save" always
+  re-downloads rather than overwriting in place.
+- Any new subsystem must be added to `ProjectDocumentV1` (or a versioned
+  successor) in the same change.
+
+Do not start another broad fidelity pass before the technical-completion
+checklist is closed.
 
 ```bash
 npm run dev

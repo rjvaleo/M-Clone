@@ -1,6 +1,6 @@
 # M-Clone — Current Backlog
 
-Audited against the working tree on 2026-07-31. `STATUS.md` is the current
+Audited against the working tree on 2026-08-01. `STATUS.md` is the current
 feature scorecard; `VISUAL_AUDIT_AND_THEMING.md` owns reference-image deltas.
 
 Legend: ⬜ open · 🟡 partial · ✅ done · ❓ decision needed
@@ -62,6 +62,8 @@ The execution order and acceptance gates for these items are in
 - ✅ Non-modal window manager: permanent six-window core, canvas right-click
   launcher, disabled already-open entries, closable simultaneous auxiliaries.
 - ✅ 26-location Snapshot core with quantized recall and one-step restore.
+- ✅ Versioned `ProjectDocumentV1` save/load with defensive decoding, File menu
+  commands, and document-name / unsaved-changes tracking.
 
 ## Deliberately paused experiment
 

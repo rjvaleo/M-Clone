@@ -65,7 +65,7 @@ align across the four fixed Voice columns, Follow pins the scrollable history
 to new rows, and Clear resets it. The later animated playhead and Pattern
 position/length experiment has been removed.
 
-**As of:** 2026-07-31 · **Working tree:** substantial uncommitted implementation
+**As of:** 2026-08-01 · **Working tree:** clean, three commits on `master`
 **Measured against:** [`M-Clone_Build_Plan.md`](./M-Clone_Build_Plan.md)
 
 Legend: ✅ done · 🟡 partial · ⬜ not started
@@ -82,7 +82,7 @@ is paused by decision.
 
 | Metric | State |
 | --- | --- |
-| Unit tests | **459 passing** (22 files) |
+| Unit tests | **515 passing** (23 files) |
 | Coverage (engine + state) | **100%** lines / branches / functions |
 | Typecheck (`tsc --noEmit`) | Clean |
 | Production build | Succeeds (`vite build`, `build:single`) |
@@ -137,7 +137,7 @@ is paused by decision.
 | Theme layer (per-view layout + renderers) | 🟡 | light + dark themes via a scoped `.theme-dark` skin over one layout; a formal per-theme layout provider is still 🟡 |
 | Web Audio lookahead scheduler | ✅ | `runtime.ts` |
 | Output sinks (MIDI + synth + WAM) | 🟡 | MIDI ✅, synth ✅, WAM ⬜ |
-| Document format (JSON) + save/load | ⬜ | in-memory only |
+| Document format (JSON) + save/load | ✅ | `ProjectDocumentV1`; versioned, defensively decoded, File menu wired |
 | Standard MIDI File import/export | ⬜ | |
 | Old `.M` import | ⬜ | awaiting sample files |
 | VST/AU hosting | ⬜ | native phase |
@@ -152,6 +152,7 @@ is paused by decision.
 | **Cyclic Variables** | ✅ | five-level Accent/Legato/Rhythm cycles, six Positions, per-Voice lengths, and Classic/Modern editor; Accent 0 rests |
 | **Midi** | ✅ | per-voice channel, program, transpose, velocity-range readout, density, legato; six-position 4×16 Orchestration routing ✅; Sound Choice skipped |
 | **Snapshot** | 🟡 | 26 A–Z locations, store/recall/erase, quantization, keyboard recall, current mark, and Restore From Snapshot ✅; Hold/Do, Edit/Blink, Slideshows ⬜ |
+| **File menu** | ✅ | New / Open / Save / Save As over a versioned document, with document name and unsaved-changes tracking; browser download rather than a file-system picker |
 | **Pattern Editor** | ✅ | dual keyboards, dotted grid, Region tools, View/Chord/Insert/Drum/Size modes, MIDI range/counter, audition, resize, and 22 working Edit/Pattern commands including Cyclic Random operations |
 | **Midi View** | ✅ | initial compact four-lane event tracker with timestamp, Note On/Off details, Follow, Clear, and bounded history |
 | **Module context menus** | ✅ | Pattern Editor owns Edit/Pattern; Variables owns editors/colors; Conducting owns Options/Harmony/Output; commands are accessed by right-click and popups are viewport-correct |
