@@ -30,11 +30,43 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* No max-width and no auto-centring: the interface is a canvas of freely
+   placed windows, so it uses the whole page rather than a fixed column. */
 .app {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 16px;
+  --app-pad: 16px;
+  padding: var(--app-pad);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
+
+.app__menubar {
+  position: relative;
+  z-index: 20000;
+  flex: none;
+  height: 22px;
+  margin: calc(-1 * var(--app-pad)) calc(-1 * var(--app-pad)) 8px;
+  padding: 1px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.app__menubar .umenu__title {
+  height: 19px;
+  padding: 0 3px;
+  border: 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  background: transparent;
+}
+.app__menubar .umenu__title:hover,
+.app__menubar .umenu__title--on { background: var(--ink); color: var(--panel); }
+.app__menubar .umenu__list { z-index: 20001; top: 19px !important; }
+.app__apple { width: 14px; text-align: center; font-size: 9px; }
 
 .app__header {
   display: flex;
@@ -69,14 +101,6 @@ body {
   .app__top {
     grid-template-columns: 1fr;
   }
-}
-
-.app__footer {
-  margin-top: 16px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-  opacity: 0.75;
-  font-size: 12px;
 }
 
 /* Windows (the classic six-window metaphor) */
@@ -253,6 +277,24 @@ body {
   display: flex;
   gap: 4px;
 }
+.zoom-control { display: flex; align-items: center; gap: 2px; margin-right: 6px; }
+.zoom-control button, .zoom-control output {
+  height: 22px; min-width: 26px; padding: 1px 5px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); font: 11px var(--font); text-align: center;
+}
+.zoom-control output { display: grid; place-items: center; min-width: 42px; }
+.workspace-viewport { flex: 1 1 auto; overflow: auto; min-height: 0; }
+.workspace-scaled { position: relative; }
+.workspace-logical {
+  position: absolute; left: 0; top: 0; width: 640px; height: 480px;
+  transform-origin: top left;
+}
+.theme-picker { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+.theme-picker select { font: inherit; }
+.channel-palette { display: flex; gap: 2px; align-items: center; }
+.channel-palette input[type="color"] {
+  width: 22px; height: 22px; padding: 1px; border: 1px solid currentColor;
+}
 .vtab {
   font-family: var(--font);
   font-size: 12px;
@@ -267,48 +309,55 @@ body {
 }
 
 /* ===== Unified classic interface (1-bit vector) ===== */
+/* Type scale and control styling for everything inside the interface. The
+   simulated desktop this used to sit in — the framed white screen and its
+   menu bar — is gone; the windows float directly on the page. */
 .uroot {
-  border: 2px solid #000;
-  background: #fff;
   color: #000;
   font-size: 11px;
   line-height: 1.3;
+  position: relative;
+  width: 640px;
+  height: 480px;
 }
-.umenubar {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  border-bottom: 2px solid #000;
-  padding: 2px 10px;
-  background: #eee;
-  font-weight: 700;
-}
-.umenubar__apple {
-  font-size: 13px;
-}
-.umenubar__item {
-  cursor: default;
-}
+/* Positioning context for the movable windows. Transparent, full-bleed, and
+   sized in JS to whatever the windows occupy — a fixed box here would clip the
+   layout at launch and stop the page scrolling to a window placed past it. */
 .ustage {
-  padding: 0;
+  position: relative;
+  width: 640px;
+  height: 480px;
+}
+.movable {
+  position: absolute; /* z-index is managed inline (last-clicked = front) */
+}
+.movable:focus-within { box-shadow: 3px 3px 0 rgb(0 0 0 / 32%); }
+.movable__handle {
+  cursor: move;
+  touch-action: none;
+  user-select: none;
 }
 .urow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
+  display: contents; /* wrappers no longer lay out; children position on the canvas */
 }
-.u-flex2 { flex: 2 1 520px; }
-.u-flex1 { flex: 1 1 320px; }
-.u-flexsnap { flex: 0 1 160px; }
+/* Fixed module sizes — like the original: the page can grow and modules
+   wrap, but each window keeps a constant size (no flex-stretch). */
+.u-flex2 { flex: none; width: 560px; }
+.u-flex1 { flex: none; width: 344px; }
+/* The Snapshot Window sizes to its own grid rather than a set width. */
+.u-flexsnap { flex: none; width: max-content; }
 
 .uwin {
-  border-right: 1px solid #000;
-  border-bottom: 1px solid #000;
-  min-width: 0;
+  flex: none;
+  border: 1px solid #000; /* hairline */
+  background: #fff; /* opaque — windows never show through each other */
+  box-shadow: 2px 2px 0 rgb(0 0 0 / 18%);
 }
 .uwin__title {
+  box-sizing: border-box;
+  height: 24px;
   border-bottom: 1px solid #000;
-  padding: 2px 6px;
+  padding: 1px 6px;
   font-weight: 700;
   font-size: 12px;
   display: flex;
@@ -357,6 +406,22 @@ body {
 }
 .ustep--beat { border-left: 2px solid #000; }
 .ustep--on { background: #000; }
+.uvoice--1 { --voice-color: var(--channel-1); }
+.uvoice--2 { --voice-color: var(--channel-2); }
+.uvoice--3 { --voice-color: var(--channel-3); }
+.uvoice--4 { --voice-color: var(--channel-4); }
+.uvoice .ustep--on,
+.uvoice .ucyccell--level-4 { background: var(--voice-color); }
+.uvoice .ucyccell--level-3 {
+  background: color-mix(in srgb, var(--voice-color) 78%, white);
+}
+.uvoice .ucyccell--level-2 {
+  background: color-mix(in srgb, var(--voice-color) 55%, white);
+}
+.uvoice .ucyccell--level-1 {
+  background: color-mix(in srgb, var(--voice-color) 30%, white);
+}
+.uvoice > td.b, .uvoice .ucyc__lab { color: var(--voice-color); }
 .ustep:disabled { background: #ddd; cursor: default; }
 
 /* transport */
@@ -369,38 +434,1001 @@ body {
 .ubtn:disabled { opacity: 0.4; cursor: default; }
 .urow2 { display: flex; gap: 6px; align-items: center; margin-bottom: 5px; }
 .usplit { justify-content: space-between; }
+.uwrap { flex-wrap: wrap; }
 .uchk { display: flex; align-items: center; gap: 3px; }
 .udiv { border-top: 1px solid #000; padding-top: 5px; margin-top: 2px; }
 
-/* snapshots */
-.usnaps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-.usnap {
-  aspect-ratio: 1; border: 1px solid #000; background: #fff; cursor: pointer; font-weight: 700;
+/* ===== Conducting Window =====
+   Rebuilt from reference/transport and conductor.png: transport block at left,
+   six-by-six dotted Grid at right, and the Tempo/Robot strip across the foot. */
+.u-conductor-win {
+  width: 230.5px;
+  overflow: visible;
 }
-.usnap--full { background: #000; color: #fff; }
-.uhint, .uwin__note { font-size: 9px; }
-.uhint { opacity: 0.6; margin-top: 4px; text-align: center; }
+.u-conductor-win > .uwin__title {
+  width: auto;
+}
+.u-conductor-win > .uwin__body {
+  width: 230.5px; height: 107px; padding: 0; overflow: hidden;
+}
+.uconduct {
+  display: grid;
+  grid-template-columns: 265px 194px;
+  grid-template-rows: 158px 56px;
+  width: 459px;
+  height: 214px;
+  background: #fff;
+  color: #000;
+  font-family: var(--mono);
+  transform: scale(0.5);
+  transform-origin: top left;
+}
+.uconduct button, .uconduct select, .uconduct input { font-family: inherit; }
+.uconduct__left {
+  box-sizing: border-box;
+  padding: 48px 8px 8px;
+  border-right: 1px solid #000;
+}
+.uconduct__transport, .uconduct__secondary { display: grid; height: 43px; }
+.uconduct__transport { grid-template-columns: 1fr 1fr 1fr; margin-bottom: 10px; }
+.uconduct__secondary { grid-template-columns: 1.35fr 1fr 0.75fr; }
+.uconduct__transport button, .uconduct__secondary button {
+  position: relative;
+  margin-right: -1px;
+  border: 1px solid #000;
+  background: #fff;
+  color: #000;
+  font-size: 21px;
+  font-weight: 900;
+  cursor: pointer;
+  overflow: hidden;
+}
+.uconduct__transport button:not(:last-child)::after,
+.uconduct__secondary button:not(:last-child)::after {
+  content: "";
+  position: absolute; z-index: 2;
+  top: -5px; right: 7px;
+  width: 1px; height: 58px;
+  background: #000;
+  transform: rotate(43deg);
+  transform-origin: top;
+}
+.uconduct__transport button:last-child,
+.uconduct__secondary button:last-child { margin-right: 0; }
+.uconduct__transport button.is-on,
+.uconduct__secondary button.is-on { background: #000; color: #fff; }
+.uconduct__transport button svg,
+.uconduct__secondary button svg {
+  display: block; width: 27px; height: 27px; margin: auto;
+  fill: currentColor;
+}
+.uconduct__secondary button { font-size: 17px; }
+.uconduct__secondary .uconduct__sync {
+  text-align: left; padding-left: 12px; font-size: 18px;
+}
+.uconduct button:disabled { opacity: 0.38; cursor: not-allowed; }
+.uconduct__grid {
+  position: relative;
+  touch-action: none;
+  cursor: crosshair;
+  overflow: hidden;
+  background-color: #fff;
+  background-image:
+    radial-gradient(circle at 1px 1px, #000 0 0.8px, transparent 1.2px),
+    radial-gradient(circle at 1px 1px, #000 0 0.8px, transparent 1.2px);
+  background-size: 3px calc(100% / 6), calc(100% / 6) 3px;
+  background-position: 0 0;
+}
+.uconduct__grid::after {
+  content: "";
+  position: absolute; inset: 0;
+  border: 1px solid #000;
+  pointer-events: none;
+}
+.uconduct__baton {
+  position: absolute; z-index: 2;
+  width: 8px; height: 8px;
+  border-radius: 50%; background: #000;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.uconduct__bottom {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 37px 211px 38px 37px 54px 27px 27px 28px;
+  align-items: stretch;
+  border-top: 1px solid #000;
+}
+.uconduct__bottom > * { min-width: 0; border: 0; border-right: 1px solid #000; }
+.uconduct__bottom > *:last-child { border-right: 0; }
+.uconduct__tempo-arrow { width: 100%; height: 100%; border: 0; border-right: 1px solid #000; }
+.uconduct__tempo { display: grid; grid-template-rows: 27px 1fr; padding: 5px 7px 0; }
+.uconduct__range {
+  position: relative; height: 20px;
+  border: 1px solid #000;
+  background: repeating-conic-gradient(#000 0 25%, #fff 0 50%) 0 0 / 2px 2px;
+}
+.uconduct__range input {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
+  appearance: none; background: transparent; pointer-events: none;
+}
+.uconduct__range input::-webkit-slider-thumb {
+  appearance: none; width: 8px; height: 22px;
+  border: 1px solid #000; background: #fff; pointer-events: auto; cursor: ew-resize;
+}
+.uconduct__range input::-moz-range-thumb {
+  width: 8px; height: 22px;
+  border: 1px solid #000; border-radius: 0; background: #fff;
+  pointer-events: auto; cursor: ew-resize;
+}
+.uconduct__tempo-mark {
+  position: absolute; top: -2px; bottom: -2px;
+  width: 1px; background: #000; pointer-events: none;
+}
+.uconduct__tempo-readout {
+  display: grid; grid-template-columns: 30px 1fr 37px 30px;
+  align-items: center; text-align: center; font-size: 11px;
+}
+.uconduct__tempo-readout b { font-size: 12px; }
+.uconduct__tempo-readout strong {
+  height: 24px; line-height: 24px; border-left: 1px solid #000;
+  border-right: 1px solid #000; font-size: 15px;
+}
+.uconduct__ratio-dir, .uconduct__robot {
+  background: #fff; color: #000; font-size: 14px; font-weight: 800; cursor: pointer;
+}
+.uconduct__ratio, .uconduct__robot-time {
+  appearance: none; padding: 0 3px; text-align: center;
+  background: #fff; color: #000; font-weight: 800; cursor: pointer;
+}
+.uconduct__robot { font-size: 23px; }
+.uconduct__robot svg {
+  display: block; width: 38px; height: 38px; margin: auto;
+  fill: currentColor;
+}
+.uconduct__robot.is-on { background: #000; color: #fff; }
+.uconduct__robot-range {
+  display: grid; grid-template-rows: 14px 1fr;
+  place-items: center; font-size: 10px; font-weight: 800;
+}
+.uconduct__robot-range input {
+  width: 23px; height: 30px; margin: 0;
+  accent-color: #000;
+}
 
-/* variables matrix */
-.uvars { border-collapse: collapse; width: 100%; }
-.uvars th, .uvars td { border: 1px solid #000; padding: 2px; text-align: center; }
-.uvars th { background: #eee; }
-.uvars__name { text-align: left !important; }
-.uvars__name button {
-  background: none; border: none; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; white-space: nowrap;
+/* ===== Snapshot Window =====
+   The tall strip down the far right: Hold/Do at the top, then the Conducting
+   Arrow and Quantization numerical, the 26 A-Z locations in two columns with
+   the Slideshow column beside them, and Edit / Restore / Blink Everything at
+   the foot. */
+.usnapwin {
+  --snap-cell: 30px;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  border: 1px solid #000;
+  background: #fff;
+  color: #000;
+}
+.usnapwin button { background: #fff; color: #000; }
+.usnapwin__holddo {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 4px;
+  border: none;
+  border-bottom: 1px solid #000;
+  cursor: pointer;
+}
+.usnapwin__row { display: flex; border-bottom: 1px solid #000; }
+.usnapwin__arrow,
+.usnapwin__quant,
+.usnapwin__slidebtn {
+  width: var(--snap-cell);
+  height: var(--snap-cell);
+  flex: none;
+  padding: 0;
+  border: none;
+  border-right: 1px solid #000;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 15px;
+}
+.usnapwin__row .usnapwin__slidebtn { border-right: none; margin-left: auto; }
+.usnapwin__grid { display: flex; }
+.usnapwin__snaps {
+  display: grid;
+  grid-template-columns: repeat(2, var(--snap-cell));
+  border-right: 1px solid #000;
+}
+.usnapwin__shows { display: flex; flex-direction: column; }
+.usnap, .usnapwin__show {
+  width: var(--snap-cell);
+  height: var(--snap-cell);
+  padding: 0;
+  border: none;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  cursor: pointer;
+}
+.usnapwin__snaps .usnap:nth-child(2n) { border-right: none; }
+.usnapwin__shows .usnapwin__show,
+.usnapwin__shows .usnapwin__slidebtn { border-right: none; border-bottom: 1px solid #000; }
+/* A stored Snapshot: the letter posing in the sun. */
+.usnap__art { display: grid; place-items: center; }
+.usnap__sun {
+  position: relative;
+  display: block;
+  width: 9px; height: 9px;
+  border: 1px solid #000; border-radius: 50%;
+  margin: 0 auto 1px;
+}
+/* The Current Snapshot indicator — a black mark in the sun. */
+.usnap__mark {
+  position: absolute; inset: 1.5px;
+  border-radius: 50%; background: #000;
+}
+.usnap__letter { font-weight: 800; font-size: 12px; line-height: 1; }
+.usnap--current { outline: 1px solid #000; outline-offset: -3px; }
+
+.usnapwin__foot { display: flex; border-top: 1px solid #000; }
+.usnapwin__tool {
+  flex: 1;
+  padding: 3px;
+  border: none;
+  border-right: 1px solid #000;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.usnapwin__tool:last-child { border-right: none; }
+.usnapwin__tool:disabled { opacity: 0.3; cursor: default; }
+.usnapwin__globe {
+  padding: 4px;
+  border: none;
+  border-top: 1px solid #000;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+/* ===== Variables Window =====
+   One row per Variable: a two-line label, its Conducting Arrow in a box, then
+   the six Positions. Each Position holds a miniature drawing of its own
+   contents (see VarThumb.tsx) rather than a generic swatch. */
+.uvars { display: flex; flex-direction: column; gap: 6px; }
+.uvars--inline { margin-bottom: 6px; }
+.uvars__row { display: flex; align-items: stretch; gap: 4px; }
+.uvars__label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  width: 66px;
+  flex: none;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: right;
+}
+.uarrow {
+  width: 26px;
+  flex: none;
+  padding: 0;
+  border: 2px solid #000;
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+}
+.uarrow--on { background: #000; color: #fff; }
+/* The six Positions share one enclosing box with hairlines between them. */
+.uvars__cells {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  flex: 1;
+  border: 2px solid #000;
 }
 .umini {
-  display: flex; flex-direction: column; gap: 1px; width: 40px; height: 26px;
-  border: 1px solid #000; background: #fff; cursor: pointer; padding: 2px; justify-content: center;
+  display: grid;
+  place-items: stretch;
+  height: 34px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 2px;
+  border: none;
+  border-right: 1px solid #000;
+  background: #fff;
+  color: #000;
+  cursor: pointer;
 }
-.umini--on { outline: 2px solid #000; background: #f3f3c0; }
-.umini__bar { height: 4px; background: #000; display: block; }
+.umini:last-child { border-right: none; }
+/* The Active Position inverts, and the artwork inverts with it because every
+   thumbnail paints in currentColor. */
+.umini--on { background: #000; color: #fff; }
+.umini__art { display: block; width: 100%; height: 100%; }
+.umini--group { place-items: center; }
+.umini--group { font-weight: 800; font-size: 15px; }
+.umini__letter { line-height: 1; }
 
-/* variable editor */
-.ueditor { border-top: 1px solid #000; padding: 6px; background: #f2f2f2; margin-top: 4px; }
-.ueditor__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-.uedit { width: 100%; border-collapse: collapse; }
-.uedit td { border-top: 1px solid #ccc; padding: 3px 4px; }
+/* pop-open variable editor */
+.uoverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 38%);
+}
+.uvarpop {
+  width: min(560px, calc(100vw - 48px));
+  border: 2px solid #000;
+  background: #f2f2f2;
+  box-shadow: 8px 8px 0 rgb(0 0 0 / 35%);
+}
+.uvarpop-host { position: absolute; }
+.uwin__close {
+  margin-left: auto; width: 20px; height: 18px; padding: 0;
+  border: 1px solid currentColor; background: inherit; color: inherit;
+  font: 700 13px/1 var(--mono); cursor: pointer;
+}
+/* Time Distortion is a toolbar over a square graph, not the four-row control
+   stack the shared width is sized for, so it shrinks to fit its contents. */
+.uvarpop--tight {
+  width: max-content;
+  max-width: calc(100vw - 48px);
+}
+.uposbox {
+  margin-left: auto;
+  display: flex;
+  border: 1px solid #000;
+}
+.uposcell {
+  width: 13px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-right: 1px solid #000;
+  background: #fff;
+  cursor: pointer;
+}
+.uposcell:last-child { border-right: none; }
+.uposcell--on { background: #000; }
+.uvarpop__close {
+  flex: none;
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  line-height: 1;
+  border: 1px solid #000;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+.uvarpop__positions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 10px;
+  border-bottom: 1px solid #999;
+}
+.uvarpop__voices { padding: 4px 10px; }
+.uvarcontrol {
+  display: grid;
+  grid-template-columns: 76px minmax(180px, 1fr) 58px;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border-bottom: 1px solid #c4c4c4;
+}
+.uvarcontrol__voice { font-weight: 700; }
+.uvarcontrol select { grid-column: 2 / 4; width: 100%; }
+.uvarcontrol input[type="range"] { width: 100%; }
+.uvarcontrol output { text-align: right; font-weight: 700; }
+.uvarpop__hint { margin: 8px 10px 10px; font-size: 10px; opacity: 0.7; }
+/* Left unwrapped this single long line would set the shrink-to-fit width. */
+.uvarpop--tight .uvarpop__hint { max-width: 320px; }
+.uorch {
+  grid-column: 2 / 4;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(28px, 1fr));
+  gap: 3px;
+  padding: 3px 0;
+}
+.uorch__channel {
+  height: 25px;
+  border: 1px solid #000;
+  background: #fff;
+  cursor: pointer;
+}
+.uorch__channel--on { background: #000; color: #fff; }
+.umidi__velocity { white-space: nowrap; text-align: center; font-weight: 700; }
+
+.uvelocity {
+  grid-column: 2 / 4;
+  display: grid;
+  grid-template-columns: 58px minmax(180px, 1fr) 58px;
+  align-items: center;
+  gap: 9px;
+}
+.uvelocity input[type="number"] {
+  width: 100%;
+  height: 29px;
+  border: 2px solid #000;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+}
+.uvelocity__track {
+  position: relative;
+  height: 30px;
+  border-block: 2px solid transparent;
+  background: linear-gradient(#000, #000) center / 100% 2px no-repeat;
+}
+.uvelocity__fill {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  background-color: #aaa;
+  background-image: repeating-linear-gradient(
+    135deg, rgb(255 255 255 / 30%) 0 1px, transparent 1px 3px
+  );
+  pointer-events: none;
+}
+.uvelocity__handle {
+  position: absolute;
+  z-index: 2;
+  top: 1px;
+  width: 12px;
+  height: 26px;
+  padding: 0;
+  border: 2px solid #000;
+  background: #fff;
+  cursor: ew-resize;
+  touch-action: none;
+  transform: translateX(-50%);
+}
+.uvelocity__handle--low { border-radius: 2px 0 0 2px; }
+.uvelocity__handle--high { border-radius: 0 2px 2px 0; }
+
+/* Velocity Range editor — exact M layout: row #, boxed low, line with a
+   drawn dithered range block, boxed high. Drag on the line to draw the block. */
+.uvarcontrol--vel {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 30px;
+}
+.uvarcontrol--vel .uvarcontrol__voice { display: none; }
+.uvel {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 16px 54px 1fr 54px;
+  align-items: center;
+  gap: 10px;
+}
+.uvel__num { font-weight: 700; text-align: center; }
+.uroot input.uvel__box {
+  width: 100%;
+  height: 26px;
+  padding: 0;
+  border: 2px solid #000;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+}
+.uvel__box::-webkit-inner-spin-button,
+.uvel__box::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.uvel__track {
+  position: relative;
+  height: 24px;
+  cursor: crosshair;
+  touch-action: none;
+  background: linear-gradient(#000, #000) center / 100% 2px no-repeat;
+}
+.uvel__band {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  pointer-events: none;
+  background: repeating-conic-gradient(#000 0 25%, #fff 0 50%) 0 0 / 3px 3px;
+}
+
+/* Note Density editor — M's layout: row #, a boxed percentage numerical, then
+   a line carrying a heavy bar from 0 to the value that terminates in a square
+   handle. Dotted guides stand at 0/25/50/75/100; because the rows sit flush
+   with no divider, those guides read as one continuous ruler down the window. */
+.udens__head {
+  display: grid;
+  grid-template-columns: 16px 54px 1fr;
+  align-items: end;
+  gap: 10px;
+  padding: 6px 10px 2px;
+  font-weight: 700;
+}
+.udens__pct { text-align: center; }
+.udens__scale { position: relative; height: 15px; }
+.udens__tick { position: absolute; bottom: 0; transform: translateX(-50%); }
+
+.uvarcontrol--dens {
+  display: block;
+  min-height: 0;
+  border-bottom: none;
+}
+.uvarcontrol--dens .uvarcontrol__voice { display: none; }
+.udens {
+  display: grid;
+  grid-template-columns: 16px 54px 1fr;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+}
+.udens__voice { font-weight: 700; text-align: center; }
+/* Qualified with `.uroot input` to outrank the generic
+   `.uroot input[type="number"]` control style, which would otherwise flatten
+   the numerical's heavy 2px box back to a hairline. */
+.uroot input.udens__num {
+  width: 100%;
+  height: 26px;
+  padding: 0;
+  border: 2px solid #000;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+.udens__num::-webkit-inner-spin-button,
+.udens__num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+.udens__track {
+  --udens-guide: repeating-linear-gradient(180deg, #000 0 2px, transparent 2px 4px);
+  position: relative;
+  height: 30px;
+  cursor: crosshair;
+  touch-action: none;
+  background-image:
+    var(--udens-guide), var(--udens-guide), var(--udens-guide),
+    var(--udens-guide), var(--udens-guide);
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+  background-position: left top, 25% top, 50% top, 75% top, right top;
+}
+/* The line the bar is drawn on, dotted where the bar hasn't reached. */
+.udens__track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  margin-top: -1px;
+  background: repeating-linear-gradient(90deg, #000 0 1px, transparent 1px 3px);
+}
+/* The stop at 100%. */
+.udens__track::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border: 1px solid #000;
+  border-radius: 50%;
+  background: #fff;
+}
+.udens__bar {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 5px;
+  margin-top: -3px;
+  background: #000;
+  pointer-events: none;
+}
+.udens__handle {
+  position: absolute;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  margin: -7px 0 0 -6px;
+  padding: 0;
+  border: none;
+  background: #000;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+/* ===== Per-window pull-down menus ===== */
+.umenu { position: relative; display: inline-block; }
+.umenu__title {
+  padding: 1px 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.umenu__title:hover, .umenu__title--on { background: #000; color: #fff; }
+.umenu__list {
+  z-index: 100;
+  min-width: 190px;
+  padding: 2px 0;
+  border: 1px solid #000;
+  background: #fff;
+  box-shadow: 3px 3px 0 rgb(0 0 0 / 35%);
+}
+.umenu__item {
+  display: block;
+  width: 100%;
+  padding: 2px 12px;
+  border: none;
+  background: transparent;
+  color: #000;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.umenu__item:hover:not(:disabled) { background: #000; color: #fff; }
+.umenu__item:disabled { opacity: 0.35; cursor: default; }
+.umenu__sep { margin: 3px 0; border: none; border-top: 1px solid #b5b5b5; }
+
+/* ===== Transposition Edit Window =====
+   Note and Octave numericals per Voice, with the legend naming the reference
+   point beside them. */
+.utr { display: flex; align-items: flex-start; gap: 18px; padding: 8px 12px 12px; }
+.utr__table { display: flex; flex-direction: column; }
+.utr__head, .utr__row {
+  display: grid;
+  grid-template-columns: 16px 46px 46px;
+  align-items: center;
+  gap: 0;
+}
+.utr__head { font-weight: 700; text-align: center; padding-bottom: 3px; }
+.utr__voice { font-weight: 700; text-align: center; }
+/* The four rows share one enclosing box, as the original's do. */
+.utr__row .utr__num { border: 1px solid #000; margin: -1px 0 0 -1px; }
+.utr__num {
+  height: 22px;
+  padding: 0;
+  background: #fff;
+  color: #000;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: ns-resize;
+}
+.utr__legend { margin: 18px 0 0; font-size: 12px; line-height: 1.5; }
+.utr__legend strong { font-weight: 800; }
+
+/* ===== Time Distortion Edit Window =====
+   A single square graph carrying all four Voices' maps, with the Map Edit
+   selector, Clear, and the two Length numericals above it. */
+.utd { padding: 8px 10px 10px; }
+.utd__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+.utd__label { font-weight: 700; }
+.utd__voices { display: flex; gap: 2px; }
+.utd__voice {
+  width: 20px; height: 20px; padding: 0;
+  border: 1px solid #000; background: #fff; color: #000;
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.utd__voice--on { outline: 1px solid #000; outline-offset: 1px; }
+.utd__clear {
+  height: 20px; padding: 0 8px; margin-left: 6px;
+  border: 1px solid #000; background: #fff; color: #000;
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.utd__len {
+  width: 42px; height: 20px; padding: 0; text-align: center;
+  border: 1px solid #000; background: #fff; font: inherit; font-weight: 700;
+  -moz-appearance: textfield;
+}
+.utd__len::-webkit-inner-spin-button,
+.utd__len::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.utd__times { opacity: 0.7; }
+.utd__unit { height: 20px; font-size: 14px; }
+
+/* Percentage width contributes nothing to the window's shrink-to-fit size, so
+   the title bar sets the width and the graph squares itself off inside it. */
+.utd__graph {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  touch-action: none;
+  cursor: crosshair;
+}
+.utd__frame { fill: #fff; stroke: #000; stroke-width: 1; }
+/* The neutral map — clock time and real time running together. */
+.utd__identity { stroke: #c9a227; stroke-width: 1; }
+/* The other Voices' maps, drawn thin behind the one being edited. */
+.utd__other { fill: none; stroke: #9a9a9a; stroke-width: 1; }
+.utd__live { fill: none; stroke: #444; stroke-width: 2.5; }
+.utd__grip { fill: #000; cursor: grab; }
+
+/* ===== Pattern Editor =====
+   Everything here is locked to the grid module: a 10x8 cell and a 46px left
+   gutter (the 8va box plus the note-scroll arrow) that rows 1-3 all share, so
+   the step ruler, the Editing Grid and the MIDI Edit Range Bar sit on exactly
+   the same left edge. Change --pe-cell-w/h and the whole window re-proportions.
+   --pe-paper is the knockout colour the icons paint their "white" shapes in;
+   inverted surfaces override it so a knockout stays a hole rather than a blob. */
+.peditor {
+  --pe-cell-w: 10px;
+  --pe-cell-h: 8px;
+  --pe-keyw: 26px; /* the right Reference Keyboard */
+  --pe-paper: #fff;
+  --pe-rule: #000;
+  --pe-dot: #9a9a9a;
+  border: 1px solid #000;
+  background: #fff;
+  color: #000;
+  width: max-content;
+}
+.peditor__tools { margin-left: auto; display: flex; }
+.petool {
+  width: 24px; height: 20px; padding: 0; cursor: pointer;
+  border: 1px solid #000; border-right: none; border-top: none; border-bottom: none;
+  background: #fff; color: #000; display: grid; place-items: center;
+}
+.petool:last-child { border-right: 1px solid #000; }
+.petool--on { background: #000; color: #fff; --pe-paper: #000; }
+
+/* --- shared row scaffold --- */
+.perow { display: flex; align-items: stretch; }
+.perow--head { height: 16px; border-bottom: 1px solid #000; }
+.perow--body { align-items: flex-start; }
+.perow--range { height: 15px; border-top: 1px solid #000; }
+.perow--foot { height: 18px; border-top: 1px solid #000; align-items: stretch; }
+
+.peoct, .pearrow {
+  flex: none; padding: 0; cursor: pointer; color: #000; background: #fff;
+  border: none; border-right: 1px solid #000;
+  display: grid; place-items: center;
+}
+.peoct { width: 30px; }
+.pearrow { width: 16px; }
+
+/* --- row 1: the step ruler, which is also where the tools operate --- */
+.peruler {
+  position: relative; height: 100%; background: #fff;
+  border-right: 1px solid #000; overflow: hidden; cursor: crosshair;
+}
+.peruler--erase, .peruler--plunge, .peruler--scissor { cursor: cell; }
+.peruler__num {
+  position: absolute; bottom: 1px; font-size: 9px; line-height: 1;
+  font-family: var(--mono); color: #000;
+}
+.peruler__num--live { font-weight: 700; }
+.peruler__region { position: absolute; top: 0; bottom: 0; background: #000; }
+.peruler__point {
+  position: absolute; bottom: 0; width: 0; height: 0;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-bottom: 6px solid #000;
+}
+
+/* The Mode Selector is one table: header and rows share a column template, and
+   row 1 pads itself by --pe-keyw so the labels land over their own columns. */
+.pemodes__head, .pemodes__row {
+  display: grid;
+  grid-template-columns: 28px 24px 24px 22px 44px;
+  align-items: center;
+}
+.pemodes__head {
+  height: 100%; font-size: 9px; font-weight: 700;
+  justify-items: center; border-left: 1px solid #000;
+}
+.pekeygap { width: var(--pe-keyw); flex: none; }
+
+/* --- row 2: keyboards and the Editing Grid --- */
+.pesidecol { position: relative; width: 46px; flex: none; border-right: 1px solid #000; }
+.penote {
+  position: absolute; z-index: 2; top: 0; left: 0; padding: 0 2px;
+  font-size: 9px; font-family: var(--mono); font-weight: 700;
+  background: #fff; color: #000;
+}
+/* Reference Keyboards. Each chromatic pitch is one row so the keys stay locked
+   to the Editing Grid, and the keyboard reads as a keyboard by drawing the
+   black keys short — they run from the outer edge to --pe-blackdepth, leaving
+   the fronts of the white keys showing as a gutter against the grid. The two
+   keyboards mirror, so each one's blacks grow away from the grid. */
+.pekeys { display: flex; flex-direction: column; --pe-blackdepth: 72%; }
+.pekeys--left { width: 100%; }
+.pekeys--right { width: var(--pe-keyw); flex: none; border-right: 1px solid #000; }
+.pekey { display: block; width: 100%; padding: 0; border: none; background: #fff; cursor: pointer; }
+.pekeys--left .pekey--black {
+  background: linear-gradient(90deg, #000 0 var(--pe-blackdepth), #fff var(--pe-blackdepth));
+}
+.pekeys--right .pekey--black {
+  background: linear-gradient(
+    270deg, #000 0 var(--pe-blackdepth), #fff var(--pe-blackdepth));
+}
+/* F-E and C-B are the only places two white keys touch on a descending
+   chromatic run, so those are the only rows that need a key edge drawn. */
+.pekey--split { box-shadow: inset 0 -1px 0 #000; }
+.pekey:hover { filter: invert(1); }
+
+.pegrid {
+  position: relative; overflow: hidden;
+  background-color: #fff;
+  background-image: radial-gradient(circle at 1px 1px, var(--pe-dot) 0.5px, transparent 0.9px);
+  background-size: var(--pe-cell-w) var(--pe-cell-h);
+}
+/* Steps that exist in the Pattern are ruled in black; past the last step the
+   dotted background shows through, and that area is still live. */
+.pegrid__ink {
+  position: absolute; z-index: 0; left: 0; top: 0; bottom: 0; pointer-events: none;
+  background-image:
+    repeating-linear-gradient(90deg, var(--pe-rule) 0 1px, transparent 1px var(--pe-cell-w)),
+    repeating-linear-gradient(0deg, var(--pe-rule) 0 1px, transparent 1px var(--pe-cell-h));
+}
+.pegrid__row { position: relative; z-index: 1; display: flex; }
+.pecell {
+  padding: 0; border: none; background: transparent;
+  cursor: crosshair; touch-action: none;
+}
+.pecell--on {
+  background-color: var(--voice-color, #000);
+  background-image: repeating-linear-gradient(135deg, transparent 0 2px, rgb(255 255 255 / 32%) 2px 3px);
+}
+/* A Pattern shown behind the edited one (shift-click a View number). */
+.pecell--ghost { background: repeating-conic-gradient(#9a9a9a 0 25%, transparent 0 50%) 0 0 / 2px 2px; }
+.pegrid__region {
+  position: absolute; z-index: 3; top: 0; bottom: 0;
+  pointer-events: none; background: rgb(0 0 0 / 18%);
+}
+/* The Legend: dotted guide marks tracking the cursor. */
+.pelegend { position: absolute; z-index: 4; pointer-events: none; }
+.pelegend--v { top: 0; bottom: 0; width: 0; border-left: 1px dotted #000; }
+.pelegend--h { left: 0; right: 0; height: 0; border-top: 1px dotted #000; }
+
+/* Cells butt up against each other and share rules, the way the original's
+   table did — hence the inset shadow rather than a border on every cell. */
+.pemodes { align-self: flex-start; border-left: 1px solid #000; }
+.pemodes__row > * {
+  width: 100%; height: 18px; padding: 0; border: none;
+  box-shadow: inset -1px -1px 0 #000;
+  background: #fff; color: #000;
+}
+.peview__num { cursor: pointer; font-weight: 700; font-size: 10px; }
+.peview__num--on { box-shadow: inset -1px -1px 0 #000, inset 0 0 0 2px #000; }
+.peview__num--ghost { box-shadow: inset -1px -1px 0 #000, inset 0 0 0 1px #9a9a9a; }
+.pepic { cursor: pointer; display: grid; place-items: center; }
+.pesize__num, .pevel {
+  font: inherit; font-size: 10px; font-weight: 700; text-align: center;
+  -moz-appearance: textfield;
+}
+.pevel {
+  width: 44px; height: 100%; padding: 0; border: none;
+  border-right: 1px solid #000; background: #fff; color: #000;
+}
+.pesize__num::-webkit-inner-spin-button,
+.pesize__num::-webkit-outer-spin-button,
+.pevel::-webkit-inner-spin-button,
+.pevel::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* --- row 3: MIDI Edit Range Bar, All / Ctr, Editor Sound Velocity --- */
+.perange {
+  position: relative; height: 100%; background: #fff;
+  border-right: 1px solid #000; overflow: hidden; cursor: pointer;
+}
+.perange__bar { position: absolute; top: 4px; height: 6px; background: #000; }
+.perange__ctr {
+  position: absolute; top: 1px; bottom: 1px; width: var(--pe-cell-w);
+  background: #000; box-shadow: inset 0 0 0 1px #fff;
+}
+.pebtn {
+  min-width: 30px; padding: 0 5px; border: none; border-right: 1px solid #000;
+  background: #fff; color: #000; font-size: 10px; font-weight: 700; cursor: pointer;
+}
+.perow--range .pevel { border: none; border-right: 1px solid #000; height: 100%; }
+
+/* --- row 4: scroll bar, Editor Sound Enable, Size Box --- */
+.pescrollbtn {
+  width: 24px; flex: none; padding: 0; border: none; border-right: 1px solid #000;
+  background: #fff; color: #000; cursor: pointer; display: grid; place-items: center;
+}
+.pescrollbtn:disabled { opacity: 0.35; cursor: default; }
+.pescroll {
+  position: relative; flex: 1; min-width: 60px; cursor: pointer;
+  background: repeating-conic-gradient(#000 0 25%, #fff 0 50%) 0 0 / 2px 2px;
+}
+.pescroll__thumb {
+  position: absolute; top: 0; bottom: 0; min-width: 14px; box-sizing: border-box;
+  background: #fff; border-left: 1px solid #000; border-right: 1px solid #000;
+  cursor: grab; touch-action: none;
+}
+.pesound, .pesizebox {
+  width: 28px; flex: none; padding: 0; border: none; border-left: 1px solid #000;
+  background: #fff; color: #000; cursor: pointer; display: grid; place-items: center;
+}
+.pesound--on { background: #000; color: #fff; --pe-paper: #000; }
+.pesizebox { cursor: nwse-resize; touch-action: none; }
+
+
+.unoteorder {
+  position: relative;
+  grid-column: 2 / 4;
+  height: 38px;
+}
+.unoteorder__bar {
+  position: absolute;
+  inset: 2px 0 auto;
+  display: flex;
+  height: 22px;
+  overflow: hidden;
+  border: 1px solid #000;
+  background: #fff;
+}
+.unoteorder__bar > span { height: 100%; }
+.unoteorder__original { background: #000; }
+.unoteorder__cyclic {
+  background-color: #aaa;
+  background-image: repeating-linear-gradient(
+    135deg, rgb(255 255 255 / 28%) 0 1px, transparent 1px 3px
+  );
+}
+.unoteorder__utterly {
+  background-color: #fff;
+  background-image: radial-gradient(#222 1px, transparent 1.2px);
+  background-size: 5px 5px;
+}
+.unoteorder__values {
+  position: absolute;
+  inset: 25px 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  font-size: 10px;
+}
+.unoteorder__values output { text-align: center; }
+.unoteorder__handle {
+  position: absolute;
+  z-index: 3;
+  top: -3px;
+  width: 24px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid #000;
+  background: #fff;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.unoteorder__handle--original {
+  transform: translateX(-100%);
+}
+.unoteorder__handle--utterly {
+  transform: translateX(0);
+  background: #e5e5e5;
+}
+.unoteorder__legend {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px 10px 4px;
+  text-align: center;
+  font-size: 10px;
+}
+.unoteorder__legend span { display: grid; justify-items: center; gap: 4px; }
+.unoteorder__swatch {
+  display: block;
+  width: 72px;
+  height: 10px;
+  border: 1px solid #000;
+}
 
 /* cyclic */
 .ucyclics { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -409,6 +1437,943 @@ body {
 .ucyc__lab { width: 8px; font-size: 9px; font-weight: 700; }
 .ucyc__cells { display: flex; gap: 1px; }
 .ucyccell { width: 9px; height: 12px; border: 1px solid #bbb; background: #fff; padding: 0; cursor: pointer; }
-.ucyccell--on { background: #000; }
+.ucyccell--level-0 { background: #fff; }
+.ucyccell--level-1 { background: #c8c8c8; }
+.ucyccell--level-2 { background: #8d8d8d; }
+.ucyccell--level-3 { background: #4c4c4c; }
+.ucyccell--level-4 { background: #000; }
+
+.ucycpos {
+  display: grid; grid-template-columns: 14px repeat(4, 1fr); align-items: center;
+  width: 100%; height: 22px; padding: 1px 2px; border: 1px solid #000;
+  margin-top: -1px; background: #fff; color: #000; cursor: pointer;
+}
+.ucycpos.is-on { outline: 2px solid #000; outline-offset: -3px; }
+.ucycpos i { display: block; height: 3px; max-width: 28px; background: var(--voice-color); }
+
+.cyced {
+  width: 439px; overflow: hidden;
+  background: #fff; color: #000; box-shadow: none;
+  font-family: var(--mono); font-size: 10px;
+}
+.cyced--modern { width: 782px; }
+.cyced__body { display: grid; grid-template-columns: 250px 187px; height: 321px; }
+.cyced__voices { padding: 11px 5px 5px 10px; }
+.cyced__voice {
+  display: grid; grid-template-columns: 20px 12px 190px 12px;
+  grid-template-rows: 48px 13px; align-items: center; height: 76px;
+}
+.cyced__voice > b { grid-row: 1; font-size: 14px; color: var(--voice-color); }
+.cyced__levels {
+  grid-row: 1; font-size: 8px; line-height: 9.5px; text-align: center;
+  color: var(--voice-color);
+}
+.cyced__levels--right { grid-column: 4; }
+.cyced__grid {
+  grid-column: 3; grid-row: 1; display: grid;
+  grid-template-columns: repeat(16, 1fr); grid-template-rows: repeat(5, 9.6px);
+  border-left: 1px solid #000; border-top: 1px dotted #000; touch-action: none;
+}
+.cyced__grid button {
+  width: auto; height: 9.6px; padding: 0; border: 0;
+  border-right: 1px dotted #000; border-bottom: 1px dotted #000;
+  background: #fff; cursor: crosshair;
+}
+.cyced__grid button.is-on::after {
+  content: ""; display: block; width: 6px; height: 6px; margin: 1px auto;
+  border-radius: 50%; background: var(--voice-color);
+}
+.cyced__grid button:disabled { background: #d8d8d8; cursor: default; }
+.cyced__steps {
+  grid-column: 3; grid-row: 2; display: grid; grid-template-columns: repeat(16, 1fr);
+}
+.cyced__steps button {
+  padding: 0; border: 0; background: #fff; font: inherit; font-size: 8px; cursor: pointer;
+}
+.cyced__steps button.is-on {
+  background: var(--voice-color); color: #fff;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 60%);
+}
+.cyced__side { display: grid; grid-template-rows: 34px 96px 96px 95px; padding-top: 2px; }
+.cyced__descriptor {
+  display: grid; grid-template-columns: 34px 1fr; align-content: center;
+  padding: 2px 4px; border-bottom: 1px solid #000;
+  font: 8px/1.15 var(--mono);
+}
+.cyced__descriptor b { grid-row: 1 / 4; align-self: center; font-size: 10px; }
+.cyced__descriptor span { grid-column: 2; }
+.cyced__control { display: grid; grid-template-columns: 92px 87px; position: relative; }
+.cyced__pick { position: relative; width: 92px; }
+.cyced__kind {
+  position: relative; z-index: 2; width: 92px; height: 26px; padding: 1px 22px 1px 6px;
+  border: 1px solid #000; background: #fff; color: #000; text-align: left;
+  font: inherit; font-size: 15px; font-weight: 900; cursor: pointer;
+  clip-path: polygon(0 0, 100% 0, 64% 100%, 0 100%);
+}
+.cyced__control.is-current .cyced__kind { background: #000; color: #fff; }
+.cyced__positions {
+  width: 31px; margin-top: 2px; display: grid; grid-template-rows: repeat(6, 13px);
+  border: 1px solid #000;
+}
+.cyced__positions button { padding: 0; border: 0; border-bottom: 1px solid #000; background: #fff; cursor: pointer; }
+.cyced__positions button:last-child { border-bottom: 0; }
+.cyced__positions button.is-on { background: #000; }
+.cyced__positions button.is-editing { outline: 1px solid #000; outline-offset: -3px; }
+.cyced__positions button.is-on.is-editing { outline-color: #fff; }
+.cyced__values { padding: 2px 0 0 3px; }
+.cyced__values label {
+  display: grid; grid-template-columns: 29px 43px; align-items: center;
+  height: 20px; font-size: 12px;
+}
+.cyced__values input {
+  width: 43px; height: 19px; padding: 0 2px; border: 1px solid #000;
+  background: #fff; color: #000; font: inherit; font-size: 14px; font-weight: 900;
+}
+.cyced__accent-key { padding-top: 24px; width: 82px; text-align: center; }
+.cyced__accent-key span { display: grid; grid-template-columns: repeat(4, 1fr); font-size: 11px; }
+.cyced__accent-key i {
+  display: block; width: 62px; height: 12px; margin: 1px auto 8px;
+  border-bottom: 1px solid #000;
+  background: repeating-conic-gradient(#777 0 25%, #fff 0 50%) 0 7px / 2px 2px;
+}
+.cyced__accent-key strong { display: inline-block; margin: 0 8px; font-size: 20px; }
+
+/* Modern Cyclic Editor — all three variables remain open and editable. */
+.cyced__modern {
+  display: grid; grid-template-columns: repeat(3, 260px); height: 365px;
+  border-top: 1px solid #000;
+}
+.cyced__modern-module { min-width: 0; border-right: 1px solid #000; overflow: hidden; }
+.cyced__modern-module:last-child { border-right: 0; }
+.cyced__modern-module h3 {
+  height: 27px; margin: 0; display: grid; place-items: center;
+  border-bottom: 1px solid #000; font-size: 16px;
+}
+.cyced__modern-positions {
+  height: 25px; display: grid; grid-template-columns: repeat(6, 1fr);
+  border-bottom: 1px solid #000;
+}
+.cyced__modern-positions button {
+  padding: 0; border: 0; border-right: 1px solid #000;
+  background: #fff; color: #000; font: 700 11px var(--mono); cursor: pointer;
+}
+.cyced__modern-positions button:last-child { border-right: 0; }
+.cyced__modern-positions button.is-on { background: #000; color: #fff; }
+.cyced__modern-positions button.is-editing { outline: 2px solid #777; outline-offset: -3px; }
+.cyced__modern-positions button.is-on.is-editing { outline-color: #fff; }
+.cyced__modern-values {
+  height: 37px; display: grid; grid-template-columns: repeat(5, 1fr);
+  align-items: stretch; border-bottom: 1px solid #000;
+}
+.cyced__modern-values label {
+  min-width: 0; display: grid; grid-template-rows: 12px 1fr;
+  text-align: center; border-right: 1px solid #bbb; font-size: 8px;
+}
+.cyced__modern-values label:last-child { border-right: 0; }
+.cyced__modern-values input, .cyced__modern-values output {
+  box-sizing: border-box; width: 100%; min-width: 0; height: 23px;
+  padding: 1px; border: 0; background: #fff; color: #000;
+  font: 700 10px var(--mono); text-align: center;
+}
+.cyced__modern-values output { display: grid; place-items: center; }
+.cyced__voices--modern { padding: 3px 5px 0 10px; }
+.cyced__voices--modern .cyced__voice { height: 67px; }
 
 .umidi { min-width: 520px; }
+
+/* Midi View — four live tracker lanes fed by the runtime's planned output. */
+.u-midiview-win { width: 760px; }
+.u-midiview-win > .uwin__body { padding: 0; overflow: hidden; }
+.midiview { background: #111; color: #ddd; font-family: var(--mono); }
+.midiview__tools {
+  height: 25px; display: flex; align-items: center; justify-content: flex-end;
+  gap: 5px; padding: 2px 5px; border-bottom: 1px solid #666; font-size: 10px;
+}
+.midiview__tools span { margin-right: auto; }
+.midiview__tools button {
+  height: 19px; padding: 0 7px; border: 1px solid #888;
+  background: #222; color: #ddd; font: inherit; cursor: pointer;
+}
+.midiview__tools button.is-on { background: #ddd; color: #111; }
+.midiview__tracker-head, .midiview__row {
+  display: grid; grid-template-columns: 112px repeat(4, minmax(0, 1fr));
+}
+.midiview__tracker-head {
+  height: 24px; background: #292929; border-bottom: 1px solid #777;
+}
+.midiview__tracker-head > b {
+  padding: 5px 6px; border-right: 1px solid #555;
+  color: #aaa; font-size: 9px; letter-spacing: 0.06em;
+}
+.midiview__tracker-head > b.uvoice { color: var(--voice-color); }
+.midiview__viewport {
+  position: relative; height: 300px; overflow-y: auto; overflow-x: hidden;
+  background:
+    linear-gradient(90deg, transparent 111px, #555 111px 112px, transparent 112px),
+    repeating-linear-gradient(90deg, transparent 0 calc((100% - 112px) / 4 - 1px), #333 calc((100% - 112px) / 4 - 1px) calc((100% - 112px) / 4));
+}
+.midiview__row {
+  min-height: 20px;
+  border-top: 1px solid #3a3a3a; border-bottom: 1px solid #202020;
+  background: rgb(17 17 17 / 92%);
+}
+.midiview__row > time {
+  padding: 6px; border-right: 1px solid #555; color: #aaa;
+  font-size: 9px; font-variant-numeric: tabular-nums;
+}
+.midiview__cell {
+  min-width: 0; padding: 3px 4px; border-right: 1px solid #444;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.midiview__cell:last-child { border-right: 0; }
+.midiview__message {
+  display: grid; grid-template-columns: 25px 25px 29px 29px 25px 1fr;
+  align-items: baseline; color: #bbb; font-size: 8px; white-space: nowrap;
+}
+.midiview__message strong, .midiview__message b {
+  color: var(--voice-color); font-style: normal;
+}
+.midiview__message i { font-style: normal; }
+.midiview__message--note-off { opacity: 0.55; }
+.midiview__waiting {
+  position: absolute; inset: 0; display: grid; place-items: center; color: #777;
+}
+
+/* ===========================================================================
+   DARK THEME — identical Unified interface, dark palette. Scoped to .theme-dark.
+   =========================================================================== */
+body.dark-bg { background: #191919; }
+
+.theme-dark {
+  color: #e8e8e8;
+  background: #191919;
+  min-height: 100vh;
+}
+.theme-dark .app__header { border-bottom-color: #666; }
+.theme-dark .app__tag { opacity: 0.65; }
+
+/* Window chrome */
+.theme-dark .uwin,
+.theme-dark .peditor,
+.theme-dark .uvarpop {
+  background: #2b2b2b;
+  border-color: #5a5a5a;
+  color: #e8e8e8;
+  box-shadow: 2px 2px 0 rgb(0 0 0 / 55%);
+}
+.theme-dark .movable:focus-within { box-shadow: 3px 3px 0 rgb(0 0 0 / 70%); }
+.theme-dark .uwin__title {
+  background: #383838;
+  border-bottom-color: #5a5a5a;
+  color: #f2f2f2;
+}
+.theme-dark .uwin__note, .theme-dark .uwin__slash { color: #cfcfcf; }
+
+/* Inputs / selects / buttons — base */
+.theme-dark input,
+.theme-dark select,
+.theme-dark button {
+  background: #333;
+  color: #e8e8e8;
+  border-color: #5a5a5a;
+}
+.theme-dark .ubtn, .theme-dark .btn, .theme-dark .petool,
+.theme-dark .utab, .theme-dark .peview__num, .theme-dark .uposcell,
+.theme-dark .usnap, .theme-dark .ucyccell, .theme-dark .pescrollbtn {
+  background: #333;
+  color: #e8e8e8;
+  border-color: #5a5a5a;
+}
+/* Same specificity story as the density numerical above. */
+.theme-dark input.uvel__box {
+  background: #333;
+  color: #e8e8e8;
+  border-color: #cfcfcf;
+}
+.theme-dark .ubtn:disabled, .theme-dark .btn:disabled { opacity: 0.4; }
+
+/* Filled / active indicators invert to light-on-dark */
+.theme-dark .utab--on,
+.theme-dark .ubtn--on,
+.theme-dark .usnap--full,
+.theme-dark .uposcell--on,
+.theme-dark .uorch__channel--on,
+.theme-dark .petool--on {
+  background: #e8e8e8;
+  color: #141414;
+}
+.theme-dark .vtab--on { background: #e8e8e8; color: #141414; }
+.theme-dark .utable__sel, .theme-dark .voices__row--sel { background: #4a4a2a; }
+
+/* Variables Window — polarity swap; the thumbnails follow currentColor. */
+.theme-dark .uvars__cells { border-color: #cfcfcf; }
+.theme-dark .umini { background: #2b2b2b; color: #e8e8e8; border-right-color: #5a5a5a; }
+.theme-dark .umini--on { background: #e8e8e8; color: #141414; }
+.theme-dark .uarrow { background: #333; color: #e8e8e8; border-color: #cfcfcf; }
+.theme-dark .uarrow--on { background: #e8e8e8; color: #141414; }
+
+/* Tables */
+.theme-dark .utable th,
+.theme-dark .voices th {
+  background: #3a3a3a; color: #e8e8e8;
+}
+.theme-dark .utable th, .theme-dark .utable td,
+.theme-dark .voices th, .theme-dark .voices td {
+  border-color: #4d4d4d;
+}
+.theme-dark .ueditor { background: #242424; }
+.theme-dark .uedit td { border-top-color: #444; }
+
+/* Pattern Editor — dark theme. The window is 1-bit, so this is a straight
+   polarity swap: ink becomes #e8e8e8, paper becomes #2b2b2b, and --pe-paper
+   follows so the icons' knockout shapes stay holes. */
+.theme-dark .peditor {
+  --pe-paper: #2b2b2b;
+  --pe-rule: #8d8d8d;
+  --pe-dot: #6e6e6e;
+  background: #2b2b2b;
+  color: #e8e8e8;
+}
+.theme-dark .peditor .perow--head { border-bottom-color: #5a5a5a; }
+.theme-dark .peditor .perow--range,
+.theme-dark .peditor .perow--foot { border-top-color: #5a5a5a; }
+.theme-dark .petool,
+.theme-dark .peoct,
+.theme-dark .pearrow,
+.theme-dark .pebtn,
+.theme-dark .pescrollbtn,
+.theme-dark .pesound,
+.theme-dark .pesizebox,
+.theme-dark .pepic,
+.theme-dark .peview__num,
+.theme-dark .pesize__num,
+.theme-dark .pevel {
+  background: #333; color: #e8e8e8; border-color: #5a5a5a;
+}
+.theme-dark .petool--on,
+.theme-dark .pesound--on { background: #e8e8e8; color: #141414; --pe-paper: #e8e8e8; }
+.theme-dark .pemodes { border-left-color: #5a5a5a; }
+.theme-dark .pemodes__row > * {
+  background: #333; color: #e8e8e8; box-shadow: inset -1px -1px 0 #5a5a5a;
+}
+.theme-dark .peview__num--on {
+  box-shadow: inset -1px -1px 0 #5a5a5a, inset 0 0 0 2px #e8e8e8;
+}
+.theme-dark .peview__num--ghost {
+  box-shadow: inset -1px -1px 0 #5a5a5a, inset 0 0 0 1px #8a8a8a;
+}
+.theme-dark .pemodes__head { color: #e8e8e8; }
+
+.theme-dark .pesidecol,
+.theme-dark .pekeys--right,
+.theme-dark .peruler,
+.theme-dark .perange { border-right-color: #5a5a5a; }
+.theme-dark .peruler,
+.theme-dark .perange,
+.theme-dark .pegrid { background-color: #242424; }
+.theme-dark .peruler__num { color: #e8e8e8; }
+.theme-dark .peruler__region,
+.theme-dark .peruler__point { background: #e8e8e8; }
+.theme-dark .peruler__point { background: none; border-bottom-color: #e8e8e8; }
+.theme-dark .penote { background: #2b2b2b; color: #e8e8e8; }
+
+.theme-dark .pekey { background: #3a3a3a; }
+.theme-dark .pekey--black { background: #101010; }
+.theme-dark .pekey--split { box-shadow: inset 0 -1px 0 #101010; }
+
+.theme-dark .pecell--on {
+  background: repeating-conic-gradient(#e8e8e8 0 25%, #242424 0 50%) 0 0 / 2px 2px;
+}
+.theme-dark .pecell--ghost {
+  background: repeating-conic-gradient(#6a6a6a 0 25%, transparent 0 50%) 0 0 / 2px 2px;
+}
+.theme-dark .pegrid__region { background: rgb(255 255 255 / 16%); }
+.theme-dark .pelegend--v { border-left-color: #e8e8e8; }
+.theme-dark .pelegend--h { border-top-color: #e8e8e8; }
+
+.theme-dark .perange__bar { background: #e8e8e8; }
+.theme-dark .perange__ctr { background: #e8e8e8; box-shadow: inset 0 0 0 1px #242424; }
+.theme-dark .pescroll {
+  background: repeating-conic-gradient(#cfcfcf 0 25%, #444 0 50%) 0 0 / 2px 2px;
+}
+.theme-dark .pescroll__thumb { background: #333; border-color: #cfcfcf; }
+
+
+/* Velocity Range editor */
+/* Snapshot Window */
+.theme-dark .usnapwin { background: #2b2b2b; color: #e8e8e8; border-color: #5a5a5a; }
+.theme-dark .usnapwin button { background: #2b2b2b; color: #e8e8e8; }
+.theme-dark .usnapwin__holddo,
+.theme-dark .usnapwin__row,
+.theme-dark .usnapwin__foot,
+.theme-dark .usnapwin__globe { border-color: #5a5a5a; }
+.theme-dark .usnapwin__arrow,
+.theme-dark .usnapwin__quant,
+.theme-dark .usnapwin__slidebtn,
+.theme-dark .usnapwin__snaps,
+.theme-dark .usnap,
+.theme-dark .usnapwin__show,
+.theme-dark .usnapwin__tool { border-color: #5a5a5a; }
+.theme-dark .usnap__sun { border-color: #e8e8e8; }
+.theme-dark .usnap__mark { background: #e8e8e8; }
+.theme-dark .usnap--current { outline-color: #e8e8e8; }
+
+/* Per-window menus */
+.theme-dark .umenu__list { background: #2b2b2b; border-color: #cfcfcf; }
+.theme-dark .umenu__item { color: #e8e8e8; }
+.theme-dark .umenu__item:hover:not(:disabled) { background: #e8e8e8; color: #141414; }
+.theme-dark .umenu__title:hover, .theme-dark .umenu__title--on { background: #e8e8e8; color: #141414; }
+.theme-dark .umenu__sep { border-top-color: #5a5a5a; }
+
+/* Transposition editor */
+.theme-dark .utr__num { background: #333; color: #e8e8e8; border-color: #cfcfcf; }
+
+/* Time Distortion editor */
+.theme-dark .utd__voice,
+.theme-dark .utd__clear,
+.theme-dark .utd__len { background: #333; color: #e8e8e8; border-color: #cfcfcf; }
+.theme-dark .utd__voice--on { outline-color: #e8e8e8; }
+.theme-dark .utd__frame { fill: #242424; stroke: #cfcfcf; }
+.theme-dark .utd__identity { stroke: #b58f1f; }
+.theme-dark .utd__other { stroke: #7a7a7a; }
+.theme-dark .utd__live { stroke: #e8e8e8; }
+.theme-dark .utd__grip { fill: #e8e8e8; }
+
+/* Note Density editor */
+.theme-dark input.udens__num { background: #333; color: #e8e8e8; border-color: #cfcfcf; }
+.theme-dark .udens__track {
+  --udens-guide: repeating-linear-gradient(180deg, #8a8a8a 0 2px, transparent 2px 4px);
+}
+.theme-dark .udens__track::before {
+  background: repeating-linear-gradient(90deg, #8a8a8a 0 1px, transparent 1px 3px);
+}
+.theme-dark .udens__track::after { background: #242424; border-color: #cfcfcf; }
+.theme-dark .udens__bar,
+.theme-dark .udens__handle { background: #e8e8e8; }
+
+.theme-dark .uvel__track {
+  background: linear-gradient(#8a8a8a, #8a8a8a) center / 100% 2px no-repeat;
+}
+.theme-dark .uvel__band {
+  background: repeating-conic-gradient(#cfcfcf 0 25%, #4a4a4a 0 50%) 0 0 / 3px 3px;
+}
+
+/* Note Order regions */
+.theme-dark .unoteorder__bar { border-color: #5a5a5a; }
+.theme-dark .unoteorder__original { background: #e8e8e8; }
+.theme-dark .unoteorder__handle { background: #444; border-color: #cfcfcf; color: #fff; }
+
+/* Cyclic Variables levels — flip so higher level = lighter on dark */
+.theme-dark .ucyccell { border-color: #555; }
+.theme-dark .ucyccell--level-0 { background: #2b2b2b; }
+.theme-dark .ucyccell--level-1 { background: #4c4c4c; }
+.theme-dark .ucyccell--level-2 { background: #8d8d8d; }
+.theme-dark .ucyccell--level-3 { background: #c8c8c8; }
+.theme-dark .ucyccell--level-4 { background: #fff; }
+
+/* Pattern grid step cells (Patterns window) */
+.theme-dark .ustep { background: #333; border-color: #555; }
+.theme-dark .ustep--on { background: #e8e8e8; }
+.theme-dark .ustep--beat { border-left-color: #888; }
+
+/* ===== 640 × 480 logical reference workspace ============================ */
+.workspace-viewport { border-top: 1px solid var(--line); }
+.uwin { box-shadow: 1px 1px 0 rgb(0 0 0 / 18%); }
+.uwin__title { height: 16px; padding: 0 3px; gap: 3px; font-size: 10px; line-height: 14px; }
+.uwin__note { font-size: 8px; }
+.uwin__body { padding: 2px; overflow: hidden; }
+.uwin__close, .uvarpop__close { width: 14px; height: 13px; font-size: 10px; }
+.umenu__title { height: 14px; padding: 0 2px; font-size: 9px; line-height: 12px; }
+.umenu__item { min-height: 16px; padding: 2px 12px 2px 5px; font-size: 9px; }
+
+/* Permanent windows: measured from color-app.gif. */
+.u-patterns { width: 220px; height: 111px; }
+.u-patterns > .uwin__body { padding: 1px; }
+.u-patterns .ugroup { gap: 1px; margin: 0 0 1px; height: 13px; }
+.u-patterns .utab { width: 15px; height: 13px; padding: 0; font-size: 8px; }
+.upatterns__table { width: 100%; min-width: 0; table-layout: fixed; font-size: 7px; }
+.upatterns__table th, .upatterns__table td { height: 17px; padding: 0; font-size: 7px; }
+.upatterns__table th:nth-child(1) { width: 17px; }
+.upatterns__table th:nth-child(2), .upatterns__table th:nth-child(3) { width: 11px; }
+.upatterns__table th:nth-child(4) { width: 22px; }
+.upatterns__table th:nth-child(5) { width: 31px; }
+.upatterns__table input[type="checkbox"] { width: 9px; height: 9px; margin: 0; }
+.upatterns__table .unum { width: 20px; height: 13px; padding: 0; font-size: 7px; }
+.upatterns__table .unum--s { width: 10px; }
+.upatterns__table select { width: 18px; height: 13px; padding: 0; font-size: 7px; }
+.upatterns__table .ustepcell { border-left: 0; border-right: 0; }
+.upatterns__table .ustep { width: 6px; height: 12px; border-width: 1px; }
+
+.u-conductor-win { width: 229px; }
+.u-conductor-win > .uwin__body { width: 229px; height: 95px; }
+.uconduct { transform: scale(0.4978, 0.4393); }
+
+.u-flexsnap > .uwin__body { padding: 0; }
+.usnapwin { --snap-cell: 18px; }
+.u-flexsnap { width: 62px; overflow: hidden; }
+.usnapwin { --snap-cell: 16px; }
+.usnapwin__holddo { height: 28px; padding: 2px; }
+.usnapwin__holddo svg { max-width: 18px; max-height: 18px; }
+.usnapwin__arrow, .usnapwin__quant, .usnapwin__slidebtn { font-size: 10px; }
+.usnapwin__row svg, .usnapwin__shows svg { max-width: 12px; max-height: 12px; }
+.usnap__letter { font-size: 8px; }
+.usnapwin__foot { height: 18px; }
+.usnapwin__tool { padding: 1px; }
+.usnapwin__tool svg { max-width: 14px; max-height: 14px; }
+.usnapwin__globe { height: 24px; padding: 1px; }
+.usnapwin__globe svg { max-width: 20px; max-height: 20px; }
+
+.u-variables { width: 220px; height: 156px; }
+.u-variables .uwin__note { display: none; }
+.u-variables > .uwin__body { padding: 2px; }
+.u-variables .uvars { gap: 2px; }
+.u-variables .uvars__row { gap: 1px; height: 21px; }
+.u-variables .uvars__label { width: 43px; font-size: 8px; }
+.u-variables .uarrow { width: 16px; border-width: 1px; }
+.u-variables .umini { height: 21px; padding: 1px; }
+.u-variables .uvars__cells { border-width: 1px; }
+.u-variables .umini--group { font-size: 9px; }
+
+.u-cyclic-vars { width: 229px; height: 156px; }
+.u-cyclic-vars > .uwin__body { padding: 2px; }
+.u-cyclic-vars .ucyclics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.u-cyclic-vars .ucyc__name { font-size: 8px; margin-bottom: 1px; }
+.u-cyclic-vars .ucycpos { height: 20px; padding: 1px; font-size: 8px; }
+.u-cyclic-vars .ucycpos i { height: 2px; margin-bottom: 1px; }
+
+.u-midi { width: 454px; min-height: 45px; }
+.u-midi > .uwin__body { padding: 1px; }
+.u-midi .uvars--inline { margin: 0; }
+.u-midi .uvars__row { height: 25px; gap: 1px; }
+.u-midi .uvars__label { width: 42px; font-size: 8px; }
+.u-midi .uarrow { width: 16px; border-width: 1px; }
+.u-midi .uvars__cells { border-width: 1px; }
+.u-midi .umini { height: 25px; padding: 1px; }
+.u-midi--open { height: auto; }
+.u-midi--open .umidi { width: 450px; min-width: 0; table-layout: fixed; }
+.u-midi--open .umidi th, .u-midi--open .umidi td { padding: 1px; font-size: 8px; }
+.u-midi--open .umidi input[type="range"] { width: 50px; }
+
+/* Auxiliary windows use their own reference-derived dimensions. */
+.peditor { width: 443px; }
+.cyced { width: 439px; }
+.u-midiview-win { width: 454px; }
+.midiview__viewport { height: 190px; }
+.midiview__tracker-head, .midiview__row { grid-template-columns: 76px repeat(4, minmax(0, 1fr)); }
+.uvarpop { width: 273px; }
+.uvarpop-host:has([aria-label="Vel Range Editor"]) .uvarpop { width: 329px; }
+.uvarpop-host:has([aria-label="Note Order Editor"]) .uvarpop { width: 397px; }
+.uvarpop-host:has([aria-label="Transposition Editor"]) .uvarpop { width: 286px; }
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .uvarpop { width: 280px; }
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uvarpop { width: 360px; }
+
+/* Four-voice artwork always takes its color from the global palette. */
+.umini__art .uvoice { color: var(--voice-color); fill: var(--voice-color); stroke: var(--voice-color); }
+.theme-dark .umini__art .uvoice { filter: brightness(1.15); }
+
+/* Compact, per-reference editor internals. */
+.uvarpop { border-width: 1px; box-shadow: 2px 2px 0 rgb(0 0 0 / 35%); }
+.uvarpop__voices { padding: 2px 5px; }
+.uvarcontrol {
+  grid-template-columns: 42px minmax(0, 1fr) 34px;
+  gap: 4px;
+  min-height: 30px;
+}
+.uvarpop__hint { display: none; }
+.udens__head { grid-template-columns: 12px 42px 1fr; gap: 4px; padding: 3px 5px 1px; }
+.udens { grid-template-columns: 12px 42px 1fr; gap: 4px; height: 30px; }
+.uvel { grid-template-columns: 12px 42px 1fr 42px; gap: 4px; }
+.uorch { grid-template-columns: repeat(8, minmax(20px, 1fr)); gap: 2px; }
+.uorch__channel { height: 20px; padding: 0; font-size: 8px; }
+.uvarcontrol.uvoice .uvarcontrol__voice,
+.utr__row.uvoice .utr__voice { color: var(--voice-color); }
+.uvarcontrol.uvoice .udens__bar,
+.uvarcontrol.uvoice .udens__handle { background: var(--voice-color); }
+.uvarcontrol.uvoice .uvel__band,
+.uvarcontrol.uvoice .unoteorder__original { background-color: var(--voice-color); }
+.utr__row.uvoice .utr__num { color: var(--voice-color); }
+.utd__graph { width: 220px; margin: 0 auto; }
+.utd__other.uvoice { stroke: var(--voice-color); opacity: 0.55; }
+.utd__live.uvoice { stroke: var(--voice-color); }
+
+/* Patterns Window - reference/patterns module.png and manual chapter 13. */
+.u-patterns { width: 228px; height: 120px; overflow: visible; }
+.u-patterns > .uwin__title {
+  position: relative; z-index: 3; width: 91px; height: 20px;
+  padding: 0 4px; gap: 3px; border-right: 0; background: #fff;
+  font-size: 11px; line-height: 18px;
+}
+.u-patterns > .uwin__title::after {
+  content: ""; position: absolute; left: 89px; top: -1px;
+  width: 15px; height: 20px; background: #fff;
+  border-top: 1px solid #000; border-right: 1px solid #000;
+  transform: skewX(-42deg); transform-origin: bottom left;
+}
+.u-patterns .uwin__name, .u-patterns .umenu { position: relative; z-index: 1; }
+.u-patterns .uwin__slash { display: none; }
+.u-patterns .umenu { margin-left: auto; }
+.u-patterns .umenu__title { text-decoration: underline; font-size: 10px; }
+.u-patterns > .uwin__body { position: static; padding: 0; }
+.pwin__channel-head {
+  position: absolute; z-index: 2; left: 103px; right: 1px; top: 0; height: 20px;
+  display: grid; grid-template-columns: 25px 1fr; grid-template-rows: 10px 10px;
+  padding: 0 2px; border-bottom: 1px solid #000; background: #fff;
+  font: 8px/9px var(--mono); font-weight: 700;
+}
+.pwin__channel-head > span:not(.pwin__input-icon) { display: grid; grid-template-columns: repeat(8, 1fr); }
+.pwin__channel-head i { font-style: normal; text-align: center; }
+.pwin__input-icon { grid-row: 1 / 3; display: grid; place-items: center; font-size: 16px; }
+.pwin__labels, .pwin__row {
+  position: absolute; left: 0; right: 0;
+  display: grid; grid-template-columns: 20px 17px 16px 15px 15px 48px 23px 43px 31px;
+}
+.pwin__labels { top: 20px; height: 19px; border-bottom: 1px solid #000; background: #fff; }
+.pwin__labels > b {
+  min-width: 0; display: grid; place-items: center; overflow: hidden;
+  font-size: 8px; line-height: 1; white-space: nowrap;
+}
+.pwin__labels > b:nth-child(1), .pwin__labels > b:nth-child(2),
+.pwin__labels > b:nth-child(6) { place-items: end start; padding: 0 0 3px 2px; }
+.pwin__speaker-head svg { width: 12px; height: 12px; fill: currentColor; }
+.pwin__echo-head { display: flex !important; gap: 1px; align-items: center; }
+.pwin__echo-head > i { font-style: normal; font-size: 8px; }
+.pwin__echo-head > span { display: grid; grid-template-columns: repeat(2, 2px); gap: 1px; }
+.pwin__echo-head > span i { width: 2px; height: 2px; background: currentColor; }
+.pwin__mouse-head { position: relative; }
+.pwin__mouse-head > i { width: 7px; height: 10px; border: 1px solid #000; border-radius: 50%; }
+.pwin__mouse-head > span { position: absolute; width: 1px; height: 12px; background: #000; transform: rotate(35deg); }
+.pwin__rows { position: absolute; inset: 39px 0 0; }
+.pwin__row { position: relative; height: 20px; }
+.pwin__row > button, .pwin__row > input, .pwin__select, .pwin__base {
+  width: 100%; height: 20px; min-width: 0; margin: 0; padding: 0;
+  border: 0; border-right: 1px solid #000; border-bottom: 1px solid #000;
+  border-radius: 0; background: #fff; color: #000;
+  font: 700 9px/18px var(--mono); text-align: center;
+}
+.pwin__src { font-family: var(--font) !important; font-size: 9px !important; }
+.pwin__use { font-size: 11px !important; }
+.pwin__play { color: var(--voice-color) !important; display: grid; place-items: center; }
+.pwin__play svg { width: 12px; height: 12px; fill: currentColor; }
+.pwin__echo, .pwin__mouse { font-size: 10px !important; }
+.pwin__select { display: grid; grid-template-columns: repeat(3, 1fr); cursor: pointer; }
+.pwin__row.is-selected .pwin__select { background: #bdbdbd; }
+.pwin__select > button {
+  width: 100%; height: 19px; padding: 0; border: 0; background: transparent;
+  color: #000; display: grid; place-items: center;
+}
+.pwin__select svg { width: 11px; height: 11px; }
+.pwin__length, .pwin__phase { -moz-appearance: textfield; }
+.pwin__length::-webkit-inner-spin-button, .pwin__length::-webkit-outer-spin-button,
+.pwin__phase::-webkit-inner-spin-button, .pwin__phase::-webkit-outer-spin-button,
+.pwin__base input::-webkit-inner-spin-button, .pwin__base input::-webkit-outer-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+.pwin__base { display: grid; grid-template-columns: 1fr 5px 1fr; align-items: center; }
+.pwin__base input, .pwin__base select {
+  width: 100%; height: 18px; min-width: 0; padding: 0; border: 0;
+  background: transparent; font: 700 9px var(--mono); text-align: center;
+  appearance: none;
+}
+.pwin__base i { font-style: normal; }
+
+/* Reference-native editor geometry. These are logical 640×480 pixels; the
+   workspace zoom scales the complete windows uniformly. */
+.uvarpop-host:has([aria-label="Note Density Editor"]) .uvarpop { width: 273px; height: 156px; overflow: hidden; }
+.uvarpop-host:has([aria-label="Vel Range Editor"]) .uvarpop { width: 329px; height: 146px; overflow: hidden; }
+.uvarpop-host:has([aria-label="Note Order Editor"]) .uvarpop { width: 397px; height: 282px; overflow: hidden; }
+.uvarpop-host:has([aria-label="Transposition Editor"]) .uvarpop { width: 286px; height: 173px; overflow: hidden; }
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .uvarpop { width: 280px; height: 278px; overflow: hidden; }
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uvarpop { width: 214px; height: 105px; overflow: hidden; }
+
+.uvarpop-host:has([aria-label="Note Density Editor"]) .udens__head { height: 18px; padding-top: 1px; }
+.uvarpop-host:has([aria-label="Note Density Editor"]) .uvarpop__voices { padding-block: 0; }
+.uvarpop-host:has([aria-label="Note Density Editor"]) .udens,
+.uvarpop-host:has([aria-label="Note Density Editor"]) .udens__track { height: 29px; }
+.uvarpop-host:has([aria-label="Vel Range Editor"]) .uvarpop__voices { padding-block: 3px; }
+.uvarpop-host:has([aria-label="Vel Range Editor"]) .uvarcontrol--vel { min-height: 29px; }
+.uvarpop-host:has([aria-label="Note Order Editor"]) .uvarpop__voices { padding: 7px 12px 2px; }
+.uvarpop-host:has([aria-label="Note Order Editor"]) .uvarcontrol {
+  grid-template-columns: 18px 1fr; gap: 6px; min-height: 43px; border: 0;
+}
+.uvarpop-host:has([aria-label="Note Order Editor"]) .uvarcontrol__voice {
+  display: grid; place-items: center; font-size: 15px; color: #000;
+}
+.uvarpop-host:has([aria-label="Note Order Editor"]) .unoteorder {
+  grid-column: 2; height: 43px;
+}
+.uvarpop-host:has([aria-label="Note Order Editor"]) .unoteorder__bar {
+  inset: 0 0 auto; height: 27px;
+}
+.uvarpop-host:has([aria-label="Note Order Editor"]) .unoteorder__values {
+  inset: 29px 0 auto; font-size: 10px; font-weight: 700;
+}
+.uvarpop-host:has([aria-label="Note Order Editor"]) .unoteorder__handle {
+  top: -2px; height: 31px; font-size: 13px;
+}
+.uvarpop-host:has([aria-label="Note Order Editor"]) .unoteorder__legend {
+  height: 67px; padding: 7px 20px 4px; gap: 28px; font-size: 13px; line-height: 1.15;
+}
+.uvarpop-host:has([aria-label="Note Order Editor"]) .unoteorder__swatch {
+  width: 68px; height: 12px;
+}
+.uvarpop-host:has([aria-label="Transposition Editor"]) .utr { gap: 8px; padding: 4px 6px; }
+.uvarpop-host:has([aria-label="Transposition Editor"]) .utr__legend { margin-top: 10px; font-size: 9px; }
+.uvarpop-host:has([aria-label="Transposition Editor"]) .utr__head,
+.uvarpop-host:has([aria-label="Transposition Editor"]) .utr__row { height: 26px; }
+
+.cyced--classic { width: 439px; height: 349px; }
+.cyced--classic .cyced__body { height: 328px; }
+
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .utd { padding: 3px 5px; }
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .utd__bar { height: 25px; }
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .utd__graph { width: 230px; height: 230px; }
+
+/* Orchestration: four Voice rows by sixteen M Output Channels, matching the
+   Chapter 3/7 reference instead of the previous two-row modern button grid. */
+.uorch__head { margin: 2px 5px 0 22px; font-size: 8px; line-height: 9px; }
+.uorch__head > span { display: block; }
+.uorch__head > b { display: grid; grid-template-columns: repeat(16, 1fr); font-weight: 400; }
+.uorch__head i { font-style: normal; text-align: center; }
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uvarpop__voices { padding: 0 5px 3px; }
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uvarcontrol {
+  display: grid; grid-template-columns: 17px 1fr; gap: 0; min-height: 13px;
+  border: 0;
+}
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uvarcontrol__voice {
+  display: grid; place-items: center; font-size: 9px;
+}
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uorch {
+  grid-column: 2; display: grid; grid-template-columns: repeat(16, 1fr);
+  gap: 0; padding: 0; border-top: 1px solid #000; border-left: 1px solid #000;
+}
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uorch__channel {
+  width: auto; height: 12px; padding: 0; border: 0;
+  border-right: 1px solid #000; border-bottom: 1px solid #000;
+  color: transparent; background: #fff;
+}
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uorch__channel--on {
+  background: repeating-linear-gradient(135deg, var(--voice-color) 0 1px, #fff 1px 2px);
+}
+
+/* Secondary-reference captures are another 2× above the logical dimensions
+   used by the 640×480 core. Keep common 16px chrome, normalize their content
+   once here, and let workspace zoom scale everything together afterwards. */
+.uvarpop__scaled-body {
+  width: 200%;
+  transform: scale(0.5);
+  transform-origin: top left;
+}
+.uvarpop-host:has([aria-label="Note Density Editor"]) .uvarpop { width: 137px; height: 86px; }
+.uvarpop-host:has([aria-label="Vel Range Editor"]) .uvarpop { width: 165px; height: 81px; }
+.uvarpop-host:has([aria-label="Note Order Editor"]) .uvarpop { width: 199px; height: 149px; }
+.uvarpop-host:has([aria-label="Transposition Editor"]) .uvarpop { width: 143px; height: 95px; }
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .uvarpop { width: 140px; height: 147px; }
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uvarpop { width: 107px; height: 61px; }
+
+.cyced--classic { width: 220px; height: 183px; }
+.cyced--classic .cyced__body {
+  width: 439px; height: 328px;
+  transform: scale(0.5); transform-origin: top left;
+}
+.cyced--modern { width: 391px; height: 199px; }
+.cyced--modern .cyced__modern {
+  width: 782px; height: 365px;
+  transform: scale(0.5); transform-origin: top left;
+}
+
+/* Compact editor chrome. Position selectors were previously left at their
+   full raster width, forcing narrow editor names onto a second line. */
+.uvarpop > .uwin__title {
+  flex-wrap: nowrap;
+  gap: 2px;
+  overflow: hidden;
+}
+.uvarpop > .uwin__title .uwin__name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
+  font-size: 6.5px;
+  line-height: 12px;
+  letter-spacing: -0.25px;
+}
+.uvarpop > .uwin__title .uwin__slash,
+.uvarpop > .uwin__title .uwin__note { display: none; }
+.uvarpop > .uwin__title .uposbox { flex: none; margin-left: 0; }
+.uvarpop > .uwin__title .uposcell { width: 6px; height: 11px; }
+.uvarpop > .uwin__title .uvarpop__close {
+  flex: none; width: 10px; height: 11px; font-size: 7px;
+}
+
+/* The Pattern Editor reference is supplied at the same doubled raster scale
+   as the secondary editors. Zoom only its inner window so the draggable host
+   and pointer coordinates remain in logical workspace pixels. */
+.peditor-host { position: absolute; width: max-content; height: max-content; }
+.peditor-host > .peditor { zoom: 0.72; }
+
+/* Keep the three probability readouts clear of the lower edge of their
+   slider track after raster normalization. */
+.uvarpop-host:has([aria-label="Note Order Editor"]) .unoteorder__values {
+  inset: 27px 0 auto;
+  line-height: 12px;
+  height: 12px;
+  overflow: visible;
+}
+
+/* ===== Shared rendered typography standard =============================
+   Targets are effective pixels at the 640×480 / 100% baseline. Scaled
+   editor bodies receive compensated declared sizes at their scale boundary. */
+:root {
+  --type-global-menu: 11px;
+  --type-window-title: 10px;
+  --type-title-note: 8px;
+  --type-body: 8px;
+  --type-compact: 7px;
+  --type-title-height: 16px;
+}
+
+.app__menubar .umenu__title { font-size: var(--type-global-menu); }
+
+.uwin > .uwin__title,
+.uvarpop > .uwin__title {
+  height: var(--type-title-height) !important;
+  min-height: var(--type-title-height);
+  font-size: var(--type-window-title) !important;
+  line-height: 14px;
+}
+.uwin > .uwin__title .uwin__name,
+.uvarpop > .uwin__title .uwin__name {
+  font-size: var(--type-window-title) !important;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.uwin > .uwin__title .uwin__note { font-size: var(--type-title-note) !important; }
+
+/* The reference notch follows the now-standard Patterns title height. */
+.u-patterns > .uwin__title { height: var(--type-title-height) !important; font-size: var(--type-window-title) !important; }
+.u-patterns > .uwin__title::after { height: var(--type-title-height); }
+
+/* Unscaled core-window controls. */
+.uwin__body :is(button, input, select, output, th, td, label, b, strong, p) {
+  font-size: var(--type-body) !important;
+}
+
+/* Conducting's reference body is horizontally scaled to 0.4978. */
+.uconduct :is(button, input, select, output, label, b, strong, p, span) {
+  font-size: 16.07px !important;
+}
+
+/* Secondary variable bodies are scaled to 0.5. */
+.uvarpop__scaled-body,
+.uvarpop__scaled-body :is(button, input, select, output, label, b, strong, p, span) {
+  font-size: 16px !important;
+}
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .uvarpop { width: 155px; }
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uvarpop { width: 145px; }
+
+/* Both Cyclic Editor layouts are scaled to 0.5. */
+.cyced__body :is(button, input, select, output, label, b, strong, p, span),
+.cyced__modern :is(button, input, select, output, label, b, strong, p, span) {
+  font-size: 16px !important;
+}
+.cyced__levels,
+.cyced__descriptor :is(b, span),
+.cyced__values input,
+.cyced__modern-values :is(input, output) { font-size: 14px !important; }
+
+/* Dense reference readouts use the shared 7px compact tier. */
+.uvarpop-host:has([aria-label="Note Density Editor"]) .udens__tick,
+.uvarpop-host:has([aria-label="Note Order Editor"]) .unoteorder__values output,
+.uvarpop-host:has([aria-label="Note Order Editor"]) .unoteorder__legend span,
+.uvarpop-host:has([aria-label="Transposition Editor"]) .utr__head span,
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .utd__bar :is(button, select) {
+  font-size: 14px !important;
+}
+.uvarpop-host:has([aria-label="Note Order Editor"]) .unoteorder__values {
+  line-height: 14px;
+  height: 14px;
+}
+
+/* Sixteen orchestration columns need compact type and an 8px effective row. */
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uvarpop {
+  width: 155px;
+  height: 80px;
+}
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uvarpop__scaled-body,
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uvarpop__scaled-body :is(button, label, b, i, span) {
+  font-size: 14px !important;
+}
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uorch__head {
+  line-height: 14px;
+}
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uvarcontrol { min-height: 16px; }
+.uvarpop-host:has([aria-label="Orchestration Editor"]) .uorch__channel { height: 16px; }
+
+/* Pattern Editor is zoomed to 0.72; compensate at its inner window. */
+.peditor > .uwin__title {
+  height: 22.222px !important;
+  min-height: 22.222px;
+  font-size: 13.889px !important;
+  line-height: 19.444px;
+}
+.peditor > .uwin__title .uwin__name { font-size: 13.889px !important; line-height: 19.444px; }
+.peditor > .uwin__title .uwin__note { font-size: 11.111px !important; }
+.peditor :is(button, input, select, output, th, td, label, b, strong, p, span) {
+  font-size: 11.111px !important;
+}
+
+/* At non-integer workspace zooms the fixed-width Pattern Editor previously
+   shrank its flex grid but not the grid's CSS background cadence. Keep every
+   note, ruler, and keyboard column on the declared 10×8 logical cell. */
+.peditor { width: max-content; }
+.peditor :is(.peruler, .pegrid, .perange) { flex: none; }
+
+/* Cyclic controls are 25% larger than the prior 0.5 normalization. Its font
+   declarations are inversely compensated so effective 8px/7px type is kept. */
+.cyced--classic { width: 275px; height: 222px; }
+.cyced--classic .cyced__body {
+  width: 439px; height: 328px;
+  transform: scale(0.625); transform-origin: top left;
+}
+.cyced--modern { width: 489px; height: 245px; }
+.cyced--modern .cyced__modern {
+  width: 782px; height: 365px;
+  transform: scale(0.625); transform-origin: top left;
+}
+.cyced__body :is(button, input, select, output, label, b, strong, p, span),
+.cyced__modern :is(button, input, select, output, label, b, strong, p, span) {
+  font-size: 12.8px !important;
+}
+.cyced__levels,
+.cyced__descriptor :is(b, span),
+.cyced__values input,
+.cyced__modern-values :is(input, output) { font-size: 11.2px !important; }
+
+/* Time Distortion's complete toolbar and square graph define its bounds. Keep
+   Length controls at their intended widths instead of letting flex clip them. */
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .uvarpop {
+  width: 185px;
+  height: 155px;
+}
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .utd__bar > *,
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .utd__len,
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .utd__unit {
+  flex: none;
+}
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .utd__len { width: 42px; }
+.uvarpop-host:has([aria-label="Time Distortion Editor"]) .utd__bar :is(button, input, select) {
+  height: 24px;
+}
+
+/* Loop markers must share the exact sixteen-column cadence of the grid above.
+   minmax(0, 1fr) prevents labels 10–16 from widening their own columns. */
+.cyced__steps {
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  padding-left: 1px;
+}
+.cyced__steps button {
+  min-width: 0;
+  overflow: visible;
+  font-size: 9.6px !important; /* 6px effective at the 0.625 content scale */
+}

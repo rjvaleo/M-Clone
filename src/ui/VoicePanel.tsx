@@ -2,9 +2,6 @@
 // that are wired into the engine so far.
 
 import { useM } from "../state/store";
-import type { NoteOrder } from "../engine/types";
-
-const ORDERS: NoteOrder[] = ["original", "reverse", "random", "random-walk"];
 const DENOMS = [1, 2, 4, 8, 16];
 
 export function VoicePanel() {
@@ -27,7 +24,7 @@ export function VoicePanel() {
               <th>Note Order</th>
               <th>Transpose</th>
               <th>Density</th>
-              <th>Velocity</th>
+              <th>Velocity Range</th>
               <th>Time Base</th>
               <th>Legato</th>
               <th>Chan</th>
@@ -58,16 +55,7 @@ export function VoicePanel() {
                 </td>
                 <td>{i + 1}</td>
                 <td>
-                  <select
-                    value={v.noteOrder}
-                    onChange={(e) => setParam(i, "noteOrder", e.target.value as NoteOrder)}
-                  >
-                    {ORDERS.map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))}
-                  </select>
+                  {v.noteOrderMix.original}/{v.noteOrderMix.cyclic}/{v.noteOrderMix.utterly}
                 </td>
                 <td>
                   <input
@@ -89,13 +77,7 @@ export function VoicePanel() {
                   />
                 </td>
                 <td>
-                  <input
-                    type="range"
-                    min={1}
-                    max={127}
-                    value={v.velocity}
-                    onChange={(e) => setParam(i, "velocity", Number(e.target.value))}
-                  />
+                  <span>{v.velocityRange.low}–{v.velocityRange.high}</span>
                 </td>
                 <td>
                   <select

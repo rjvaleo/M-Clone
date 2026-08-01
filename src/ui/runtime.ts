@@ -8,7 +8,10 @@ let runtime: MRuntime | null = null;
 
 export function getRuntime(): MRuntime {
   if (!runtime) {
-    runtime = new MRuntime(() => useM.getState().project);
+    runtime = new MRuntime(
+      () => useM.getState().project,
+      (notes) => useM.getState().recordMidiNotes(notes),
+    );
   }
   return runtime;
 }

@@ -1,8 +1,15 @@
 # M‑Clone — Build Plan & Design Document
 
+> The deferred visual-fidelity sequence and per-reference delta are maintained
+> in `VISUAL_AUDIT_AND_THEMING.md`.
+
+**A clean‑room reconstruction of the classic interactive composing instrument *M*, rebuilt screen by screen from the manual.**
+
 *A modern, browser‑first recreation of **M**, David Zicarelli / Joel Chadabe's interactive composing instrument (Intelligent Music → Cycling '74, v2.7), extended into an all‑in‑one generative studio.*
 
-Status: **Planning / design.** No code yet. This document is the reference we build and edit from.
+Status: **Living design and roadmap.** P0-P2 and substantial P3/P4 work are
+implemented; this document includes future intent as well as shipped design.
+Use [`STATUS.md`](./STATUS.md) for the authoritative current scorecard.
 Source material: `M27.pdf` (194‑page v2.7 manual) — all pages rendered and analyzed; the manual's screen images are the drawing reference for the UI.
 
 ---
@@ -44,6 +51,11 @@ Look‑and‑feel is **decoupled from layout and from function**, so a theme can
 
 ## 3. The Generative Engine (the soul)
 
+> **Implementation status (2026-07-28): this section is now complete and fully
+> tested** — transform chain, memory + 1/f Brownian randomness, and the full
+> harmonic engine (per-voice / diatonic / second-order transposition, key-snap,
+> chord-tone targeting). See [`STATUS.md`](./STATUS.md) for the live scorecard.
+
 ### 3.1 The "four by six" model
 M's whole design rests on two numbers: **4 Voices** and **6 Variable Positions**. Every Variable holds six snapshot‑able Positions; each Position stores a setting for each of the four Voices. Selecting a Position (by click or by conducting) instantly swaps that group of settings.
 
@@ -53,7 +65,7 @@ Each step, for each Voice, the engine pulls material from the Voice's Pattern an
 ```
 Pattern
   → Pattern Group select        (which pattern set is active)
-  → Note Order                  (original / reverse / random / weighted-random …)
+  → Note Order                  (Original / Cyclic Random / Utterly Random mix)
   → Transposition               (per-voice; incl. Second-Order Transpose)
   → Note Density                (probability the note actually sounds)
   → Velocity Range + Accents    (dynamics)
@@ -68,21 +80,55 @@ Overlaid on the chain:
 - **Conducting** moves the Active Position of any conducting‑enabled Variable as the baton is dragged (continuous for Velocity Range and Legato).
 - **Cyclic Variables** independently step through their own 16‑step cycles for Rhythm, Legato, and Accent.
 
-### 3.3 The "quantum," alive randomness
+### 3.3 Note Order behavior and editor
+
+Note Order is not an exclusive mode selector. Each Voice stores a three-part
+probability mix whose values always total 100:
+
+- **Original Order** (solid black) reads the Pattern in its recorded order.
+- **Cyclic Random** (gray) reads a stored permutation of the Pattern. That
+  permutation repeats, so the result is scrambled but cyclic.
+- **Utterly Random** (polka dot) chooses a Pattern step anew during playback
+  and avoids immediately repeating the previous step when possible.
+
+The editor shows one segmented bar per Voice. Two numbered handles are placed
+directly on each bar:
+
+1. The **Original/Cyclic boundary** controls the end of the solid region.
+2. The **Cyclic/Utterly boundary** controls the start of the polka-dot region.
+
+Dragging either handle continuously changes the shaded regions, percentages,
+and live playback. The gray Cyclic Random share is the space between the two
+boundaries. When the boundaries meet, the handles remain side by side and
+grab-able; dragging one through the other pushes the opposite edge so the
+percentages remain valid. Each handle permanently occupies one side of its
+boundary, uses the same positioning rule across the full range, and is clamped
+inside the bar at both extremes. Pointer movement is batched to animation frames
+so dragging does not trigger excessive store/render updates. Each of the six
+a–f Note Order Positions stores a separate mix for all four Voices.
+
+The stored Scrambled list is owned by the Pattern and remains deterministic
+from the project seed plus a Pattern generation counter. **Pattern →
+ReScramble**, **Original → Scrambled**, and **Swap Scrambled and Original** all
+operate on whole Patterns or selected Regions.
+
+### 3.4 The "quantum," alive randomness
 Flat `Math.random()` will not reproduce M's feel. The randomness is modeled as a **tunable RNG layer**:
-- **Weighted random with memory** — avoid immediate repeats, bias toward locally coherent choices, so it feels intentional rather than noisy.
+- **M-style Note Order mix** — each Voice probabilistically chooses among the
+  recorded Original Order, a stored/repeating Cyclic Random permutation, and a
+  live Utterly Random pick. Utterly Random avoids immediate repeats.
 - **1/f (pink) / Brownian distributions** — Chadabe's Intelligent Music lineage leaned on fractional noise, which wanders smoothly yet still surprises. This is the "musical randomness" texture.
 - **Real‑time steering** — you are driving a probabilistic system through the conducting layer, so responsiveness/latency is part of the feel, not just the math.
 
 All of this is exposed as parameters we can dial toward what the ear remembers.
 
-### 3.4 The harmonic engine — "notes I never played, in key"
+### 3.5 The harmonic engine — "notes I never played, in key"
 The single most important behavior to reproduce: M generated complementary pitches the user never entered, in the right key or a complementary one — auto‑accompaniment in the Band‑in‑a‑Box era, done M's gestural way.
 
 Best‑fit mechanism (to validate by ear):
 - The **pitch pool is seeded by the user's input**, but **per‑voice Transposition** reads that one line at different intervals across the four Voices (e.g., melody / third / fifth / octave), producing harmony you never explicitly voiced.
 - **Second‑Order Transpose** (a real Options‑menu toggle in M) transposes the transpositions — a harmonizer feeding a harmonizer — turning played notes into implied chords.
-- Note Order scrambling + Density gating then let each voice wander independently through that harmonized space: four players reading one chart.
+- Note Order mixing + Density gating then let each voice wander independently through that harmonized space: four players reading one chart.
 
 Whether M snapped transpositions to a scale (so a "third" bends major/minor to stay in key) can't be confirmed from the manual. We implement it as a **first‑class harmonic engine** regardless:
 - A **key / scale context**.
@@ -106,12 +152,17 @@ Faithful default behavior, with modern guardrails available.
 - **Engine** — framework‑agnostic TS: clock, scheduler, transform chain, RNG, harmonic engine, document model.
 - **Control catalog + bindings (shared)** — abstract control types (Numerical, Toggle / Picture‑Matrix, Grid editor, Variable‑miniature strip, Conducting arrow, Drag area) each bound to engine state. Never changes between views.
 - **Theme layer (per view)** — supplies a *layout map* (where controls sit) and a *renderer* per control type. Classic = M's 640×480 arrangement in vector; Modern = reflowable.
+- **Workspace scale layer** — the Classic layout remains in 640×480 logical
+  coordinates and the entire control suite scales from 50–200% in 10% steps.
+  Dragging, menus, persistence, fonts, icons, and channel colors share that one
+  coordinate and theme system; individual modules do not apply local zoom.
 
 ### 4.3 Stack
 - **Vite + React + TypeScript** for UI.
 - **Lightweight store** (Zustand‑style) that both the engine and React can touch.
 - **Timing:** the **Web Audio clock with a lookahead scheduler** (not `setInterval`) — even for MIDI out — to avoid jitter.
-- **Output sinks, from day one:** **Web MIDI** (`navigator.requestMIDIAccess`) + **internal WebAudio synth** + **WAM instruments**.
+- **Output sinks:** **Web MIDI** (`navigator.requestMIDIAccess`) and the internal
+  WebAudio synth are implemented. **WAM instruments** remain planned.
 - **Native later:** **Tauri** (Rust shell) for cross‑platform desktop, native MIDI/audio, and **VST/AU hosting** (see §7).
 
 ### 4.4 Data & file formats
@@ -128,6 +179,12 @@ A browser **cannot** load VST/VST3/AU binaries. Path:
 ---
 
 ## 5. Screen Inventory
+
+> **Implementation note:** the Unified view now renders these as a **movable-window
+> 640×480 canvas** (drag by the title bar, positions persist, last-clicked comes
+> to front) with **50–200% application zoom**, light/dark themes, and a shared
+> six-preset/custom channel palette. See [`STATUS.md`](./STATUS.md) for what's wired and
+> [`TODO.md`](./TODO.md) for the open UI/UX items.
 
 ### Main screen — six always‑live windows
 1. **Patterns** (4 rows). *Input controls:* Src/Use, input channel, monitor, record enable, Record Mode (Replace / Overdub / Drum‑Machine), Insertion Mode. *Output controls:* Play‑Enable (speaker), Mouse Advance, Pattern thumbnail / Select, Output Length, Time Base (numerator/denominator), Phase, articulation, Pattern Group.
@@ -192,6 +249,11 @@ Conducting Grid (mouse baton), Input Control System (MIDI‑keyboard one‑step 
 
 ## 8. Phased Roadmap
 
+**Current checkpoint (2026-07-31):** P0–P2 are complete; the implemented parts
+of P3/P4 are stable; layout is accepted and frozen. Technical completion now
+follows `NEXT_STEPS.md`: persistence, remaining Snapshot/Phrasing behavior,
+recording/MIDI I/O, controller bindings, and the instrument decision.
+
 - **P0 — Foundations.** Repo scaffold (Vite/React/TS), engine skeleton, Web Audio clock + lookahead scheduler, dual output sinks (MIDI + synth), theme architecture (control catalog + theme provider), state store.
 - **P1 — Sound & Patterns.** Pattern model, Pattern Editor, transport (Start/Stop/Pause/Sync), Tempo, Time Base / Output Length / Play‑Enable. **First sound.**
 - **P2 — Variables core.** Note Order, Transposition (+ harmonic engine start), Density, Velocity/Accents; Positions, miniatures, Active Position, edit windows.
@@ -207,8 +269,9 @@ Conducting Grid (mouse baton), Input Control System (MIDI‑keyboard one‑step 
 
 - **Generative fidelity:** reverse‑engineer to best ability; tune by ear (decided).
 - **Look:** vector redraw from manual images; faithful function/feel, not pixels (decided).
-- **Views:** classic + modern, fully decoupled theme (decided).
-- **Audio:** internal synth + Web MIDI + WAM from the start (decided).
+- **Views:** classic + modern remains the direction. The Modern Cyclic Editor
+  is implemented; a fully decoupled whole-app layout system is not yet built.
+- **Audio:** internal synth + Web MIDI are implemented; WAM remains planned.
 - **VST:** browser can't host VST; real VST hosting arrives with the native/Tauri build (decided).
 - **`.M` import:** wanted; deferred until sample files are provided.
 - **Instruments:** RJ has specific instruments in mind — **dedicated design conversation still queued.**

@@ -22,10 +22,16 @@ export class MRuntime {
   private cursors: VoiceCursor[] = [];
   private rng = new Rng(1);
   private timer: ReturnType<typeof setInterval> | null = null;
+  private pausedAt: number | null = null;
   private synthEnabled = true;
+  private onPlannedNotes: ((notes: readonly import("./planner").PlannedNote[]) => void) | null;
 
-  constructor(getState: () => ProjectState) {
+  constructor(
+    getState: () => ProjectState,
+    onPlannedNotes: ((notes: readonly import("./planner").PlannedNote[]) => void) | null = null,
+  ) {
     this.getState = getState;
+    this.onPlannedNotes = onPlannedNotes;
   }
 
   /** Create audio graph lazily (must follow a user gesture). */
@@ -76,12 +82,68 @@ export class MRuntime {
     return this.timer !== null;
   }
 
+  /**
+   * Play a one-shot chord straight to the sinks — what M calls Editor Sound:
+   * clicking a Reference Keyboard key, adding a note to a step, or dragging the
+   * MIDI Edit Counter. Bypasses the planner entirely; this is monitoring, not
+   * musical output, so it never touches the cursors.
+   */
+  audition(
+    pitches: number[],
+    velocity: number,
+    channels: number[],
+    durationSec = 0.35,
+  ): void {
+    if (pitches.length === 0 || channels.length === 0) return;
+    const ctx = this.ensure();
+    if (ctx.state === "suspended") void ctx.resume();
+    const startSec = ctx.currentTime + 0.005;
+    for (const sink of this.sinks()) {
+      for (const note of pitches) {
+        for (const channel of channels) {
+          sink.schedule({ note, velocity, channel, startSec, durationSec });
+        }
+      }
+    }
+  }
+
   async start(): Promise<void> {
     const ctx = this.ensure();
     if (ctx.state === "suspended") await ctx.resume();
     const state = this.getState();
     this.rng = new Rng(state.seed);
     this.cursors = makeCursors(state, ctx.currentTime + 0.06);
+    this.pausedAt = null;
+    if (this.timer === null) {
+      this.timer = setInterval(() => this.tick(), TICK_MS);
+    }
+  }
+
+  /** Pause scheduling without discarding the musical cursor. */
+  pause(): void {
+    if (this.timer === null || !this.ctx) return;
+    clearInterval(this.timer);
+    this.timer = null;
+    this.pausedAt = this.ctx.currentTime;
+    this.synth?.panic();
+    this.midi?.panic();
+  }
+
+  /** Continue from the paused cursor instead of restarting at step one. */
+  async resume(): Promise<void> {
+    if (this.pausedAt === null) {
+      await this.start();
+      return;
+    }
+    const ctx = this.ensure();
+    if (ctx.state === "suspended") await ctx.resume();
+    const shift = ctx.currentTime - this.pausedAt;
+    this.cursors = this.cursors.map((cursor) => ({
+      ...cursor,
+      nextTimeSec: cursor.nextTimeSec + shift,
+      originSec: cursor.originSec + shift,
+    }));
+    this.pausedAt = null;
     if (this.timer === null) {
       this.timer = setInterval(() => this.tick(), TICK_MS);
     }
@@ -102,6 +164,7 @@ export class MRuntime {
     }
     this.synth?.panic();
     this.midi?.panic();
+    this.pausedAt = null;
   }
 
   private tick(): void {
@@ -111,6 +174,7 @@ export class MRuntime {
     const windowEnd = now + LOOKAHEAD_SEC;
     const { notes, cursors } = planWindow(state, this.cursors, this.rng, now, windowEnd);
     this.cursors = cursors;
+    if (notes.length > 0) this.onPlannedNotes?.(notes);
     const sinks = this.sinks();
     for (const n of notes) {
       for (const sink of sinks) sink.schedule(n);
