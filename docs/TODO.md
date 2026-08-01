@@ -28,9 +28,9 @@ scope should be counted as current implementation.
    deterministic type-1 Standard MIDI File export are complete. Still open:
    MIDI import, Pattern conversion choices, independent Sequence playback,
    editable track presentation, and versioned persistence.
-5. 🟡 **Instrument layer.** A compact dual-oscillator, sub/noise mixer,
-   routable-LFO, click-safe Web Audio monitor and themed Synth window are
-   implemented. The approved four
+5. 🟡 **Instrument layer.** Four independent, stream-color-coded patches in a
+   compact dual-oscillator, sub/noise mixer, routable-LFO, click-safe Web Audio
+   monitor and themed Synth window are implemented. The approved four
    role-specific browser engines still precede seven full Studio instruments,
    signature effects, and multi-output native audio. Third-party WAM hosting is
    exploratory and does not block Classic.
@@ -46,6 +46,8 @@ The execution order and acceptance gates for these items are in
 
 - ✅ Shared rendered typography, global/context menu ownership, 640×480 sizing,
   application scaling, and current clipping/alignment defects are normalized.
+- ✅ Compact Synth dial/select rows and the Note Density 100%/fourth-row edges
+  have explicit containment clearance at the normal 150% scale.
 - ⏸ Further notch, icon, pixel-overlay, and exact reference-detail work is
   deliberately paused until technical completion. The current layout is good
   enough for implementation work.

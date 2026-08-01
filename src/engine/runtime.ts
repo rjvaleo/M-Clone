@@ -26,7 +26,7 @@ import {
   type TimingFingerprint,
 } from "./transport";
 import {
-  DEFAULT_SYNTH_SETTINGS,
+  createDefaultSynthSettings,
   normalizeSynthSettings,
   type SynthSettings,
 } from "./synth";
@@ -49,7 +49,7 @@ export class MRuntime {
   private auditionWakes = new Set<SchedulerHandle>();
   private pausedAt: number | null = null;
   private synthEnabled = true;
-  private synthSettings = DEFAULT_SYNTH_SETTINGS;
+  private synthSettings = createDefaultSynthSettings();
   private timing: TimingFingerprint[] = [];
   private onPlannedNotes: ((notes: readonly import("./planner").PlannedNote[]) => void) | null;
   private scheduler: SchedulerDriver;
@@ -78,7 +78,7 @@ export class MRuntime {
     if (!this.ctx) {
       const ctx = new AudioContext();
       const master = ctx.createGain();
-      master.gain.value = this.synthSettings.masterVolume;
+      master.gain.value = 1;
       master.connect(ctx.destination);
       this.ctx = ctx;
       this.master = master;
@@ -151,11 +151,10 @@ export class MRuntime {
     this.synthEnabled = on;
   }
 
-  setSynthSettings(settings: SynthSettings): void {
-    this.synthSettings = normalizeSynthSettings(settings);
-    this.synthEnabled = this.synthSettings.enabled;
+  setSynthSettings(settings: readonly SynthSettings[]): void {
+    this.synthSettings = settings.map(normalizeSynthSettings);
+    this.synthEnabled = this.synthSettings.some((patch) => patch.enabled);
     this.synth?.setSettings(this.synthSettings);
-    if (this.master) this.master.gain.value = this.synthSettings.masterVolume;
   }
 
   setMasterVolume(v: number): void {
@@ -187,13 +186,14 @@ export class MRuntime {
     velocity: number,
     channels: number[],
     durationSec = 0.35,
+    voice = 0,
   ): void {
     if (pitches.length === 0 || channels.length === 0) return;
     const ctx = this.ensure();
     if (ctx.state === "suspended") void ctx.resume();
     const startSec = this.nowSec() + 0.005;
     const notes = pitches.flatMap((note) => channels.map((channel) => ({
-      voice: 0, note, velocity, channel, startSec, durationSec,
+      voice, note, velocity, channel, startSec, durationSec,
       atTick: this.cursors[0]?.transportTick ?? 0,
       durationTicks: 0,
     })));

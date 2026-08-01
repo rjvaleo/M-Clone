@@ -34,6 +34,12 @@ The core engine should support a configurable 1–16 Voices even though Classic
 exposes four and Studio exposes eight. Product caps belong in capability
 configuration, never in musical algorithms.
 
+Current audio checkpoint: all four Classic streams have independent patches in
+one configurable subtractive monitor design. The role-specific drum, bass,
+lead, and chord/pad engines in the table remain release work; the monitor is an
+implemented audition/routing foundation, not a claim that the Classic rack is
+complete.
+
 ## 3. M Classic Web — free
 
 ### Product promise

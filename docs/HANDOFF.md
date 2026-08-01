@@ -47,7 +47,7 @@ defaulted or clamped and returned as warnings. File ▸ New / Open / Save /
 Save As are wired in `src/ui/fileCommands.ts`, with document name and
 unsaved-changes tracking shown in the header.
 
-**Current suite: 662 tests across 36 files**, 100% coverage on `src/engine` and
+**Current suite: 665 tests across 38 files**, 100% coverage on `src/engine` and
 `src/state`, typecheck and both builds clean.
 
 Snapshot editing and Slideshows are complete. Manual review also established
@@ -93,12 +93,16 @@ The generative engine and selected P3 scope are complete. Save/load,
 Snapshot/Slideshow, and Phrasing-through-Legato are done; Sound Choice remains
 intentionally skipped. The UI was rebuilt against the real M screenshots in
 [`../reference/`](../reference/) and the M 2.7 manual (`reference/M27.pdf`)
-rather than from an impression of them. The suite is **662 tests across 36
+rather than from an impression of them. The suite is **665 tests across 38
 files**, with 100% coverage held on `src/engine` and `src/state`. Movie capture,
 deterministic SMF export, and the Patterns/Transport/Conductor parity correction
-are complete. The built-in monitor is now a compact dual-oscillator,
-sub/noise-mixer, LFO-modulated, click-safe subtractive synth designed for the
-normal 150% workspace scale. MIDI import and Sequence playback follow.
+are complete. Each sequencer stream now owns an independent color-coded patch
+in the compact dual-oscillator, sub/noise-mixer, LFO-modulated, click-safe
+subtractive synth. The panel is designed for the normal 150% workspace scale.
+Its compact rows now use contained knob hit areas, measured caption clearance,
+and value-sized selects with one-character side padding. The Note Density
+editor is 145×90 with fixed drawing geometry and visible right/bottom gutters.
+MIDI import and Sequence playback follow.
 
 ## How we've been working — keep doing this
 
@@ -134,7 +138,8 @@ normal 150% workspace scale. MIDI import and Sequence playback follow.
 | **Time Distortion** | New: breakpoint-curve model, edit window, and planner integration — it is audible |
 | **Transposition** | Note/Octave numericals against C3, with the octave carry |
 | **Snapshot Window** | Rebuilt as the tall strip: 26 A–Z locations, Quantization, Slideshow controls |
-| **Note Density** | The bar-and-square line editor with its scale header |
+| **Note Density** | The bar-and-square line editor with its scale header; 145×90 shell preserves the fixed ruler while padding the 100% label and fourth lane |
+| **Built-in Synth** | Four independent stream-colored patches; compact dual-oscillator/LFO/filter/dual-ADSR faceplate, click-safe envelopes, and collision-free controls at 150% |
 | **Presets** | Six distinct Variable Positions read off the screenshots, replacing six identical copies |
 | **Layout** | Restored the global menu bar, removed the footer, standardized effective typography, and gave the remaining viewport to the window canvas |
 | **Window manager** | Right-click blank canvas to open windows; the six reference main windows are permanent, while all auxiliary editors are movable, closable, and can remain open together |

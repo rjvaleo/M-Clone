@@ -15,7 +15,7 @@ equivalents.
 
 **Implementation status:** Core conducting plus Movie capture/export are
 implemented. Pure conductor, Movie, and store behavior are covered by the
-current 657-test, 100%-coverage engine/state suite.
+current 665-test, 100%-coverage engine/state suite.
 Production and single-file builds pass, and the localhost UI has been exercised
 with the in-app browser.
 

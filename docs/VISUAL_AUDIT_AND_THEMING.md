@@ -1,6 +1,6 @@
 # Visual Audit, Window Consistency, and Theming
 
-Date: 2026-07-31
+Last audited: 2026-08-01
 
 ## Scope and decision
 
@@ -12,7 +12,9 @@ behavior is complete.
 
 Implemented outcomes include the extensible four-Voice color-theme system, six
 initial presets, custom palette chooser, menu ownership, shared rendered
-typography, and logical panel sizing.
+typography, logical panel sizing, collision-free auxiliary placement, compact
+Synth control containment, and explicit right/bottom safety gutters for the
+Note Density editor.
 
 ## Reference scale caveat
 
@@ -99,7 +101,7 @@ windows and Midi View are non-modal, independently movable, and closable.
 | `transport and conductor.png` | Conducting window | Inventory and geometry are close. Exact bitmap font, diagonal/border pixels, native controls, title-menu fit, and lower icons remain deltas. |
 | `variables.png` | Variables / `VarThumb` | Six positions and miniature concepts exist. Width, labels/arrows, four-color miniature rows, and exact cell/title metrics differ. |
 | `cyclic editor.png` | Dedicated Cyclic Editor | Classic controls are enlarged 25% to 275×222 logical pixels without enlarging typography. Four stacked 5×16 grids, aligned loop numerals, dual axes, controls, Positions, defaults, and random ranges work; Modern exposes all three variables. |
-| `note density.png` | Note Density popup | ✅ Reference raster normalized to 137×86 logical geometry, with compact four-Voice percentage/slider rows and global channel colors. |
+| `note density.png` | Note Density popup | ✅ Reference raster normalized to 145×90 logical geometry, with a fixed-width drawing area, right/bottom safety gutter, compact four-Voice percentage/slider rows, and global channel colors. |
 | `velocity range.png` | Velocity popup | Four bands exist. Selector, dither, number boxes, endpoints, pointer treatment, and dimensions differ. |
 | `note order.png` | Note Order popup | ✅ Reference raster normalized to 199×149 logical geometry; three-region behavior, textures, boundaries, values and selector retained. |
 | `note-order.png` | Note Order popup | The 100/0/0 state is supported; the same geometry/texture/title deltas apply. |

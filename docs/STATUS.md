@@ -2,19 +2,28 @@
 
 ## 2026-08-01: configurable click-safe built-in Synth
 
-The fixed triangle monitor is now a compact themed Synth module with two tuned
+Each of the four sequencer streams now owns an independent, color-coded patch
+in the compact themed Synth module. Every patch has two tuned
 oscillators, sub oscillator, noise mixer, routable LFO, power, master, glide,
 multimode keyboard-tracked resonant filter, filter ADSR, amplifier ADSR, and
-velocity sensitivity. Its 310px hardware-panel layout is designed around the
-application's normal 150% working scale.
+velocity sensitivity. Its 366×81px hardware-panel layout is designed around
+the application's normal 150% working scale.
 The Web Audio path uses held scheduled values and nonzero attack/release ramps,
 eliminating the hard envelope discontinuities exposed by repeated sixteenth
 notes. See [`BUILT_IN_SYNTH.md`](./BUILT_IN_SYNTH.md).
 
-TDD verification is **662 tests across 36 files** with 100% included
+The final compact-control pass keeps the 366×81 faceplate while preventing
+caption/select/section collisions at 150%. Knob hit areas cover their complete
+dial-and-caption cells, select widths derive from their abbreviated values with
+one-character border padding, and every Output control remains contained.
+The Note Density editor is now 145×90 logical pixels with a fixed 270px
+pre-scaled drawing body and equal rendered right/bottom safety gutters, so its
+100% label and fourth lane clear the frame.
+
+TDD verification is **665 tests across 38 files** with 100% included
 engine/state coverage. Browser verification covered dark-theme layout,
-close/reopen through Windows, live control exposure, and a generated
-sixteenth-note run through the new oscillator/filter/envelope path.
+close/reopen through Windows, live control exposure, a generated sixteenth-note
+run, compact select/knob containment, and Note Density geometry at 150%.
 
 ## 2026-08-01: Patterns/Transport/Conductor parity correction
 
@@ -206,8 +215,8 @@ align across the four fixed Voice columns, Follow pins the scrollable history
 to new rows, and Clear resets it. The later animated playhead and Pattern
 position/length experiment has been removed.
 
-**As of:** 2026-08-01 · **Working tree:** local Phrasing/Legato changes
-intentionally uncommitted
+**As of:** 2026-08-01 · **Working tree:** local Synth, density-layout, and
+documentation refinements intentionally uncommitted
 **Measured against:** [`M-Clone_Build_Plan.md`](./M-Clone_Build_Plan.md)
 
 Legend: ✅ done · 🟡 partial · ⬜ not started
@@ -224,7 +233,7 @@ is paused by decision.
 
 | Metric | State |
 | --- | --- |
-| Unit tests | **662 passing** (36 files) |
+| Unit tests | **665 passing** (38 files) |
 | Coverage (engine + state) | **100%** lines / branches / functions |
 | Typecheck (`tsc --noEmit`) | Clean |
 | Production build | Succeeds (`vite build`, `build:single`) |
@@ -282,7 +291,7 @@ is paused by decision.
 | Theme layer (per-view layout + renderers) | 🟡 | light + dark themes via a scoped `.theme-dark` skin over one layout; a formal per-theme layout provider is still 🟡 |
 | Web Audio lookahead scheduler | ✅ | injected monotonic clock + scheduler; 25 ms browser wake; bounded 80–250 ms adaptive horizon; stall/drop policy and diagnostics |
 | Explicit MIDI event/lifecycle layer | ✅ | ordered events, 960 PPQN, retrigger cleanup, per-Voice RNG |
-| Output sinks (MIDI + instruments) | 🟡 | explicit-event Web MIDI + prototype synth ✅; Classic/Studio and native adapters ⬜ |
+| Output sinks (MIDI + instruments) | 🟡 | explicit-event Web MIDI + configurable four-stream monitor synth ✅; Classic/Studio and native adapters ⬜ |
 | Document format (JSON) + save/load | ✅ | `ProjectDocumentV2`; Slideshows included, v1-compatible defensive decode, File menu wired |
 | Standard MIDI File import/export | ⬜ | |
 | Old `.M` import | ⬜ | awaiting sample files |
@@ -301,6 +310,7 @@ is paused by decision.
 | **File menu** | ✅ | New / Open / Save / Save As over a versioned document, with document name and unsaved-changes tracking; browser download rather than a file-system picker |
 | **Pattern Editor** | ✅ | dual keyboards, dotted grid, Region tools, View/Chord/Insert/Drum/Size modes, MIDI range/counter, audition, resize, and 22 working Edit/Pattern commands including Cyclic Random operations |
 | **Midi View** | ✅ | initial compact four-lane event tracker with timestamp, Note On/Off details, Follow, Clear, and bounded history |
+| **Synth** | ✅ monitor scope | four independent stream-colored subtractive patches; compact themed dual-oscillator/LFO/filter/dual-ADSR control surface; click-safe Web Audio scheduling |
 | **Module context menus** | ✅ | Pattern Editor owns Edit/Pattern; Variables owns editors/colors; Conducting owns Options/Harmony/Output; commands are accessed by right-click and popups are viewport-correct |
 | **Global menu bar** | ✅ | Classic File/Edit/Variables/Pattern/Windows/Options strip restored; window and editor entries use the shared window registry |
 | **Typography standard** | ✅ | 11px global menu; uniform 10px/16px panel chrome; 8px primary body controls; 7px compact dense readouts, verified as effective rendered sizes across all fifteen panels |
@@ -318,7 +328,7 @@ is paused by decision.
 | 640×480 workspace + zoom | ✅ | 640×480 logical baseline; persisted 50–200% application scaling in 10% increments; −/+ /100%/Fit controls; scale-aware dragging and context menus |
 | Complete channel coloring | ✅ | four-voice artwork across main windows and editors inherits the six-preset/custom global palette |
 | Reference Patterns Window | 🟡 | 228×120 Chapter 13 layout; Play Enable, Option-click Record Modes, Output Length, full numeric Time Base, functional Phase, selection and double-click editing work. Src/Use/Echo/Mouse Advance and independent a–f banks await input/group architecture |
-| Reference-native editors | ✅ | Density 137×86; Velocity 165×81; Note Order 199×149; Transposition 143×95; Cyclic controls enlarged 25% to 275×222 without changing font size; Time Distortion content-fit 185×155; Orchestration 155×80 |
+| Reference-native editors | ✅ | Density 145×90 with right/bottom gutter; Velocity 165×81; Note Order 199×149; Transposition 143×95; Cyclic controls enlarged 25% to 275×222 without changing font size; Time Distortion content-fit 185×155; Orchestration 155×80 |
 | Velocity Range editor | ✅ | exact M layout (boxed low/high, dithered range block on the axis line); click-drag to draw the range |
 
 ## Modern upgrades (beyond classic M)
