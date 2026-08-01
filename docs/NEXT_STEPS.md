@@ -20,12 +20,14 @@ Updated 2026-08-01.
 
 - Branch at the earlier checkpoint: `master`; inspect the current working tree
   before making additional changes.
-- Tests: **662 passing across 36 files**.
+- Tests: **665 passing across 38 files**.
 - Coverage: **100% statements, branches, functions, and lines** across
   `src/engine` and `src/state`.
 - Typecheck, normal production build, and single-file build: passing.
 - Native workspace: 640×480 with persisted 50–200% scaling.
 - Layout decision: frozen until technical completion.
+- Latest bounded visual fixes: Synth controls are contained at 150%, and the
+  145×90 Note Density editor has explicit right/bottom safety gutters.
 
 ## First 15 minutes
 
@@ -233,8 +235,9 @@ Decide:
 The product decision is now partially closed:
 
 - Classic Web receives four lightweight engines and basic stereo reverb/delay.
-- The shared click-safe subtractive monitor and its full control window are
-  implemented; reuse its normalized settings/envelope patterns where useful.
+- The click-safe subtractive monitor has one independent patch per stream and
+  a full control window; reuse its normalized settings/envelope patterns where
+  useful.
 - Studio receives seven full instruments, signature effects, and multi-output.
 - The instrument rack remains downstream of the explicit MIDI/event engine.
 - Third-party WAM hosting is not part of the approved Classic promise and needs

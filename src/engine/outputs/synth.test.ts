@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { SynthSink } from "./synth";
 import { DEFAULT_SYNTH_SETTINGS } from "../synth";
+import type { SynthSettings } from "../synth";
 import type { EngineEvent } from "../events";
 
 class FakeParam {
@@ -55,7 +56,7 @@ describe("SynthSink envelopes", () => {
       createBufferSource: () => noise,
     } as unknown as AudioContext;
     const sink = new SynthSink(context, master as unknown as GainNode);
-    sink.setSettings({
+    const streamThreePatch: SynthSettings = {
       ...DEFAULT_SYNTH_SETTINGS,
       waveform: "square",
       oscillator2Waveform: "sine",
@@ -69,10 +70,16 @@ describe("SynthSink envelopes", () => {
       lfoDepth: 0.3,
       filterType: "highpass",
       ampReleaseSec: 0.2,
-    });
+    };
+    sink.setSettings([
+      DEFAULT_SYNTH_SETTINGS,
+      DEFAULT_SYNTH_SETTINGS,
+      streamThreePatch,
+      DEFAULT_SYNTH_SETTINGS,
+    ]);
     const base = {
       atTick: 0, sequence: 0, destination: "synth" as const,
-      voice: 0, channel: 1, noteId: 4, note: 60,
+      voice: 2, channel: 1, noteId: 4, note: 60,
     };
     sink.scheduleBatch([
       { ...base, type: "note-on", atSec: 1, velocity: 100 },

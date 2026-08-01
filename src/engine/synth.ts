@@ -77,6 +77,10 @@ export const DEFAULT_SYNTH_SETTINGS: SynthSettings = {
   masterVolume: 0.8,
 };
 
+export function createDefaultSynthSettings(voices = 4): SynthSettings[] {
+  return Array.from({ length: voices }, () => ({ ...DEFAULT_SYNTH_SETTINGS }));
+}
+
 const clamp = (value: number, low: number, high: number) =>
   Math.max(low, Math.min(high, Number.isFinite(value) ? value : low));
 

@@ -4,6 +4,7 @@ import type { EngineEvent, NoteOnEvent } from "../events";
 import type { OutputSink } from "./types";
 import {
   DEFAULT_SYNTH_SETTINGS,
+  createDefaultSynthSettings,
   normalizeSynthSettings,
   synthFrequency,
   type SynthSettings,
@@ -17,6 +18,8 @@ type ActiveSynthNote = {
   gain: GainNode;
   nodes: AudioNode[];
   baseCutoff: number;
+  ampReleaseSec: number;
+  filterReleaseSec: number;
 };
 
 function holdAt(param: AudioParam, at: number, floor = 0.0001): void {
@@ -34,15 +37,14 @@ export class SynthSink implements OutputSink {
   readonly destination = "synth" as const;
   private active = new Set<AudioScheduledSourceNode>();
   private notes = new Map<number, ActiveSynthNote>();
-  private settings = DEFAULT_SYNTH_SETTINGS;
+  private settings = createDefaultSynthSettings();
   private lastFrequency: number | null = null;
   private noiseBuffer: AudioBuffer | null = null;
 
   constructor(private ctx: AudioContext, private master: GainNode) {}
 
-  setSettings(settings: SynthSettings): void {
-    this.settings = normalizeSynthSettings(settings);
-    this.master.gain.value = this.settings.masterVolume;
+  setSettings(settings: readonly SynthSettings[]): void {
+    this.settings = settings.map(normalizeSynthSettings);
   }
 
   private oscillator(
@@ -50,13 +52,14 @@ export class SynthSink implements OutputSink {
     frequency: number,
     start: number,
     glideFrom: number | null,
+    glideSec: number,
   ): OscillatorNode {
     const oscillator = this.ctx.createOscillator();
     oscillator.type = waveform;
-    if (this.settings.glideSec > 0 && glideFrom !== null) {
+    if (glideSec > 0 && glideFrom !== null) {
       oscillator.frequency.setValueAtTime(glideFrom, start);
       oscillator.frequency.exponentialRampToValueAtTime(
-        frequency, start + this.settings.glideSec,
+        frequency, start + glideSec,
       );
     } else {
       oscillator.frequency.setValueAtTime(frequency, start);
@@ -78,19 +81,25 @@ export class SynthSink implements OutputSink {
 
   private noteOn(event: NoteOnEvent): void {
     const start = Math.max(event.atSec, this.ctx.currentTime);
-    const settings = this.settings;
+    const settings = this.settings[event.voice] ?? DEFAULT_SYNTH_SETTINGS;
+    if (!settings.enabled) return;
     const velocity = event.velocity / 127;
-    const level = 0.25 * ((1 - settings.velocitySensitivity)
+    const level = 0.25 * settings.masterVolume * ((1 - settings.velocitySensitivity)
       + settings.velocitySensitivity * velocity);
     const frequency1 = synthFrequency(event.note, settings.oscillatorOctave, settings.detuneCents);
     const frequency2 = synthFrequency(
       event.note, settings.oscillator2Octave, settings.oscillator2DetuneCents,
     );
-    const oscillator1 = this.oscillator(settings.waveform, frequency1, start, this.lastFrequency);
-    const oscillator2 = this.oscillator(settings.oscillator2Waveform, frequency2, start, this.lastFrequency);
+    const oscillator1 = this.oscillator(
+      settings.waveform, frequency1, start, this.lastFrequency, settings.glideSec,
+    );
+    const oscillator2 = this.oscillator(
+      settings.oscillator2Waveform, frequency2, start, this.lastFrequency, settings.glideSec,
+    );
     const subOscillator = this.oscillator(
       settings.subOscillatorWaveform, frequency1 / 2, start,
       this.lastFrequency === null ? null : this.lastFrequency / 2,
+      settings.glideSec,
     );
     this.lastFrequency = frequency1;
 
@@ -162,6 +171,8 @@ export class SynthSink implements OutputSink {
     const nodes: AudioNode[] = [...mixLevels, lfoGain, gain, filter];
     this.notes.set(event.noteId, {
       sources, oscillators, filter, gain, nodes, baseCutoff,
+      ampReleaseSec: settings.ampReleaseSec,
+      filterReleaseSec: settings.filterReleaseSec,
     });
     oscillator1.onended = () => {
       for (const node of nodes) node.disconnect();
@@ -185,14 +196,14 @@ export class SynthSink implements OutputSink {
       const at = Math.max(event.atSec, this.ctx.currentTime);
       holdAt(active.gain.gain, at, 0.0002);
       active.gain.gain.exponentialRampToValueAtTime(
-        0.0001, at + this.settings.ampReleaseSec,
+        0.0001, at + active.ampReleaseSec,
       );
       holdAt(active.filter.frequency, at, 40);
       active.filter.frequency.exponentialRampToValueAtTime(
-        active.baseCutoff, at + this.settings.filterReleaseSec,
+        active.baseCutoff, at + active.filterReleaseSec,
       );
       const stopAt = at + Math.max(
-        this.settings.ampReleaseSec, this.settings.filterReleaseSec,
+        active.ampReleaseSec, active.filterReleaseSec,
       ) + 0.02;
       for (const source of active.sources) source.stop(stopAt);
     }

@@ -52,10 +52,13 @@ Distortion maps. The Classic, Blue, Red, Green, RGB, B&W, and custom palettes
 therefore propagate without component-specific color tables.
 
 Reference-native auxiliary sizes are fixed in logical pixels after normalizing
-the secondary captures' additional 2× raster scale: Note Density 137×86,
+the secondary captures' additional 2× raster scale: Note Density 145×90,
 Velocity Range 165×81, Note Order 199×149, Transposition 143×95, Cyclic Editor
 275×222, Time Distortion 185×155, and Orchestration 155×80.
 Orchestration follows the manual's four Voice rows by sixteen M Output Channels.
+Note Density keeps its 270px pre-scaled drawing width inside the wider shell;
+the extra shell area becomes an actual gutter instead of stretching the 100%
+tick and four Voice lanes back against the frame.
 
 ## Verification
 
@@ -68,3 +71,5 @@ The workspace math was written test-first. Browser verification confirmed:
 - Auxiliary initial/reopen placement is non-overlapping, left-aligned, and
   padded; pure collision tests cover free, overlapping, edge-snap, and stacked
   cases.
+- At 150%, Note Density retains equal 6.75px rendered clearance to the right of
+  its 100% label and below its fourth row.

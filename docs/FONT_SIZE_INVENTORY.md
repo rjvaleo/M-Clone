@@ -40,12 +40,16 @@ below and `WORKSPACE_SCALING.md` for current geometry.
 | Midi View | 454×257 | 10px; annotation 8px | 16px | 9px (5), 10px (2) |
 | Pattern Editor | 319×163 | **7.2px**; annotation 5.76px | **11.5px** | **7.92px (571)** |
 | Cyclic Editor (Classic) | 220×183 | 10px; annotation 8px | 16px | 4px (64), 5px (1), **5.5px (345)**, 6px (10), 7px (14), 10px (2) |
-| Note Density Editor | 137×86 | **6.5px** | 16px | **5.5px (12)** |
+| Note Density Editor | 145×90 | **6.5px** | 16px | **5.5px (12)** |
 | Velocity Range Editor | 165×81 | **6.5px** | 16px | **5.5px (12)** |
 | Note Order Editor | 199×149 | **6.5px** | 16px | 5px (12), 5.5px (4), 6.5px (8) |
 | Transposition Editor | 143×95 | **6.5px** | 16px | 4.5px (2), **5.5px (8)** |
 | Time Distortion Editor | 140×147 | **6.5px** | 16px | **5.5px (7)** |
 | Orchestration Editor | 107×61 | **6.5px** | 16px | 4px (1), **5.5px (68)** |
+
+The Note Density shell is intentionally wider/taller than its fixed scaled
+drawing body. Those pixels are containment gutters and do not change its type,
+ruler, or Voice-lane cadence.
 
 ## Material deltas
 

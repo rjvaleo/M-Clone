@@ -1,7 +1,7 @@
 # Audio Instruments and Signature Effects Specification
 
 **Status:** approved Studio product direction; not currently implemented except
-the prototype Web Audio synth  
+the configurable four-stream Web Audio monitor synth
 **Last updated:** 2026-08-01
 
 This document defines the intended audio identity of M Studio and the constrained
@@ -37,6 +37,13 @@ Four lightweight engines:
 
 One stereo mix with basic reverb and delay. The web instruments are writing and
 audition tools; complete MIDI compatibility remains the core promise.
+
+The current implementation milestone is deliberately earlier than that rack:
+four independent stream-colored patches share the configurable built-in
+subtractive monitor design documented in
+[`BUILT_IN_SYNTH.md`](./BUILT_IN_SYNTH.md). It validates routing, patch
+ownership, click-safe Web Audio scheduling, and compact control patterns; it
+does not satisfy or replace the four role-specific Classic engines above.
 
 ### M Studio
 

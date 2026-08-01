@@ -204,7 +204,9 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
 
   const audition = (notes: number[]) => {
     if (!soundOn || notes.length === 0) return;
-    getRuntime().audition(notes, soundVel, voices[selectedVoice].outputChannels);
+    getRuntime().audition(
+      notes, soundVel, voices[selectedVoice].outputChannels, 0.35, selectedVoice,
+    );
   };
 
   /**

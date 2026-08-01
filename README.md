@@ -15,7 +15,7 @@
 
 ![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
 ![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25_lines%20%7C%20branches%20%7C%20functions-brightgreen)
-![Tests](https://img.shields.io/badge/tests-662_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-665_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
@@ -58,7 +58,7 @@ limits specification is
 The technical-completion sequence for the next session is in
 [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md).
 
-Current verified checkpoint: **662 passing tests across 36 files**, **100%**
+Current verified checkpoint: **665 passing tests across 38 files**, **100%**
 statement/branch/function/line coverage for the included engine and state
 modules, clean TypeScript checking, and successful normal and single-file
 production builds. P3 is complete for the selected scope (Sound Choice remains
@@ -91,6 +91,8 @@ playback are next.
 - [`docs/NATIVE_PLUGIN_SPEC.md`](docs/NATIVE_PLUGIN_SPEC.md) — standalone clock,
   VST3/Audio Unit host synchronization, eight/ten stereo buses, real-time safety,
   host certification, packaging, and native release gates.
+- [`docs/BUILT_IN_SYNTH.md`](docs/BUILT_IN_SYNTH.md) — implemented four-stream
+  Web Audio monitor, control surface, click correction, and state boundary.
 
 ### MIDI, timing, and conducting
 
@@ -209,6 +211,10 @@ Working today:
 - **Orchestration:** each of six a–f Positions stores a 4-Voice × 16-channel
   routing matrix; a Voice can layer across multiple MIDI channels or be silent.
 - **Dual output:** built-in synth (zero setup) **and** Web MIDI to any device/DAW.
+- **Four independent monitor patches:** each stream has its own color-coded,
+  click-safe subtractive Synth patch with dual oscillators, sub/noise mixer,
+  routable LFO, resonant multimode filter, dual ADSR envelopes, glide, velocity,
+  and master controls.
 - **MIDI reliability foundation:** shared 960-PPQN positions, per-Voice RNG,
   explicit ordered Note On/Off/Program Change events, lifecycle-owned releases,
   equal-timestamp batch submission, and clear-before-panic transport transitions.

@@ -281,8 +281,9 @@ Conducting Grid (mouse baton), Input Control System (MIDI‑keyboard one‑step 
 **Current checkpoint (2026-08-01):** P0–P2 and P4 are complete; the implemented
 parts of P3 are stable. P5 now includes Movie capture and deterministic SMF
 export plus the completed Patterns/Transport/Conductor parity correction. MIDI
-import is next. The shared built-in monitor now has a complete click-safe
-subtractive control surface; role-specific Classic engines remain later in P5.
+import is next. The built-in monitor now has four independent stream patches
+and a complete click-safe subtractive control surface; role-specific Classic
+engines remain later in P5.
 
 - **P0 — Foundations.** Repo scaffold (Vite/React/TS), engine skeleton, Web Audio clock + lookahead scheduler, dual output sinks (MIDI + synth), theme architecture (control catalog + theme provider), state store.
 - **P1 — Sound & Patterns.** Pattern model, Pattern Editor, transport (Start/Stop/Pause/Sync), Tempo, Time Base / Output Length / Play‑Enable. **First sound.**
@@ -302,7 +303,7 @@ subtractive control surface; role-specific Classic engines remain later in P5.
 - **Look:** vector redraw from manual images; faithful function/feel, not pixels (decided).
 - **Views:** classic + modern remains the direction. The Modern Cyclic Editor
   is implemented; a fully decoupled whole-app layout system is not yet built.
-- **Audio:** prototype synth + Web MIDI are implemented; four Classic engines,
+- **Audio:** configurable four-stream monitor synth + Web MIDI are implemented; four Classic engines,
   seven Studio engines, signature effects, and native multi-output remain planned.
 - **VST:** browser can't host VST; real VST hosting arrives with the native/Tauri build (decided).
 - **`.M` import:** wanted; deferred until sample files are provided.

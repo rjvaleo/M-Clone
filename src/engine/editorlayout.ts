@@ -1,5 +1,5 @@
 export const EDITOR_NATIVE_SIZES = {
-  density: [137, 86], velocityRange: [165, 81], noteOrderMix: [199, 149],
+  density: [145, 90], velocityRange: [165, 81], noteOrderMix: [199, 149],
   transposition: [143, 95], cyclic: [275, 222], timeDistort: [185, 155],
   outputChannels: [155, 80],
 } as const;
