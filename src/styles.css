@@ -2493,3 +2493,164 @@ body.dark-bg { background: #191919; }
 .theme-dark .app__menubar .umenu__title { color: #e8e8e8; }
 .theme-dark .app__menubar .umenu__title:hover,
 .theme-dark .app__menubar .umenu__title--on { background: #e8e8e8; color: #141414; }
+
+/* Compact hardware-inspired subtractive Synth. At the app's 100% logical
+   scale this is intentionally tiny; the workspace's usual 150% display scale
+   brings its controls up to comfortable physical size. */
+.u-synth-win { width: 310px; }
+.u-synth-win > .uwin__body { padding: 0; }
+.synthpanel {
+  display: flex;
+  min-height: 90px;
+  background: var(--panel);
+  color: var(--ink);
+  font: 5px/1.05 var(--mono);
+  user-select: none;
+}
+.synthpanel__section {
+  position: relative;
+  min-width: 0;
+  padding: 13px 2px 2px;
+  border-right: 1px solid var(--line);
+}
+.synthpanel__section:last-child { border-right: 0; }
+.synthpanel__section h3 {
+  position: absolute;
+  inset: 3px 2px auto;
+  margin: 0;
+  font-size: 5.5px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.synthpanel__lfo { flex: 0 0 40px; }
+.synthpanel__osc { flex: 0 0 72px; }
+.synthpanel__mixer { flex: 0 0 40px; }
+.synthpanel__filter { flex: 0 0 44px; }
+.synthpanel__envelopes { flex: 0 0 84px; }
+.synthpanel__output { flex: 1 0 30px; }
+.synthpanel__knobs { display: grid; justify-content: center; }
+.synthpanel__knobs--2 { grid-template-columns: repeat(2, 18px); }
+.synthknob {
+  position: relative;
+  display: grid;
+  grid-template-rows: 18px 6px;
+  justify-items: center;
+  min-width: 17px;
+  color: inherit;
+  cursor: ns-resize;
+}
+.synthknob__dial {
+  --knob-turn: 0deg;
+  position: relative;
+  box-sizing: border-box;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 32%, #fafafa 0 12%, transparent 13%),
+    conic-gradient(from 210deg, var(--line), var(--panel) 20%, var(--ink) 48%, var(--panel) 76%, var(--line));
+  box-shadow: inset 0 0 0 3px var(--cell), 0 1px 1px rgb(0 0 0 / 28%);
+  transform: rotate(var(--knob-turn));
+}
+.synthknob__dial::after {
+  position: absolute;
+  top: 1px;
+  left: 6px;
+  width: 1px;
+  height: 5px;
+  background: var(--ink);
+  content: "";
+}
+.synthknob--large { grid-template-rows: 22px 6px; }
+.synthknob--large .synthknob__dial { width: 19px; height: 19px; }
+.synthknob--large .synthknob__dial::after { left: 8px; height: 6px; }
+.synthknob input[type="range"] {
+  position: absolute;
+  inset: 0 0 10px;
+  z-index: 2;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  cursor: ns-resize;
+  opacity: 0;
+}
+.synthknob input[type="range"]:focus-visible + b,
+.synthknob:focus-within b { outline: 1px dotted var(--ink); outline-offset: 1px; }
+.synthknob b { font-size: 4.5px; line-height: 6px; white-space: nowrap; }
+.synthknob output { display: none; }
+.synthchoice {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 1px;
+  min-height: 10px;
+  margin-top: 1px;
+  font-weight: 700;
+}
+.synthchoice select {
+  min-width: 0;
+  width: 100%;
+  height: 9px;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: var(--cell);
+  color: var(--ink);
+  font: 4.5px/1 var(--mono);
+}
+.synthchoice--octave { display: block; margin: 0; text-align: center; }
+.synthchoice--octave span { display: block; height: 6px; }
+.synthchoice--octave select { width: 19px; }
+.synthosc {
+  display: grid;
+  grid-template-columns: 6px 20px 19px 1fr;
+  align-items: start;
+  min-height: 30px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+}
+.synthosc em { padding-top: 7px; font-size: 8px; font-style: normal; font-weight: 800; }
+.synthosc .synthchoice:not(.synthchoice--octave) { display: block; padding-top: 3px; }
+.synthosc .synthchoice:not(.synthchoice--octave) span { display: block; text-align: center; }
+.synthosc .synthchoice:not(.synthchoice--octave) select { margin-top: 2px; }
+.synthpanel__osc > .synthchoice { grid-template-columns: 23px 1fr; }
+.synthenvelope {
+  display: grid;
+  grid-template-columns: 12px repeat(4, 18px);
+  align-items: center;
+  min-height: 34px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+}
+.synthenvelope:last-child { border-bottom: 0; }
+.synthenvelope strong {
+  font-size: 6px;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+}
+.synthpanel__output > .synthknob { margin: 0 auto 2px; }
+.synthpower { display: grid; justify-items: center; gap: 1px; font-weight: 800; cursor: pointer; }
+.synthpower input { position: absolute; opacity: 0; }
+.synthpower span {
+  width: 14px;
+  height: 6px;
+  border: 1px solid var(--line);
+  background: var(--cell);
+  box-shadow: inset 0 0 0 1px var(--panel);
+}
+.synthpower input:checked + span { background: var(--ink); }
+.theme-dark .synthpanel { background: #2b2b2b; color: #e8e8e8; }
+.theme-dark .synthpanel__section,
+.theme-dark .synthknob__dial,
+.theme-dark .synthchoice select,
+.theme-dark .synthpower span { border-color: #686868; }
+.theme-dark .synthknob__dial {
+  background:
+    radial-gradient(circle at 36% 32%, #fff 0 11%, transparent 12%),
+    conic-gradient(from 210deg, #777, #202020 20%, #ddd 48%, #202020 76%, #777);
+  box-shadow: inset 0 0 0 3px #333, 0 1px 1px #000;
+}
+.theme-dark .synthchoice select { background: #333; color: #e8e8e8; }
+.theme-dark .synthpower span { background: #333; }
+.theme-dark .synthpower input:checked + span { background: #e8e8e8; }

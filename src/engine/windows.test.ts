@@ -18,5 +18,6 @@ describe("application window registry", () => {
     const opened = openAppWindow(new Set<string>(), "midi-view");
     expect([...openAppWindow(opened, "midi-view")]).toEqual(["midi-view"]);
     expect(closeAppWindow(opened, "midi-view").has("midi-view")).toBe(false);
+    expect(APP_WINDOWS).toContainEqual({ id: "synth", label: "Synth", permanent: false });
   });
 });

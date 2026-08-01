@@ -15,7 +15,7 @@
 
 ![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
 ![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25_lines%20%7C%20branches%20%7C%20functions-brightgreen)
-![Tests](https://img.shields.io/badge/tests-657_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-662_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
@@ -50,13 +50,15 @@ Movie capture and deterministic Standard MIDI File export are documented in
 [`docs/MOVIES_AND_MIDI.md`](docs/MOVIES_AND_MIDI.md).
 The manual/reference parity audit for Patterns, Transport, and Conductor is in
 [`docs/PATTERNS_TRANSPORT_AUDIT.md`](docs/PATTERNS_TRANSPORT_AUDIT.md).
+The configurable click-safe Web Audio monitor is documented in
+[`docs/BUILT_IN_SYNTH.md`](docs/BUILT_IN_SYNTH.md).
 The authoritative MIDI timing, transport, lifecycle, verification, and known-
 limits specification is
 [`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md).
 The technical-completion sequence for the next session is in
 [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md).
 
-Current verified checkpoint: **657 passing tests across 34 files**, **100%**
+Current verified checkpoint: **662 passing tests across 36 files**, **100%**
 statement/branch/function/line coverage for the included engine and state
 modules, clean TypeScript checking, and successful normal and single-file
 production builds. P3 is complete for the selected scope (Sound Choice remains

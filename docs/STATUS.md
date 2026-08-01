@@ -1,5 +1,21 @@
 # M-Clone — Project Status
 
+## 2026-08-01: configurable click-safe built-in Synth
+
+The fixed triangle monitor is now a compact themed Synth module with two tuned
+oscillators, sub oscillator, noise mixer, routable LFO, power, master, glide,
+multimode keyboard-tracked resonant filter, filter ADSR, amplifier ADSR, and
+velocity sensitivity. Its 310px hardware-panel layout is designed around the
+application's normal 150% working scale.
+The Web Audio path uses held scheduled values and nonzero attack/release ramps,
+eliminating the hard envelope discontinuities exposed by repeated sixteenth
+notes. See [`BUILT_IN_SYNTH.md`](./BUILT_IN_SYNTH.md).
+
+TDD verification is **662 tests across 36 files** with 100% included
+engine/state coverage. Browser verification covered dark-theme layout,
+close/reopen through Windows, live control exposure, and a generated
+sixteenth-note run through the new oscillator/filter/envelope path.
+
 ## 2026-08-01: Patterns/Transport/Conductor parity correction
 
 The manual/reference audit is complete. Phase is now a persisted, Snapshot-aware
@@ -208,12 +224,12 @@ is paused by decision.
 
 | Metric | State |
 | --- | --- |
-| Unit tests | **657 passing** (34 files) |
+| Unit tests | **662 passing** (36 files) |
 | Coverage (engine + state) | **100%** lines / branches / functions |
 | Typecheck (`tsc --noEmit`) | Clean |
 | Production build | Succeeds (`vite build`, `build:single`) |
 | Views | Unified movable-window canvas · light/dark skins · Classic/Modern Cyclic Editor |
-| Audio out | Built-in WebAudio synth ✅ · Web MIDI ✅ |
+| Audio out | Configurable click-safe WebAudio subtractive synth ✅ · Web MIDI ✅ |
 
 ## Roadmap phases
 
@@ -260,7 +276,7 @@ is paused by decision.
 | --- | --- | --- |
 | A — Generator (classic M) | ✅ | engine + store |
 | B — Recorder (record-to-tracks / Movie) | ⬜ | |
-| C — Instrument rack | ⬜ | prototype synth only; four lightweight Classic engines then seven first-party Studio engines planned |
+| C — Instrument rack | 🟡 | configurable subtractive monitor synth complete; four role-specific Classic engines then seven first-party Studio engines remain planned |
 | Engine (framework-agnostic TS) | ✅ | `src/engine/*` |
 | Control catalog + bindings (shared) | 🟡 | store is shared; formal abstract control catalog ⬜ |
 | Theme layer (per-view layout + renderers) | 🟡 | light + dark themes via a scoped `.theme-dark` skin over one layout; a formal per-theme layout provider is still 🟡 |
@@ -346,4 +362,5 @@ polish is not on the technical critical path.
 
 - Web MIDI needs a secure origin (`https`/`localhost`); the `file://` standalone
   preview is synth-only.
-- The built-in synth is intentionally basic (placeholder for the instrument phase).
+- The built-in synth is a complete shared subtractive monitor, not one of the
+  four later role-specific Classic instruments.

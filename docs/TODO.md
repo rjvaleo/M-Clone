@@ -28,10 +28,12 @@ scope should be counted as current implementation.
    deterministic type-1 Standard MIDI File export are complete. Still open:
    MIDI import, Pattern conversion choices, independent Sequence playback,
    editable track presentation, and versioned persistence.
-5. ⬜ **Instrument layer.** The approved split is four lightweight browser
-   engines followed by seven full Studio instruments, signature effects, and
-   multi-output native audio. Third-party WAM hosting is exploratory and does
-   not block Classic.
+5. 🟡 **Instrument layer.** A compact dual-oscillator, sub/noise mixer,
+   routable-LFO, click-safe Web Audio monitor and themed Synth window are
+   implemented. The approved four
+   role-specific browser engines still precede seven full Studio instruments,
+   signature effects, and multi-output native audio. Third-party WAM hosting is
+   exploratory and does not block Classic.
 6. ⬜ **Dynamic Voice architecture.** Remove framework-independent assumptions
    that the engine always has four Voices. Classic exposes four, Studio eight,
    and core structures should support a configured 1–16 without changing

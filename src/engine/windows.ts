@@ -10,6 +10,7 @@ export const APP_WINDOWS = [
   { id: "pattern-editor", label: "Pattern Editor", permanent: false },
   { id: "cyclic-editor", label: "Cyclic Editor", permanent: false },
   { id: "midi-view", label: "Midi View", permanent: false },
+  { id: "synth", label: "Synth", permanent: false },
   { id: "density", label: "Note Density Editor", permanent: false },
   { id: "velocityRange", label: "Velocity Range Editor", permanent: false },
   { id: "noteOrderMix", label: "Note Order Editor", permanent: false },

@@ -20,7 +20,7 @@ Updated 2026-08-01.
 
 - Branch at the earlier checkpoint: `master`; inspect the current working tree
   before making additional changes.
-- Tests: **657 passing across 34 files**.
+- Tests: **662 passing across 36 files**.
 - Coverage: **100% statements, branches, functions, and lines** across
   `src/engine` and `src/state`.
 - Typecheck, normal production build, and single-file build: passing.
@@ -233,6 +233,8 @@ Decide:
 The product decision is now partially closed:
 
 - Classic Web receives four lightweight engines and basic stereo reverb/delay.
+- The shared click-safe subtractive monitor and its full control window are
+  implemented; reuse its normalized settings/envelope patterns where useful.
 - Studio receives seven full instruments, signature effects, and multi-output.
 - The instrument rack remains downstream of the explicit MIDI/event engine.
 - Third-party WAM hosting is not part of the approved Classic promise and needs

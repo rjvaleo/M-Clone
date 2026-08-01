@@ -25,6 +25,11 @@ import {
   timingFingerprints,
   type TimingFingerprint,
 } from "./transport";
+import {
+  DEFAULT_SYNTH_SETTINGS,
+  normalizeSynthSettings,
+  type SynthSettings,
+} from "./synth";
 
 const LOOKAHEAD_SEC = 0.12;
 const TICK_MS = 25;
@@ -44,6 +49,7 @@ export class MRuntime {
   private auditionWakes = new Set<SchedulerHandle>();
   private pausedAt: number | null = null;
   private synthEnabled = true;
+  private synthSettings = DEFAULT_SYNTH_SETTINGS;
   private timing: TimingFingerprint[] = [];
   private onPlannedNotes: ((notes: readonly import("./planner").PlannedNote[]) => void) | null;
   private scheduler: SchedulerDriver;
@@ -72,11 +78,12 @@ export class MRuntime {
     if (!this.ctx) {
       const ctx = new AudioContext();
       const master = ctx.createGain();
-      master.gain.value = 0.8;
+      master.gain.value = this.synthSettings.masterVolume;
       master.connect(ctx.destination);
       this.ctx = ctx;
       this.master = master;
       this.synth = new SynthSink(ctx, master);
+      this.synth.setSettings(this.synthSettings);
       this.midi = new MidiSink(ctx);
     }
     return this.ctx;
@@ -142,6 +149,13 @@ export class MRuntime {
 
   setSynthEnabled(on: boolean): void {
     this.synthEnabled = on;
+  }
+
+  setSynthSettings(settings: SynthSettings): void {
+    this.synthSettings = normalizeSynthSettings(settings);
+    this.synthEnabled = this.synthSettings.enabled;
+    this.synth?.setSettings(this.synthSettings);
+    if (this.master) this.master.gain.value = this.synthSettings.masterVolume;
   }
 
   setMasterVolume(v: number): void {

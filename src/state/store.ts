@@ -87,6 +87,11 @@ import {
   finishMovie,
   type MovieRecorder,
 } from "../engine/movie";
+import {
+  DEFAULT_SYNTH_SETTINGS,
+  normalizeSynthSettings,
+  type SynthSettings,
+} from "../engine/synth";
 
 /** 26 Snapshot locations, one per letter key A-Z. */
 export const SNAPSHOT_COUNT = 26;
@@ -240,6 +245,7 @@ export type MStore = {
   midiViewEvents: MidiViewEvent[];
   midiViewNextId: number;
   movieRecorder: MovieRecorder;
+  synthSettings: SynthSettings;
 
   setTempo: (bpm: number) => void;
   setPlaying: (playing: boolean) => void;
@@ -341,6 +347,7 @@ export type MStore = {
   clearMidiView: () => void;
   toggleMovieRecording: () => void;
   stopMovieRecording: () => void;
+  setSynthParam: <K extends keyof SynthSettings>(key: K, value: SynthSettings[K]) => void;
 
   activatePosition: (id: PositionVarId, posIndex: number) => void;
   setSlotValue: (
@@ -493,6 +500,7 @@ export const useM = create<MStore>((set, get) => ({
   midiViewEvents: [],
   midiViewNextId: 0,
   movieRecorder: EMPTY_MOVIE_RECORDER,
+  synthSettings: DEFAULT_SYNTH_SETTINGS,
 
   setTempo: (bpm) => set((s) => ({ project: { ...s.project, tempo: bpm } })),
 
@@ -772,6 +780,7 @@ export const useM = create<MStore>((set, get) => ({
       midiViewEvents: [],
       midiViewNextId: 0,
       movieRecorder: EMPTY_MOVIE_RECORDER,
+      synthSettings: DEFAULT_SYNTH_SETTINGS,
     }));
     return result;
   },
@@ -803,6 +812,7 @@ export const useM = create<MStore>((set, get) => ({
       midiViewEvents: [],
       midiViewNextId: 0,
       movieRecorder: EMPTY_MOVIE_RECORDER,
+      synthSettings: DEFAULT_SYNTH_SETTINGS,
     }));
   },
 
@@ -999,6 +1009,9 @@ export const useM = create<MStore>((set, get) => ({
   })),
   stopMovieRecording: () => set((s) => ({
     movieRecorder: finishMovie(s.movieRecorder),
+  })),
+  setSynthParam: (key, value) => set((s) => ({
+    synthSettings: normalizeSynthSettings({ ...s.synthSettings, [key]: value }),
   })),
 
   activatePosition: (id, posIndex) =>
