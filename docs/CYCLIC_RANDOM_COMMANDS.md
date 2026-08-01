@@ -7,7 +7,7 @@ The Cyclic Editor visual delta is tracked in
 (Pattern menu), and Chapter 22 (`Don't Scramble Rests`).
 
 **Implementation status:** Complete as of 2026-07-30. All acceptance criteria
-below are implemented and covered by the current 665-test, 100%-coverage suite.
+below are implemented and covered by the current 672-test, 100%-coverage suite.
 
 ## Manual behavior
 

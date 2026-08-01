@@ -11,6 +11,40 @@ import { encodeMovieAsSmf, movieFileName } from "../engine/movie";
 const EXTENSION = ".mclone.json";
 const DEFAULT_NAME = `Untitled${EXTENSION}`;
 
+type ProjectWritable = {
+  write: (data: string) => Promise<void>;
+  close: () => Promise<void>;
+};
+
+type ProjectFileHandle = {
+  name: string;
+  createWritable: () => Promise<ProjectWritable>;
+};
+
+type SavePickerWindow = Window & {
+  showSaveFilePicker?: (options: {
+    suggestedName: string;
+    types: Array<{
+      description: string;
+      accept: Record<string, string[]>;
+    }>;
+  }) => Promise<ProjectFileHandle>;
+};
+
+let projectFileHandle: ProjectFileHandle | null = null;
+
+export function hasProjectSavePicker(): boolean {
+  return typeof (window as SavePickerWindow).showSaveFilePicker === "function";
+}
+
+export function needsDownloadName(
+  saveAs: boolean,
+  documentName: string | null,
+  hasPicker = hasProjectSavePicker(),
+): boolean {
+  return !hasPicker && (saveAs || documentName === null);
+}
+
 /** Ask before throwing away unsaved music. Returns false to cancel. */
 function confirmDiscard(action: string): boolean {
   const { isDirty, documentName } = useM.getState();
@@ -27,27 +61,58 @@ export function newProject(): void {
   useM.getState().newDocument();
 }
 
-/** File ▸ Save / Save As — writes the document out as a download. */
-export function saveProject(saveAs = false): void {
+/** File ▸ Save / Save As — writes through the picker or a download fallback. */
+export async function saveProject(
+  saveAs = false,
+  explicitName?: string,
+): Promise<"saved" | "cancelled" | "needs-name"> {
   const state = useM.getState();
   let name = state.documentName ?? DEFAULT_NAME;
+  const json = JSON.stringify(state.exportDocument(), null, 2);
+  const showSaveFilePicker = (window as SavePickerWindow).showSaveFilePicker;
 
-  if (saveAs || !state.documentName) {
-    const chosen = window.prompt("Save project as:", name);
-    if (chosen === null) return; // cancelled
-    name = chosen.trim() || DEFAULT_NAME;
-    if (!name.toLowerCase().endsWith(".json")) name += EXTENSION;
+  if (showSaveFilePicker && explicitName === undefined) {
+    try {
+      if (saveAs || !projectFileHandle) {
+        projectFileHandle = await showSaveFilePicker.call(window, {
+          suggestedName: name,
+          types: [{
+            description: "M-Clone project",
+            accept: { "application/json": [".json"] },
+          }],
+        });
+      }
+      const writable = await projectFileHandle.createWritable();
+      await writable.write(json);
+      await writable.close();
+      state.markSaved(projectFileHandle.name);
+      return "saved";
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return "cancelled";
+      // Some embedded browsers expose the picker but reject it. The download
+      // path below still gives Save and Save As a working local result.
+    }
   }
 
-  const json = JSON.stringify(state.exportDocument(), null, 2);
-  const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(url);
+  if (explicitName !== undefined) {
+    name = explicitName.trim() || DEFAULT_NAME;
+    if (!name.toLowerCase().endsWith(".json")) name += EXTENSION;
+  } else if (saveAs || !state.documentName) {
+    // Page prompts are suppressed by some embedded browsers. Let App render
+    // an accessible filename dialog instead of silently keeping "Untitled".
+    return "needs-name";
+  }
 
+  const link = document.querySelector<HTMLAnchorElement>("#mclone-project-download");
+  if (!link) throw new Error("Project download anchor is unavailable");
+  link.href = `data:application/json;charset=utf-8,${encodeURIComponent(json)}`;
+  link.download = name;
+  // A download has no completion callback. Record the chosen document name
+  // before dispatching it because embedded browsers may transfer control to
+  // their download UI before the remaining handler statements run.
   state.markSaved(name);
+  link.click();
+  return "saved";
 }
 
 /** File ▸ Open — picks a JSON file and imports it. */

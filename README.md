@@ -15,7 +15,7 @@
 
 ![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
 ![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25_lines%20%7C%20branches%20%7C%20functions-brightgreen)
-![Tests](https://img.shields.io/badge/tests-665_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-672_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
@@ -58,7 +58,7 @@ limits specification is
 The technical-completion sequence for the next session is in
 [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md).
 
-Current verified checkpoint: **665 passing tests across 38 files**, **100%**
+Current verified checkpoint: **672 passing tests across 41 files**, **100%**
 statement/branch/function/line coverage for the included engine and state
 modules, clean TypeScript checking, and successful normal and single-file
 production builds. P3 is complete for the selected scope (Sound Choice remains
