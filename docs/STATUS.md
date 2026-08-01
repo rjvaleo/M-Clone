@@ -19,8 +19,13 @@ one-character border padding, and every Output control remains contained.
 The Note Density editor is now 145×90 logical pixels with a fixed 270px
 pre-scaled drawing body and equal rendered right/bottom safety gutters, so its
 100% label and fourth lane clear the frame.
+Global menu titles now toggle closed on a second click instead of being reopened
+by the outside-dismiss handler. Save As uses an app-owned filename dialog and
+commits that explicit name before activating the declarative encoded-download
+anchor. This avoids suppressed page prompts and late embedded-browser picker
+results changing or losing the document title.
 
-TDD verification is **665 tests across 38 files** with 100% included
+TDD verification is **672 tests across 41 files** with 100% included
 engine/state coverage. Browser verification covered dark-theme layout,
 close/reopen through Windows, live control exposure, a generated sixteenth-note
 run, compact select/knob containment, and Note Density geometry at 150%.
@@ -233,7 +238,7 @@ is paused by decision.
 
 | Metric | State |
 | --- | --- |
-| Unit tests | **665 passing** (38 files) |
+| Unit tests | **672 passing** (41 files) |
 | Coverage (engine + state) | **100%** lines / branches / functions |
 | Typecheck (`tsc --noEmit`) | Clean |
 | Production build | Succeeds (`vite build`, `build:single`) |
@@ -307,7 +312,7 @@ is paused by decision.
 | **Cyclic Variables** | ✅ | five-level Accent/Legato/Rhythm cycles, six Positions, per-Voice lengths, conducting, Snapshot/Slideshow integration, and Classic/Modern editor; Legato supplies Phrasing |
 | **Midi** | ✅ | per-voice channel, program, transpose, velocity-range readout, density, legato; six-position 4×16 Orchestration routing ✅; Sound Choice skipped |
 | **Snapshot** | ✅ | 26 partial A–Z stores, Hold/Do, Edit/copy, Blink Everything, restore, keyboard control, and nine record/play/pause/loop/stop Slideshows |
-| **File menu** | ✅ | New / Open / Save / Save As over a versioned document, with document name and unsaved-changes tracking; browser download rather than a file-system picker |
+| **File menu** | ✅ | New / Open / Save / Save As over a versioned document, with document name and unsaved-changes tracking in both the application header and Conducting/transport title; an app-owned filename dialog and encoded download keep embedded-browser saves deterministic |
 | **Pattern Editor** | ✅ | dual keyboards, dotted grid, Region tools, View/Chord/Insert/Drum/Size modes, MIDI range/counter, audition, resize, and 22 working Edit/Pattern commands including Cyclic Random operations |
 | **Midi View** | ✅ | initial compact four-lane event tracker with timestamp, Note On/Off details, Follow, Clear, and bounded history |
 | **Synth** | ✅ monitor scope | four independent stream-colored subtractive patches; compact themed dual-oscillator/LFO/filter/dual-ADSR control surface; click-safe Web Audio scheduling |

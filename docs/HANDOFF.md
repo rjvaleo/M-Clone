@@ -47,7 +47,7 @@ defaulted or clamped and returned as warnings. File ▸ New / Open / Save /
 Save As are wired in `src/ui/fileCommands.ts`, with document name and
 unsaved-changes tracking shown in the header.
 
-**Current suite: 665 tests across 38 files**, 100% coverage on `src/engine` and
+**Current suite: 672 tests across 41 files**, 100% coverage on `src/engine` and
 `src/state`, typecheck and both builds clean.
 
 Snapshot editing and Slideshows are complete. Manual review also established
@@ -93,7 +93,7 @@ The generative engine and selected P3 scope are complete. Save/load,
 Snapshot/Slideshow, and Phrasing-through-Legato are done; Sound Choice remains
 intentionally skipped. The UI was rebuilt against the real M screenshots in
 [`../reference/`](../reference/) and the M 2.7 manual (`reference/M27.pdf`)
-rather than from an impression of them. The suite is **665 tests across 38
+rather than from an impression of them. The suite is **672 tests across 41
 files**, with 100% coverage held on `src/engine` and `src/state`. Movie capture,
 deterministic SMF export, and the Patterns/Transport/Conductor parity correction
 are complete. Each sequencer stream now owns an independent color-coded patch
@@ -203,8 +203,10 @@ Patterns/Transport/Conductor parity audit are green; continue with MIDI import.
 
 Two smaller carry-overs from save/load:
 
-- Save uses a browser download, not a real file-system picker, so "Save" always
-  re-downloads rather than overwriting in place.
+- Save As uses an app-owned filename dialog before activating the encoded
+  download anchor. The explicit name is committed before download, so
+  suppressed prompts or late picker results cannot leave the document as
+  `Untitled`; it is shown in both the application header and transport title.
 - Any new subsystem must be added to `ProjectDocumentV2` (or a versioned
   successor) in the same change.
 

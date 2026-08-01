@@ -25,17 +25,26 @@ export type MenuItem =
       checked?: boolean;
     };
 
+export function shouldCloseMenu(isInsideList: boolean, isOnTitle: boolean): boolean {
+  return !isInsideList && !isOnTitle;
+}
+
 /** Shared popup body, positioned by whoever opened it. */
-function MenuList({ items, onClose, style }: {
+function MenuList({ items, onClose, style, title }: {
   items: MenuItem[];
   onClose: () => void;
   style: React.CSSProperties;
+  title?: HTMLElement | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const away = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose();
+      const target = e.target as Node;
+      if (shouldCloseMenu(
+        ref.current?.contains(target) ?? false,
+        title?.contains(target) ?? false,
+      )) onClose();
     };
     const esc = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -48,7 +57,7 @@ function MenuList({ items, onClose, style }: {
       document.removeEventListener("mousedown", away);
       document.removeEventListener("keydown", esc);
     };
-  }, [onClose]);
+  }, [onClose, title]);
 
   return (
     <div className="umenu__list" ref={ref} style={style} role="menu">
@@ -86,9 +95,11 @@ function MenuList({ items, onClose, style }: {
 /** A pull-down title used by the global application menu bar. */
 export function WindowMenu({ label, items }: { label: string; items: MenuItem[] }) {
   const [open, setOpen] = useState(false);
+  const titleRef = useRef<HTMLButtonElement>(null);
   return (
     <span className="umenu">
       <button
+        ref={titleRef}
         type="button"
         className={"umenu__title" + (open ? " umenu__title--on" : "")}
         aria-haspopup="menu"
@@ -102,6 +113,7 @@ export function WindowMenu({ label, items }: { label: string; items: MenuItem[] 
         <MenuList
           items={items}
           onClose={() => setOpen(false)}
+          title={titleRef.current}
           style={{ position: "absolute", top: "100%", left: 0 }}
         />
       )}

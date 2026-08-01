@@ -20,7 +20,7 @@ Updated 2026-08-01.
 
 - Branch at the earlier checkpoint: `master`; inspect the current working tree
   before making additional changes.
-- Tests: **665 passing across 38 files**.
+- Tests: **672 passing across 41 files**.
 - Coverage: **100% statements, branches, functions, and lines** across
   `src/engine` and `src/state`.
 - Typecheck, normal production build, and single-file build: passing.
@@ -109,8 +109,9 @@ malformed JSON, future versions, missing legacy fields, invalid bounds and
 detached copies, browser-verified save → wander → open, and no coverage
 regression.
 
-Still open, carried forward: Save uses a browser download rather than a real
-file-system picker, so it cannot overwrite in place.
+Still open, carried forward: Save uses and reuses a File System Access handle
+where supported, but restricted embedded browsers fall back to an encoded
+download and cannot overwrite in place. Open still uses a file input.
 
 Original scope, for reference:
 

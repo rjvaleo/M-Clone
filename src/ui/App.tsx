@@ -10,7 +10,13 @@ import {
 import { clampWorkspaceZoom, workspaceLayout } from "../engine/workspace";
 import { WorkspaceScaleProvider } from "./WorkspaceScale";
 import { useM } from "../state/store";
-import { newProject, openProject, saveMovieAsMidiFile, saveProject } from "./fileCommands";
+import {
+  needsDownloadName,
+  newProject,
+  openProject,
+  saveMovieAsMidiFile,
+  saveProject,
+} from "./fileCommands";
 import { WindowMenu, type MenuItem } from "./WindowMenu";
 import { APP_WINDOWS, type AppWindowId } from "../engine/windows";
 import {
@@ -134,6 +140,8 @@ export function App() {
       return [...CHANNEL_THEME_PRESETS.classic.colors];
     }
   });
+  const [saveNameDialogOpen, setSaveNameDialogOpen] = useState(false);
+  const [saveName, setSaveName] = useState("Untitled");
 
   useEffect(() => {
     document.body.classList.toggle("dark-bg", theme === "dark");
@@ -180,6 +188,23 @@ export function App() {
   const setOption = useM((s) => s.setOption);
   const { editMenu, patternMenu } = usePatternMenus();
 
+  const showSaveNameDialog = () => {
+    setSaveName(documentName ?? "Untitled");
+    setSaveNameDialogOpen(true);
+  };
+
+  const runSave = async (saveAs: boolean) => {
+    // Use the app-owned filename step for downloads. Some embedded browsers
+    // expose a picker that resolves late and otherwise overwrites the title.
+    if (needsDownloadName(saveAs, documentName, false)) {
+      showSaveNameDialog();
+      return;
+    }
+    if (await saveProject(false, documentName ?? undefined) === "needs-name") {
+      showSaveNameDialog();
+    }
+  };
+
   const openVoiceColor = (voice: number) =>
     document.querySelector<HTMLInputElement>(
       `input[aria-label="Voice ${voice + 1} color"]`,
@@ -188,8 +213,8 @@ export function App() {
   const fileItems = buildMenu(FILE_MENU_ITEMS, {
     new: { run: newProject },
     open: { run: openProject },
-    save: { run: () => saveProject(false) },
-    saveAs: { run: () => saveProject(true) },
+    save: { run: () => { void runSave(false); } },
+    saveAs: { run: () => { void runSave(true); } },
     saveMovieAsMidiFile: {
       run: saveMovieAsMidiFile,
       enabled: movie !== null,
@@ -308,6 +333,34 @@ export function App() {
           </button>
         </div>
       </nav>
+
+      <a id="mclone-project-download" className="visually-hidden"
+        aria-hidden="true" tabIndex={-1} />
+
+      {saveNameDialogOpen && (
+        <div className="save-name-backdrop" role="presentation">
+          <form className="save-name-dialog" role="dialog" aria-modal="true"
+            aria-labelledby="save-name-title"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!saveName.trim()) return;
+              setSaveNameDialogOpen(false);
+              void saveProject(true, saveName);
+            }}>
+            <h2 id="save-name-title">Save Project As</h2>
+            <label>
+              <span>File name</span>
+              <input autoFocus value={saveName}
+                onChange={(event) => setSaveName(event.target.value)}
+                onFocus={(event) => event.currentTarget.select()} />
+            </label>
+            <div className="save-name-dialog__actions">
+              <button type="button" onClick={() => setSaveNameDialogOpen(false)}>Cancel</button>
+              <button type="submit">Save</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="workspace-viewport" ref={viewportRef}>
         <div className="workspace-scaled" style={{

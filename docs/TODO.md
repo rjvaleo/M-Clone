@@ -15,8 +15,11 @@ scope should be counted as current implementation.
 
 1. 🟡 **Project save/load (JSON).** `ProjectDocumentV2` and the File menu are
    done: New, Open, Save, Save As, defensive decoding, document name and
-   unsaved-changes tracking. Still open — a real file-system picker instead of
-   download/upload, and promoting the format when new subsystems land.
+   unsaved-changes tracking, including the Conducting/transport title. Save As
+   uses an app-owned filename dialog and encoded download so restricted
+   browsers commit the visible document name before downloading.
+   Still open — picker-backed Open/handle persistence and promoting the format
+   when new subsystems land.
 2. ✅ **Slideshows and Snapshot editing.** Hold/Do, partial stores, Edit/copy,
    Blink Everything, Restore, and nine timed record/play/pause/loop/stop
    Slideshows are implemented and saved in document version 2.

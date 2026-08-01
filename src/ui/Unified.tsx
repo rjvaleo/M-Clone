@@ -31,6 +31,7 @@ import { ensureCyclicSelection, type CyclicSelection } from "./cyclicselection";
 import { normalizeCyclicStep } from "../engine/cyclic";
 import { MidiView } from "./MidiView";
 import { SynthWindow } from "./SynthWindow";
+import { transportDocumentTitle } from "./documenttitle";
 import { APP_WINDOWS, closeAppWindow, openAppWindow, type AppWindowId } from "../engine/windows";
 import {
   cycleChordMode,
@@ -134,6 +135,7 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
     "pattern-editor", "midi-view", "synth",
   ]));
   const project = useM((s) => s.project);
+  const documentName = useM((s) => s.documentName);
   const selectedVoice = useM((s) => s.selectedVoice);
   const positions = useM((s) => s.positions);
   const arrows = useM((s) => s.arrows);
@@ -540,7 +542,7 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
             </div>
           </Win>
 
-          <Win id="untitled" defX={232} defY={4} title="Untitled"
+          <Win id="untitled" defX={232} defY={4} title={transportDocumentTitle(documentName)}
             className="u-conductor-win"
             menuItems={conductingMenu}>
             <ConductorWindow />

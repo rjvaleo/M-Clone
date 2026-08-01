@@ -2731,3 +2731,53 @@ body.dark-bg { background: #191919; }
 .theme-dark .synthpower input:checked + span { background: #e8e8e8; }
 .theme-dark .synthstreams button { background: #2b2b2b; }
 .theme-dark .synthstreams button.is-on { background: var(--voice-color); color: #111; }
+.save-name-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 24%);
+}
+
+.save-name-dialog {
+  width: 250px;
+  border: 2px solid var(--ink, #111);
+  padding: 10px;
+  background: var(--paper, #f3f3ed);
+  color: var(--ink, #111);
+  box-shadow: 4px 4px 0 rgb(0 0 0 / 28%);
+}
+
+.save-name-dialog h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.save-name-dialog label,
+.save-name-dialog input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.save-name-dialog label span {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+}
+
+.save-name-dialog input {
+  border: 1px solid currentColor;
+  padding: 4px;
+  background: var(--paper, #fff);
+  color: inherit;
+  font: inherit;
+}
+
+.save-name-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+}

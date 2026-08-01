@@ -15,7 +15,8 @@ equivalents.
 
 **Implementation status:** Core conducting plus Movie capture/export are
 implemented. Pure conductor, Movie, and store behavior are covered by the
-current 665-test, 100%-coverage engine/state suite.
+current 672-test, 100%-coverage engine/state suite. Its window title follows
+the saved project filename and returns to Untitled for a new unsaved document.
 Production and single-file builds pass, and the localhost UI has been exercised
 with the in-app browser.
 
