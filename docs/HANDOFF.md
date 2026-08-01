@@ -47,7 +47,7 @@ defaulted or clamped and returned as warnings. File ▸ New / Open / Save /
 Save As are wired in `src/ui/fileCommands.ts`, with document name and
 unsaved-changes tracking shown in the header.
 
-**Current suite: 657 tests across 34 files**, 100% coverage on `src/engine` and
+**Current suite: 662 tests across 36 files**, 100% coverage on `src/engine` and
 `src/state`, typecheck and both builds clean.
 
 Snapshot editing and Slideshows are complete. Manual review also established
@@ -93,10 +93,12 @@ The generative engine and selected P3 scope are complete. Save/load,
 Snapshot/Slideshow, and Phrasing-through-Legato are done; Sound Choice remains
 intentionally skipped. The UI was rebuilt against the real M screenshots in
 [`../reference/`](../reference/) and the M 2.7 manual (`reference/M27.pdf`)
-rather than from an impression of them. The suite is **657 tests across 34
+rather than from an impression of them. The suite is **662 tests across 36
 files**, with 100% coverage held on `src/engine` and `src/state`. Movie capture,
 deterministic SMF export, and the Patterns/Transport/Conductor parity correction
-are complete. MIDI import and Sequence playback follow.
+are complete. The built-in monitor is now a compact dual-oscillator,
+sub/noise-mixer, LFO-modulated, click-safe subtractive synth designed for the
+normal 150% workspace scale. MIDI import and Sequence playback follow.
 
 ## How we've been working — keep doing this
 

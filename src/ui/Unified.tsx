@@ -30,6 +30,7 @@ import { CyclicEditor } from "./CyclicEditor";
 import { ensureCyclicSelection, type CyclicSelection } from "./cyclicselection";
 import { normalizeCyclicStep } from "../engine/cyclic";
 import { MidiView } from "./MidiView";
+import { SynthWindow } from "./SynthWindow";
 import { APP_WINDOWS, closeAppWindow, openAppWindow, type AppWindowId } from "../engine/windows";
 import {
   cycleChordMode,
@@ -130,7 +131,7 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
   const [patternMouseAdvance, setPatternMouseAdvance] = useState([false, false, false, false]);
   const [openWindows, setOpenWindows] = useState<Set<string>>(() => new Set([
     ...APP_WINDOWS.filter((window) => window.permanent).map((window) => window.id),
-    "pattern-editor", "midi-view",
+    "pattern-editor", "midi-view", "synth",
   ]));
   const project = useM((s) => s.project);
   const selectedVoice = useM((s) => s.selectedVoice);
@@ -708,6 +709,10 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
         {openWindows.has("midi-view") && <Win id="midi-view" defX={80} defY={180} title="Midi View"
           note="generated output tracker" className="u-midiview-win"
           onClose={() => hideWindow("midi-view")}><MidiView /></Win>}
+
+        {openWindows.has("synth") && <Win id="synth" defX={90} defY={200} title="Synth"
+          note="built-in subtractive instrument" className="u-synth-win"
+          onClose={() => hideWindow("synth")}><SynthWindow /></Win>}
 
         {/* Pattern Editor — M-style editor window with a resizable grid */}
         {openWindows.has("pattern-editor") &&

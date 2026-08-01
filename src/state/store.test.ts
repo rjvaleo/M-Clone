@@ -9,6 +9,7 @@ import {
 } from "../engine/patterncmd";
 import { DEFAULT_OPTIONS } from "../engine/options";
 import { EMPTY_MOVIE_RECORDER } from "../engine/movie";
+import { DEFAULT_SYNTH_SETTINGS } from "../engine/synth";
 
 beforeEach(() => {
   const project = createDefaultProject();
@@ -51,6 +52,7 @@ beforeEach(() => {
     midiViewEvents: [],
     midiViewNextId: 0,
     movieRecorder: EMPTY_MOVIE_RECORDER,
+    synthSettings: Array.from({ length: 4 }, () => ({ ...DEFAULT_SYNTH_SETTINGS })),
     options: { ...DEFAULT_OPTIONS },
     editorRegion: null,
     snapshotMode: "idle",
@@ -77,6 +79,17 @@ describe("transport + selection", () => {
   it("selects a voice", () => {
     g().selectVoice(2);
     expect(g().selectedVoice).toBe(2);
+  });
+});
+
+describe("built-in synth controls", () => {
+  it("updates one normalized control without disturbing the patch", () => {
+    g().setSynthParam(2, "ampReleaseSec", 0);
+    expect(g().synthSettings[2].ampReleaseSec).toBe(0.015);
+    expect(g().synthSettings[2].waveform).toBe("triangle");
+    g().setSynthParam(2, "waveform", "square");
+    expect(g().synthSettings[2].waveform).toBe("square");
+    expect(g().synthSettings[0].waveform).toBe("triangle");
   });
 });
 

@@ -13,5 +13,6 @@ export function getRuntime(): MRuntime {
       (notes) => useM.getState().recordMidiNotes(notes),
     );
   }
+  runtime.setSynthSettings(useM.getState().synthSettings);
   return runtime;
 }
