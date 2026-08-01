@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Unified } from "./Unified";
 import {
   CHANNEL_THEME_PRESETS,
@@ -7,18 +7,96 @@ import {
   type ChannelColors,
   type ChannelThemePresetId,
 } from "../engine/theme";
-import {
-  clampWorkspaceZoom,
-  fitWorkspaceZoom,
-  scaledWorkspaceSize,
-} from "../engine/workspace";
+import { clampWorkspaceZoom, workspaceLayout } from "../engine/workspace";
 import { WorkspaceScaleProvider } from "./WorkspaceScale";
 import { useM } from "../state/store";
 import { newProject, openProject, saveProject } from "./fileCommands";
 import { WindowMenu, type MenuItem } from "./WindowMenu";
 import { APP_WINDOWS, type AppWindowId } from "../engine/windows";
+import {
+  FILE_MENU_ITEMS,
+  VARIABLES_MENU_ITEMS,
+  WINDOWS_MENU_ITEMS,
+  type MenuItemSpec,
+} from "../engine/menus";
+import { optionEntries } from "../engine/options";
+import { usePatternMenus } from "./patternMenus";
 
 type Theme = "light" | "dark";
+
+type Handler = { run: () => void; enabled?: boolean; hint?: string };
+
+/**
+ * Turn a manual-defined menu spec into renderable items.
+ *
+ * Ids without a handler render disabled rather than disappearing, so a command
+ * the manual documents but this build hasn't implemented still occupies its
+ * proper place in the menu and says so on hover.
+ */
+function buildMenu(
+  spec: readonly MenuItemSpec[],
+  handlers: Record<string, Handler>,
+): MenuItem[] {
+  return spec.map((item) => {
+    if (item === "separator") return "separator";
+    const handler = handlers[item.id];
+    if (!handler) {
+      return {
+        label: item.label,
+        hint: `${item.hint ?? item.label} — not yet wired up`,
+        enabled: false,
+        run: () => {},
+      };
+    }
+    return {
+      label: item.label,
+      hint: handler.hint ?? item.hint,
+      enabled: handler.enabled,
+      run: handler.run,
+    };
+  });
+}
+
+/** Which built edit window each Variables-menu command opens. */
+const VARIABLE_WINDOWS: Record<string, AppWindowId> = {
+  "var.noteDensity": "density",
+  "var.velocityRange": "velocityRange",
+  "var.noteOrder": "noteOrderMix",
+  "var.transposition": "transposition",
+  "var.timeDistortion": "timeDistort",
+  "var.orchestration": "outputChannels",
+  "var.rhythm": "cyclic-editor",
+  "var.accents": "cyclic-editor",
+};
+
+/**
+ * Track an element's own box, so the desktop can size itself to whatever the
+ * browser window leaves after the menu bar rather than to a fixed constant.
+ */
+function useElementSize() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () =>
+      setSize({ width: el.clientWidth, height: el.clientHeight });
+    measure();
+    // ResizeObserver is missing in jsdom and in a few older browsers; the
+    // window listener keeps the desktop responsive either way.
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  return [ref, size] as const;
+}
 
 export function App() {
   const [workspaceZoom, setWorkspaceZoom] = useState(() => {
@@ -97,49 +175,87 @@ export function App() {
   );
   const documentName = useM((s) => s.documentName);
   const isDirty = useM((s) => s.isDirty);
-  const windowItems: MenuItem[] = APP_WINDOWS.map((item) => ({
-    label: item.label,
-    run: () => openWindow(item.id),
+  const options = useM((s) => s.options);
+  const setOption = useM((s) => s.setOption);
+  const { editMenu, patternMenu } = usePatternMenus();
+
+  const openVoiceColor = (voice: number) =>
+    document.querySelector<HTMLInputElement>(
+      `input[aria-label="Voice ${voice + 1} color"]`,
+    )?.click();
+
+  const fileItems = buildMenu(FILE_MENU_ITEMS, {
+    new: { run: newProject },
+    open: { run: openProject },
+    save: { run: () => saveProject(false) },
+    saveAs: { run: () => saveProject(true) },
+  });
+
+  const variableItems = buildMenu(VARIABLES_MENU_ITEMS, {
+    ...Object.fromEntries(
+      Object.entries(VARIABLE_WINDOWS).map(([id, window]) => [
+        id, { run: () => openWindow(window) },
+      ]),
+    ),
+    ...Object.fromEntries(
+      [0, 1, 2, 3].map((voice) => [
+        `voiceColor.${voice}`,
+        { run: () => openVoiceColor(voice), hint: `Change Voice ${voice + 1}'s colour` },
+      ]),
+    ),
+  });
+
+  // "This menu manages M's many windows. The contents of the Windows Menu will
+  // vary as you open and close edit windows."
+  const windowItems: MenuItem[] = [
+    ...buildMenu(WINDOWS_MENU_ITEMS, {
+      closeEditWindows: {
+        run: () => window.dispatchEvent(new CustomEvent("mclone:close-edit-windows")),
+        hint: "Close every open edit window",
+      },
+    }),
+    "separator",
+    ...APP_WINDOWS.map((item) => ({
+      label: item.label,
+      run: () => openWindow(item.id),
+    })),
+  ];
+
+  // Chapter 22: every item is a check mark that toggles.
+  const optionItems: MenuItem[] = optionEntries(options).map((entry) => ({
+    label: entry.label,
+    checked: entry.checked,
+    enabled: entry.available,
+    hint: entry.available ? undefined : "Needs MIDI input, which isn't built yet",
+    run: () => setOption(entry.id, !entry.checked),
   }));
-  const variableItems: MenuItem[] = APP_WINDOWS
-    .filter((item) => ["density", "velocityRange", "noteOrderMix", "transposition", "timeDistort", "outputChannels"].includes(item.id))
-    .map((item) => ({ label: item.label, run: () => openWindow(item.id) }));
+
+  // Zoom and skin are this build's own, not M's, so they sit apart from the
+  // manual's options rather than pretending to be among them.
+  const viewItems: MenuItem[] = [
+    { label: "Zoom Out", run: () => setWorkspaceZoom((v) => clampWorkspaceZoom(v - 10)) },
+    { label: "Zoom In", run: () => setWorkspaceZoom((v) => clampWorkspaceZoom(v + 10)) },
+    { label: "Actual Size", run: () => setWorkspaceZoom(100) },
+    "separator",
+    { label: "Light Theme", checked: theme === "light", run: () => setTheme("light") },
+    { label: "Dark Theme", checked: theme === "dark", run: () => setTheme("dark") },
+  ];
+
+  const [viewportRef, viewport] = useElementSize();
+  const layout = workspaceLayout(viewport.width, viewport.height, workspaceZoom);
 
   return (
     <div className={"app" + (theme === "dark" ? " theme-dark" : "")}
       style={channelThemeVariables(channelTheme) as React.CSSProperties}>
       <nav className="app__menubar" aria-label="Application menu bar">
         <span className="app__apple" aria-hidden="true">◆</span>
-        <WindowMenu label="File" items={[
-          { label: "New", run: newProject, hint: "Start an empty project" },
-          { label: "Open\u2026", run: openProject, hint: "Open a saved .mclone.json project" },
-          "separator",
-          { label: "Save", run: () => saveProject(false), hint: "Save the project" },
-          { label: "Save As\u2026", run: () => saveProject(true), hint: "Save under a new name" },
-        ]} />
-        <WindowMenu label="Edit" items={[
-          { label: "Open Pattern Editor", run: () => openWindow("pattern-editor") },
-        ]} />
+        <WindowMenu label="File" items={fileItems} />
+        <WindowMenu label="Edit" items={editMenu} />
         <WindowMenu label="Variables" items={variableItems} />
-        <WindowMenu label="Pattern" items={[
-          { label: "Open Pattern Editor", run: () => openWindow("pattern-editor") },
-          { label: "Open Cyclic Editor", run: () => openWindow("cyclic-editor") },
-        ]} />
+        <WindowMenu label="Pattern" items={patternMenu} />
         <WindowMenu label="Windows" items={windowItems} />
-        <WindowMenu label="Options" items={[
-          { label: "Zoom Out", run: () => setWorkspaceZoom((value) => clampWorkspaceZoom(value - 10)) },
-          { label: "Zoom In", run: () => setWorkspaceZoom((value) => clampWorkspaceZoom(value + 10)) },
-          { label: "Actual Size (100%)", run: () => setWorkspaceZoom(100) },
-          "separator",
-          { label: "Light Theme", run: () => setTheme("light") },
-          { label: "Dark Theme", run: () => setTheme("dark") },
-        ]} />
-      </nav>
-      <header className="app__header">
-        <h1>
-          M<span className="app__sub">-Clone</span>
-        </h1>
-        <p className="app__tag">An Intelligent Musical Instrument — reborn</p>
+        <WindowMenu label="Options" items={optionItems} />
+        <WindowMenu label="View" items={viewItems} />
         <p className="app__doc" aria-live="polite">
           {documentName ?? "Untitled"}{isDirty ? " •" : ""}
         </p>
@@ -150,13 +266,11 @@ export function App() {
             <output aria-label="Application zoom level">{workspaceZoom}%</output>
             <button type="button" onClick={() => setWorkspaceZoom((value) => clampWorkspaceZoom(value + 10))}
               aria-label="Zoom in">+</button>
-            <button type="button" onClick={() => setWorkspaceZoom(100)}>100%</button>
-            <button type="button" onClick={() => setWorkspaceZoom(fitWorkspaceZoom(
-              Math.max(0, window.innerWidth - 32), Math.max(0, window.innerHeight - 112),
-            ))}>Fit</button>
+            <button type="button" onClick={() => setWorkspaceZoom(100)}
+              title="Actual size">1:1</button>
           </div>
           <label className="theme-picker">
-            Channels
+            <span className="visually-hidden">Channels</span>
             <select aria-label="Channel color preset" value={channelPreset}
               onChange={(event) =>
                 setChannelPreset(event.target.value as ChannelThemePresetId | "custom")}>
@@ -166,7 +280,8 @@ export function App() {
               {channelPreset === "custom" && <option value="custom">Custom</option>}
             </select>
           </label>
-          <div className="channel-palette" aria-label="Channel color palette">
+          {/* Driven from Variables ▸ Voice N Color…, where the manual puts it. */}
+          <div className="channel-palette visually-hidden" aria-label="Channel color palette">
             {channelTheme.colors.map((color, index) => (
               <input key={index} type="color" value={color}
                 aria-label={`Voice ${index + 1} color`}
@@ -186,12 +301,19 @@ export function App() {
             Dark
           </button>
         </div>
-      </header>
+      </nav>
 
-      <div className="workspace-viewport">
-        <div className="workspace-scaled" style={scaledWorkspaceSize(workspaceZoom)}>
-          <div className="workspace-logical" style={{ transform: `scale(${workspaceZoom / 100})` }}>
-            <WorkspaceScaleProvider value={workspaceZoom / 100}>
+      <div className="workspace-viewport" ref={viewportRef}>
+        <div className="workspace-scaled" style={{
+          width: layout.physical.width,
+          height: layout.physical.height,
+        }}>
+          <div className="workspace-logical" style={{
+            width: layout.logical.width,
+            height: layout.logical.height,
+            transform: `scale(${layout.scale})`,
+          }}>
+            <WorkspaceScaleProvider value={layout.scale}>
               <Unified openVoiceColor={(voice) => {
                 document.querySelector<HTMLInputElement>(
                   `input[aria-label="Voice ${voice + 1} color"]`,

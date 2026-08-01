@@ -29,6 +29,7 @@ import { POSITION_COUNT, POSITION_VARS } from "./variables";
 import { createDefaultProject } from "./project";
 import { makePresetPositions } from "./variables";
 import { neutralTimeMap } from "./timemap";
+import { DEFAULT_OPTIONS, OPTION_IDS, type Options } from "./options";
 
 export const DOCUMENT_VERSION = 1;
 
@@ -55,6 +56,7 @@ export type DocumentSource = {
   cyclicPositions: CyclicPositionBanks;
   cyclicLengths: CyclicPositionLengths;
   activeCyclicPositions: Record<CyclicVariable, number>;
+  options: Options;
 };
 
 export type ProjectDocumentV1 = DocumentSource & { version: number };
@@ -87,6 +89,7 @@ export function encodeDocument(source: DocumentSource): ProjectDocumentV1 {
     cyclicPositions: clone(source.cyclicPositions),
     cyclicLengths: clone(source.cyclicLengths),
     activeCyclicPositions: { ...source.activeCyclicPositions },
+    options: { ...source.options },
   };
 }
 
@@ -385,6 +388,26 @@ function readCyclicLengths(value: unknown): CyclicPositionLengths {
   ) as CyclicPositionLengths;
 }
 
+/**
+ * Read the Options menu.
+ *
+ * Absent entirely is the normal case for a document saved before Options were
+ * carried, so that is silent; anything present but malformed is repaired and
+ * reported. Unknown keys are dropped rather than passed through.
+ */
+function readOptions(value: unknown, warn: (m: string) => void): Options {
+  if (value === undefined) return { ...DEFAULT_OPTIONS };
+  if (!isBag(value)) {
+    warn("The saved options were unreadable and were reset to their defaults.");
+    return { ...DEFAULT_OPTIONS };
+  }
+  const bag = value as Bag;
+  return OPTION_IDS.reduce((acc, id) => {
+    acc[id] = bool(bag[id], DEFAULT_OPTIONS[id]);
+    return acc;
+  }, {} as Options);
+}
+
 /** Parse and validate a decoded JSON value into a document. */
 export function decodeDocument(raw: unknown): DecodeResult {
   if (!isBag(raw)) return { ok: false, error: "Not a project document." };
@@ -454,6 +477,7 @@ export function decodeDocument(raw: unknown): DecodeResult {
           clamp(Math.round(num(actives[kind], 0)), 0, POSITION_COUNT - 1),
         ]),
       ) as Record<CyclicVariable, number>,
+      options: readOptions(raw.options, warn),
     },
   };
 }

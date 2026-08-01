@@ -23,6 +23,12 @@ import {
   encodeDocument,
 } from "../engine/document";
 import {
+  DEFAULT_OPTIONS,
+  setOption as setOptionValue,
+  type OptionId,
+  type Options,
+} from "../engine/options";
+import {
   makePresetPositions,
   applyActivePositions,
   applyPosition,
@@ -219,6 +225,19 @@ export type MStore = {
   /** The Edit menu clipboard, holding copied steps. */
   clipboard: StepEvent[];
   setClipboard: (steps: StepEvent[]) => void;
+  /** The Options menu, chapter 22. Saved with the document. */
+  options: Options;
+  setOption: (id: OptionId, on: boolean) => void;
+  /**
+   * The Region selected in the Pattern Editor's grid.
+   *
+   * This lives in the store rather than in the editor window because M's Edit
+   * and Pattern menus are global but act on the current selection — the menu
+   * bar has to be able to see it. `point` marks a Pointwise Selection, the
+   * click-without-drag that only Insert Paste accepts.
+   */
+  editorRegion: { from: number; to: number; point: boolean } | null;
+  setEditorRegion: (region: { from: number; to: number; point: boolean } | null) => void;
   setScaleSnap: (on: boolean) => void;
   setScale: (scale: ScaleName) => void;
   setRoot: (root: number) => void;
@@ -326,6 +345,8 @@ export const useM = create<MStore>((set, get) => ({
   arrows: {},
   patternGroup: 0,
   clipboard: [],
+  options: { ...DEFAULT_OPTIONS },
+  editorRegion: null,
   documentName: null,
   isDirty: false,
   documentEpoch: 0,
@@ -575,6 +596,7 @@ export const useM = create<MStore>((set, get) => ({
       cyclicPositions: d.cyclicPositions,
       cyclicLengths: d.cyclicLengths,
       activeCyclicPositions: d.activeCyclicPositions,
+      options: d.options,
       // Playback and everything derived from the old piece has to go: the
       // transport is stopped, and undo/clipboard/monitor state belonged to a
       // project that no longer exists.
@@ -582,6 +604,7 @@ export const useM = create<MStore>((set, get) => ({
       isPaused: false,
       restorePoint: null,
       clipboard: [],
+      editorRegion: null,
       editingVar: null,
       midiViewEvents: [],
       midiViewNextId: 0,
@@ -603,6 +626,8 @@ export const useM = create<MStore>((set, get) => ({
       arrows: {},
       patternGroup: 0,
       clipboard: [],
+      editorRegion: null,
+      options: { ...DEFAULT_OPTIONS },
       selectedVoice: 0,
       isPlaying: false,
       isPaused: false,
@@ -613,6 +638,10 @@ export const useM = create<MStore>((set, get) => ({
   },
 
   setClipboard: (steps) => set({ clipboard: steps.map((s) => ({ pitches: [...s.pitches] })) }),
+
+  setOption: (id, on) => set((s) => ({ options: setOptionValue(s.options, id, on) })),
+
+  setEditorRegion: (region) => set({ editorRegion: region }),
 
   runPatternCommand: (patternIndex, command) =>
     set((s) => ({
@@ -904,7 +933,7 @@ const MUSICAL_SLICES = [
   "project", "positions", "snapshots", "currentSnapshot", "snapshotQuantize",
   "arrows", "patternGroup", "cyclicPositions", "cyclicLengths",
   "activeCyclicPositions", "tempoRange", "syncRatio", "syncRatioDirection",
-  "robotRange", "robotTimeBase",
+  "robotRange", "robotTimeBase", "options",
 ] as const satisfies readonly (keyof MStore)[];
 
 /**
