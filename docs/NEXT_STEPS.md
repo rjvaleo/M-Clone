@@ -20,7 +20,7 @@ Updated 2026-08-01.
 
 - Branch at the earlier checkpoint: `master`; inspect the current working tree
   before making additional changes.
-- Tests: **641 passing across 33 files**.
+- Tests: **657 passing across 34 files**.
 - Coverage: **100% statements, branches, functions, and lines** across
   `src/engine` and `src/state`.
 - Typecheck, normal production build, and single-file build: passing.
@@ -184,13 +184,20 @@ Acceptance gate:
 - Met: audible timing/articulation is handled by Legato without a duplicate
   model; Active Position, conducting, snapshots, Slideshows, and save/load agree.
 
-### 4. Performance recording and standard MIDI files — NEXT
+### 4. Performance recording and standard MIDI files — IN PROGRESS
 
-- Define one timestamped performance-event model fed by the existing planner
-  output rather than scraping Midi View.
-- Implement Movie/Sequence recording, stop, clear, and playback.
-- Implement Standard MIDI File export first, then import with documented chord,
+- ✅ Define one 960-PPQN timestamped performance-event model fed by the existing
+  planner output rather than scraping Midi View.
+- ✅ Implement manual-faithful Movie arm, capture, stop, and completed-take
+  behavior, including pause-gap exclusion and tempo-map capture.
+- ✅ Implement deterministic format-1 Standard MIDI File export with a tempo
+  track and one track per used Voice.
+- ✅ Audited Patterns, Transport, and Conductor icons/behavior against the
+  manual and reference images; corrected Phase, numeric Time Bases,
+  Option-click Record Modes, editable Tempo, and Movie/Sequence glyphs.
+- Implement Standard MIDI File import with documented chord,
   timing, rest, quantization, and source-channel choices.
+- Implement imported Sequence storage, playback, stop, clear, and play-enable.
 - Keep Web MIDI, built-in synth, Midi View, and recorder as consumers of the
   same planned events.
 

@@ -24,8 +24,10 @@ scope should be counted as current implementation.
    Legato Cyclic, not another Variable. Onset-relative sustain, manual defaults,
    cyclic conducting, Snapshots, Slideshows, and persistence are complete.
    Sound Choice remains intentionally deferred to instrument design.
-4. ⬜ **Recorder / Movie / Sequence.** No performance-to-track recorder, Movie
-   capture, imported Sequence playback, or MIDI file import/export exists yet.
+4. 🟡 **Recorder / Movie / Sequence.** Movie arming/capture/finalization and
+   deterministic type-1 Standard MIDI File export are complete. Still open:
+   MIDI import, Pattern conversion choices, independent Sequence playback,
+   editable track presentation, and versioned persistence.
 5. ⬜ **Instrument layer.** The approved split is four lightweight browser
    engines followed by seven full Studio instruments, signature effects, and
    multi-output native audio. Third-party WAM hosting is exploratory and does
@@ -54,6 +56,9 @@ The execution order and acceptance gates for these items are in
   skins over the shared main layout.
 - ✅ Cyclic-variable Conducting Arrows are manual-confirmed and implemented for
   Accent, Legato, and Rhythm Positions.
+- ✅ Audited Patterns, Transport, and Conductor icons/control semantics. Phase,
+  numeric Time Bases, Option-click modes, editable Tempo, and Movie/Sequence
+  glyphs are corrected; dependency-bound input gaps are documented separately.
 
 ## Completed foundations
 

@@ -75,6 +75,8 @@ export type VoiceState = {
   velocityRange: VelocityRange; // Accent levels 1..4 span low..high; 0 is silent
   timeBaseNumerator: number; // multiplier (slows the voice)
   timeBaseDenominator: number; // division of a whole note (4=quarter, 8=eighth)
+  /** Initial delay in M ticks; 96 M ticks equal one quarter note. */
+  phase: number;
   /** Time Distortion Map: this Voice's re-mapping of clock time to real time. */
   timeDistort: TimeMap;
   legato: number; // per-Voice multiplier over the Cyclic Legato onset percentage

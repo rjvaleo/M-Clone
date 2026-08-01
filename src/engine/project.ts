@@ -45,6 +45,7 @@ export function createDefaultVoice(index: number): VoiceState {
     velocityRange: { low: 48, high: 110 },
     timeBaseNumerator: 1,
     timeBaseDenominator: 8,
+    phase: 0,
     timeDistort: neutralTimeMap(),
     legato: 1,
     channel: index + 1,

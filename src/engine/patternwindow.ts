@@ -3,6 +3,11 @@ import type { ChordMode, InsertMode } from "./types";
 export type SourceChannel = "all" | number;
 export type InputUse = "disabled" | "record";
 
+/** Chapter 13's numeric Time Base denominator values; `sa` awaits Input Control. */
+export const TIME_BASE_DENOMINATORS = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 15, 16, 24,
+] as const;
+
 export function cycleSourceChannel(value: SourceChannel): SourceChannel {
   if (value === "all") return 1;
   return value >= 16 ? "all" : value + 1;

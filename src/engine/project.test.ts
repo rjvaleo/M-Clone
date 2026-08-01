@@ -43,6 +43,9 @@ describe("createDefaultVoice", () => {
     expect(createDefaultVoice(0).playEnabled).toBe(true);
     expect(createDefaultVoice(1).playEnabled).toBe(false);
   });
+  it("starts every Voice at Phase zero", () => {
+    expect(createDefaultVoice(2).phase).toBe(0);
+  });
 });
 
 describe("createDefaultProject", () => {

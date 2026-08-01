@@ -566,9 +566,11 @@ body {
   align-items: center; text-align: center; font-size: 11px;
 }
 .uconduct__tempo-readout b { font-size: 12px; }
-.uconduct__tempo-readout strong {
-  height: 24px; line-height: 24px; border-left: 1px solid #000;
-  border-right: 1px solid #000; font-size: 15px;
+.uconduct__tempo-readout input {
+  box-sizing: border-box; width: 37px; height: 24px; padding: 0;
+  border: 0; border-left: 1px solid #000; border-right: 1px solid #000;
+  background: #fff; color: #000; font: 800 15px/24px var(--mono);
+  text-align: center;
 }
 .uconduct__ratio-dir, .uconduct__robot {
   background: #fff; color: #000; font-size: 14px; font-weight: 800; cursor: pointer;
@@ -2421,7 +2423,9 @@ body.dark-bg { background: #191919; }
 .theme-dark .uconduct__left,
 .theme-dark .uconduct__bottom,
 .theme-dark .uconduct__bottom > *,
-.theme-dark .uconduct__tempo-readout strong { border-color: #5a5a5a; }
+.theme-dark .uconduct__tempo-readout input {
+  border-color: #5a5a5a; background: #333; color: #e8e8e8;
+}
 .theme-dark .uconduct__transport button,
 .theme-dark .uconduct__secondary button,
 .theme-dark .uconduct__ratio-dir,

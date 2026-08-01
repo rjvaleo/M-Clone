@@ -36,6 +36,7 @@ import {
   cycleInputUse,
   cycleInsertMode,
   cycleSourceChannel,
+  TIME_BASE_DENOMINATORS,
   type InputUse,
   type SourceChannel,
 } from "../engine/patternwindow";
@@ -51,7 +52,6 @@ import {
   IconSpeaker,
 } from "./icons";
 
-const DENOMS = [1, 2, 4, 8, 16];
 const SCALES: ScaleName[] = [
   "chromatic", "major", "minor", "dorian", "mixolydian", "lydian",
   "phrygian", "harmonicMinor", "majorPentatonic", "minorPentatonic", "blues",
@@ -128,7 +128,6 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
   const [patternUses, setPatternUses] = useState<InputUse[]>(["disabled", "disabled", "disabled", "disabled"]);
   const [patternEcho, setPatternEcho] = useState([false, false, false, false]);
   const [patternMouseAdvance, setPatternMouseAdvance] = useState([false, false, false, false]);
-  const [patternPhases, setPatternPhases] = useState([0, 0, 0, 0]);
   const [openWindows, setOpenWindows] = useState<Set<string>>(() => new Set([
     ...APP_WINDOWS.filter((window) => window.permanent).map((window) => window.id),
     "pattern-editor", "midi-view",
@@ -492,15 +491,30 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
                   <div className="pwin__select" onClick={() => selectVoice(i)}
                     onDoubleClick={() => { selectVoice(i); showWindow("pattern-editor"); }}>
                     <button aria-label={`Voice ${i + 1} Chord Mode: ${pattern.chordMode}`}
-                      onClick={(event) => { event.stopPropagation(); setPatternMode(voice.patternIndex, "chordMode", cycleChordMode(pattern.chordMode)); }}>
+                      title="Option-click to change Chord Mode"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (event.altKey) setPatternMode(voice.patternIndex, "chordMode", cycleChordMode(pattern.chordMode));
+                        else selectVoice(i);
+                      }}>
                       {chordIcon}
                     </button>
                     <button aria-label={`Voice ${i + 1} Insertion Mode: ${pattern.insertMode}`}
-                      onClick={(event) => { event.stopPropagation(); setPatternMode(voice.patternIndex, "insertMode", cycleInsertMode(pattern.insertMode)); }}>
+                      title="Option-click to change Insertion Mode"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (event.altKey) setPatternMode(voice.patternIndex, "insertMode", cycleInsertMode(pattern.insertMode));
+                        else selectVoice(i);
+                      }}>
                       {insertIcon}
                     </button>
                     <button aria-label={`Voice ${i + 1} Drum Machine: ${pattern.drumMachine ? "Enabled" : "Disabled"}`}
-                      onClick={(event) => { event.stopPropagation(); setPatternMode(voice.patternIndex, "drumMachine", !pattern.drumMachine); }}>
+                      title="Option-click to toggle Drum Machine Record"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (event.altKey) setPatternMode(voice.patternIndex, "drumMachine", !pattern.drumMachine);
+                        else selectVoice(i);
+                      }}>
                       {pattern.drumMachine ? <IconDrumOn size={11} /> : <IconDrumOff size={11} />}
                     </button>
                   </div>
@@ -508,19 +522,18 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
                     value={pattern.outputLength} aria-label={`Voice ${i + 1} Output Length`}
                     onChange={(event) => setOutputLength(voice.patternIndex, Number(event.target.value))} />
                   <span className="pwin__base">
-                    <input type="number" min={1} max={8} value={voice.timeBaseNumerator}
+                    <input type="number" min={1} max={24} value={voice.timeBaseNumerator}
                       aria-label={`Voice ${i + 1} Time Base Numerator`}
                       onChange={(event) => setVoiceParam(i, "timeBaseNumerator", Number(event.target.value))} />
                     <i>|</i>
                     <select value={voice.timeBaseDenominator} aria-label={`Voice ${i + 1} Time Base Denominator`}
                       onChange={(event) => setVoiceParam(i, "timeBaseDenominator", Number(event.target.value))}>
-                      {DENOMS.map((value) => <option key={value} value={value}>{value}</option>)}
+                      {TIME_BASE_DENOMINATORS.map((value) => <option key={value} value={value}>{value}</option>)}
                     </select>
                   </span>
-                  <input className="pwin__phase" type="number" min={0} max={384}
-                    value={patternPhases[i]} aria-label={`Voice ${i + 1} Phase`}
-                    onChange={(event) => setPatternPhases((values) => values.map((value, at) =>
-                      at === i ? Number(event.target.value) : value))} />
+                  <input className="pwin__phase" type="number" min={0} max={999}
+                    value={voice.phase} aria-label={`Voice ${i + 1} Phase`}
+                    onChange={(event) => setVoiceParam(i, "phase", Number(event.target.value))} />
                 </div>;
               })}
             </div>

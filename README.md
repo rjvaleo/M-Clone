@@ -15,7 +15,7 @@
 
 ![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
 ![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25_lines%20%7C%20branches%20%7C%20functions-brightgreen)
-![Tests](https://img.shields.io/badge/tests-641_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-657_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
@@ -46,17 +46,23 @@ The manual-derived Phrasing/Legato behavior is documented in
 [`docs/PHRASING.md`](docs/PHRASING.md).
 The four-stream diagnostic tracker is documented in
 [`docs/MIDI_VIEW.md`](docs/MIDI_VIEW.md).
+Movie capture and deterministic Standard MIDI File export are documented in
+[`docs/MOVIES_AND_MIDI.md`](docs/MOVIES_AND_MIDI.md).
+The manual/reference parity audit for Patterns, Transport, and Conductor is in
+[`docs/PATTERNS_TRANSPORT_AUDIT.md`](docs/PATTERNS_TRANSPORT_AUDIT.md).
 The authoritative MIDI timing, transport, lifecycle, verification, and known-
 limits specification is
 [`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md).
 The technical-completion sequence for the next session is in
 [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md).
 
-Current verified checkpoint: **641 passing tests across 33 files**, **100%**
+Current verified checkpoint: **657 passing tests across 34 files**, **100%**
 statement/branch/function/line coverage for the included engine and state
 modules, clean TypeScript checking, and successful normal and single-file
 production builds. P3 is complete for the selected scope (Sound Choice remains
-intentionally skipped); **performance recording and standard MIDI files are next**.
+intentionally skipped). Movie capture/SMF export and the focused
+Patterns/Transport/Conductor audit are complete; MIDI import and Sequence
+playback are next.
 
 ## Documentation index
 
@@ -91,6 +97,10 @@ intentionally skipped); **performance recording and standard MIDI files are next
   verification specification.
 - [`docs/MIDI_VIEW.md`](docs/MIDI_VIEW.md) — four-Voice diagnostic tracker,
   capture semantics, display behavior, and tests.
+- [`docs/MOVIES_AND_MIDI.md`](docs/MOVIES_AND_MIDI.md) — manual-derived Movie
+  capture, timestamp model, deterministic SMF export, and remaining import work.
+- [`docs/PATTERNS_TRANSPORT_AUDIT.md`](docs/PATTERNS_TRANSPORT_AUDIT.md) —
+  corrected Pattern/transport/conductor parity and dependency-bound gaps.
 - [`docs/CONDUCTING_WINDOW.md`](docs/CONDUCTING_WINDOW.md) — Conducting Window
   dependency map, transport controls, Baton, tempo, Robot, and implementation
   history.

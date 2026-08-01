@@ -63,16 +63,17 @@ describe("what a Snapshot captures", () => {
     expect(snap.arrows.density.on).toBe(true);
   });
 
-  // "Play-Enable ... Output Length, Time Base ... for each Voice"
-  it("records Play-Enable, Time Base and Output Length per Voice", () => {
+  // "Play-Enable ... Output Length, Time Base, and Phase ... for each Voice"
+  it("records Play-Enable, Time Base, Phase and Output Length per Voice", () => {
     const { project, positions } = setup();
     project.voices[1].playEnabled = false;
     project.voices[2].timeBaseNumerator = 3;
     project.voices[2].timeBaseDenominator = 16;
+    project.voices[2].phase = 48;
     project.patterns[0].outputLength = 5;
     const snap = captureSnapshot(project, positions, arrows, 0);
     expect(snap.playEnabled[1]).toBe(false);
-    expect(snap.timeBase[2]).toEqual({ numerator: 3, denominator: 16 });
+    expect(snap.timeBase[2]).toEqual({ numerator: 3, denominator: 16, phase: 48 });
     expect(snap.outputLength[0]).toBe(5);
   });
 
@@ -123,13 +124,13 @@ describe("executing a Snapshot", () => {
     const snap = captureSnapshot(project, positions, arrows, 0, { patternGroup: true });
     expect(snap.included).toEqual({ patternGroup: true });
   });
-  it("puts Play-Enable and Time Base back", () => {
+  it("puts Play-Enable, Time Base, and Phase back", () => {
     const { project, positions } = setup();
     const snap = captureSnapshot(project, positions, arrows, 0);
     const changed: typeof project = {
       ...project,
       voices: project.voices.map((v) => ({
-        ...v, playEnabled: !v.playEnabled, timeBaseDenominator: 32,
+        ...v, playEnabled: !v.playEnabled, timeBaseDenominator: 32, phase: 96,
       })),
     };
     const restored = applySnapshot(changed, snap);
@@ -137,6 +138,7 @@ describe("executing a Snapshot", () => {
       .toEqual(project.voices.map((v) => v.playEnabled));
     expect(restored.voices[0].timeBaseDenominator)
       .toBe(project.voices[0].timeBaseDenominator);
+    expect(restored.voices[0].phase).toBe(project.voices[0].phase);
   });
 
   it("puts Output Length back without exceeding the pattern", () => {
