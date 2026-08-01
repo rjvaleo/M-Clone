@@ -37,7 +37,7 @@ Browser-native select and number-input rendering remains a platform delta.
 
 The three competing title systems have now been consolidated on the majority
 generic `.uwin` chrome. Main windows, Pattern Editor, Cyclic Editor, variable
-editors, Midi View, and Conducting all use the same compact reference title bar, title/note
+editors, Midi View, and Conducting all use the same compact flat title bar, title/note
 layout, inline controls, drag handle, border, and theme treatment. Conducting's
 body alone remains scaled to preserve its compact control geometry. Title height,
 diagonal notch angle, border weight, menu placement, shadow, and drag hit area
@@ -94,7 +94,7 @@ windows and Midi View are non-modal, independently movable, and closable.
 | --- | --- | --- |
 | `color-app.gif` | Unified desktop | Global menu restored and footer removed; logical scaling, shared typography, Voice colors, and compact proportions are in place. Exact header branding, notches, gaps, and pixel placement remain deferred. |
 | `b&w-open-window.jpg` | Unified desktop / B&W preset | B&W supplies distinct grays, but monochrome chrome, menu geometry, overlap order, and compact desktop dimensions are not matched. |
-| `all-windows-open-overlapping.png` | Movable windows | Movement/z-order exists. Default overlap, desktop scale, edit-window placement, and menu-bar treatment differ. |
+| `all-windows-open-overlapping.png` | Movable windows | Movement/z-order exists. Auxiliary windows now open/reopen in a collision-free padded column and snap away from overlaps after dragging; user order remains free. |
 | `patterns module.png` | Patterns window | ✅ Rebuilt at the reference's effective 228×120 size: notched Patterns/group title, 1–16 input-channel header, Src, Use, colored Play Enable, Echo-Thru, Mouse Advance, three-part Select box, Output Length, Time Base, Phase, and four 20px Voice rows. |
 | `transport and conductor.png` | Conducting window | Inventory and geometry are close. Exact bitmap font, diagonal/border pixels, native controls, title-menu fit, and lower icons remain deltas. |
 | `variables.png` | Variables / `VarThumb` | Six positions and miniature concepts exist. Width, labels/arrows, four-color miniature rows, and exact cell/title metrics differ. |

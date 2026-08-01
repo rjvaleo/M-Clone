@@ -20,7 +20,7 @@ Updated 2026-08-01.
 
 - Branch at the earlier checkpoint: `master`; inspect the current working tree
   before making additional changes.
-- Tests: **625 passing across 32 files**.
+- Tests: **641 passing across 33 files**.
 - Coverage: **100% statements, branches, functions, and lines** across
   `src/engine` and `src/state`.
 - Typecheck, normal production build, and single-file build: passing.
@@ -165,21 +165,26 @@ Acceptance gate:
 - Stop/Resume semantics are covered explicitly.
 - Browser verification with an audible A→B→C slideshow.
 
-### 3. Implement the remaining Phrasing Variable — NEXT
+### 3. Complete Phrasing through Legato Cyclic — ✅ DONE (2026-08-01)
 
-- Read the complete Phrasing sections of the M 2.7 manual before modeling it.
-- Document the inferred data model and any ambiguity.
-- Add four Voices × six Positions, presets, conducting behavior, thumbnails,
-  editor state, planner integration, snapshot integration, and persistence.
-- Follow red → implementation → coverage for engine and store work.
+Manual review established that the section heading “Working with Phrasing”
+describes Legato Cyclic; it does not introduce a separate Variable. Implemented
+through red → green → coverage:
+
+- corrected Legato defaults to 6/25/50/75/100%;
+- made sustain a percentage of the actual interval to the next onset, including
+  Rhythm and Time Distortion and values above 100%;
+- added cyclic-position conducting, Snapshot/Hold/Do/Restore/Blink integration,
+  Slideshow recording/playback, and document compatibility;
+- fixed double-click selection when opening the Cyclic Editor;
+- documented the manual-derived model in [`PHRASING.md`](./PHRASING.md).
 
 Acceptance gate:
 
-- Phrasing changes audible timing/articulation as specified without duplicating
-  existing Legato or Time Distortion responsibilities.
-- Active Position, conducting, snapshots, and save/load all agree.
+- Met: audible timing/articulation is handled by Legato without a duplicate
+  model; Active Position, conducting, snapshots, Slideshows, and save/load agree.
 
-### 4. Performance recording and standard MIDI files
+### 4. Performance recording and standard MIDI files — NEXT
 
 - Define one timestamped performance-event model fed by the existing planner
   output rather than scraping Midi View.
@@ -246,7 +251,7 @@ The browser milestone is technically complete when:
 
 - Project save/load is versioned and reliable.
 - Every visible non-deferred control either works or is removed.
-- Snapshot/Slideshow and Phrasing are complete.
+- Snapshot/Slideshow and Phrasing-through-Legato are complete.
 - Performance recording and Standard MIDI File import/export work.
 - Input control and MIDI assignments work with graceful device loss.
 - The instrument/Sound Choice scope is implemented or explicitly moved to the

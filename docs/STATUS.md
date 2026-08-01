@@ -1,5 +1,44 @@
 # M-Clone — Project Status
 
+## 2026-08-01: unified module themes and collision-free placement
+
+Patterns and the inner Conducting/transport drawing now honor the dark palette;
+Midi View uses the same light/dark panel surfaces as the rest of the app while
+retaining its monospaced tracker data. Individual window/module title bars are
+flat in both themes—the old stripe fill is removed.
+
+New and reopened auxiliary windows begin in the leftmost free column to the
+right of the permanent modules, then stack vertically with 4px padding. Drag
+release snaps nearby edges into alignment and resolves overlaps to the nearest
+free padded edge. TDD verification is **641 tests across 33 files** with 100%
+included engine/state coverage; browser verification covered initial placement,
+close/reopen placement, computed theme colors, and flat chrome.
+
+## 2026-08-01: Midi View lane containment
+
+Compact Midi View messages now render in two rows of three fields, so Note On
+duration, velocity, and channel remain inside their Voice lane. Header, row,
+and background dividers share one 60px time-column measurement. Live browser
+checks confirm zero horizontal overflow for cells and messages in both themes.
+
+## 2026-08-01: Phrasing completed through Legato Cyclic
+
+Manual review corrected the roadmap model: M has no separate Phrasing
+Variable. Its “Working with Phrasing” behavior is the Legato Cyclic Variable.
+Legato now uses the manual defaults (6/25/50/75/100%) and sustains each note as
+a percentage of the actual interval to its next Rhythm/Time-Distortion-adjusted
+onset. Values above 100% overlap subsequent notes as documented.
+
+Accent, Legato, and Rhythm Positions now have Conducting Arrows and participate
+in Hold/Do, partial Snapshots, Restore, Blink Everything, Slideshows, and saved
+documents by active Position only. A Cyclic Editor selection race found during
+browser verification is also fixed. See [`PHRASING.md`](./PHRASING.md).
+
+TDD verification: **635 tests across 33 files**, 100% included engine/state
+coverage, clean typecheck, both production builds, and fresh-server browser
+verification of cyclic selection, arrow exposure, and correct Legato editor
+opening.
+
 ## 2026-08-01: Snapshot editing and Slideshows
 
 The remaining Snapshot Window controls are wired from the M 2.7 manual.
@@ -121,8 +160,8 @@ align across the four fixed Voice columns, Follow pins the scrollable history
 to new rows, and Clear resets it. The later animated playhead and Pattern
 position/length experiment has been removed.
 
-**As of:** 2026-08-01 · **Working tree:** local Snapshot/Slideshow changes
-intentionally uncommitted on `master`
+**As of:** 2026-08-01 · **Working tree:** local Phrasing/Legato changes
+intentionally uncommitted
 **Measured against:** [`M-Clone_Build_Plan.md`](./M-Clone_Build_Plan.md)
 
 Legend: ✅ done · 🟡 partial · ⬜ not started
@@ -139,7 +178,7 @@ is paused by decision.
 
 | Metric | State |
 | --- | --- |
-| Unit tests | **625 passing** (32 files) |
+| Unit tests | **641 passing** (33 files) |
 | Coverage (engine + state) | **100%** lines / branches / functions |
 | Typecheck (`tsc --noEmit`) | Clean |
 | Production build | Succeeds (`vite build`, `build:single`) |
@@ -153,7 +192,7 @@ is paused by decision.
 | **P0 Foundations** | Scaffold, engine skeleton, Web Audio lookahead scheduler, dual sinks, store | ✅ (theme architecture 🟡) |
 | **P1 Sound & Patterns** | Pattern model, editor, transport, tempo, time base, first sound | ✅ |
 | **P2 Variables core** | Note Order, Transposition, Density, manual-faithful Velocity Range + positions + editors + harmonic engine | ✅ |
-| **P3 Cyclic + Midi + rest** | Cyclic editor, Midi window, Orchestration, Time Distortion, Phrasing, Pattern Group, Sound Choice | 🟡 (Cyclic, Midi View, Orchestration, Time Distortion, Pattern Group ✅; Phrasing ⬜; Sound Choice intentionally skipped) |
+| **P3 Cyclic + Midi + rest** | Cyclic editor, Midi window, Orchestration, Time Distortion, Phrasing, Pattern Group, Sound Choice | ✅ for selected scope (Phrasing is Legato Cyclic ✅; Sound Choice intentionally skipped) |
 | **P4 Conducting + Snapshots** | Conducting grid, arrows, Robot, snapshots, slideshows | ✅ |
 | **P5 Classic technical I/O** | Record-to-tracks, MIDI import/export, save/load, Input Control, Mouse Advance, four lightweight playback engines | 🟡 (save/load ✅) |
 | **P6 Modern theme + instruments** | Modern layouts, deeper instruments, pattern-manipulation upgrades | 🟡 (Modern Cyclic Editor + color themes ✅; broader Modern layout ⬜) |
@@ -209,8 +248,8 @@ is paused by decision.
 | --- | --- | --- |
 | **Patterns** | ✅ | play-enable, voice select, output length, time base (num/den), 16-step toggles; Pattern Group a–f selection, conducting, snapshots, and persistence ✅ |
 | **Conducting / "Untitled"** | ✅ | Start/Stop/Pause/Sync, six-by-six Grid, Position + Tempo conducting, Tempo Range, Sync Ratio, bounded Robot + Time Base; Movie/Sequence honestly disabled pending their subsystems |
-| **Variables** | 🟡 | 6-position activation and editors for Note Order, Transposition, Density, Velocity Range, Orchestration, and Time Distortion ✅; Pattern Group activation/conducting ✅; Phrasing ⬜; Sound Choice skipped |
-| **Cyclic Variables** | ✅ | five-level Accent/Legato/Rhythm cycles, six Positions, per-Voice lengths, and Classic/Modern editor; Accent 0 rests |
+| **Variables** | ✅ for selected scope | 6-position activation/editors for Note Order, Transposition, Density, Velocity Range, Orchestration, and Time Distortion; Pattern Group activation/conducting; Sound Choice skipped |
+| **Cyclic Variables** | ✅ | five-level Accent/Legato/Rhythm cycles, six Positions, per-Voice lengths, conducting, Snapshot/Slideshow integration, and Classic/Modern editor; Legato supplies Phrasing |
 | **Midi** | ✅ | per-voice channel, program, transpose, velocity-range readout, density, legato; six-position 4×16 Orchestration routing ✅; Sound Choice skipped |
 | **Snapshot** | ✅ | 26 partial A–Z stores, Hold/Do, Edit/copy, Blink Everything, restore, keyboard control, and nine record/play/pause/loop/stop Slideshows |
 | **File menu** | ✅ | New / Open / Save / Save As over a versioned document, with document name and unsaved-changes tracking; browser download rather than a file-system picker |
@@ -268,8 +307,9 @@ is paused by decision.
 ## Suggested next steps
 
 See [`NEXT_STEPS.md`](./NEXT_STEPS.md). Project save/load and MIDI Reliability
-Phase 3 and Snapshot/Slideshow behavior are complete. The active order is
-Phrasing, performance recording/MIDI I/O, then controller and instrument work. Visual
+Phase 3 (with Sound Choice intentionally skipped), Phrasing/Legato, and
+Snapshot/Slideshow behavior are complete. The active order is performance
+recording/MIDI I/O, then controller and instrument work. Visual
 polish is not on the technical critical path.
 
 ## Known constraints

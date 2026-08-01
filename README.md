@@ -15,7 +15,7 @@
 
 ![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
 ![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25_lines%20%7C%20branches%20%7C%20functions-brightgreen)
-![Tests](https://img.shields.io/badge/tests-625_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-641_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
@@ -42,6 +42,8 @@ ownership audit, and channel-theme architecture are in
 [`docs/VISUAL_AUDIT_AND_THEMING.md`](docs/VISUAL_AUDIT_AND_THEMING.md).
 The dedicated editor is documented in
 [`docs/CYCLIC_EDITOR.md`](docs/CYCLIC_EDITOR.md).
+The manual-derived Phrasing/Legato behavior is documented in
+[`docs/PHRASING.md`](docs/PHRASING.md).
 The four-stream diagnostic tracker is documented in
 [`docs/MIDI_VIEW.md`](docs/MIDI_VIEW.md).
 The authoritative MIDI timing, transport, lifecycle, verification, and known-
@@ -50,10 +52,11 @@ limits specification is
 The technical-completion sequence for the next session is in
 [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md).
 
-Current verified checkpoint: **625 passing tests across 32 files**, **100%**
+Current verified checkpoint: **641 passing tests across 33 files**, **100%**
 statement/branch/function/line coverage for the included engine and state
 modules, clean TypeScript checking, and successful normal and single-file
-production builds. Snapshot/Slideshow work is complete; **Phrasing is next**.
+production builds. P3 is complete for the selected scope (Sound Choice remains
+intentionally skipped); **performance recording and standard MIDI files are next**.
 
 ## Documentation index
 
@@ -163,6 +166,9 @@ Working today:
 - **Window manager:** right-click blank canvas to open any available window.
   The six reference main windows stay open; auxiliary editors and Midi View can
   close and reopen, and all editor windows can coexist without modal overlays.
+  New/reopened auxiliaries occupy the leftmost free column beyond the permanent
+  modules and stack with 4px padding. Dragged windows snap to nearby aligned
+  edges and resolve overlaps on release.
 - **Unified window navigation:** every main and auxiliary window uses the same
   compact reference title bar, with window-specific commands available by right-click.
 - **Classic global menu:** File, Edit, Variables, Pattern, Windows, and Options
@@ -195,9 +201,13 @@ Working today:
   explicit ordered Note On/Off/Program Change events, lifecycle-owned releases,
   equal-timestamp batch submission, and clear-before-panic transport transitions.
 - **Light / Dark themes:** the header toggle re-skins the whole interface between
-  a light and a dark theme — identical layout and functionality, persisted.
+  coherent light and dark palettes, including Patterns, Conducting, and Midi
+  View. Individual module title bars use flat surfaces rather than stripes.
 
 The five-level Accent, Legato, and Rhythm Cyclic Variables drive playback.
+Legato is M's Phrasing system: its 6/25/50/75/100% levels scale the actual time
+to the next onset and may exceed 100% for overlapping articulation. All three
+Cyclic Variables have six conductable, Snapshot/Slideshow-aware Positions.
 Their dedicated editor has a reference-derived Classic view and a right-click
 Modern view that exposes all three variables and all twelve Voice grids at once.
 Time Distortion, Grid conducting, and the Robot Conductor are audible; external

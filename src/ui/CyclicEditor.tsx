@@ -29,8 +29,8 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
   const setLength = useM((s) => s.setCyclicLength);
   const setValue = useM((s) => s.setCyclicValue);
   const [view, setView] = useState<"classic" | "modern">("classic");
-  const { pos, z, onPointerDown: onTitleDown, bringToFront } = useDraggable(
-    "cyclic-editor", { x: 96, y: 54 },
+  const { ref, pos, z, onPointerDown: onTitleDown, bringToFront } = useDraggable(
+    "cyclic-editor", { x: 96, y: 54 }, { autoPlace: true },
   );
   const [modernPositions, setModernPositions] = useState<Record<CyclicVariable, number>>({
     rhythm: activePositions.rhythm,
@@ -117,7 +117,7 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
   );
 
   return (
-    <section className={`cyced uwin cyced--${view} movable`} aria-label="Cyclic Editor"
+    <section ref={ref} className={`cyced uwin cyced--${view} movable`} aria-label="Cyclic Editor"
       style={{ left: pos.x, top: pos.y, zIndex: z }}
       onPointerDownCapture={bringToFront} onContextMenu={context.onContextMenu}>
       {context.menu}
@@ -133,7 +133,7 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
           <div className="cyced__descriptor">
             <b>NOTE</b>
             <span>Rhythm: steps</span>
-            <span>Legato: 1–100%</span>
+            <span>Legato: % of next onset</span>
             <span>Accent: 1–100%</span>
           </div>
           {KINDS.map(({ id, name }) => (

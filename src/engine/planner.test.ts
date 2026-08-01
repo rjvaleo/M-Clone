@@ -322,8 +322,18 @@ describe("planWindow — cyclic variables", () => {
     st.cyclicValues.rhythm[4] = 3;
     st.cyclicValues.legato[4] = 200;
     const { notes } = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 2);
-    expect(notes[0].durationSec).toBeCloseTo(1, 9);
+    // Legato is a percentage of the actual 1.5-second interval to the next onset.
+    expect(notes[0].durationSec).toBeCloseTo(3, 9);
     expect(notes[1].startSec).toBeCloseTo(1.5, 9);
+  });
+
+  it("makes 400% Legato overlap the next three equal-spaced notes", () => {
+    const st = project([pattern("p", [[60]])], [voice({ legato: 1 })]);
+    st.cyclic.legato[0][0] = 4;
+    st.cyclicValues.legato[4] = 400;
+    const { notes } = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 0.6);
+    expect(notes[0].durationSec).toBeCloseTo(2, 9);
+    expect(notes[1].startSec).toBeCloseTo(0.5, 9);
   });
 
   it("chooses cyclic range levels deterministically during playback", () => {

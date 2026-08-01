@@ -131,9 +131,9 @@ function freshDocument(): { project: ProjectState; positions: VariablePositions 
  * that a Snapshot stores the Position, not its contents.
  */
 function executeSnapshot(
-  s: { project: ProjectState; positions: VariablePositions },
+  s: MStore,
   snap: Snapshot,
-): { project: ProjectState; positions: VariablePositions; arrows: Record<string, ArrowState>; patternGroup: number } {
+): Partial<MStore> {
   let positions = s.positions;
   for (const id of POSITION_VARS) {
     if (!snapshotIncludes(snap, "actives", id)) continue;
@@ -141,10 +141,29 @@ function executeSnapshot(
     if (active === undefined) continue;
     positions = { ...positions, [id]: { ...positions[id], active } };
   }
-  const project = applySnapshot(s.project, snap);
+  let project = applySnapshot(s.project, snap);
+  let activeCyclicPositions = s.activeCyclicPositions;
+  for (const kind of ["accent", "legato", "rhythm"] as CyclicVariable[]) {
+    if (!snapshotIncludes(snap, "cyclicActives", kind)) continue;
+    const active = snap.cyclicActives?.[kind];
+    if (active === undefined) continue;
+    activeCyclicPositions = { ...activeCyclicPositions, [kind]: active };
+    project = {
+      ...project,
+      cyclic: {
+        ...project.cyclic,
+        [kind]: s.cyclicPositions[kind][active].map((voice) => [...voice]),
+      },
+      cyclicLengths: {
+        ...project.cyclicLengths,
+        [kind]: [...s.cyclicLengths[kind][active]],
+      },
+    };
+  }
   return {
     project: { ...project, voices: applyActivePositions(project.voices, positions) },
     positions,
+    activeCyclicPositions,
     arrows: snap.included
       ? Object.fromEntries([
           ...Object.entries((s as MStore).arrows),
@@ -161,11 +180,12 @@ function executeSnapshot(
 
 const nowSeconds = () => performance.now() / 1000;
 const emptyInclusion = (): SnapshotInclusion => ({
-  actives: [], arrows: [], playEnabled: [], timeBase: [], outputLength: [],
+  actives: [], cyclicActives: [], arrows: [], playEnabled: [], timeBase: [], outputLength: [],
   patternGroup: false,
 });
 const everythingInclusion = (): SnapshotInclusion => ({
   actives: [...POSITION_VARS],
+  cyclicActives: ["accent", "legato", "rhythm"],
   arrows: [],
   playEnabled: [0, 1, 2, 3],
   timeBase: [0, 1, 2, 3],
@@ -371,6 +391,24 @@ function conductUpdate(s: MStore, rawPoint: BatonPoint) {
     };
   }
 
+  let activeCyclicPositions = s.activeCyclicPositions;
+  let cyclic = s.project.cyclic;
+  let cyclicLengths = s.project.cyclicLengths;
+  for (const kind of ["accent", "legato", "rhythm"] as CyclicVariable[]) {
+    const arrow = s.arrows[kind];
+    if (!arrow?.on) continue;
+    const active = positionFromBaton(baton, arrow.dir);
+    activeCyclicPositions = { ...activeCyclicPositions, [kind]: active };
+    cyclic = {
+      ...cyclic,
+      [kind]: s.cyclicPositions[kind][active].map((voice) => [...voice]),
+    };
+    cyclicLengths = {
+      ...cyclicLengths,
+      [kind]: [...s.cyclicLengths[kind][active]],
+    };
+  }
+
   const tempoArrow = s.arrows.tempo;
   const tempo = tempoArrow?.on
     ? conductedTempo(s.tempoRange, axisValue(baton, tempoArrow.dir))
@@ -383,10 +421,13 @@ function conductUpdate(s: MStore, rawPoint: BatonPoint) {
   return {
     baton,
     positions,
+    activeCyclicPositions,
     patternGroup,
     project: {
       ...s.project,
       tempo,
+      cyclic,
+      cyclicLengths,
       voices: applyActivePositions(s.project.voices, positions),
     },
   };
@@ -864,6 +905,29 @@ export const useM = create<MStore>((set, get) => ({
   activateCyclicPosition: (kind, position) =>
     set((s) => {
       const pos = Math.max(0, Math.min(5, Math.round(position)));
+      if (s.snapshotMode !== "idle" && s.snapshotDraft) {
+        const included = s.snapshotDraft.included!;
+        const cyclicActives = s.snapshotMode === "editing"
+          ? toggleIncluded(included.cyclicActives!, kind)
+          : [...new Set([...included.cyclicActives!, kind])];
+        return {
+          snapshotDraft: {
+            ...s.snapshotDraft,
+            cyclicActives: { ...s.snapshotDraft.cyclicActives!, [kind]: pos },
+            included: { ...included, cyclicActives },
+          },
+        };
+      }
+      let slideshowTransport = s.slideshowTransport;
+      let slideshows = s.slideshows;
+      if (slideshowTransport.mode === "recording" && slideshowTransport.slot !== null) {
+        const result = addSlideshowAction(
+          slideshowTransport, slideshows[slideshowTransport.slot],
+          { type: "position", variable: kind, position: pos }, nowSeconds(),
+        );
+        slideshowTransport = result.state;
+        slideshows = slideshows.map((show, i) => i === slideshowTransport.slot ? result.slideshow : show);
+      }
       return {
         activeCyclicPositions: { ...s.activeCyclicPositions, [kind]: pos },
         project: {
@@ -871,6 +935,8 @@ export const useM = create<MStore>((set, get) => ({
           cyclic: { ...s.project.cyclic, [kind]: s.cyclicPositions[kind][pos].map((v) => [...v]) },
           cyclicLengths: { ...s.project.cyclicLengths, [kind]: [...s.cyclicLengths[kind][pos]] },
         },
+        slideshowTransport,
+        slideshows,
       };
     }),
   setCyclicLength: (kind, position, voiceIndex, length) =>
@@ -969,7 +1035,10 @@ export const useM = create<MStore>((set, get) => ({
       const snapshots = [...s.snapshots];
       snapshots[index] = s.snapshotDraft
         ? structuredClone(s.snapshotDraft)
-        : captureSnapshot(s.project, s.positions, s.arrows, s.patternGroup);
+        : captureSnapshot(
+          s.project, s.positions, s.arrows, s.patternGroup,
+          undefined, s.activeCyclicPositions,
+        );
       return {
         snapshots, currentSnapshot: index,
         snapshotMode: "idle", snapshotDraft: null,
@@ -984,6 +1053,7 @@ export const useM = create<MStore>((set, get) => ({
       // Arm Restore From Snapshot with where we were a moment ago.
       const restorePoint = captureSnapshot(
         s.project, s.positions, s.arrows, s.patternGroup,
+        undefined, s.activeCyclicPositions,
       );
       let slideshowTransport = s.slideshowTransport;
       let slideshows = s.slideshows;
@@ -1056,6 +1126,7 @@ export const useM = create<MStore>((set, get) => ({
     snapshotMode: "holding",
     snapshotDraft: captureSnapshot(
       s.project, s.positions, s.arrows, s.patternGroup, emptyInclusion(),
+      s.activeCyclicPositions,
     ),
   })),
 
@@ -1070,6 +1141,7 @@ export const useM = create<MStore>((set, get) => ({
     const source = structuredClone(s.snapshots[s.currentSnapshot]!);
     source.included = source.included ? {
       actives: source.included.actives ?? [],
+      cyclicActives: source.included.cyclicActives ?? [],
       arrows: source.included.arrows ?? [],
       playEnabled: source.included.playEnabled ?? [],
       timeBase: source.included.timeBase ?? [],
@@ -1083,7 +1155,7 @@ export const useM = create<MStore>((set, get) => ({
     snapshotMode: "holding",
     snapshotDraft: captureSnapshot(s.project, s.positions, s.arrows, s.patternGroup, {
       ...everythingInclusion(), arrows: Object.keys(s.arrows),
-    }),
+    }, s.activeCyclicPositions),
   })),
 
   recordSlideshow: (index, atSec = nowSeconds()) => set((s) => {
@@ -1146,7 +1218,11 @@ export const useM = create<MStore>((set, get) => ({
     set({ slideshowTransport: result.state });
     for (const action of result.actions) {
       if (action.type === "snapshot") get().recallSnapshot(action.index, atSec);
-      else get().activatePosition(action.variable, action.position);
+      else if (["accent", "legato", "rhythm"].includes(action.variable)) {
+        get().activateCyclicPosition(action.variable as CyclicVariable, action.position);
+      } else {
+        get().activatePosition(action.variable as PositionVarId, action.position);
+      }
     }
   },
 

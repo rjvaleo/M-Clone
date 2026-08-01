@@ -342,7 +342,9 @@ function readSlideshows(value: unknown, warn: (m: string) => void): Slideshow[] 
           ? [{ atSec, action: { type: "snapshot", index } as SlideshowAction }]
           : [];
       }
-      if (action.type === "position" && POSITION_VARS.includes(action.variable as never)) {
+      if (action.type === "position" && [
+        ...POSITION_VARS, ...CYCLIC_KINDS,
+      ].includes(action.variable as never)) {
         return [{
           atSec,
           action: {

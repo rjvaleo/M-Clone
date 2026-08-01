@@ -77,7 +77,7 @@ export type VoiceState = {
   timeBaseDenominator: number; // division of a whole note (4=quarter, 8=eighth)
   /** Time Distortion Map: this Voice's re-mapping of clock time to real time. */
   timeDistort: TimeMap;
-  legato: number; // gate length as a fraction of the step (0..~1.5)
+  legato: number; // per-Voice multiplier over the Cyclic Legato onset percentage
   channel: number; // 1..16 MIDI output channel
   outputChannels: number[]; // Orchestration: any combination of channels 1..16
   program: number; // 0..127 program/patch

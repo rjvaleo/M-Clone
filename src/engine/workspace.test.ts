@@ -3,7 +3,9 @@ import {
   MIN_WORKSPACE_HEIGHT,
   MIN_WORKSPACE_WIDTH,
   clampWorkspaceZoom,
+  placeWindow,
   logicalDragDelta,
+  windowRectsOverlap,
   workspaceLayout,
 } from "./workspace";
 
@@ -89,5 +91,54 @@ describe("fluid workspace layout", () => {
     const layout = workspaceLayout(1601, 901, 130);
     expect(layout.physical.width).toBeCloseTo(1601, 5);
     expect(layout.physical.height).toBeCloseTo(901, 5);
+  });
+});
+
+describe("collision-free window placement", () => {
+  const size = { width: 100, height: 80 };
+
+  it("stacks a newly opened window below the previous one in the leftmost auxiliary column", () => {
+    const occupied = [
+      { x: 534, y: 4, width: 100, height: 80 },
+    ];
+    expect(placeWindow({ x: 534, y: 4 }, size, occupied, 4)).toEqual({
+      x: 534, y: 88,
+    });
+  });
+
+  it("moves an overlapping drag to the nearest padded edge", () => {
+    const occupied = [{ x: 100, y: 100, width: 100, height: 80 }];
+    const placed = placeWindow({ x: 150, y: 110 }, size, occupied, 4);
+    expect(windowRectsOverlap({ ...placed, ...size }, occupied[0], 4)).toBe(false);
+    expect(placed).toEqual({ x: 204, y: 110 });
+  });
+
+  it("snaps nearby windows into left alignment without changing their vertical order", () => {
+    const occupied = [{ x: 534, y: 4, width: 100, height: 80 }];
+    expect(placeWindow({ x: 539, y: 92 }, size, occupied, 4)).toEqual({
+      x: 534, y: 88,
+    });
+  });
+
+  it("keeps a free position unchanged", () => {
+    expect(placeWindow({ x: 20, y: 30 }, size, [], 4)).toEqual({ x: 20, y: 30 });
+  });
+
+  it("chooses the closest of several snap edges", () => {
+    expect(placeWindow({ x: 106, y: 300 }, { width: 10, height: 10 }, [
+      { x: 100, y: 0, width: 1, height: 1 },
+      { x: 108, y: 20, width: 1, height: 1 },
+    ], 4)).toEqual({ x: 105, y: 300 });
+  });
+
+  it("uses touching rectangles as the zero-gap boundary", () => {
+    expect(windowRectsOverlap(
+      { x: 0, y: 0, width: 10, height: 10 },
+      { x: 9, y: 0, width: 10, height: 10 },
+    )).toBe(true);
+    expect(windowRectsOverlap(
+      { x: 0, y: 0, width: 10, height: 10 },
+      { x: 10, y: 0, width: 10, height: 10 },
+    )).toBe(false);
   });
 });

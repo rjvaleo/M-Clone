@@ -216,8 +216,8 @@ A browser **cannot** load VST/VST3/AU binaries. Path:
 ### Main screen — six always‑live windows
 1. **Patterns** (4 rows). *Input controls:* Src/Use, input channel, monitor, record enable, Record Mode (Replace / Overdub / Drum‑Machine), Insertion Mode. *Output controls:* Play‑Enable (speaker), Mouse Advance, Pattern thumbnail / Select, Output Length, Time Base (numerator/denominator), Phase, articulation, Pattern Group.
 2. **Conducting.** Start / Stop / Pause / Sync buttons, Tempo, Sync‑Metronome ratio, the Conducting Grid (baton), Robot (Automatic) Conductor.
-3. **Variables.** Matrix of Variables × 6 Positions × 4 Voices; each Variable has a conducting arrow (direction/enable), miniature representations of all six Positions, and an Active Position. Variables: Note Order, Transposition, Note Density, Velocity Range / Accents, Pattern Group, Orchestration, Sound Choice, Time Distortion, Phrasing.
-4. **Cyclic Variables.** Rhythm / Legato / Accent, six Positions arranged vertically, cyclic conducting arrows.
+3. **Variables.** Matrix of Variables × 6 Positions × 4 Voices; each Variable has a conducting arrow (direction/enable), miniature representations of all six Positions, and an Active Position. Variables: Note Order, Transposition, Note Density, Velocity Range / Accents, Pattern Group, Orchestration, Sound Choice, and Time Distortion.
+4. **Cyclic Variables.** Rhythm / Legato / Accent, six Positions arranged vertically, cyclic conducting arrows. The manual's Phrasing behavior is Legato Cyclic, not a separate Variable.
 5. **Midi.** Per‑voice output channel + program (patch) change.
 6. **Snapshot.** Drag area, snapshot store/recall controls, Slideshow record/play controls.
 
@@ -248,9 +248,9 @@ Conducting Grid (mouse baton), Input Control System (MIDI‑keyboard one‑step 
 
 **Voices & playback** — 4 voices, Play‑Enable, per‑voice time base/phase, Sync (reset all voices to start), Start/Stop/Pause.
 
-**Variables** — six snapshot‑able positions per transform, conducting‑enabled with direction; Note Order, Transposition, Density, Velocity/Accents, Time Distortion, Phrasing, Pattern Group, Orchestration, Sound Choice.
+**Variables** — six snapshot‑able positions per transform, conducting‑enabled with direction; Note Order, Transposition, Density, Velocity/Accents, Time Distortion, Pattern Group, Orchestration, Sound Choice.
 
-**Cyclic Variables** — 16‑step cycles for Rhythm, Legato, Accent, five levels each, per voice.
+**Cyclic Variables** — 16‑step cycles for Rhythm, Legato, Accent, five levels each, per voice; Legato provides M's Phrasing behavior.
 
 **Conducting** — drag the baton to move Active Positions of enabled Variables; continuous conducting for Velocity/Legato; Robot Conductor for autonomous movement; tempo and sync/metronome ratios.
 
@@ -280,13 +280,13 @@ Conducting Grid (mouse baton), Input Control System (MIDI‑keyboard one‑step 
 
 **Current checkpoint (2026-08-01):** P0–P2 and P4 are complete; the implemented
 parts of P3 are stable; layout is accepted and frozen. Technical completion now
-follows `NEXT_STEPS.md`: Phrasing, recording/MIDI I/O, controller bindings, and
+follows `NEXT_STEPS.md`: recording/MIDI I/O, controller bindings, and
 the instrument decision.
 
 - **P0 — Foundations.** Repo scaffold (Vite/React/TS), engine skeleton, Web Audio clock + lookahead scheduler, dual output sinks (MIDI + synth), theme architecture (control catalog + theme provider), state store.
 - **P1 — Sound & Patterns.** Pattern model, Pattern Editor, transport (Start/Stop/Pause/Sync), Tempo, Time Base / Output Length / Play‑Enable. **First sound.**
 - **P2 — Variables core.** Note Order, Transposition (+ harmonic engine start), Density, Velocity/Accents; Positions, miniatures, Active Position, edit windows.
-- **P3 — Cyclic + Midi + remaining Variables.** Cyclic Editor, Midi window, Orchestration, Time Distortion, Phrasing, Pattern Group, Sound Choice.
+- **P3 — Cyclic + Midi + remaining Variables.** Cyclic Editor, Midi window, Orchestration, Time Distortion, Phrasing through Legato Cyclic, Pattern Group; Sound Choice intentionally skipped.
 - **P4 — Conducting + Snapshots.** Conducting Grid, arrows, Robot Conductor; snapshots + slideshows. *(Classic M feature‑complete.)*
 - **P5 — Classic technical I/O.** Record-to-tracks, MIDI import/export, Options,
   project save/load, Input Control, Mouse Advance, and four lightweight engines.

@@ -717,6 +717,14 @@ describe("Hold/Do and Edit Snapshot", () => {
     expect(g().snapshotDraft?.included?.actives).toHaveLength(6);
   });
 
+  it("leaves Cyclic Positions unchanged when an older Snapshot lacks them", () => {
+    g().storeSnapshot(0);
+    delete g().snapshots[0]!.cyclicActives;
+    g().activateCyclicPosition("legato", 4);
+    g().recallSnapshot(0);
+    expect(g().activeCyclicPositions.legato).toBe(4);
+  });
+
   it("Edit Snapshot can add a control that was not previously included", () => {
     g().beginHold();
     g().activatePosition("transposition", 2);
@@ -733,7 +741,7 @@ describe("Hold/Do and Edit Snapshot", () => {
     g().snapshots[0]!.included = {};
     g().editCurrentSnapshot();
     expect(g().snapshotDraft?.included).toMatchObject({
-      arrows: [], playEnabled: [], timeBase: [], outputLength: [], patternGroup: false,
+      cyclicActives: [], arrows: [], playEnabled: [], timeBase: [], outputLength: [], patternGroup: false,
     });
   });
 });
@@ -792,6 +800,20 @@ describe("Slideshows", () => {
     g().toggleSlideshowLoop(3);
     expect(g().slideshows[0].loopAtSec).not.toBe(null);
     expect(g().slideshowTransport.mode).toBe("idle");
+  });
+
+  it("records and plays Cyclic Variable Position changes", () => {
+    g().recordSlideshow(0, 0);
+    g().activateCyclicPosition("legato", 4);
+    expect(g().slideshows[0].events[0].action).toEqual({
+      type: "position", variable: "legato", position: 4,
+    });
+    g().stopSlideshow(1);
+    g().activateCyclicPosition("legato", 0);
+    g().setPlaying(true);
+    g().playSlideshow(0, 2);
+    g().advanceSlideshow(2);
+    expect(g().activeCyclicPositions.legato).toBe(4);
   });
 
   it("adds and removes a playback loop, then stops playback", () => {
@@ -980,6 +1002,35 @@ describe("the Conducting Grid", () => {
 });
 
 describe("cyclic variables", () => {
+  it("conducts Legato, Rhythm, and Accent Positions", () => {
+    g().setArrow("legato", { on: true, dir: "right" });
+    g().setArrow("rhythm", { on: true, dir: "down" });
+    g().setArrow("accent", { on: true, dir: "left" });
+    g().conductAt(0.8, 0.2);
+    expect(g().activeCyclicPositions).toEqual({ legato: 4, rhythm: 1, accent: 1 });
+  });
+
+  it("Hold/Do and Snapshots include Cyclic Variable Positions", () => {
+    g().beginHold();
+    g().activateCyclicPosition("legato", 3);
+    expect(g().activeCyclicPositions.legato).toBe(0);
+    g().doHold();
+    expect(g().activeCyclicPositions.legato).toBe(3);
+    g().blinkEverything();
+    g().storeSnapshot(0);
+    g().activateCyclicPosition("legato", 1);
+    g().recallSnapshot(0);
+    expect(g().activeCyclicPositions.legato).toBe(3);
+  });
+
+  it("Edit Snapshot toggles a Cyclic Variable Position's membership", () => {
+    g().storeSnapshot(0);
+    g().editCurrentSnapshot();
+    g().activateCyclicPosition("legato", 4);
+    expect(g().snapshotDraft?.cyclicActives?.legato).toBe(4);
+    expect(g().snapshotDraft?.included?.cyclicActives).not.toContain("legato");
+    expect(g().activeCyclicPositions.legato).toBe(0);
+  });
   it("sets one cyclic level without changing other steps or voices", () => {
     g().setCyclicLevel("accent", 2, 5, 4);
     expect(g().project.cyclic.accent[2][5]).toBe(4);
