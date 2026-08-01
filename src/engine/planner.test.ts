@@ -76,7 +76,9 @@ describe("planWindow — basic playback", () => {
     const { notes } = planWindow(st, cursors, new Rng(1), 0, 1.0);
     expect(notes).toHaveLength(2);
     expect(notes[0]).toMatchObject({ note: 60, startSec: 0, channel: 1, velocity: 100 });
+    expect(notes[0]).toMatchObject({ atTick: 0, durationTicks: 432 });
     expect(notes[1]).toMatchObject({ note: 64 });
+    expect(notes[1].atTick).toBe(960);
     expect(notes[1].startSec).toBeCloseTo(0.5, 9);
     expect(notes[0].durationSec).toBeCloseTo(0.225, 9); // level 2 is 50%
   });
@@ -98,6 +100,28 @@ describe("planWindow — basic playback", () => {
     const { notes } = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 1.0);
     expect(notes).toHaveLength(1);
     expect(notes[0].note).toBe(60);
+  });
+});
+
+describe("planWindow — independent voice randomness", () => {
+  it("keeps one voice reproducible when another voice changes random consumption", () => {
+    const patterns = [
+      pattern("a", [[60], [61], [62], [63]]),
+      pattern("b", [[70], [71], [72], [73]]),
+    ];
+    const voices = [
+      voice({ patternIndex: 0, noteOrderMix: { original: 0, cyclic: 0, utterly: 100 } }),
+      voice({ patternIndex: 1, outputChannels: [2],
+        noteOrderMix: { original: 0, cyclic: 0, utterly: 100 } }),
+    ];
+    const a = project(patterns, voices);
+    const b = project(patterns, [{ ...voices[0], density: 0 }, voices[1]]);
+    const rngs = () => [new Rng(101), new Rng(202)];
+    const notesA = planWindow(a, makeCursors(a, 0), rngs(), 0, 3).notes
+      .filter((note) => note.voice === 1).map((note) => note.note);
+    const notesB = planWindow(b, makeCursors(b, 0), rngs(), 0, 3).notes
+      .filter((note) => note.voice === 1).map((note) => note.note);
+    expect(notesB).toEqual(notesA);
   });
 });
 

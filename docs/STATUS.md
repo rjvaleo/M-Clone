@@ -1,14 +1,43 @@
 # M-Clone — Project Status
 
+## 2026-08-01: product, audio, and native roadmap approved
+
+The product family is now explicitly defined: free four-Voice **M Classic Web**,
+paid eight-Voice **M Studio** for native desktop/plug-in production, and later
+premium **M Modular**. Studio is planned with seven original instruments,
+*September*-derived source material, signature granular glitch, Smooth Crusher,
+Spatial Enhancer, Tempo Delay, and multi-output audio. These are roadmap items,
+not current shipped features. Authoritative specifications:
+
+- [`PRODUCT_RELEASE_ROADMAP.md`](./PRODUCT_RELEASE_ROADMAP.md)
+- [`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md)
+- [`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md)
+
+## 2026-08-01: MIDI reliability phases 1–2
+
+The MIDI path now has timing-continuity segments, atomic queue cancellation,
+one clock correlation per batch, explicit ordered Note On/Off/Program Change
+events, 960-PPQN musical positions, lifecycle-owned future Note Offs, deterministic
+retrigger handling, destination separation, and independent per-Voice RNG.
+Output is submitted before Midi View/Zustand telemetry. The exact guarantees,
+known browser limits, test matrix, and manual measurement protocol are maintained
+in [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md).
+
+Current verification checkpoint: **530 tests across 27 files**, 100% included
+engine/state coverage, clean typecheck, and successful production build. Native
+clock/scheduler adapters, device lifecycle, late-event telemetry/policy,
+multi-port routing, and suspension recovery remain open Phase 3 work.
+
 ## 2026-08-01: project save/load
 
-The working tree is committed. `ProjectDocumentV1` is the portable save format:
+At that checkpoint the save/load work was committed. `ProjectDocumentV1` is the portable save format:
 Project and Pattern material (Original and Scrambled), Variable and Cyclic
 Positions, Snapshots, Conducting Arrows and configuration. Workspace geometry,
 zoom, skin and palette stay local preferences. Decoding rejects damaged or
 future documents and repairs what it safely can, reporting warnings. File ▸
 New / Open / Save / Save As are wired, with document name and unsaved-changes
-tracking in the header. 515 tests, 100% engine/state coverage.
+tracking in the header. The later MIDI reliability work brings the current
+checkpoint to 530 tests with 100% included engine/state coverage.
 
 ## 2026-07-31: end-of-session checkpoint
 
@@ -82,7 +111,7 @@ is paused by decision.
 
 | Metric | State |
 | --- | --- |
-| Unit tests | **515 passing** (23 files) |
+| Unit tests | **530 passing** (27 files) |
 | Coverage (engine + state) | **100%** lines / branches / functions |
 | Typecheck (`tsc --noEmit`) | Clean |
 | Production build | Succeeds (`vite build`, `build:single`) |
@@ -98,9 +127,12 @@ is paused by decision.
 | **P2 Variables core** | Note Order, Transposition, Density, manual-faithful Velocity Range + positions + editors + harmonic engine | ✅ |
 | **P3 Cyclic + Midi + rest** | Cyclic editor, Midi window, Orchestration, Time Distortion, Phrasing, Pattern Group, Sound Choice | 🟡 (Cyclic, Midi View, Orchestration, Time Distortion, Pattern Group ✅; Phrasing ⬜; Sound Choice intentionally skipped) |
 | **P4 Conducting + Snapshots** | Conducting grid, arrows, Robot, snapshots, slideshows | 🟡 (Snapshots + conducting core ✅; slideshows ⬜) |
-| **P5 All-in-one I/O** | Record-to-tracks, WAM rack + sampler, drum routing, MIDI import/export, save/load, Input Control, Mouse Advance | ⬜ |
+| **P5 Classic technical I/O** | Record-to-tracks, MIDI import/export, save/load, Input Control, Mouse Advance, four lightweight playback engines | 🟡 (save/load ✅) |
 | **P6 Modern theme + instruments** | Modern layouts, deeper instruments, pattern-manipulation upgrades | 🟡 (Modern Cyclic Editor + color themes ✅; broader Modern layout ⬜) |
-| **Later — Native** | Tauri build, VST/AU hosting, `.M` import | ⬜ |
+| **M Classic Web** | faithful four-Voice browser MIDI product + four lightweight engines | 🟡 |
+| **M Studio Desktop** | paid eight-Voice standalone + plug-in, seven instruments, signature FX, multi-output | ⬜ |
+| **M Modular** | premium node-based generative MIDI/audio environment | ⬜ |
+| **Later — Mobile** | paid iOS/iPadOS and Android family after desktop | ⬜ |
 
 ## The generative engine (the soul) — ✅ complete
 
@@ -131,12 +163,13 @@ is paused by decision.
 | --- | --- | --- |
 | A — Generator (classic M) | ✅ | engine + store |
 | B — Recorder (record-to-tracks / Movie) | ⬜ | |
-| C — Instrument rack (WAM + sampler + drum routing) | ⬜ | built-in synth only so far |
+| C — Instrument rack | ⬜ | prototype synth only; four lightweight Classic engines then seven first-party Studio engines planned |
 | Engine (framework-agnostic TS) | ✅ | `src/engine/*` |
 | Control catalog + bindings (shared) | 🟡 | store is shared; formal abstract control catalog ⬜ |
 | Theme layer (per-view layout + renderers) | 🟡 | light + dark themes via a scoped `.theme-dark` skin over one layout; a formal per-theme layout provider is still 🟡 |
-| Web Audio lookahead scheduler | ✅ | `runtime.ts` |
-| Output sinks (MIDI + synth + WAM) | 🟡 | MIDI ✅, synth ✅, WAM ⬜ |
+| Web Audio lookahead scheduler | 🟡 | timestamped 25 ms wake / 120 ms horizon ✅; injected/native scheduler, stall policy, telemetry ⬜ |
+| Explicit MIDI event/lifecycle layer | ✅ | ordered events, 960 PPQN, retrigger cleanup, per-Voice RNG |
+| Output sinks (MIDI + instruments) | 🟡 | explicit-event Web MIDI + prototype synth ✅; Classic/Studio and native adapters ⬜ |
 | Document format (JSON) + save/load | ✅ | `ProjectDocumentV1`; versioned, defensively decoded, File menu wired |
 | Standard MIDI File import/export | ⬜ | |
 | Old `.M` import | ⬜ | awaiting sample files |
@@ -187,7 +220,9 @@ is paused by decision.
 | Pattern copy/paste/extend/variation commands | ✅ |
 | Non-destructive pattern operation stacks / undo | ⬜ |
 | All-in-one record-to-tracks | ⬜ |
-| WAM instrument rack + sampler + drum auto-routing | ⬜ |
+| Classic four-engine rack | ⬜ | browser milestone; scope in `AUDIO_ENGINE_SPEC.md` |
+| Studio seven-engine rack + signature effects | ⬜ | paid native milestone |
+| Third-party WAM hosting | ⬜ | exploratory; not a Classic release requirement |
 | VST/AU hosting (native) | ⬜ |
 | Import old `.M` files | ⬜ |
 | Automation lanes / history-undo | ⬜ |

@@ -9,6 +9,12 @@ import type { ProjectState } from "./types";
 import type { OutputSink } from "./outputs/types";
 import { SynthSink } from "./outputs/synth";
 import { MidiSink } from "./outputs/webmidi";
+import { NoteLifecycle, type OutputDestination } from "./events";
+import {
+  rebaseChangedTimelines,
+  timingFingerprints,
+  type TimingFingerprint,
+} from "./transport";
 
 const LOOKAHEAD_SEC = 0.12;
 const TICK_MS = 25;
@@ -20,10 +26,13 @@ export class MRuntime {
   private synth: SynthSink | null = null;
   private midi: MidiSink | null = null;
   private cursors: VoiceCursor[] = [];
-  private rng = new Rng(1);
+  private rngs: Rng[] = [];
+  private lifecycle = new NoteLifecycle();
+  private programs = "";
   private timer: ReturnType<typeof setInterval> | null = null;
   private pausedAt: number | null = null;
   private synthEnabled = true;
+  private timing: TimingFingerprint[] = [];
   private onPlannedNotes: ((notes: readonly import("./planner").PlannedNote[]) => void) | null;
 
   constructor(
@@ -56,6 +65,30 @@ export class MRuntime {
     return list;
   }
 
+  private destinations(): OutputDestination[] {
+    return this.sinks().map((sink) => sink.destination);
+  }
+
+  private resetRandom(seed: number, voices: number): void {
+    this.rngs = Array.from({ length: voices }, (_, voice) =>
+      new Rng((seed ^ Math.imul(voice + 1, 0x9e3779b1)) >>> 0));
+  }
+
+  private programKey(state: ProjectState): string {
+    return state.voices.map((voice) => `${voice.program}:${voice.outputChannels.join(",")}`).join("|");
+  }
+
+  private enqueuePrograms(state: ProjectState, atSec: number): void {
+    const key = this.programKey(state);
+    if (key === this.programs || !this.midi?.hasOutput()) return;
+    this.programs = key;
+    this.lifecycle.addProgramChanges(atSec, this.cursors[0]?.transportTick ?? 0,
+      state.voices.flatMap((voice, voiceIndex) =>
+      voice.outputChannels.map((channel) => ({
+        voice: voiceIndex, channel, program: voice.program,
+      }))));
+  }
+
   get context(): AudioContext | null {
     return this.ctx;
   }
@@ -68,6 +101,7 @@ export class MRuntime {
   selectMidiOutput(output: MIDIOutput | null): void {
     this.ensure();
     this.midi!.setOutput(output);
+    this.programs = "";
   }
 
   setSynthEnabled(on: boolean): void {
@@ -98,21 +132,28 @@ export class MRuntime {
     const ctx = this.ensure();
     if (ctx.state === "suspended") void ctx.resume();
     const startSec = ctx.currentTime + 0.005;
-    for (const sink of this.sinks()) {
-      for (const note of pitches) {
-        for (const channel of channels) {
-          sink.schedule({ note, velocity, channel, startSec, durationSec });
-        }
-      }
-    }
+    const notes = pitches.flatMap((note) => channels.map((channel) => ({
+      voice: 0, note, velocity, channel, startSec, durationSec,
+      atTick: this.cursors[0]?.transportTick ?? 0,
+      durationTicks: 0,
+    })));
+    this.lifecycle.ingest(notes, this.destinations());
+    this.submitEvents(startSec + 0.01);
+    const delay = Math.max(0, (durationSec - LOOKAHEAD_SEC) * 1000);
+    setTimeout(() => this.submitEvents(ctx.currentTime + LOOKAHEAD_SEC), delay);
   }
 
   async start(): Promise<void> {
+    if (this.timer !== null) return;
     const ctx = this.ensure();
     if (ctx.state === "suspended") await ctx.resume();
     const state = this.getState();
-    this.rng = new Rng(state.seed);
+    this.resetRandom(state.seed, state.voices.length);
+    this.lifecycle.reset();
     this.cursors = makeCursors(state, ctx.currentTime + 0.06);
+    this.timing = timingFingerprints(state);
+    this.programs = "";
+    this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? ctx.currentTime);
     this.pausedAt = null;
     if (this.timer === null) {
       this.timer = setInterval(() => this.tick(), TICK_MS);
@@ -126,7 +167,9 @@ export class MRuntime {
     this.timer = null;
     this.pausedAt = this.ctx.currentTime;
     this.synth?.panic();
+    this.midi?.cancelScheduled();
     this.midi?.panic();
+    this.lifecycle.reset();
   }
 
   /** Continue from the paused cursor instead of restarting at step one. */
@@ -152,9 +195,16 @@ export class MRuntime {
   /** Reset all voices to the top (M's Sync). */
   sync(): void {
     if (!this.ctx) return;
+    this.synth?.cancelScheduled();
+    this.midi?.cancelScheduled();
+    this.midi?.panic();
     const state = this.getState();
-    this.rng = new Rng(state.seed);
+    this.resetRandom(state.seed, state.voices.length);
+    this.lifecycle.reset();
     this.cursors = makeCursors(state, this.ctx.currentTime + 0.06);
+    this.timing = timingFingerprints(state);
+    this.programs = "";
+    this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? this.ctx.currentTime);
   }
 
   stop(): void {
@@ -162,22 +212,33 @@ export class MRuntime {
       clearInterval(this.timer);
       this.timer = null;
     }
-    this.synth?.panic();
+    this.synth?.cancelScheduled();
+    this.midi?.cancelScheduled();
     this.midi?.panic();
+    this.lifecycle.reset();
     this.pausedAt = null;
   }
 
   private tick(): void {
     if (!this.ctx) return;
     const state = this.getState();
+    const timing = timingFingerprints(state);
+    this.cursors = rebaseChangedTimelines(this.cursors, this.timing, timing);
+    this.timing = timing;
     const now = this.ctx.currentTime;
     const windowEnd = now + LOOKAHEAD_SEC;
-    const { notes, cursors } = planWindow(state, this.cursors, this.rng, now, windowEnd);
+    this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? now);
+    const { notes, cursors } = planWindow(state, this.cursors, this.rngs, now, windowEnd);
     this.cursors = cursors;
+    this.lifecycle.ingest(notes, this.destinations());
+    this.submitEvents(windowEnd);
+    // UI recording is intentionally after time-critical output submission.
     if (notes.length > 0) this.onPlannedNotes?.(notes);
-    const sinks = this.sinks();
-    for (const n of notes) {
-      for (const sink of sinks) sink.schedule(n);
-    }
+  }
+
+  private submitEvents(windowEnd: number): void {
+    const events = this.lifecycle.drainBefore(windowEnd);
+    if (events.length === 0) return;
+    for (const sink of this.sinks()) sink.scheduleBatch(events);
   }
 }

@@ -2,6 +2,14 @@
 
 Date prepared: 2026-07-31
 
+Product sequencing is now fixed by
+[`PRODUCT_RELEASE_ROADMAP.md`](./PRODUCT_RELEASE_ROADMAP.md): finish free
+four-Voice M Classic Web, then invite-only native desktop work, then paid
+eight-Voice M Studio standalone/plug-in, then mobile stores, with M Modular as a
+later premium platform. Instrument/effect and native requirements live in
+[`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md) and
+[`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md).
+
 The current layout is accepted as good enough. Do not begin another broad
 reference-fidelity or resizing pass while this plan is active. Fix only visual
 defects that block operation, hide data, or break hit targets.
@@ -10,8 +18,9 @@ defects that block operation, hide data, or break hit targets.
 
 Updated 2026-08-01.
 
-- Branch: `master`, working tree clean, three commits.
-- Tests: **515 passing across 23 files**.
+- Branch at the earlier checkpoint: `master`; inspect the current working tree
+  before making additional changes.
+- Tests: **530 passing across 27 files**.
 - Coverage: **100% statements, branches, functions, and lines** across
   `src/engine` and `src/state`.
 - Typecheck, normal production build, and single-file build: passing.
@@ -35,10 +44,39 @@ Updated 2026-08-01.
    npm run build:single
    ```
 
-3. Review `git status`. The tree is clean as of 2026-08-01; keep it that way by
-   committing each subsystem as it lands.
+3. Review `git status`; preserve unrelated work and commit each subsystem
+   intentionally when requested.
 
 ## Technical completion sequence
+
+### 0. MIDI reliability Phase 3 — next reliability gate
+
+Phases 1–2 are implemented: timing continuity segments, cancellation-before-
+panic transitions, synchronized batch clock anchors, explicit ordered events,
+960-PPQN positions, note lifecycle/retrigger cleanup, Program Change, destination
+separation, and per-Voice RNG. The authoritative requirements and verification
+matrix are in [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md).
+
+Implement next:
+
+- injected monotonic clock and scheduler drivers;
+- one scheduler for transport and audition;
+- late-wake/event diagnostics and bounded adaptive lookahead;
+- explicit drop/recovery behavior after serious stalls;
+- retained `MIDIAccess`, port `statechange`, reconnect, and multiple port IDs;
+- background/suspension/sleep recovery;
+- stronger controller-aware panic;
+- versioned native event-batch serialization;
+- forced-stall, device-loss, and long-duration conformance traces.
+
+Acceptance gate:
+
+- no uncontrolled catch-up burst after a simulated 500 ms stall;
+- no hanging lifecycle owners after Stop, suspension, or device removal;
+- measured diagnostics identify minimum lead, maximum lateness, and queue depth;
+- multi-port loss does not interrupt unaffected destinations;
+- browser and simulated native adapters pass the same event-order traces;
+- the canonical reliability specification is updated with measured results.
 
 ### 1. Versioned project document and File commands — ✅ DONE (2026-08-01)
 
@@ -78,7 +116,7 @@ Acceptance gate:
 - Save → reload page → Open restores an audible equivalent project.
 - No regression below 100% engine/state coverage.
 
-### 2. Finish Snapshot and Slideshow behavior — ⬅ NEXT
+### 2. Finish Snapshot and Slideshow behavior
 
 Implement the remaining honest placeholders from the manual:
 
@@ -145,12 +183,32 @@ Decide:
 
 - Whether Sound Choice is an M-style Variable, an instrument-rack concern, or
   a bridge between them.
-- Initial WAM host scope.
+- Whether third-party WAM hosting belongs in a later milestone at all.
 - Built-in sampler format and asset ownership.
 - Drum auto-routing rules.
 - What belongs in the browser milestone versus later native/Tauri work.
 
-Only then implement the WAM rack, sampler, Sound Choice, and drum routing.
+The product decision is now partially closed:
+
+- Classic Web receives four lightweight engines and basic stereo reverb/delay.
+- Studio receives seven full instruments, signature effects, and multi-output.
+- The instrument rack remains downstream of the explicit MIDI/event engine.
+- Third-party WAM hosting is not part of the approved Classic promise and needs
+  a separate scope decision.
+
+Implement only the lightweight Classic engines during the browser milestone.
+Follow `AUDIO_ENGINE_SPEC.md`; do not pull Studio DSP into Classic by accident.
+
+### 7. Native invite beta and M Studio — after Classic Web
+
+- Native macOS/Windows standalone adapters and real-time audio foundation.
+- External MIDI clock in standalone mode.
+- Host tempo/position/loop context in plug-in mode; do not depend on MIDI clock
+  from the host.
+- Eight Voices, seven instruments, signature effects, and multi-output buses.
+- Invite-only standalone beta before hosted plug-in beta.
+- Paid release only after the native and host certification gates in
+  `NATIVE_PLUGIN_SPEC.md` pass.
 
 ## Definition of technical completion
 

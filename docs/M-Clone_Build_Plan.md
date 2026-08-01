@@ -1,5 +1,15 @@
 # M‑Clone — Build Plan & Design Document
 
+> **Current product clarification (2026-08-01):** This historical implementation
+> plan contains early “all-in-one” and WAM exploration. Current edition,
+> platform, commercial, audio, and plug-in decisions are authoritative in
+> [`PRODUCT_RELEASE_ROADMAP.md`](./PRODUCT_RELEASE_ROADMAP.md),
+> [`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md), and
+> [`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md). Classic Web is
+> free/four-Voice/MIDI-first with four lightweight engines; Studio is
+> paid/eight-Voice/native with seven instruments, signature effects, and
+> multi-output; mobile follows desktop; Modular is later.
+
 > The deferred visual-fidelity sequence and per-reference delta are maintained
 > in `VISUAL_AUDIT_AND_THEMING.md`.
 
@@ -73,7 +83,7 @@ Pattern
   → Legato / Staccato           (how long it plays)
   → Orchestration               (which MIDI channel / instrument)
   → Sound Choice                (program / patch)
-  → output  (Web MIDI + internal synth + WAM instruments)
+  → output  (Web MIDI + first-party Classic/Studio instruments; WAM exploratory)
 ```
 
 Overlaid on the chain:
@@ -148,6 +158,11 @@ Faithful default behavior, with modern guardrails available.
 - **B — Recorder:** the "hit record and ride the sliders" step becomes built‑in multitrack capture (M called it a *Movie*), except the four voices are kept as **live, editable tracks** rather than bounced to a flat MIDI file.
 - **C — Instrument rack:** **WAM (Web Audio Modules)**‑hosted instruments per voice, including a **sampler** to replace HALion. **Drum voices auto‑route** each note to its own pad/lane/output — automating the old hand drum‑splitting step.
 
+Current scope refinement: the free browser milestone implements only four
+lightweight built-in engines and basic stereo effects. The paid Studio desktop
+milestone implements seven first-party instruments and signature effects. WAM
+third-party hosting is exploratory and is not a Classic release requirement.
+
 ### 4.2 Cross‑cutting technical layers
 - **Engine** — framework‑agnostic TS: clock, scheduler, transform chain, RNG, harmonic engine, document model.
 - **Control catalog + bindings (shared)** — abstract control types (Numerical, Toggle / Picture‑Matrix, Grid editor, Variable‑miniature strip, Conducting arrow, Drag area) each bound to engine state. Never changes between views.
@@ -160,10 +175,21 @@ Faithful default behavior, with modern guardrails available.
 ### 4.3 Stack
 - **Vite + React + TypeScript** for UI.
 - **Lightweight store** (Zustand‑style) that both the engine and React can touch.
-- **Timing:** the **Web Audio clock with a lookahead scheduler** (not `setInterval`) — even for MIDI out — to avoid jitter.
+- **Timing:** the Web Audio clock timestamps output through a 120 ms lookahead;
+  the current browser wake driver is a 25 ms main-thread `setInterval`. Events
+  execute from Web Audio/Web MIDI timestamps rather than callback timing, but
+  stalls beyond available lead remain an open hardening case. The portable
+  layer now carries 960-PPQN positions and explicit ordered events. See
+  [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md).
 - **Output sinks:** **Web MIDI** (`navigator.requestMIDIAccess`) and the internal
-  WebAudio synth are implemented. **WAM instruments** remain planned.
-- **Native later:** **Tauri** (Rust shell) for cross‑platform desktop, native MIDI/audio, and **VST/AU hosting** (see §7).
+  WebAudio synth consume explicit Note On/Off events; Web MIDI also consumes
+  Program Change. Queue cancellation, lifecycle releases, and one clock anchor
+  per batch are implemented. The approved next audio work is the four-engine
+  Classic rack; WAM remains exploratory.
+- **Native after Classic Web:** macOS/Windows standalone, followed by VST3 and
+  an evaluated Audio Unit target. Tauri/Rust remain candidate implementation
+  technologies rather than locked product requirements. Mobile follows the
+  paid desktop milestone.
 
 ### 4.4 Data & file formats
 - **Document format:** a fresh JSON project format (patterns, variables, snapshots, tempo, routing, instrument rack).
@@ -173,7 +199,8 @@ Faithful default behavior, with modern guardrails available.
 ### 4.5 VST / plugin reality
 A browser **cannot** load VST/VST3/AU binaries. Path:
 1. **Now:** internal synth + SoundFonts, plus Web MIDI out to drive existing VSTs in an external host.
-2. **Browser‑native plugins:** support the **WAM** standard (closest thing to "VST for the web").
+2. **Browser audio:** ship four lightweight first-party engines; evaluate WAM
+   separately rather than making it a Classic dependency.
 3. **Real VST hosting:** in the **Tauri native build**, where the Rust shell bridges to VST/AU so existing plugins load inside M‑Clone.
 
 ---
@@ -240,7 +267,9 @@ Conducting Grid (mouse baton), Input Control System (MIDI‑keyboard one‑step 
 - **Pattern manipulation system** — replace M's manual copy/paste with reusable transforms: multi‑pattern operations, variation generators, "extend / develop this pattern," non‑destructive operation stacks, and history/undo.
 - **Harmonic / scale engine** — key context, diatonic transposition, chord‑tone targeting, optional key‑quantization guardrail (§3.4).
 - **All‑in‑one record‑to‑tracks** — capture the performance as editable multitrack instead of a flat MIDI bounce.
-- **WAM instrument rack** — per‑voice hosted instruments; built‑in sampler replacing HALion; **automatic drum routing** (each drum note → its own pad/lane/output).
+- **Instrument rack** — four lightweight browser engines for Classic; seven
+  first-party native engines, automatic drum routing, signature effects, and
+  multi-output buses for Studio. Third-party WAM hosting is exploratory.
 - **VST/AU hosting** in the native build.
 - **Import old `.M` files** once samples are available.
 - Quality‑of‑life: automation lanes for slider moves, richer conducting, project save/load, and cross‑platform native.
@@ -259,7 +288,8 @@ recording/MIDI I/O, controller bindings, and the instrument decision.
 - **P2 — Variables core.** Note Order, Transposition (+ harmonic engine start), Density, Velocity/Accents; Positions, miniatures, Active Position, edit windows.
 - **P3 — Cyclic + Midi + remaining Variables.** Cyclic Editor, Midi window, Orchestration, Time Distortion, Phrasing, Pattern Group, Sound Choice.
 - **P4 — Conducting + Snapshots.** Conducting Grid, arrows, Robot Conductor; snapshots + slideshows. *(Classic M feature‑complete.)*
-- **P5 — All‑in‑one I/O.** Record‑to‑tracks, WAM instrument rack + sampler + drum auto‑routing, MIDI import/export, Options toggles, project save/load, Input Control System, Mouse Advance.
+- **P5 — Classic technical I/O.** Record-to-tracks, MIDI import/export, Options,
+  project save/load, Input Control, Mouse Advance, and four lightweight engines.
 - **P6 — Modern theme + instruments.** Second theme; deeper instrument work; pattern‑manipulation upgrades.
 - **Later — Native.** Tauri build; VST/AU hosting; `.M` import.
 
@@ -271,7 +301,8 @@ recording/MIDI I/O, controller bindings, and the instrument decision.
 - **Look:** vector redraw from manual images; faithful function/feel, not pixels (decided).
 - **Views:** classic + modern remains the direction. The Modern Cyclic Editor
   is implemented; a fully decoupled whole-app layout system is not yet built.
-- **Audio:** internal synth + Web MIDI are implemented; WAM remains planned.
+- **Audio:** prototype synth + Web MIDI are implemented; four Classic engines,
+  seven Studio engines, signature effects, and native multi-output remain planned.
 - **VST:** browser can't host VST; real VST hosting arrives with the native/Tauri build (decided).
 - **`.M` import:** wanted; deferred until sample files are provided.
 - **Instruments:** RJ has specific instruments in mind — **dedicated design conversation still queued.**

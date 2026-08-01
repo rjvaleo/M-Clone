@@ -1,17 +1,11 @@
-// A sink receives fully-planned notes (times in the AudioContext domain) and
-// realizes them — as audio, as MIDI, later as WAM instruments. Keeping the
-// interface note-oriented lets the runtime treat all outputs uniformly.
-
-export type ScheduledNote = {
-  note: number;
-  velocity: number;
-  channel: number;
-  startSec: number;
-  durationSec: number;
-};
+import type { EngineEvent, OutputDestination } from "../events";
 
 export interface OutputSink {
-  schedule(n: ScheduledNote): void;
+  readonly destination: OutputDestination;
+  /** Submit explicit events which were planned from one clock snapshot. */
+  scheduleBatch(events: readonly EngineEvent[]): void;
+  /** Remove timestamped events which have not reached the device yet. */
+  cancelScheduled(): void;
   /** Immediately silence everything (transport stop / panic). */
   panic(): void;
 }

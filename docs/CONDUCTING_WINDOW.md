@@ -1,5 +1,11 @@
 # Conducting Window — Dependency Map and Implementation Plan
 
+Transport timing, tempo-continuity segments, Pause/Resume/Sync cancellation,
+MIDI event ordering, and the precise browser limitations are specified in
+[`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md). This document owns the
+Conducting UI and musical controls; the reliability specification owns output
+semantics and verification.
+
 Cross-window scale, typography, theme, and menu findings are tracked in
 `VISUAL_AUDIT_AND_THEMING.md`.
 
@@ -8,7 +14,7 @@ Chapters 8 and 15, Chapter 22 for Options, and Appendix A for keyboard
 equivalents.
 
 **Implementation status:** Complete as of 2026-07-30. Pure conductor and store
-behavior are covered by the current 515-test, 100%-coverage engine/state suite.
+behavior are covered by the current 530-test, 100%-coverage engine/state suite.
 Production and single-file builds pass, and the localhost UI has been exercised
 with the in-app browser.
 

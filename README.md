@@ -1,5 +1,42 @@
 # M-Clone
 
+### Current stack and engineering practices
+
+![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=111827)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
+![Zustand](https://img.shields.io/badge/Zustand-4-433E38)
+![Vitest](https://img.shields.io/badge/Vitest-2-6E9F18?logo=vitest&logoColor=white)
+![npm](https://img.shields.io/badge/npm-package_tooling-CB3837?logo=npm&logoColor=white)
+![Web Audio API](https://img.shields.io/badge/Web_Audio_API-timestamped_synthesis-8A2BE2)
+![Web MIDI API](https://img.shields.io/badge/Web_MIDI_API-timestamped_output-0A7EA4)
+![HTML5](https://img.shields.io/badge/HTML5-semantic_UI-E34F26?logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-responsive_vector_UI-1572B6?logo=css&logoColor=white)
+
+![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
+![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25-brightgreen)
+![Tests](https://img.shields.io/badge/tests-530_passing-brightgreen)
+![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
+![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
+![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
+![Timing](https://img.shields.io/badge/timing-960_PPQN_%2B_lookahead_scheduler-6A1B9A)
+![Deterministic](https://img.shields.io/badge/generation-seeded_%26_deterministic-795548)
+![Clean room](https://img.shields.io/badge/reimplementation-clean_room-37474F)
+![Browser first](https://img.shields.io/badge/platform-browser_first-F57C00)
+![Document format](https://img.shields.io/badge/document_format-versioned_JSON-263238?logo=json&logoColor=white)
+
+### Planned platform stack
+
+![Tauri planned](https://img.shields.io/badge/Tauri-native_shell_planned-24C8DB?logo=tauri&logoColor=white)
+![Rust planned](https://img.shields.io/badge/Rust-native_timing_planned-000000?logo=rust&logoColor=white)
+![WAM planned](https://img.shields.io/badge/Web_Audio_Modules-instrument_host_planned-5C2D91)
+![Platforms planned](https://img.shields.io/badge/targets-macOS_%7C_Windows_%7C_iOS_%7C_Android-607D8B)
+![Editions](https://img.shields.io/badge/editions-Classic_%7C_Studio_%7C_Modular-7B1FA2)
+
+Badges labeled **planned** describe the roadmap, not current shipped capability.
+The exact MIDI guarantees and remaining native work are defined in
+[`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md).
+
 The current visual-consistency analysis, reference-by-reference delta, menu
 ownership audit, and channel-theme architecture are in
 [`docs/VISUAL_AUDIT_AND_THEMING.md`](docs/VISUAL_AUDIT_AND_THEMING.md).
@@ -7,8 +44,71 @@ The dedicated editor is documented in
 [`docs/CYCLIC_EDITOR.md`](docs/CYCLIC_EDITOR.md).
 The four-stream diagnostic tracker is documented in
 [`docs/MIDI_VIEW.md`](docs/MIDI_VIEW.md).
+The authoritative MIDI timing, transport, lifecycle, verification, and known-
+limits specification is
+[`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md).
 The technical-completion sequence for the next session is in
 [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md).
+
+## Documentation index
+
+### Project direction and current state
+
+- [`docs/STATUS.md`](docs/STATUS.md) — authoritative implemented-feature
+  scorecard, verification checkpoint, and roadmap status.
+- [`docs/TODO.md`](docs/TODO.md) — current open backlog and deferred decisions.
+- [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md) — ordered technical-completion plan
+  with acceptance gates.
+- [`docs/HANDOFF.md`](docs/HANDOFF.md) — implementation handoff, working rules,
+  architectural decisions, and known development gotchas.
+- [`docs/M-Clone_Build_Plan.md`](docs/M-Clone_Build_Plan.md) — product vision,
+  architecture, technology choices, phased build plan, and native direction.
+- [`docs/PRODUCT_RELEASE_ROADMAP.md`](docs/PRODUCT_RELEASE_ROADMAP.md) —
+  authoritative Classic/Studio/Modular editions, browser/desktop/mobile stages,
+  free/invite/paid progression, monetization principles, and release gates.
+
+### Audio products and native integration
+
+- [`docs/AUDIO_ENGINE_SPEC.md`](docs/AUDIO_ENGINE_SPEC.md) — four lightweight
+  web engines; seven Studio instruments; RJ Vallejo source-library, mixer,
+  granular glitch, Smooth Crusher, Spatial Enhancer, and delay specifications.
+- [`docs/NATIVE_PLUGIN_SPEC.md`](docs/NATIVE_PLUGIN_SPEC.md) — standalone clock,
+  VST3/Audio Unit host synchronization, eight/ten stereo buses, real-time safety,
+  host certification, packaging, and native release gates.
+
+### MIDI, timing, and conducting
+
+- [`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md) — canonical
+  MIDI timing, transport, event lifecycle, synchronization, limitations, and
+  verification specification.
+- [`docs/MIDI_VIEW.md`](docs/MIDI_VIEW.md) — four-Voice diagnostic tracker,
+  capture semantics, display behavior, and tests.
+- [`docs/CONDUCTING_WINDOW.md`](docs/CONDUCTING_WINDOW.md) — Conducting Window
+  dependency map, transport controls, Baton, tempo, Robot, and implementation
+  history.
+
+### Musical editors and commands
+
+- [`docs/CYCLIC_EDITOR.md`](docs/CYCLIC_EDITOR.md) — Classic and Modern Cyclic
+  Editor models, positions, values, lengths, interactions, and layout.
+- [`docs/CYCLIC_RANDOM_COMMANDS.md`](docs/CYCLIC_RANDOM_COMMANDS.md) —
+  Pattern-owned Cyclic Random material, command semantics, invariants, and test
+  requirements.
+
+### Interface, layout, and visual system
+
+- [`docs/VISUAL_AUDIT_AND_THEMING.md`](docs/VISUAL_AUDIT_AND_THEMING.md) —
+  reference-by-reference visual audit, theme architecture, menu ownership, and
+  deferred fidelity work.
+- [`docs/WORKSPACE_SCALING.md`](docs/WORKSPACE_SCALING.md) — 640×480 logical
+  workspace, application scaling, coordinates, dragging, and persistence.
+- [`docs/FONT_SIZE_INVENTORY.md`](docs/FONT_SIZE_INVENTORY.md) — rendered
+  typography inventory, normalization rules, and verification notes.
+
+### Source references
+
+- [`reference/README.md`](reference/README.md) — inventory and provenance of the
+  manual, screenshots, mockups, and other reference assets.
 
 **A clean-room reconstruction of the classic interactive composing instrument
 *M*, rebuilt screen by screen from the manual.**
@@ -82,6 +182,9 @@ Working today:
 - **Orchestration:** each of six a–f Positions stores a 4-Voice × 16-channel
   routing matrix; a Voice can layer across multiple MIDI channels or be silent.
 - **Dual output:** built-in synth (zero setup) **and** Web MIDI to any device/DAW.
+- **MIDI reliability foundation:** shared 960-PPQN positions, per-Voice RNG,
+  explicit ordered Note On/Off/Program Change events, lifecycle-owned releases,
+  equal-timestamp batch submission, and clear-before-panic transport transitions.
 - **Light / Dark themes:** the header toggle re-skins the whole interface between
   a light and a dark theme — identical layout and functionality, persisted.
 
@@ -133,6 +236,8 @@ src/
     rng.ts         seeded + Brownian randomness
     transform.ts   per-step transform primitives
     planner.ts     the pure scheduler heart
+    transport.ts   timing-change continuity segments
+    events.ts      explicit event protocol + note lifecycle
     variables.ts   Variable Positions (a–f) model
     project.ts     defaults
     runtime.ts     Web Audio lookahead scheduler (browser-only wiring)
@@ -148,5 +253,7 @@ docs/              build plan, status, and UI to-dos
 reference/         original M manual, screenshots, layout mockup
 ```
 
-Engine and state logic are held at **100% line/branch/function coverage**. All
-browser-only wiring (AudioContext / Web MIDI / React) is kept deliberately thin.
+Engine and state logic are held at **100% line/branch/function coverage**.
+Browser runtime and Web MIDI behavior also have fake-clock/fake-port tests. The
+current browser scheduler still wakes on the main thread; see the reliability
+specification for exact guarantees, verification steps, and native requirements.
