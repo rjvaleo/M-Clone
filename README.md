@@ -2,11 +2,11 @@
 
 ### Current stack and engineering practices
 
-![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=111827)
-![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
-![Zustand](https://img.shields.io/badge/Zustand-4-433E38)
-![Vitest](https://img.shields.io/badge/Vitest-2-6E9F18?logo=vitest&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react&logoColor=111827)
+![Vite](https://img.shields.io/badge/Vite-5.4.21-646CFF?logo=vite&logoColor=white)
+![Zustand](https://img.shields.io/badge/Zustand-4.5.7-433E38)
+![Vitest](https://img.shields.io/badge/Vitest-2.1.9-6E9F18?logo=vitest&logoColor=white)
 ![npm](https://img.shields.io/badge/npm-package_tooling-CB3837?logo=npm&logoColor=white)
 ![Web Audio API](https://img.shields.io/badge/Web_Audio_API-timestamped_synthesis-8A2BE2)
 ![Web MIDI API](https://img.shields.io/badge/Web_MIDI_API-timestamped_output-0A7EA4)
@@ -14,16 +14,16 @@
 ![CSS3](https://img.shields.io/badge/CSS3-responsive_vector_UI-1572B6?logo=css&logoColor=white)
 
 ![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
-![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25-brightgreen)
+![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25_lines%20%7C%20branches%20%7C%20functions-brightgreen)
 ![Tests](https://img.shields.io/badge/tests-625_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
-![Timing](https://img.shields.io/badge/timing-960_PPQN_%2B_lookahead_scheduler-6A1B9A)
+![Timing](https://img.shields.io/badge/timing-960_PPQN_%2B_adaptive_lookahead-6A1B9A)
 ![Deterministic](https://img.shields.io/badge/generation-seeded_%26_deterministic-795548)
 ![Clean room](https://img.shields.io/badge/reimplementation-clean_room-37474F)
 ![Browser first](https://img.shields.io/badge/platform-browser_first-F57C00)
-![Document format](https://img.shields.io/badge/document_format-versioned_JSON-263238?logo=json&logoColor=white)
+![Document format](https://img.shields.io/badge/document_format-JSON_v2-263238?logo=json&logoColor=white)
 
 ### Planned platform stack
 
@@ -49,6 +49,11 @@ limits specification is
 [`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md).
 The technical-completion sequence for the next session is in
 [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md).
+
+Current verified checkpoint: **625 passing tests across 32 files**, **100%**
+statement/branch/function/line coverage for the included engine and state
+modules, clean TypeScript checking, and successful normal and single-file
+production builds. Snapshot/Slideshow work is complete; **Phrasing is next**.
 
 ## Documentation index
 
@@ -130,8 +135,9 @@ Working today:
 
 - Four independent **Voices**, four **Patterns**, a per-step **piano-roll editor**.
 - **Variable Positions (a–f):** six snapshot-able positions for Note Order,
-  Transposition, Note Density, Velocity Range, and Orchestration — click a cell to activate, click a
-  name to edit per-voice values.
+  Transposition, Note Density, Velocity Range, Time Distortion, and
+  Orchestration — click a cell to activate, click a name to edit per-voice
+  values. Pattern Group also has six active/conductable positions.
 - **M-style Note Order mixing:** each Voice blends Original Order, a
   stored/repeating Cyclic Random scramble, and continually changing Utterly
   Random playback. Two handles sit directly on the segmented bar: the first
@@ -172,7 +178,8 @@ Working today:
   or custom palette rather than falling back to black and white.
 - **Snapshots and Slideshows:** 26 partial A–Z locations with Hold/Do,
   Edit/copy, Blink Everything, recall/erase/restore, plus nine timed
-  record/play/pause/loop/stop Slideshows and version-2 persistence.
+  record/play/pause/loop/stop Slideshows, Record Wait, Snapshot-quantized
+  playback, keyboard control, and version-2 persistence with v1 migration.
 - **Manual-faithful Velocity Range:** per-Voice shaded low/high range bar drawn
   directly on the axis line — **click-drag on the line to draw the range** —
   plus editable endpoint numericals. Accent 0 is silent; levels 1–4 span the
@@ -225,8 +232,11 @@ then open `dist-single/index.html`.
 ```bash
 npm test          # unit tests (Vitest)
 npm run coverage  # tests + coverage (engine/state held at 100%)
+npm run test:watch # interactive test watch mode
 npm run typecheck # tsc --noEmit
 npm run build     # typecheck + production build
+npm run build:single # self-contained dist-single/index.html
+npm run preview   # preview the normal production build
 ```
 
 ## Layout
@@ -239,8 +249,13 @@ src/
     transform.ts   per-step transform primitives
     planner.ts     the pure scheduler heart
     transport.ts   timing-change continuity segments
+    scheduler.ts   adaptive lookahead policy + diagnostics
     events.ts      explicit event protocol + note lifecycle
+    eventbatch.ts  versioned adapter-neutral MIDI event batches
     variables.ts   Variable Positions (a–f) model
+    snapshot.ts    partial Snapshot capture/apply + quantization
+    slideshow.ts   deterministic recording/playback state machine
+    document.ts    defensive JSON v2 codec + v1 migration
     project.ts     defaults
     runtime.ts     Web Audio lookahead scheduler (browser-only wiring)
     outputs/       synth + Web MIDI sinks
@@ -255,7 +270,9 @@ docs/              build plan, status, and UI to-dos
 reference/         original M manual, screenshots, layout mockup
 ```
 
-Engine and state logic are held at **100% line/branch/function coverage**.
-Browser runtime and Web MIDI behavior also have fake-clock/fake-port tests. The
-current browser scheduler still wakes on the main thread; see the reliability
+Included engine and state logic are held at **100% statement/line/branch/function
+coverage** by Vitest's V8 provider. Browser runtime and Web MIDI behavior also
+have fake-clock/fake-scheduler/fake-port tests, while their browser-only adapter
+code is excluded from the Node coverage threshold. The browser scheduler wakes
+on the main thread with a bounded adaptive horizon; see the reliability
 specification for exact guarantees, verification steps, and native requirements.
