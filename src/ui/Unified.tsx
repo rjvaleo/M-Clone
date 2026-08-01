@@ -171,8 +171,21 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
       const id = (event as CustomEvent<AppWindowId>).detail;
       if (APP_WINDOWS.some((window) => window.id === id)) showWindow(id);
     };
+    // "Close Edit Windows merely closes any edit windows you have open." The
+    // six permanent windows are not edit windows, and closeAppWindow already
+    // refuses to close them.
+    const closeEditWindows = () =>
+      setOpenWindows((current) =>
+        APP_WINDOWS.reduce(
+          (open, window) => (window.permanent ? open : closeAppWindow(open, window.id)),
+          current,
+        ));
     window.addEventListener("mclone:open-window", openRequestedWindow);
-    return () => window.removeEventListener("mclone:open-window", openRequestedWindow);
+    window.addEventListener("mclone:close-edit-windows", closeEditWindows);
+    return () => {
+      window.removeEventListener("mclone:open-window", openRequestedWindow);
+      window.removeEventListener("mclone:close-edit-windows", closeEditWindows);
+    };
   });
   const showVariableEditor = (id: PositionVarId) => showWindow(id);
   const canvasMenu = useContextMenu(APP_WINDOWS.flatMap((window, index) => [

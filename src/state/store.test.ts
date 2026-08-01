@@ -7,6 +7,7 @@ import {
   originalToScrambled,
   swapScrambledAndOriginal,
 } from "../engine/patterncmd";
+import { DEFAULT_OPTIONS } from "../engine/options";
 
 beforeEach(() => {
   const project = createDefaultProject();
@@ -48,6 +49,8 @@ beforeEach(() => {
     activeCyclicPositions: { accent: 0, legato: 0, rhythm: 0 },
     midiViewEvents: [],
     midiViewNextId: 0,
+    options: { ...DEFAULT_OPTIONS },
+    editorRegion: null,
   });
 });
 
@@ -993,5 +996,75 @@ describe("document name and unsaved changes", () => {
     g().importDocument({ garbage: true });
     expect(g().documentName).toBe("kept.json");
     expect(g().isDirty).toBe(true);
+  });
+})
+
+describe("the Options menu in the store", () => {
+  it("starts at the manual's defaults", () => {
+    expect(g().options).toEqual(DEFAULT_OPTIONS);
+  });
+
+  it("toggles one option without touching the rest", () => {
+    g().setOption("useMetronome", true);
+    expect(g().options.useMetronome).toBe(true);
+    expect(g().options.slideshowRecordWait).toBe(true);
+    expect(g().options.noZoomRects).toBe(false);
+  });
+
+  it("marks the document dirty, because options are saved with it", () => {
+    useM.setState({ isDirty: false });
+    g().setOption("noZoomRects", true);
+    expect(g().isDirty).toBe(true);
+  });
+
+  it("carries options out through the document", () => {
+    g().setOption("useMetronome", true);
+    expect(g().exportDocument().options.useMetronome).toBe(true);
+  });
+
+  it("takes options back in when a document is opened", () => {
+    g().setOption("useMetronome", true);
+    const saved = JSON.parse(JSON.stringify(g().exportDocument()));
+    g().newDocument();
+    expect(g().options.useMetronome).toBe(false);
+    const result = g().importDocument(saved, "x.mclone.json");
+    expect(result.ok).toBe(true);
+    expect(g().options.useMetronome).toBe(true);
+  });
+
+  it("resets options when a new document is started", () => {
+    g().setOption("useMetronome", true);
+    g().newDocument();
+    expect(g().options).toEqual(DEFAULT_OPTIONS);
+  });
+});
+
+describe("the Pattern Editor's selected Region", () => {
+  it("starts with nothing selected", () => {
+    expect(g().editorRegion).toBeNull();
+  });
+
+  it("holds the Region so the menu bar can act on it", () => {
+    // M's Edit and Pattern menus are global but operate on the current
+    // selection, so the selection cannot live inside the editor window.
+    g().setEditorRegion({ from: 2, to: 5, point: false });
+    expect(g().editorRegion).toEqual({ from: 2, to: 5, point: false });
+  });
+
+  it("clears back to nothing", () => {
+    g().setEditorRegion({ from: 2, to: 5, point: false });
+    g().setEditorRegion(null);
+    expect(g().editorRegion).toBeNull();
+  });
+
+  it("does not dirty the document, because a selection is not musical content", () => {
+    useM.setState({ isDirty: false });
+    g().setEditorRegion({ from: 1, to: 3, point: false });
+    expect(g().isDirty).toBe(false);
+  });
+
+  it("is not written into the saved document", () => {
+    g().setEditorRegion({ from: 1, to: 3, point: false });
+    expect("editorRegion" in g().exportDocument()).toBe(false);
   });
 })

@@ -31,10 +31,10 @@ body {
 }
 
 /* No max-width and no auto-centring: the interface is a canvas of freely
-   placed windows, so it uses the whole page rather than a fixed column. */
+   placed windows, so it uses the whole page rather than a fixed column.
+   The menu bar is docked at the top and the desktop takes every remaining
+   pixel, the way the original owned the whole screen. */
 .app {
-  --app-pad: 16px;
-  padding: var(--app-pad);
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -46,8 +46,7 @@ body {
   z-index: 20000;
   flex: none;
   height: 22px;
-  margin: calc(-1 * var(--app-pad)) calc(-1 * var(--app-pad)) 8px;
-  padding: 1px 16px;
+  padding: 1px 10px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -68,33 +67,15 @@ body {
 .app__menubar .umenu__list { z-index: 20001; top: 19px !important; }
 .app__apple { width: 14px; text-align: center; font-size: 9px; }
 
-.app__header {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  border-bottom: 2px solid var(--line);
-  padding-bottom: 6px;
-  margin-bottom: 14px;
-}
-.app__header h1 {
-  font-size: 34px;
-  margin: 0;
-  letter-spacing: 1px;
-}
-.app__sub {
-  font-size: 18px;
-  opacity: 0.55;
-}
+/* The document name sits in the menu bar, where the original put the name of
+   the Conducting Window. The bullet marks unsaved changes. */
 .app__doc {
-  margin: 0;
-  font-size: 12px;
+  margin: 0 0 0 auto;
+  padding-right: 8px;
+  font-size: 11px;
   opacity: 0.75;
   font-variant-numeric: tabular-nums;
-}
-.app__tag {
-  margin: 0;
-  font-style: italic;
-  opacity: 0.7;
+  white-space: nowrap;
 }
 
 .app__top {
@@ -277,35 +258,49 @@ body {
   outline-offset: -1px;
 }
 
-/* View tabs */
+/* Right-hand strip of the menu bar. Everything here is sized to sit inside
+   the 22px bar without stretching it. */
 .app__views {
-  margin-left: auto;
   display: flex;
+  align-items: center;
   gap: 4px;
 }
-.zoom-control { display: flex; align-items: center; gap: 2px; margin-right: 6px; }
+.zoom-control { display: flex; align-items: center; gap: 2px; margin-right: 4px; }
 .zoom-control button, .zoom-control output {
-  height: 22px; min-width: 26px; padding: 1px 5px; border: 1px solid var(--line);
-  background: var(--panel); color: var(--ink); font: 11px var(--font); text-align: center;
+  height: 18px; min-width: 22px; padding: 0 4px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); font: 10px var(--font); text-align: center;
 }
-.zoom-control output { display: grid; place-items: center; min-width: 42px; }
+.zoom-control output { display: grid; place-items: center; min-width: 38px; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The desktop: fills whatever the menu bar leaves, scrolls only when the
+   640 × 480 floor makes it bigger than the window. */
 .workspace-viewport { flex: 1 1 auto; overflow: auto; min-height: 0; }
 .workspace-scaled { position: relative; }
 .workspace-logical {
-  position: absolute; left: 0; top: 0; width: 640px; height: 480px;
+  position: absolute; left: 0; top: 0;
   transform-origin: top left;
 }
-.theme-picker { display: flex; align-items: center; gap: 4px; font-size: 11px; }
-.theme-picker select { font: inherit; }
+.theme-picker { display: flex; align-items: center; gap: 4px; font-size: 10px; }
+.theme-picker select { font: 10px var(--font); height: 18px; padding: 0 2px; }
 .channel-palette { display: flex; gap: 2px; align-items: center; }
 .channel-palette input[type="color"] {
   width: 22px; height: 22px; padding: 1px; border: 1px solid currentColor;
 }
 .vtab {
   font-family: var(--font);
-  font-size: 12px;
-  padding: 4px 10px;
-  border: 2px solid var(--line);
+  font-size: 10px;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
   background: var(--panel);
   cursor: pointer;
 }
@@ -1085,6 +1080,9 @@ body {
 }
 .umenu__item:hover:not(:disabled) { background: #000; color: #fff; }
 .umenu__item:disabled { opacity: 0.35; cursor: default; }
+/* Every item in a checkable menu reserves the tick gutter, so the labels stay
+   in one column whether or not the option is on. */
+.umenu__check { display: inline-block; width: 11px; }
 .umenu__sep { margin: 3px 0; border: none; border-top: 1px solid #b5b5b5; }
 
 /* ===== Transposition Edit Window =====
@@ -1655,14 +1653,7 @@ body.dark-bg { background: #191919; }
   background: #191919;
   min-height: 100vh;
 }
-.theme-dark .app__header { border-bottom-color: #666; }
-.theme-dark .app__doc {
-  margin: 0;
-  font-size: 12px;
-  opacity: 0.75;
-  font-variant-numeric: tabular-nums;
-}
-.app__tag { opacity: 0.65; }
+.theme-dark .app__doc { opacity: 0.7; }
 
 /* Window chrome */
 .theme-dark .uwin,

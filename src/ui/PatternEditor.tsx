@@ -28,9 +28,9 @@ import {
 import { midiToName } from "../engine/music";
 import { getRuntime } from "./runtime";
 import { useDraggable } from "./useDraggable";
-import { useContextMenu, type MenuItem } from "./WindowMenu";
-import * as cmd from "../engine/patterncmd";
-import type { ChordMode, InsertMode, StepEvent } from "../engine/types";
+import { useContextMenu } from "./WindowMenu";
+import { usePatternMenus } from "./patternMenus";
+import type { ChordMode, InsertMode } from "../engine/types";
 import {
   IconBuild,
   IconChord,
@@ -161,11 +161,6 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
   const insertSteps = useM((s) => s.insertSteps);
   const deleteRegion = useM((s) => s.deleteRegion);
   const selectVoice = useM((s) => s.selectVoice);
-  const runPatternCommand = useM((s) => s.runPatternCommand);
-  const runPatternDocumentCommand = useM((s) => s.runPatternDocumentCommand);
-  const clipboard = useM((s) => s.clipboard);
-  const projectSeed = useM((s) => s.project.seed);
-  const setClipboard = useM((s) => s.setClipboard);
 
   const patternIndex = voices[selectedVoice].patternIndex;
   const pattern = patterns[patternIndex];
@@ -179,8 +174,10 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
   // Patterns shown behind the edited one (shift-click a View number).
   const [ghosts, setGhosts] = useState<number[]>([]);
   // The Selector's region. `point` marks a Pointwise selection — a click with
-  // no drag, which draws a triangle instead of a span.
-  const [region, setRegion] = useState<{ from: number; to: number; point: boolean } | null>(null);
+  // no drag, which draws a triangle instead of a span. It lives in the store
+  // so the global Edit and Pattern menus can act on it too.
+  const region = useM((s) => s.editorRegion);
+  const setRegion = useM((s) => s.setEditorRegion);
   const [legend, setLegend] = useState<{ step: number; pitch: number } | null>(null);
   const [range, setRange] = useState({ from: 0, to: Math.max(0, len - 1) });
   const [counter, setCounter] = useState(0);
@@ -275,110 +272,9 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
 
   /* ---- The Edit and Pattern menus ---- */
 
-  // "The commands in the Pattern Menu operate on any selected Patterns or
-  // Regions." With no Region selected they act on the whole Pattern, so the
-  // Selector's region — minus a bare pointwise click — is the selection.
-  const sel: cmd.Region =
-    region && !region.point ? { from: region.from, to: region.to } : null;
-  const selLabel = sel ? "Region" : "Pattern";
-  const run = (fn: (steps: StepEvent[], maxSize: number) => StepEvent[]) => () =>
-    runPatternCommand(patternIndex, fn);
-
-  const editMenu: MenuItem[] = [
-    {
-      label: "Cut",
-      hint: `Remove the ${selLabel} to the clipboard`,
-      run: () => {
-        setClipboard(cmd.copyRegion(pattern.steps, sel));
-        runPatternCommand(patternIndex, (st) => cmd.clearSteps(st, sel));
-      },
-    },
-    {
-      label: "Copy",
-      hint: `Copy the ${selLabel} to the clipboard`,
-      run: () => setClipboard(cmd.copyRegion(pattern.steps, sel)),
-    },
-    {
-      label: "Paste",
-      hint: "Replace the selection with the clipboard",
-      enabled: clipboard.length > 0,
-      run: run((st) => cmd.pasteSteps(st, sel, clipboard)),
-    },
-    {
-      label: "Paste Notes",
-      hint: "Replace only the notes, leaving the length alone",
-      enabled: clipboard.length > 0,
-      run: run((st) => cmd.pasteNotes(st, sel, clipboard)),
-    },
-    {
-      // "If an entire Pattern is selected, this item is displayed as Paste At
-      //  End. If a Region is selected, the command is displayed as Insert Paste."
-      label: sel || region?.point ? "Insert Paste" : "Paste at End",
-      hint: sel || region?.point
-        ? "Push the clipboard in at the selection"
-        : "Add the clipboard to the end of the Pattern",
-      enabled: clipboard.length > 0,
-      run: run((st, maxSize) =>
-        sel || region?.point
-          ? cmd.insertPaste(st, sel ? sel.from : region!.from, clipboard, maxSize)
-          : cmd.pasteAtEnd(st, clipboard, maxSize)),
-    },
-    "separator",
-    {
-      label: "Clear",
-      hint: `Delete the ${selLabel}`,
-      run: run((st) => cmd.clearSteps(st, sel)),
-    },
-    {
-      label: "Change to Rests",
-      hint: `Empty the ${selLabel} without deleting steps`,
-      run: run((st) => cmd.changeToRests(st, sel)),
-    },
-    {
-      label: "Fill With Rests",
-      hint: "Fill the whole Pattern to its Size with rests",
-      run: run((st, maxSize) => cmd.fillWithRests(st, maxSize)),
-    },
-  ];
-
-  const patternMenu: MenuItem[] = [
-    { label: "Transpose Up Half-Step", run: run((st) => cmd.transposeSteps(st, sel, 1)) },
-    { label: "Transpose Down Half-Step", run: run((st) => cmd.transposeSteps(st, sel, -1)) },
-    { label: "Transpose Up Octave", run: run((st) => cmd.transposeSteps(st, sel, 12)) },
-    { label: "Transpose Down Octave", run: run((st) => cmd.transposeSteps(st, sel, -12)) },
-    "separator",
-    {
-      label: "ReScramble",
-      hint: `Generate a new Cyclic Random ordering of the ${selLabel}`,
-      run: () => runPatternDocumentCommand(patternIndex, (current) =>
-        cmd.reScramble(
-          current,
-          sel,
-          projectSeed + patternIndex * 997 + (current.scrambleGeneration + 1) * 7919,
-        )),
-    },
-    {
-      label: "Original → Scrambled",
-      hint: `Copy the ${selLabel}'s Original list to its Cyclic Random list`,
-      run: () => runPatternDocumentCommand(patternIndex, (current) =>
-        cmd.originalToScrambled(current, sel)),
-    },
-    {
-      label: "Swap Scrambled and Original",
-      hint: `Exchange the ${selLabel}'s Original and Cyclic Random lists`,
-      run: () => runPatternDocumentCommand(patternIndex, (current) =>
-        cmd.swapScrambledAndOriginal(current, sel)),
-    },
-    "separator",
-    { label: "Rotate Forward", run: run((st) => cmd.rotateForward(st, sel)) },
-    { label: "Rotate Backward", run: run((st) => cmd.rotateBackward(st, sel)) },
-    { label: "Reverse Order", run: run((st) => cmd.reverseOrder(st, sel)) },
-    "separator",
-    { label: "Double with Rests", run: run((st, m) => cmd.doubleWithRests(st, sel, m)) },
-    { label: "Triple with Rests", run: run((st, m) => cmd.tripleWithRests(st, sel, m)) },
-    { label: "Eliminate Chords", run: run((st, m) => cmd.eliminateChords(st, sel, m)) },
-    { label: "Eliminate Rests", run: run((st) => cmd.eliminateRests(st, sel)) },
-  ];
+  // Built from the shared source so the right-click here and the global menu
+  // bar always offer exactly the same commands.
+  const { editMenu, patternMenu } = usePatternMenus();
 
   const context = useContextMenu([...editMenu, "separator", ...patternMenu]);
 

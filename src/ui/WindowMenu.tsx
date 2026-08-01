@@ -12,7 +12,18 @@ import { useWorkspaceScale } from "./WorkspaceScale";
 
 export type MenuItem =
   | "separator"
-  | { label: string; run: () => void; enabled?: boolean; hint?: string };
+  | {
+      label: string;
+      run: () => void;
+      enabled?: boolean;
+      hint?: string;
+      /**
+       * Options-menu items carry a tick: "An Option is on when the menu item
+       * shows a check mark and off when there's no check mark." Leave it
+       * undefined for ordinary commands, which reserve no room for one.
+       */
+      checked?: boolean;
+    };
 
 /** Shared popup body, positioned by whoever opened it. */
 function MenuList({ items, onClose, style }: {
@@ -48,8 +59,10 @@ function MenuList({ items, onClose, style }: {
           <button
             key={i}
             type="button"
-            role="menuitem"
-            className="umenu__item"
+            role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+            aria-checked={item.checked}
+            className={"umenu__item"
+              + (item.checked === undefined ? "" : " umenu__item--checkable")}
             disabled={item.enabled === false}
             title={item.hint}
             onClick={() => {
@@ -57,6 +70,11 @@ function MenuList({ items, onClose, style }: {
               onClose();
             }}
           >
+            {item.checked !== undefined && (
+              <span className="umenu__check" aria-hidden="true">
+                {item.checked ? "✓" : ""}
+              </span>
+            )}
             {item.label}
           </button>
         ),

@@ -16,6 +16,7 @@ import {
   type DocumentSource,
 } from "./document";
 import { createDefaultProject } from "./project";
+import { DEFAULT_OPTIONS, setOption } from "./options";
 import { makePresetPositions, POSITION_VARS } from "./variables";
 import type { CyclicPositionBanks, CyclicPositionLengths, CyclicVariable } from "./types";
 
@@ -47,6 +48,7 @@ function source(over: Partial<DocumentSource> = {}): DocumentSource {
       KINDS.map((kind) => [kind, Array.from({ length: 6 }, () => Array(4).fill(16))]),
     ) as CyclicPositionLengths,
     activeCyclicPositions: { accent: 0, legato: 0, rhythm: 0 },
+    options: DEFAULT_OPTIONS,
     ...over,
   };
 }
@@ -496,5 +498,48 @@ describe("structurally broken pieces the decoder must still handle", () => {
       expect(result.document.cyclicLengths[kind]).toHaveLength(6);
       expect(result.document.cyclicLengths[kind][0]).toEqual([16, 16, 16, 16]);
     }
+  });
+})
+
+describe("the Options menu travels with the document", () => {
+  it("round-trips every option", () => {
+    const options = setOption(
+      setOption(DEFAULT_OPTIONS, "useMetronome", true),
+      "slideshowRecordWait",
+      false,
+    );
+    const back = roundTrip(source({ options }));
+    expect(back.options.useMetronome).toBe(true);
+    expect(back.options.slideshowRecordWait).toBe(false);
+    expect(back.options.noZoomRects).toBe(false);
+  });
+
+  it("defaults the whole set when a v1 file predates it", () => {
+    // Documents saved before Options existed simply have no such key, and must
+    // still open rather than being rejected.
+    const raw = JSON.parse(JSON.stringify(encodeDocument(source()))) as Record<string, unknown>;
+    delete raw.options;
+    const result = decodeDocument(raw);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.document.options).toEqual(DEFAULT_OPTIONS);
+  });
+
+  it("repairs an options bag that is the wrong shape", () => {
+    const raw = JSON.parse(JSON.stringify(encodeDocument(source()))) as Record<string, unknown>;
+    raw.options = "not an object";
+    const result = decodeDocument(raw);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.document.options).toEqual(DEFAULT_OPTIONS);
+    expect(result.warnings.join(" ")).toMatch(/option/i);
+  });
+
+  it("keeps the good keys and defaults the bad ones", () => {
+    const raw = JSON.parse(JSON.stringify(encodeDocument(source()))) as Record<string, unknown>;
+    raw.options = { useMetronome: true, noZoomRects: "yes", bogus: true };
+    const result = decodeDocument(raw);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.document.options.useMetronome).toBe(true);
+    expect(result.document.options.noZoomRects).toBe(false);
+    expect("bogus" in result.document.options).toBe(false);
   });
 })
