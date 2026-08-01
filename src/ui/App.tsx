@@ -10,7 +10,7 @@ import {
 import { clampWorkspaceZoom, workspaceLayout } from "../engine/workspace";
 import { WorkspaceScaleProvider } from "./WorkspaceScale";
 import { useM } from "../state/store";
-import { newProject, openProject, saveProject } from "./fileCommands";
+import { newProject, openProject, saveMovieAsMidiFile, saveProject } from "./fileCommands";
 import { WindowMenu, type MenuItem } from "./WindowMenu";
 import { APP_WINDOWS, type AppWindowId } from "../engine/windows";
 import {
@@ -175,6 +175,7 @@ export function App() {
   );
   const documentName = useM((s) => s.documentName);
   const isDirty = useM((s) => s.isDirty);
+  const movie = useM((s) => s.movieRecorder.movie);
   const options = useM((s) => s.options);
   const setOption = useM((s) => s.setOption);
   const { editMenu, patternMenu } = usePatternMenus();
@@ -189,6 +190,11 @@ export function App() {
     open: { run: openProject },
     save: { run: () => saveProject(false) },
     saveAs: { run: () => saveProject(true) },
+    saveMovieAsMidiFile: {
+      run: saveMovieAsMidiFile,
+      enabled: movie !== null,
+      hint: movie ? "Save the completed Movie as a Standard MIDI File" : "Record a Movie first",
+    },
   });
 
   const variableItems = buildMenu(VARIABLES_MENU_ITEMS, {

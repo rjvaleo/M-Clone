@@ -13,8 +13,9 @@ Cross-window scale, typography, theme, and menu findings are tracked in
 Chapters 8 and 15, Chapter 22 for Options, and Appendix A for keyboard
 equivalents.
 
-**Implementation status:** Complete as of 2026-07-30. Pure conductor and store
-behavior are covered by the current 592-test, 100%-coverage engine/state suite.
+**Implementation status:** Core conducting plus Movie capture/export are
+implemented. Pure conductor, Movie, and store behavior are covered by the
+current 657-test, 100%-coverage engine/state suite.
 Production and single-file builds pass, and the localhost UI has been exercised
 with the in-app browser.
 
@@ -45,10 +46,9 @@ The manual defines these behaviors:
 - **Sync Ratio:** stores the relationship between M’s quarter-note pulse and
   MIDI clock/metronome output, with a reversible direction.
 
-Movie capture, imported Sequence playback, MIDI clock output, and an audible
-metronome depend on subsystems that do not exist yet. Their reference buttons
-will be rendered disabled with explicit tooltips rather than pretending to
-work.
+Movie capture and Standard MIDI File export are implemented. Imported Sequence
+playback, MIDI clock output, and an audible metronome still depend on unfinished
+subsystems; Sequence remains disabled with an explicit tooltip.
 
 ## Implemented state
 
@@ -60,8 +60,13 @@ work.
   semantics.
 - Tempo, Pattern Group, supported Variable Positions, and Orchestration respond
   to armed arrows. Robot movement conducts through the same store path.
-- Movie and imported Sequence controls remain visibly disabled because those
-  subsystems do not exist.
+- Movie arms before Start, captures planner output, highlights while armed or
+  recording, and finalizes on Stop. Sequence remains disabled until import and
+  playback exist.
+- The Tempo Numerical is directly editable from 40–240, while Tempo Range and
+  Baton conducting continue to update the same project tempo.
+- Movie and Sequence glyphs follow the reference filmstrip and
+  document/mechanism symbols. Full audit: `PATTERNS_TRANSPORT_AUDIT.md`.
 
 ## Target data flow
 
@@ -189,6 +194,7 @@ Midi, and Cyclic modules.
 - Editing the tempo range selects its midpoint.
 - Pause and resume preserve musical cursor position.
 - Robot movement remains inside the Grid and respects both jump ranges.
-- Unsupported Movie/Sequence features are visibly disabled and honest.
+- Unsupported Sequence features remain visibly disabled and honest; Movie is
+  enabled only for its implemented capture/export workflow.
 - Options needed by this window use its module right-click menu.
 - Engine/state coverage remains 100%.

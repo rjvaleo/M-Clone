@@ -80,6 +80,13 @@ import {
   type MidiViewEvent,
 } from "../engine/midiview";
 import type { PlannedNote } from "../engine/planner";
+import {
+  EMPTY_MOVIE_RECORDER,
+  armMovie,
+  captureMovieNotes,
+  finishMovie,
+  type MovieRecorder,
+} from "../engine/movie";
 
 /** 26 Snapshot locations, one per letter key A-Z. */
 export const SNAPSHOT_COUNT = 26;
@@ -232,6 +239,7 @@ export type MStore = {
   activeCyclicPositions: Record<CyclicVariable, number>;
   midiViewEvents: MidiViewEvent[];
   midiViewNextId: number;
+  movieRecorder: MovieRecorder;
 
   setTempo: (bpm: number) => void;
   setPlaying: (playing: boolean) => void;
@@ -331,6 +339,8 @@ export type MStore = {
   setCyclicValue: (kind: CyclicVariable, level: number, value: number) => void;
   recordMidiNotes: (notes: readonly PlannedNote[]) => void;
   clearMidiView: () => void;
+  toggleMovieRecording: () => void;
+  stopMovieRecording: () => void;
 
   activatePosition: (id: PositionVarId, posIndex: number) => void;
   setSlotValue: (
@@ -482,6 +492,7 @@ export const useM = create<MStore>((set, get) => ({
   activeCyclicPositions: { accent: 0, legato: 0, rhythm: 0 },
   midiViewEvents: [],
   midiViewNextId: 0,
+  movieRecorder: EMPTY_MOVIE_RECORDER,
 
   setTempo: (bpm) => set((s) => ({ project: { ...s.project, tempo: bpm } })),
 
@@ -760,6 +771,7 @@ export const useM = create<MStore>((set, get) => ({
       editingVar: null,
       midiViewEvents: [],
       midiViewNextId: 0,
+      movieRecorder: EMPTY_MOVIE_RECORDER,
     }));
     return result;
   },
@@ -790,6 +802,7 @@ export const useM = create<MStore>((set, get) => ({
       editingVar: null,
       midiViewEvents: [],
       midiViewNextId: 0,
+      movieRecorder: EMPTY_MOVIE_RECORDER,
     }));
   },
 
@@ -975,9 +988,18 @@ export const useM = create<MStore>((set, get) => ({
       return {
         midiViewEvents: mergeMidiViewEvents(s.midiViewEvents, incoming),
         midiViewNextId: s.midiViewNextId + incoming.length,
+        movieRecorder: captureMovieNotes(s.movieRecorder, notes, s.project.tempo),
       };
     }),
   clearMidiView: () => set({ midiViewEvents: [], midiViewNextId: 0 }),
+  toggleMovieRecording: () => set((s) => ({
+    movieRecorder: s.movieRecorder.mode === "idle"
+      ? armMovie(s.movieRecorder)
+      : finishMovie(s.movieRecorder),
+  })),
+  stopMovieRecording: () => set((s) => ({
+    movieRecorder: finishMovie(s.movieRecorder),
+  })),
 
   activatePosition: (id, posIndex) =>
     set((s) => {

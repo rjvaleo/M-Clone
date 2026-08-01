@@ -16,7 +16,7 @@
 //
 // Of those, this captures the ones the rebuild actually has: Variable
 // Positions, Conducting Arrows, Play-Enable, Time Base and Output Length. Src
-// Channel, Echo-Thru, Mouse Advance, Phase and the Sequence don't exist yet.
+// Channel, Echo-Thru, Mouse Advance and the Sequence don't exist yet.
 
 import type { CyclicVariable, ProjectState } from "./types";
 import { POSITION_VARS, type PositionVarId, type VariablePositions } from "./variables";
@@ -45,7 +45,7 @@ export type Snapshot = {
   /** Which Variables are armed for Conducting, and along which Grid axis. */
   arrows: Record<string, ArrowState>;
   playEnabled: boolean[];
-  timeBase: { numerator: number; denominator: number }[];
+  timeBase: { numerator: number; denominator: number; phase?: number }[];
   outputLength: number[];
   /** The active Pattern Group (a-f). */
   patternGroup: number;
@@ -86,6 +86,7 @@ export function captureSnapshot(
     timeBase: project.voices.map((v) => ({
       numerator: v.timeBaseNumerator,
       denominator: v.timeBaseDenominator,
+      phase: v.phase,
     })),
     outputLength: project.patterns.map((p) => p.outputLength),
     patternGroup,
@@ -124,6 +125,9 @@ export function applySnapshot(project: ProjectState, snap: Snapshot): ProjectSta
       timeBaseDenominator: snapshotIncludes(snap, "timeBase", i)
         ? snap.timeBase[i]?.denominator ?? v.timeBaseDenominator
         : v.timeBaseDenominator,
+      phase: snapshotIncludes(snap, "timeBase", i)
+        ? snap.timeBase[i]?.phase ?? v.phase
+        : v.phase,
     })),
     patterns: project.patterns.map((p, i) => ({
       ...p,

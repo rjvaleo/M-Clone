@@ -1,5 +1,35 @@
 # M-Clone — Project Status
 
+## 2026-08-01: Patterns/Transport/Conductor parity correction
+
+The manual/reference audit is complete. Phase is now a persisted, Snapshot-aware
+per-Voice initial delay that affects planner and Movie timing; all numeric M
+Time Base denominators are available; Pattern Record Mode icons require the
+manual's Option-click gesture; and Tempo is directly editable. Movie and
+Sequence glyphs have been redrawn toward the printed filmstrip and document
+symbols. Dependency-bound gaps are catalogued without claiming they work in
+[`PATTERNS_TRANSPORT_AUDIT.md`](./PATTERNS_TRANSPORT_AUDIT.md).
+
+TDD verification is **657 tests across 34 files** with 100% included
+engine/state coverage. The next P5 slice is MIDI import and Sequence playback;
+live input later owns Source/Use/Echo-Thru, Mouse Advance, and `sa` Step Advance.
+
+## 2026-08-01: Movie capture and deterministic MIDI export
+
+The Conducting Movie button now arms before Start, records the same submitted
+planner notes consumed by the outputs and Midi View, and automatically finishes
+on Stop. A 960-PPQN performance model retains Voice, channel, pitch, velocity,
+duration, and tempo-map changes without introducing Pause wall-clock gaps.
+File ▸ Save Movie As Midi File is enabled for a completed take and writes a
+deterministic format-1 SMF with a conductor tempo track and one track per used
+Voice. See [`MOVIES_AND_MIDI.md`](./MOVIES_AND_MIDI.md).
+
+TDD verification is **653 tests across 34 files** with 100% included
+engine/state statement, branch, function, and line coverage. MIDI import,
+Pattern/Sequence conversion, editable track UI, and Movie persistence remain
+open. The immediate next checkpoint is a manual/reference parity audit of the
+Parent Pattern, Transport, and Conductor modules.
+
 ## 2026-08-01: unified module themes and collision-free placement
 
 Patterns and the inner Conducting/transport drawing now honor the dark palette;
@@ -178,7 +208,7 @@ is paused by decision.
 
 | Metric | State |
 | --- | --- |
-| Unit tests | **641 passing** (33 files) |
+| Unit tests | **657 passing** (34 files) |
 | Coverage (engine + state) | **100%** lines / branches / functions |
 | Typecheck (`tsc --noEmit`) | Clean |
 | Production build | Succeeds (`vite build`, `build:single`) |
@@ -194,7 +224,7 @@ is paused by decision.
 | **P2 Variables core** | Note Order, Transposition, Density, manual-faithful Velocity Range + positions + editors + harmonic engine | ✅ |
 | **P3 Cyclic + Midi + rest** | Cyclic editor, Midi window, Orchestration, Time Distortion, Phrasing, Pattern Group, Sound Choice | ✅ for selected scope (Phrasing is Legato Cyclic ✅; Sound Choice intentionally skipped) |
 | **P4 Conducting + Snapshots** | Conducting grid, arrows, Robot, snapshots, slideshows | ✅ |
-| **P5 Classic technical I/O** | Record-to-tracks, MIDI import/export, save/load, Input Control, Mouse Advance, four lightweight playback engines | 🟡 (save/load ✅) |
+| **P5 Classic technical I/O** | Record-to-tracks, MIDI import/export, save/load, Input Control, Mouse Advance, four lightweight playback engines | 🟡 (save/load ✅; Movie capture + SMF export ✅) |
 | **P6 Modern theme + instruments** | Modern layouts, deeper instruments, pattern-manipulation upgrades | 🟡 (Modern Cyclic Editor + color themes ✅; broader Modern layout ⬜) |
 | **M Classic Web** | faithful four-Voice browser MIDI product + four lightweight engines | 🟡 |
 | **M Studio Desktop** | paid eight-Voice standalone + plug-in, seven instruments, signature FX, multi-output | ⬜ |
@@ -247,7 +277,7 @@ is paused by decision.
 | Window | Status | Wired today |
 | --- | --- | --- |
 | **Patterns** | ✅ | play-enable, voice select, output length, time base (num/den), 16-step toggles; Pattern Group a–f selection, conducting, snapshots, and persistence ✅ |
-| **Conducting / "Untitled"** | ✅ | Start/Stop/Pause/Sync, six-by-six Grid, Position + Tempo conducting, Tempo Range, Sync Ratio, bounded Robot + Time Base; Movie/Sequence honestly disabled pending their subsystems |
+| **Conducting / "Untitled"** | 🟡 | Start/Stop/Pause/Sync, six-by-six Grid, Position + Tempo conducting, editable Tempo, Tempo Range, Sync Ratio, bounded Robot + Time Base, corrected Movie/Sequence glyphs, and Movie capture; Sequence remains disabled pending import/playback |
 | **Variables** | ✅ for selected scope | 6-position activation/editors for Note Order, Transposition, Density, Velocity Range, Orchestration, and Time Distortion; Pattern Group activation/conducting; Sound Choice skipped |
 | **Cyclic Variables** | ✅ | five-level Accent/Legato/Rhythm cycles, six Positions, per-Voice lengths, conducting, Snapshot/Slideshow integration, and Classic/Modern editor; Legato supplies Phrasing |
 | **Midi** | ✅ | per-voice channel, program, transpose, velocity-range readout, density, legato; six-position 4×16 Orchestration routing ✅; Sound Choice skipped |
@@ -271,7 +301,7 @@ is paused by decision.
 | Unified window navigation | ✅ | every main and auxiliary window uses compact reference `.uwin__title` chrome with shared name/note/close layout, drag handle, border, and theme treatment; module menus are context-only |
 | 640×480 workspace + zoom | ✅ | 640×480 logical baseline; persisted 50–200% application scaling in 10% increments; −/+ /100%/Fit controls; scale-aware dragging and context menus |
 | Complete channel coloring | ✅ | four-voice artwork across main windows and editors inherits the six-preset/custom global palette |
-| Reference Patterns Window | ✅ | 228×120 Chapter 13 layout with Src/Use, colored Play Enable, Echo-Thru, Mouse Advance, three record modes, Output Length, Time Base, Phase, selection and double-click editing |
+| Reference Patterns Window | 🟡 | 228×120 Chapter 13 layout; Play Enable, Option-click Record Modes, Output Length, full numeric Time Base, functional Phase, selection and double-click editing work. Src/Use/Echo/Mouse Advance and independent a–f banks await input/group architecture |
 | Reference-native editors | ✅ | Density 137×86; Velocity 165×81; Note Order 199×149; Transposition 143×95; Cyclic controls enlarged 25% to 275×222 without changing font size; Time Distortion content-fit 185×155; Orchestration 155×80 |
 | Velocity Range editor | ✅ | exact M layout (boxed low/high, dithered range block on the axis line); click-drag to draw the range |
 

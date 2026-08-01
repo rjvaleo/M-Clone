@@ -279,9 +279,10 @@ Conducting Grid (mouse baton), Input Control System (MIDI‑keyboard one‑step 
 ## 8. Phased Roadmap
 
 **Current checkpoint (2026-08-01):** P0–P2 and P4 are complete; the implemented
-parts of P3 are stable; layout is accepted and frozen. Technical completion now
-follows `NEXT_STEPS.md`: recording/MIDI I/O, controller bindings, and
-the instrument decision.
+parts of P3 are stable. P5 now includes Movie capture and deterministic SMF
+export plus the completed Patterns/Transport/Conductor parity correction. MIDI
+import is next, followed by controller bindings and the instrument decision in
+`NEXT_STEPS.md`.
 
 - **P0 — Foundations.** Repo scaffold (Vite/React/TS), engine skeleton, Web Audio clock + lookahead scheduler, dual output sinks (MIDI + synth), theme architecture (control catalog + theme provider), state store.
 - **P1 — Sound & Patterns.** Pattern model, Pattern Editor, transport (Start/Stop/Pause/Sync), Tempo, Time Base / Output Length / Play‑Enable. **First sound.**

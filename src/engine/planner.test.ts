@@ -33,6 +33,7 @@ function voice(over: Partial<VoiceState> = {}): VoiceState {
     velocityRange: { low: 100, high: 100 },
     timeBaseNumerator: 1,
     timeBaseDenominator: 4, // quarter notes
+    phase: 0,
     timeDistort: neutralTimeMap(),
     legato: 0.9,
     channel: 1,
@@ -81,6 +82,16 @@ describe("planWindow — basic playback", () => {
     expect(notes[1].atTick).toBe(960);
     expect(notes[1].startSec).toBeCloseTo(0.5, 9);
     expect(notes[0].durationSec).toBeCloseTo(0.225, 9); // level 2 is 50%
+  });
+
+  // Chapter 13: Phase is an initial delay measured in M ticks, where 96 ticks
+  // equal a quarter note. It is re-applied by Start and Sync.
+  it("delays a Voice by its Phase without changing its step order", () => {
+    const st = project([pattern("p", [[60], [62]])], [voice({ phase: 48 })]);
+    const { notes } = planWindow(st, makeCursors(st, 10), new Rng(1), 10, 11);
+    expect(notes[0]).toMatchObject({ note: 60, atTick: 480 });
+    expect(notes[0].startSec).toBeCloseTo(10.25, 9);
+    expect(notes[1].note).toBe(62);
   });
 
   it("applies per-voice transposition", () => {

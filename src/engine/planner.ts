@@ -71,14 +71,16 @@ function cyclicLevel(
 
 /** One fresh cursor per voice, all starting at `startSec`. */
 export function makeCursors(state: ProjectState, startSec: number): VoiceCursor[] {
-  return state.voices.map(() => {
+  return state.voices.map((voice) => {
+    const phase = Math.max(0, voice.phase);
+    const phaseSec = phase * (60 / state.tempo) / 96;
     return {
       order: { pos: 0, last: -1, bval: 0.5 },
-      nextTimeSec: startSec,
-      originSec: startSec,
+      nextTimeSec: startSec + phaseSec,
+      originSec: startSec + phaseSec,
       clockSec: 0,
       cyclicPos: 0,
-      transportTick: 0,
+      transportTick: Math.round(phase * PPQN / 96),
     };
   });
 }

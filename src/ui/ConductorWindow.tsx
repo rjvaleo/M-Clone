@@ -20,9 +20,10 @@ function TransportGlyph({ kind }: {
   if (kind === "movie") {
     return (
       <svg viewBox="0 0 32 32" aria-hidden="true">
-        <path fill="none" stroke="currentColor" strokeWidth="2"
-          d="M4 7h24v19H4zm0 6h24M10 7v19m7-19v19m6-19v19" />
-        <path d="M4 5h24v4H4z" />
+        <rect x="3" y="6" width="26" height="20" />
+        {[6, 13, 20].map((x) => <rect key={`top-${x}`} x={x} y="8" width="4" height="5" fill="var(--panel)" />)}
+        {[6, 13, 20].map((x) => <rect key={`bottom-${x}`} x={x} y="19" width="4" height="5" fill="var(--panel)" />)}
+        <rect x="4" y="15" width="24" height="2" fill="var(--panel)" />
       </svg>
     );
   }
@@ -31,8 +32,9 @@ function TransportGlyph({ kind }: {
       <svg viewBox="0 0 32 32" aria-hidden="true">
         <path fill="none" stroke="currentColor" strokeWidth="2" d="M7 3h14l5 5v21H7Z" />
         <path fill="none" stroke="currentColor" strokeWidth="2" d="M21 3v6h5" />
-        <circle cx="17" cy="20" r="5" fill="none" stroke="currentColor" strokeWidth="2" />
-        <path d="m17 12 2 4 4 1-4 2-1 5-2-4-4-1 4-2Z" />
+        <circle cx="17" cy="20" r="6" />
+        <circle cx="17" cy="20" r="2.5" fill="var(--panel)" />
+        <path d="M16 11h2v4h-2zm0 14h2v4h-2zM8 19h4v2H8zm14 0h4v2h-4z" />
       </svg>
     );
   }
@@ -63,12 +65,16 @@ export function ConductorWindow() {
   const setArrow = useM((s) => s.setArrow);
   const conductAt = useM((s) => s.conductAt);
   const setTempoRange = useM((s) => s.setTempoRange);
+  const setTempo = useM((s) => s.setTempo);
   const setRobot = useM((s) => s.setRobot);
   const setRobotRange = useM((s) => s.setRobotRange);
   const setRobotTimeBase = useM((s) => s.setRobotTimeBase);
   const setSyncRatio = useM((s) => s.setSyncRatio);
   const setSyncDirection = useM((s) => s.setSyncRatioDirection);
   const robotStep = useM((s) => s.robotStep);
+  const movieMode = useM((s) => s.movieRecorder.mode);
+  const toggleMovieRecording = useM((s) => s.toggleMovieRecording);
+  const stopMovieRecording = useM((s) => s.stopMovieRecording);
   const grid = useRef<HTMLDivElement>(null);
 
   const start = async () => {
@@ -79,6 +85,7 @@ export function ConductorWindow() {
   };
   const stop = () => {
     getRuntime().stop();
+    stopMovieRecording();
     setPaused(false);
     setPlaying(false);
   };
@@ -144,8 +151,13 @@ export function ConductorWindow() {
         </div>
         <div className="uconduct__secondary">
           <button className="uconduct__sync" onClick={sync}>Sync</button>
-          <button disabled title="Movie recording is not implemented"
-            aria-label="Movie recording"><TransportGlyph kind="movie" /></button>
+          <button title={movieMode === "idle"
+              ? "Arm Movie recording before Start"
+              : "Movie is armed or recording — click to finish"}
+            aria-label="Movie recording" onClick={toggleMovieRecording}
+            className={movieMode === "idle" ? "" : "is-on"}>
+            <TransportGlyph kind="movie" />
+          </button>
           <button disabled title="No imported MIDI Sequence is loaded"
             aria-label="Sequence Play Enable"><TransportGlyph kind="sequence" /></button>
         </div>
@@ -188,7 +200,10 @@ export function ConductorWindow() {
               style={{ left: `${((tempo - 40) / 200) * 100}%` }} />
           </div>
           <div className="uconduct__tempo-readout">
-            <span>{tempoRange.low}</span><b>Tempo</b><strong>{tempo}</strong>
+            <span>{tempoRange.low}</span><b>Tempo</b>
+            <input type="number" min={40} max={240} value={tempo}
+              aria-label="Tempo Numerical"
+              onChange={(event) => setTempo(Math.max(40, Math.min(240, Number(event.target.value))))} />
             <span>{tempoRange.high}</span>
           </div>
         </div>

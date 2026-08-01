@@ -6,6 +6,7 @@
 // sits outside the coverage gate along with the other browser-only wiring.
 
 import { useM } from "../state/store";
+import { encodeMovieAsSmf, movieFileName } from "../engine/movie";
 
 const EXTENSION = ".mclone.json";
 const DEFAULT_NAME = `Untitled${EXTENSION}`;
@@ -80,4 +81,20 @@ export function openProject(): void {
     }
   };
   input.click();
+}
+
+/** File ▸ Save Movie As Midi File — exports the last completed performance. */
+export function saveMovieAsMidiFile(): void {
+  const state = useM.getState();
+  const movie = state.movieRecorder.movie;
+  if (!movie) return;
+  const bytes = encodeMovieAsSmf(movie);
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  const url = URL.createObjectURL(new Blob([buffer], { type: "audio/midi" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = movieFileName(state.documentName);
+  link.click();
+  URL.revokeObjectURL(url);
 }

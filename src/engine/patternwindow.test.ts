@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  TIME_BASE_DENOMINATORS,
   cycleChordMode,
   cycleInputUse,
   cycleInsertMode,
@@ -7,6 +8,11 @@ import {
 } from "./patternwindow";
 
 describe("Patterns Window picture controls", () => {
+  it("offers every numeric Time Base denominator printed in Chapter 13", () => {
+    expect(TIME_BASE_DENOMINATORS).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 15, 16, 24,
+    ]);
+  });
   it("cycles Source through All and the sixteen M Input Channels", () => {
     expect(cycleSourceChannel("all")).toBe(1);
     expect(cycleSourceChannel(7)).toBe(8);

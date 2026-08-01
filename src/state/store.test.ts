@@ -8,6 +8,7 @@ import {
   swapScrambledAndOriginal,
 } from "../engine/patterncmd";
 import { DEFAULT_OPTIONS } from "../engine/options";
+import { EMPTY_MOVIE_RECORDER } from "../engine/movie";
 
 beforeEach(() => {
   const project = createDefaultProject();
@@ -49,6 +50,7 @@ beforeEach(() => {
     activeCyclicPositions: { accent: 0, legato: 0, rhythm: 0 },
     midiViewEvents: [],
     midiViewNextId: 0,
+    movieRecorder: EMPTY_MOVIE_RECORDER,
     options: { ...DEFAULT_OPTIONS },
     editorRegion: null,
     snapshotMode: "idle",
@@ -88,6 +90,40 @@ describe("Midi View", () => {
     expect(g().midiViewEvents[0]).toMatchObject({ voice: 3, noteName: "A4", channel: 4 });
     g().clearMidiView();
     expect(g().midiViewEvents).toEqual([]);
+  });
+});
+
+describe("Movie recording", () => {
+  it("arms, captures the planner stream, and finalizes on Stop", () => {
+    g().toggleMovieRecording();
+    expect(g().movieRecorder.mode).toBe("armed");
+    g().recordMidiNotes([{
+      voice: 0, note: 60, velocity: 99, channel: 1,
+      startSec: 4, durationSec: 0.25, atTick: 0, durationTicks: 240,
+    }]);
+    expect(g().movieRecorder).toMatchObject({
+      mode: "recording",
+      draft: { notes: [{ atTick: 0, durationTicks: 240 }] },
+    });
+    g().stopMovieRecording();
+    expect(g().movieRecorder).toMatchObject({
+      mode: "idle",
+      draft: null,
+      movie: { notes: [{ note: 60, velocity: 99 }] },
+    });
+  });
+
+  it("can cancel an armed Movie without losing the previous take", () => {
+    g().toggleMovieRecording();
+    g().recordMidiNotes([{
+      voice: 0, note: 60, velocity: 99, channel: 1,
+      startSec: 4, durationSec: 0.25, atTick: 0, durationTicks: 240,
+    }]);
+    g().stopMovieRecording();
+    const movie = g().movieRecorder.movie;
+    g().toggleMovieRecording();
+    g().toggleMovieRecording();
+    expect(g().movieRecorder).toMatchObject({ mode: "idle", movie });
   });
 });
 

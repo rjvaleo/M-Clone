@@ -8,6 +8,7 @@ export function Transport() {
   const tempo = useM((s) => s.project.tempo);
   const setPlaying = useM((s) => s.setPlaying);
   const setTempo = useM((s) => s.setTempo);
+  const stopMovieRecording = useM((s) => s.stopMovieRecording);
 
   const start = async () => {
     await getRuntime().start();
@@ -15,6 +16,7 @@ export function Transport() {
   };
   const stop = () => {
     getRuntime().stop();
+    stopMovieRecording();
     setPlaying(false);
   };
   const sync = () => getRuntime().sync();

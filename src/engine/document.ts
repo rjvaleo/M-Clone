@@ -203,6 +203,7 @@ function readVoice(value: unknown, index: number): VoiceState {
     },
     timeBaseNumerator: Math.max(1, Math.round(num(value.timeBaseNumerator, defaults.timeBaseNumerator))),
     timeBaseDenominator: Math.max(1, Math.round(num(value.timeBaseDenominator, defaults.timeBaseDenominator))),
+    phase: clamp(Math.round(num(value.phase, defaults.phase)), 0, 999),
     timeDistort: map
       ? {
           points,
