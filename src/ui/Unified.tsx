@@ -11,7 +11,6 @@ import { TimeDistortEditor } from "./TimeDistortEditor";
 import { SnapshotWindow } from "./SnapshotWindow";
 import { TransposeEditor } from "./TransposeEditor";
 import { useDraggable } from "./useDraggable";
-import { listMidiOutputs } from "../engine/outputs/webmidi";
 import { NOTE_NAMES, type ScaleName } from "../engine/music";
 import type { CyclicVariable, NoteOrderMix, VelocityRange } from "../engine/types";
 import {
@@ -200,14 +199,19 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
   // Which Voice's Time Map the Time Distortion window is editing.
   const [tdVoice, setTdVoice] = useState(0);
   const [midiOuts, setMidiOuts] = useState<MIDIOutput[]>([]);
-  const [midiId, setMidiId] = useState("");
+  const [midiIds, setMidiIds] = useState<string[]>([]);
   const enableMidi = async () => {
-    const list = await listMidiOutputs();
+    const registry = getRuntime().midiPorts();
+    const list = await registry.enable();
     setMidiOuts(list);
+    registry.subscribe(setMidiOuts);
   };
   const chooseMidi = (id: string) => {
-    setMidiId(id);
-    getRuntime().selectMidiOutput(midiOuts.find((o) => o.id === id) ?? null);
+    const next = id === "" ? [] : midiIds.includes(id)
+      ? midiIds.filter((item) => item !== id)
+      : [...midiIds, id];
+    setMidiIds(next);
+    getRuntime().midiPorts().select(next);
   };
 
   const editSlot = (id: PositionVarId, voice: number, value: PositionValue) =>
@@ -391,10 +395,10 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
   const conductorMidi: MenuItem[] = midiOuts.length === 0
     ? [{ label: "Enable Web MIDI…", run: () => void enableMidi() }]
     : [
-        { label: `${midiId === "" ? "✓ " : ""}No MIDI Output`, run: () => chooseMidi("") },
+        { label: `${midiIds.length === 0 ? "✓ " : ""}No MIDI Output`, run: () => chooseMidi("") },
         "separator",
         ...midiOuts.map((output) => ({
-          label: `${midiId === output.id ? "✓ " : ""}${output.name ?? output.id}`,
+          label: `${midiIds.includes(output.id) ? "✓ " : ""}${output.name ?? output.id}`,
           run: () => chooseMidi(output.id),
         })),
       ];

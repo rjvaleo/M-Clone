@@ -20,7 +20,7 @@ Updated 2026-08-01.
 
 - Branch at the earlier checkpoint: `master`; inspect the current working tree
   before making additional changes.
-- Tests: **530 passing across 27 files**.
+- Tests: **592 passing across 31 files**.
 - Coverage: **100% statements, branches, functions, and lines** across
   `src/engine` and `src/state`.
 - Typecheck, normal production build, and single-file build: passing.
@@ -49,7 +49,7 @@ Updated 2026-08-01.
 
 ## Technical completion sequence
 
-### 0. MIDI reliability Phase 3 — next reliability gate
+### 0. MIDI reliability Phase 3 — ✅ DONE (2026-08-01)
 
 Phases 1–2 are implemented: timing continuity segments, cancellation-before-
 panic transitions, synchronized batch clock anchors, explicit ordered events,
@@ -57,7 +57,7 @@ panic transitions, synchronized batch clock anchors, explicit ordered events,
 separation, and per-Voice RNG. The authoritative requirements and verification
 matrix are in [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md).
 
-Implement next:
+Implemented:
 
 - injected monotonic clock and scheduler drivers;
 - one scheduler for transport and audition;
@@ -77,6 +77,23 @@ Acceptance gate:
 - multi-port loss does not interrupt unaffected destinations;
 - browser and simulated native adapters pass the same event-order traces;
 - the canonical reliability specification is updated with measured results.
+
+Executed plan (TDD, in this order):
+
+1. Add a pure bounded-lookahead policy that measures wake lateness, minimum
+   submission lead, maximum event lateness, queue depth, dropped windows, and
+   recovery count. A serious stall rebases unscheduled Voice timelines instead
+   of emitting an uncontrolled catch-up burst.
+2. Inject monotonic clock and scheduler drivers into the browser runtime and use
+   the same scheduler for transport and audition release wakes.
+3. Replace the single disposable Web MIDI output lookup with retained access,
+   multi-port selection, statechange reconciliation, unaffected-port isolation,
+   reconnect restoration, and controller-aware panic.
+4. Add a versioned adapter-neutral event-batch codec and conformance traces that
+   drive browser and simulated-native consumers from identical ordered events.
+5. Forced 500 ms stalls, device-loss/reconnect, 100,000-wake boundedness,
+   coverage, typecheck, and both production builds pass. The measured result is
+   592 tests across 31 files at 100% included engine/state coverage.
 
 ### 1. Versioned project document and File commands — ✅ DONE (2026-08-01)
 

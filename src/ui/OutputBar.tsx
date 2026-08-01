@@ -4,7 +4,6 @@
 import { useState } from "react";
 import { useM } from "../state/store";
 import { getRuntime } from "./runtime";
-import { listMidiOutputs } from "../engine/outputs/webmidi";
 import { NOTE_NAMES, type ScaleName } from "../engine/music";
 
 const SCALES: ScaleName[] = [
@@ -32,23 +31,24 @@ export function OutputBar() {
   const [synthOn, setSynthOn] = useState(true);
   const [volume, setVolume] = useState(0.8);
   const [outputs, setOutputs] = useState<MIDIOutput[]>([]);
-  const [midiId, setMidiId] = useState("");
+  const [midiIds, setMidiIds] = useState<string[]>([]);
   const [midiError, setMidiError] = useState("");
 
   const enableMidi = async () => {
     try {
-      const list = await listMidiOutputs();
+      const registry = getRuntime().midiPorts();
+      const list = await registry.enable();
       setOutputs(list);
+      registry.subscribe(setOutputs);
       if (list.length === 0) setMidiError("No MIDI outputs found.");
     } catch {
       setMidiError("Web MIDI unavailable or permission denied.");
     }
   };
 
-  const chooseMidi = (id: string) => {
-    setMidiId(id);
-    const out = outputs.find((o) => o.id === id) ?? null;
-    getRuntime().selectMidiOutput(out);
+  const chooseMidi = (ids: string[]) => {
+    setMidiIds(ids);
+    getRuntime().midiPorts().select(ids);
   };
 
   return (
@@ -90,8 +90,11 @@ export function OutputBar() {
               Enable MIDI
             </button>
           ) : (
-            <select value={midiId} onChange={(e) => chooseMidi(e.target.value)}>
-              <option value="">— none —</option>
+            <select multiple value={midiIds}
+              aria-label="MIDI outputs"
+              onChange={(e) => chooseMidi(
+                Array.from(e.target.selectedOptions, (option) => option.value),
+              )}>
               {outputs.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}

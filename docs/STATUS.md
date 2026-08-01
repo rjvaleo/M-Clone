@@ -13,7 +13,7 @@ not current shipped features. Authoritative specifications:
 - [`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md)
 - [`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md)
 
-## 2026-08-01: MIDI reliability phases 1–2
+## 2026-08-01: MIDI reliability phases 1–3
 
 The MIDI path now has timing-continuity segments, atomic queue cancellation,
 one clock correlation per batch, explicit ordered Note On/Off/Program Change
@@ -23,10 +23,16 @@ Output is submitted before Midi View/Zustand telemetry. The exact guarantees,
 known browser limits, test matrix, and manual measurement protocol are maintained
 in [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md).
 
-Current verification checkpoint: **530 tests across 27 files**, 100% included
-engine/state coverage, clean typecheck, and successful production build. Native
-clock/scheduler adapters, device lifecycle, late-event telemetry/policy,
-multi-port routing, and suspension recovery remain open Phase 3 work.
+Phase 3 adds injected monotonic clock/scheduler drivers, a shared transport and
+audition scheduler, bounded adaptive lookahead, lateness/lead/queue diagnostics,
+20 ms late-attack dropping, 400 ms stall recovery without catch-up bursts,
+suspension recovery, retained MIDIAccess with multi-port selection and reconnect,
+controller-aware panic, and a versioned native event-batch boundary.
+
+Current verification checkpoint: **592 tests across 31 files**, 100% included
+engine/state coverage, clean typecheck, and successful normal and single-file
+production builds. Physical timing certification and native adapters remain
+future platform work, not browser Phase 3 work.
 
 ## 2026-08-01: project save/load
 
@@ -37,7 +43,7 @@ zoom, skin and palette stay local preferences. Decoding rejects damaged or
 future documents and repairs what it safely can, reporting warnings. File ▸
 New / Open / Save / Save As are wired, with document name and unsaved-changes
 tracking in the header. The later MIDI reliability work brings the current
-checkpoint to 530 tests with 100% included engine/state coverage.
+checkpoint to 592 tests with 100% included engine/state coverage.
 
 ## 2026-07-31: end-of-session checkpoint
 
@@ -94,7 +100,8 @@ align across the four fixed Voice columns, Follow pins the scrollable history
 to new rows, and Clear resets it. The later animated playhead and Pattern
 position/length experiment has been removed.
 
-**As of:** 2026-08-01 · **Working tree:** clean, three commits on `master`
+**As of:** 2026-08-01 · **Working tree:** local Phase 3 changes intentionally
+uncommitted on `master`
 **Measured against:** [`M-Clone_Build_Plan.md`](./M-Clone_Build_Plan.md)
 
 Legend: ✅ done · 🟡 partial · ⬜ not started
@@ -111,7 +118,7 @@ is paused by decision.
 
 | Metric | State |
 | --- | --- |
-| Unit tests | **530 passing** (27 files) |
+| Unit tests | **592 passing** (31 files) |
 | Coverage (engine + state) | **100%** lines / branches / functions |
 | Typecheck (`tsc --noEmit`) | Clean |
 | Production build | Succeeds (`vite build`, `build:single`) |
@@ -167,7 +174,7 @@ is paused by decision.
 | Engine (framework-agnostic TS) | ✅ | `src/engine/*` |
 | Control catalog + bindings (shared) | 🟡 | store is shared; formal abstract control catalog ⬜ |
 | Theme layer (per-view layout + renderers) | 🟡 | light + dark themes via a scoped `.theme-dark` skin over one layout; a formal per-theme layout provider is still 🟡 |
-| Web Audio lookahead scheduler | 🟡 | timestamped 25 ms wake / 120 ms horizon ✅; injected/native scheduler, stall policy, telemetry ⬜ |
+| Web Audio lookahead scheduler | ✅ | injected monotonic clock + scheduler; 25 ms browser wake; bounded 80–250 ms adaptive horizon; stall/drop policy and diagnostics |
 | Explicit MIDI event/lifecycle layer | ✅ | ordered events, 960 PPQN, retrigger cleanup, per-Voice RNG |
 | Output sinks (MIDI + instruments) | 🟡 | explicit-event Web MIDI + prototype synth ✅; Classic/Studio and native adapters ⬜ |
 | Document format (JSON) + save/load | ✅ | `ProjectDocumentV1`; versioned, defensively decoded, File menu wired |
@@ -179,7 +186,7 @@ is paused by decision.
 
 | Window | Status | Wired today |
 | --- | --- | --- |
-| **Patterns** | ✅ | play-enable, voice select, output length, time base (num/den), 16-step toggles; group a–f tabs 🟡 (visual) |
+| **Patterns** | ✅ | play-enable, voice select, output length, time base (num/den), 16-step toggles; Pattern Group a–f selection, conducting, snapshots, and persistence ✅ |
 | **Conducting / "Untitled"** | ✅ | Start/Stop/Pause/Sync, six-by-six Grid, Position + Tempo conducting, Tempo Range, Sync Ratio, bounded Robot + Time Base; Movie/Sequence honestly disabled pending their subsystems |
 | **Variables** | 🟡 | 6-position activation and editors for Note Order, Transposition, Density, Velocity Range, Orchestration, and Time Distortion ✅; Pattern Group activation/conducting ✅; Phrasing ⬜; Sound Choice skipped |
 | **Cyclic Variables** | ✅ | five-level Accent/Legato/Rhythm cycles, six Positions, per-Voice lengths, and Classic/Modern editor; Accent 0 rests |
@@ -231,17 +238,18 @@ is paused by decision.
 
 - **TDD throughout the engine:** every pure module (`music`, `rng`, `transform`,
   `planner`, `variables`, `project`) and the `store` has co-located tests.
-- **Coverage gate:** Vitest + V8 at a 100% threshold over `src/engine` and
-  `src/state`; browser-only wiring (`runtime`, `outputs/synth`, `outputs/webmidi`,
-  React UI, type-only files) is excluded by design and kept thin.
+- **Coverage gate:** Vitest + V8 at a 100% threshold over included `src/engine`
+  and `src/state` modules. React UI, `outputs/synth`, and type-only files are
+  excluded; directly tested runtime/Web MIDI adapter modules also appear in the
+  measured report and currently remain at 100%.
 - Scripts: `dev`, `build`, `build:single`, `test`, `coverage`, `typecheck`.
 
 ## Suggested next steps
 
-See [`NEXT_STEPS.md`](./NEXT_STEPS.md). The order is: checkpoint commit,
-versioned project save/load, finish Snapshot/Slideshow behavior, add Phrasing,
-complete performance recording/MIDI I/O, then close controller and instrument
-decisions. Visual polish is not on the technical critical path.
+See [`NEXT_STEPS.md`](./NEXT_STEPS.md). Project save/load and MIDI Reliability
+Phase 3 are complete. The active order is Snapshot/Slideshow behavior, Phrasing,
+performance recording/MIDI I/O, then controller and instrument work. Visual
+polish is not on the technical critical path.
 
 ## Known constraints
 

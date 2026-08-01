@@ -6,7 +6,7 @@ Do not infer MIDI guarantees from the UI or older roadmap prose. The canonical
 implemented behavior, invariants, known limits, automated suites, and manual
 verification procedure are in
 [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md). Phases 1–2 are present
-in the working tree; Phase 3 begins with injected clock/scheduler drivers and a
+in the working tree; Phase 3 now includes injected clock/scheduler drivers and a
 defined late-event policy. Any change to planner timing, transport, event
 ordering, routing, audition, or an output adapter must update that specification
 and its verification matrix in the same change.
@@ -47,7 +47,7 @@ defaulted or clamped and returned as warnings. File ▸ New / Open / Save /
 Save As are wired in `src/ui/fileCommands.ts`, with document name and
 unsaved-changes tracking shown in the header.
 
-**Current suite: 530 tests across 27 files**, 100% coverage on `src/engine` and
+**Current suite: 592 tests across 31 files**, 100% coverage on `src/engine` and
 `src/state`, typecheck and both builds clean.
 
 ## Earlier work
@@ -73,8 +73,8 @@ planned Note On/Off data in timestamped rows, with Follow, Clear, channel
 colors, and bounded history; it no longer has the animated playhead or Pattern
 position/length fields. See `MIDI_VIEW.md`.
 
-**Last audited:** 2026-08-01 · **Branch:** `master` · **Working tree clean,
-three commits.**
+**Last audited:** 2026-08-01 · **Branch:** `master` · **Phase 3 changes are
+local and intentionally uncommitted.**
 
 This file is the pick-up-where-we-left-off note. [`TODO.md`](./TODO.md) is the
 backlog, [`STATUS.md`](./STATUS.md) is the feature-by-feature state.
@@ -86,7 +86,7 @@ backlog, [`STATUS.md`](./STATUS.md) is the feature-by-feature state.
 The generative engine was already done. This session was a **fidelity pass over
 the UI**, rebuilding windows against the real M screenshots in
 [`../reference/`](../reference/) and the M 2.7 manual (`reference/M27.pdf`)
-rather than from an impression of them. The suite is **530 tests across 27
+rather than from an impression of them. The suite is **592 tests across 31
 files**, with 100% coverage held on `src/engine` and `src/state` throughout.
 Technical completion is now underway; project save/load is the first item done.
 
@@ -180,10 +180,10 @@ Technical completion is now underway; project save/load is the first item done.
 ## Start here next
 
 The tree is green, committed, and builds. Layout is frozen. Follow
-[`NEXT_STEPS.md`](./NEXT_STEPS.md) — step 1 (save/load) is done, so the head of
-the list is **step 2, Snapshot and Slideshow behaviour**: Hold/Do, Edit
-Snapshot, Blink Everything, and Slideshow record/play/pause/loop/stop, which are
-currently honest placeholders.
+[`NEXT_STEPS.md`](./NEXT_STEPS.md) — step 1 (save/load) is done and the active
+head of the list is now **step 2, Snapshot and Slideshow behaviour** because
+MIDI Reliability Phase 3 is complete: Hold/Do, Edit Snapshot, Blink Everything, and Slideshow
+record/play/pause/loop/stop remain honest placeholders.
 
 That one needs a decision before coding: how Slideshow timing interacts with
 Pause, Stop and Robot conducting. The manual does not fully pin it down — see

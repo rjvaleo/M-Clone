@@ -26,10 +26,11 @@ timer, Web Audio, and Web MIDI objects are adapters, not musical truth.
 - **Musical tick:** position on the shared 960 PPQN timeline.
 - **Real time:** seconds in the current `AudioContext` time domain.
 - **Output time:** `DOMHighResTimeStamp` milliseconds used by Web MIDI.
-- **Planning window:** `[now, now + 120 ms)` in the current browser adapter.
-- **Scheduler wake:** the main-thread callback currently requested every 25 ms.
+- **Planning window:** base `[now, now + 120 ms)`, adaptively bounded to 80–250 ms.
+- **Scheduler wake:** injected driver; the browser adapter requests every 25 ms.
 - **Batch:** all explicit events submitted from one clock correlation snapshot.
-- **Destination:** currently `synth` or `midi`; physical port IDs are Phase 3.
+- **Destination:** engine events use `synth` or `midi`; selected physical port IDs
+  are retained and reconciled by the Web MIDI adapter.
 - **Atomic transition:** cancel queued output, silence notes, reset or preserve
   transport state, then resume from one shared boundary.
 
@@ -69,15 +70,20 @@ and device submission.
 
 ### 3.1 Current browser clock
 
-`AudioContext.currentTime` is the scheduling clock. The browser adapter wakes
-with `setInterval` every 25 ms and plans 120 ms ahead. `setInterval` is only the
-wake mechanism; event execution is timestamped by Web Audio/Web MIDI rather
-than expected to occur precisely inside the callback.
+The runtime accepts injected monotonic clock and scheduler drivers. The browser
+clock defaults to `AudioContext.currentTime`; its scheduler adapter wakes with
+`setInterval` every 25 ms. Lookahead starts at 120 ms and adapts within 80–250 ms.
+The timer is only the wake mechanism; event execution is timestamped by Web
+Audio/Web MIDI rather than expected to occur precisely inside the callback.
 
 This protects already-submitted events from ordinary short UI activity. It does
 not guarantee immunity from a main-thread stall longer than the remaining
 lookahead, background-tab throttling, OS suspension, driver jitter, or device
-latency. Those cases are open Phase 3 requirements.
+latency. A wake at least 400 ms late is a serious stall: queued output and
+lifecycle ownership are cleared, unscheduled Voice timelines are rebased to a
+fresh 60 ms boundary, and no overdue catch-up burst is emitted. Note attacks
+more than 20 ms late are dropped; releases and state events are retained.
+Suspension uses the same recovery boundary.
 
 ### 3.2 Clock-domain conversion
 
@@ -180,12 +186,13 @@ ordered bytes. Panic resets pending lifecycle state as well as device state.
 | MIDI output change | Musical cursor preserved | Old port cleared | Old port panic | New port receives state next tick |
 
 For Web MIDI, cancellation calls the standard `MIDIOutput.clear()` when the
-browser exposes it, followed by All Notes Off (CC 123) on all 16 channels.
+browser exposes it, followed by Sustain Off (CC 64), Reset All Controllers
+(CC 121), and All Notes Off (CC 123) on all 16 channels.
 TypeScript DOM versions that omit `clear()` are handled without weakening the
 runtime feature detection.
 
-Limit: panic does not yet send Sustain Off (CC 64), Reset All Controllers
-(CC 121), or explicit per-note offs. Phase 3 must extend the panic profile.
+Limit: panic does not send explicit per-note offs because lifecycle ownership is
+discarded atomically before the controller-aware channel panic.
 
 ## 8. Channel synchronization and routing
 
@@ -204,9 +211,11 @@ electrically simultaneous. USB/OS/driver/device behavior also lies beyond the
 engine's timestamp guarantee. Verification must distinguish equal submission
 timestamps from measured wire or audio onset.
 
-Only one selected Web MIDI port exists today. The `midi` destination is separate
-from the synth but does not yet contain a physical port ID. Multi-port routing
-and reconnect restoration are Phase 3.
+One or more Web MIDI ports may be selected. `MIDIAccess` and selected physical
+IDs are retained; `statechange` removes only missing destinations and restores a
+selected destination when its ID reconnects. Losing one port does not disturb
+unaffected ports. Engine events remain adapter-neutral; `eventbatch.ts` carries
+the physical destination ID across the versioned native boundary.
 
 ## 9. UI isolation
 
@@ -224,9 +233,8 @@ an adapter queue. They can still delay the main-thread wake. The current product
 therefore guarantees timestamp isolation for already-submitted events, not
 zero-jitter execution under arbitrary UI or browser stalls.
 
-Editor Sound audition uses the same lifecycle and destinations, but its follow-up
-wake currently uses a browser timeout. Consolidating audition and transport on
-an injected scheduler is a Phase 3 requirement.
+Editor Sound audition uses the same lifecycle, destinations, and injected
+scheduler as transport, including cancellation of outstanding one-shot wakes.
 
 ## 10. Device behavior and feature inventory
 
@@ -236,16 +244,17 @@ an injected scheduler is a Phase 3 requirement.
 | Select/deselect output | Implemented | `webmidi.test.ts`, UI test |
 | Timestamped Note On/Off | Implemented | `webmidi.test.ts` |
 | Equal-time batch timestamps | Implemented | `webmidi.test.ts` |
-| Program Change | Implemented | event/adapter code; add device integration trace in Phase 3 |
+| Program Change | Implemented | event/adapter tests |
 | Queue clear before panic/switch | Implemented where `clear()` exists | runtime/Web MIDI tests |
 | All Notes Off on 16 channels | Implemented | runtime/Web MIDI tests |
-| Device `statechange` | Not implemented | Phase 3 |
-| Reconnect/state restoration | Not implemented | Phase 3 |
-| Multiple MIDI output ports | Not implemented | Phase 3 |
+| Device `statechange` | Implemented | `webmidi.test.ts` |
+| Reconnect/state restoration | Implemented | retained selected-ID trace |
+| Multiple MIDI output ports | Implemented | independent loss/fan-out trace |
 | MIDI input/controller assignment | Not implemented | later I/O phase |
 | MIDI file import/export | Not implemented | later I/O phase |
 | MIDI clock output/input | Not implemented | later conducting/I/O phase |
-| Sustain/controller ownership | Not implemented | Phase 3 |
+| Controller-aware panic | Implemented | CC 64 / 121 / 123 on all channels |
+| General CC/bank/sustain musical events | Not implemented | later I/O/instrument phase |
 | Native MIDI adapters | Not implemented | native milestone |
 
 ## 11. Automated verification
@@ -259,7 +268,8 @@ npm run coverage
 npm run build
 ```
 
-Current verified result: 530 tests in 27 files, production build passing, and
+Current verified result after Phase 3 implementation: 592 tests in 31 files,
+both production builds passing, and
 100% included engine/state statement, branch, function, and line coverage.
 
 Relevant suites:
@@ -271,6 +281,8 @@ Relevant suites:
 | `events.test.ts` | future offs, retrigger order, stale-off removal, destinations, program priority, reset |
 | `outputs/webmidi.test.ts` | one clock anchor, exact timestamps, channel bytes, clear/panic behavior |
 | `runtime.test.ts` | output before UI telemetry, idempotent Start, clear-before-panic Stop |
+| `scheduler.test.ts` | injected drivers, adaptive bounds, late attacks, 500 ms recovery, 100,000 wakes |
+| `eventbatch.test.ts` | V1 ordered round trip and damaged/future rejection |
 | `midiview.test.ts` | diagnostic conversion/order/history; not device timing |
 
 Browser-only adapters remain excluded from the global coverage percentage, but
@@ -293,8 +305,8 @@ Use Chromium on `localhost` or HTTPS; Web MIDI is unavailable from the standalon
 8. Press Stop, Pause, and Sync repeatedly inside the lookahead horizon; verify no
    queued Note On occurs after cancellation.
 9. Change programs during playback; verify Program Change precedes the next note.
-10. Disconnect the device. Current expected limitation: automatic lifecycle
-    recovery is not implemented; document the browser/device response.
+10. Disconnect one of multiple selected devices. The remaining destination must
+    continue; reconnecting the same port ID must restore its selection.
 
 For quantitative jitter measurement, loop MIDI output to a timestamp recorder or
 capture audio transients from the destination. Report median, p95, p99, maximum,
@@ -316,21 +328,23 @@ The following must remain true after every MIDI change:
 9. Musical tick positions never depend on React, Zustand, Web MIDI, or Web Audio.
 10. Unsupported MIDI functionality is labeled as unsupported.
 
-## 14. Open reliability work
+## 14. Reliability work after browser Phase 3
 
-Phase 3 is the next required reliability phase:
+Browser Phase 3 is implemented: injected clock/scheduler drivers, unified
+audition wakes, diagnostics, explicit late-event/stall policy, bounded adaptive
+lookahead, retained device lifecycle, multi-port routing, suspension recovery,
+controller-aware panic, versioned native event batches, and forced-stall / loss /
+100,000-wake conformance tests.
 
-1. inject monotonic clock and scheduler drivers;
-2. unify audition and transport wakeups;
-3. add lateness/lead-time/queue diagnostics;
-4. define late-event drop and recovery policy;
-5. add bounded adaptive browser lookahead;
-6. retain `MIDIAccess` and implement port `statechange`;
-7. support physical destination IDs and multiple ports;
-8. handle suspension, backgrounding, sleep, and wake;
-9. add controller/bank/sustain state and stronger panic;
-10. define a versioned native event-batch serialization boundary;
-11. add long-duration and forced-stall conformance tests.
+Still open for later product phases:
+
+1. physical-device integration measurements across the published browser matrix;
+2. native high-priority clock, scheduler, and MIDI adapters consuming the V1
+   event-batch boundary;
+3. general Control Change, Bank Select, sustain ownership, Pitch Bend, and
+   controller assignment semantics;
+4. platform-specific background/sleep certification and recovery telemetry;
+5. MIDI clock, MIDI input, SysEx, and MIDI 2.0 only in their named future phases.
 
 The browser build must not be described as “zero jitter.” The implemented claim
 is narrower: deterministic musical planning, equal batch timestamps, bounded
