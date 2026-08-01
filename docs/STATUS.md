@@ -1,5 +1,15 @@
 # M-Clone — Project Status
 
+## 2026-08-01: project save/load
+
+The working tree is committed. `ProjectDocumentV1` is the portable save format:
+Project and Pattern material (Original and Scrambled), Variable and Cyclic
+Positions, Snapshots, Conducting Arrows and configuration. Workspace geometry,
+zoom, skin and palette stay local preferences. Decoding rejects damaged or
+future documents and repairs what it safely can, reporting warnings. File ▸
+New / Open / Save / Save As are wired, with document name and unsaved-changes
+tracking in the header. 515 tests, 100% engine/state coverage.
+
 ## 2026-07-31: end-of-session checkpoint
 
 Layout is accepted as good enough for now. The global menu bar is restored,

@@ -923,3 +923,75 @@ describe("project document export / import", () => {
     expect(g().isPlaying).toBe(false);
   });
 })
+
+describe("document name and unsaved changes", () => {
+  it("starts as an unnamed, clean document", () => {
+    g().newDocument();
+    expect(g().documentName).toBe(null);
+    expect(g().isDirty).toBe(false);
+  });
+
+  it("becomes dirty when the music changes", () => {
+    g().newDocument();
+    g().setTempo(133);
+    expect(g().isDirty).toBe(true);
+  });
+
+  it("becomes dirty when a Pattern is edited", () => {
+    g().newDocument();
+    g().paintStep(0, 2, 64, true);
+    expect(g().isDirty).toBe(true);
+  });
+
+  it("stays clean when only transient state moves", () => {
+    g().newDocument();
+    g().setPlaying(true);
+    g().selectVoice(2);
+    g().openEditor("density");
+    expect(g().isDirty).toBe(false);
+  });
+
+  it("is clean again after saving, and remembers the name", () => {
+    g().newDocument();
+    g().setTempo(120);
+    g().markSaved("Piece One.mclone.json");
+    expect(g().isDirty).toBe(false);
+    expect(g().documentName).toBe("Piece One.mclone.json");
+  });
+
+  it("goes dirty again after a change following a save", () => {
+    g().markSaved("x.json");
+    g().setTempo(101);
+    expect(g().isDirty).toBe(true);
+  });
+
+  it("is clean immediately after importing a document", () => {
+    g().setTempo(155);
+    const doc = JSON.parse(JSON.stringify(g().exportDocument()));
+    g().setTempo(90);
+    g().importDocument(doc);
+    expect(g().isDirty).toBe(false);
+  });
+
+  it("adopts the name it was opened under", () => {
+    const doc = JSON.parse(JSON.stringify(g().exportDocument()));
+    g().importDocument(doc, "Opened.mclone.json");
+    expect(g().documentName).toBe("Opened.mclone.json");
+    expect(g().isDirty).toBe(false);
+  });
+
+  it("forgets the name on New", () => {
+    g().markSaved("old.json");
+    g().newDocument();
+    expect(g().documentName).toBe(null);
+    expect(g().isDirty).toBe(false);
+  });
+
+  it("leaves name and dirty state alone when an import fails", () => {
+    g().markSaved("kept.json");
+    g().setTempo(111);
+    g().importDocument({ garbage: true });
+    expect(g().documentName).toBe("kept.json");
+    expect(g().isDirty).toBe(true);
+  });
+})

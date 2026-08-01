@@ -85,6 +85,12 @@ body {
   font-size: 18px;
   opacity: 0.55;
 }
+.app__doc {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
 .app__tag {
   margin: 0;
   font-style: italic;
@@ -1650,7 +1656,13 @@ body.dark-bg { background: #191919; }
   min-height: 100vh;
 }
 .theme-dark .app__header { border-bottom-color: #666; }
-.theme-dark .app__tag { opacity: 0.65; }
+.theme-dark .app__doc {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.app__tag { opacity: 0.65; }
 
 /* Window chrome */
 .theme-dark .uwin,
