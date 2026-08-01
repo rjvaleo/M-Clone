@@ -96,6 +96,22 @@ describe("what a Snapshot captures", () => {
 });
 
 describe("executing a Snapshot", () => {
+  it("applies only controls included by Hold/Do", () => {
+    const { project, positions } = setup();
+    const snap = captureSnapshot(project, positions, arrows, 3, {
+      actives: ["transposition"], patternGroup: false,
+    });
+    snap.actives.transposition = 2;
+    const changed = { ...project, voices: project.voices.map((voice) => ({ ...voice })) };
+    changed.voices[0].playEnabled = !project.voices[0].playEnabled;
+    const restored = applySnapshot(changed, snap);
+    expect(restored.voices[0].playEnabled).toBe(changed.voices[0].playEnabled);
+  });
+  it("accepts a sparse inclusion mask", () => {
+    const { project, positions } = setup();
+    const snap = captureSnapshot(project, positions, arrows, 0, { patternGroup: true });
+    expect(snap.included).toEqual({ patternGroup: true });
+  });
   it("puts Play-Enable and Time Base back", () => {
     const { project, positions } = setup();
     const snap = captureSnapshot(project, positions, arrows, 0);

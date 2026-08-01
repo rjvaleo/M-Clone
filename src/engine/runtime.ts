@@ -152,6 +152,12 @@ export class MRuntime {
     return this.timer !== null;
   }
 
+  /** Seconds since the current transport origin, for musical quantization. */
+  transportElapsedSec(): number {
+    const origin = this.cursors[0]?.originSec;
+    return origin === undefined ? 0 : Math.max(0, this.nowSec() - origin);
+  }
+
   schedulingDiagnostics(): SchedulingDiagnostics {
     return this.scheduling.snapshot();
   }

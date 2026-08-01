@@ -13,7 +13,8 @@
 
 import { useEffect } from "react";
 import { useM } from "../state/store";
-import { QUANTIZE_VALUES, SNAPSHOT_LETTERS } from "../engine/snapshot";
+import { getRuntime } from "./runtime";
+import { QUANTIZE_VALUES, SNAPSHOT_LETTERS, quantizeDelay } from "../engine/snapshot";
 import {
   IconCamera,
   IconEditSnapshot,
@@ -37,29 +38,66 @@ const QUANTIZE_GLYPH: Record<number, string> = {
 
 const SLIDESHOWS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
-/** Not-yet-built controls all get the same honest suffix. */
-const PENDING = " — not yet wired up";
-
 export function SnapshotWindow() {
   const snapshots = useM((s) => s.snapshots);
   const currentSnapshot = useM((s) => s.currentSnapshot);
   const restorePoint = useM((s) => s.restorePoint);
   const quantize = useM((s) => s.snapshotQuantize);
   const arrows = useM((s) => s.arrows);
+  const snapshotMode = useM((s) => s.snapshotMode);
+  const slideshows = useM((s) => s.slideshows);
+  const slideTransport = useM((s) => s.slideshowTransport);
+  const tempo = useM((s) => s.project.tempo);
   const storeSnapshot = useM((s) => s.storeSnapshot);
   const recallSnapshot = useM((s) => s.recallSnapshot);
   const eraseSnapshot = useM((s) => s.eraseSnapshot);
   const restoreFromSnapshot = useM((s) => s.restoreFromSnapshot);
   const setSnapshotQuantize = useM((s) => s.setSnapshotQuantize);
   const setArrow = useM((s) => s.setArrow);
+  const beginHold = useM((s) => s.beginHold);
+  const doHold = useM((s) => s.doHold);
+  const editCurrentSnapshot = useM((s) => s.editCurrentSnapshot);
+  const blinkEverything = useM((s) => s.blinkEverything);
+  const recordSlideshow = useM((s) => s.recordSlideshow);
+  const playSlideshow = useM((s) => s.playSlideshow);
+  const stopSlideshow = useM((s) => s.stopSlideshow);
+  const pauseSlideshow = useM((s) => s.pauseSlideshow);
+  const toggleSlideshowLoop = useM((s) => s.toggleSlideshowLoop);
 
   // "Clicking on a Snapshot location that exists ... or typing the letter of
   // the Snapshot will recall the stored screen control settings."
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey) return;
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (/^[1-9]$/.test(e.key)) {
+        e.preventDefault();
+        const slot = Number(e.key) - 1;
+        const now = performance.now() / 1000;
+        if (e.altKey) useM.getState().recordSlideshow(slot, now);
+        else useM.getState().playSlideshow(
+          slot, now,
+          quantizeDelay(
+            useM.getState().snapshotQuantize,
+            useM.getState().project.tempo,
+            getRuntime().transportElapsedSec(),
+          ),
+        );
+        return;
+      }
+      if (e.key === "0") { e.preventDefault(); useM.getState().stopSlideshow(); return; }
+      if (e.altKey && e.key === "Tab") { e.preventDefault(); useM.getState().pauseSlideshow(); return; }
+      if (e.key === "\\" || e.key === "|") {
+        e.preventDefault(); useM.getState().toggleSlideshowLoop(undefined, e.altKey); return;
+      }
+      if (e.key === "Backspace" && !e.altKey) {
+        e.preventDefault();
+        const state = useM.getState();
+        state.snapshotMode === "idle" ? state.beginHold() : state.doHold();
+        return;
+      }
+      if (e.altKey) return;
       const index = SNAPSHOT_LETTERS.indexOf(e.key.toUpperCase());
       if (index >= 0 && useM.getState().snapshots[index]) {
         e.preventDefault();
@@ -69,6 +107,12 @@ export function SnapshotWindow() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(() => {
+    if (slideTransport.mode !== "playing" || slideTransport.paused) return;
+    const timer = window.setInterval(() => useM.getState().advanceSlideshow(), 16);
+    return () => window.clearInterval(timer);
+  }, [slideTransport.mode, slideTransport.paused]);
 
   const snapArrow = arrows.snapshot ?? { on: false, dir: "right" };
   const nextQuantize =
@@ -83,9 +127,11 @@ export function SnapshotWindow() {
       <button type="button" className="usnapwin__holddo"
         title={
           "Hold/Do (Backspace) — collect screen settings, then click again to " +
-          "apply them together, or click a Snapshot to store them" + PENDING
+          "apply them together, or click a Snapshot to store them"
         }
-        aria-label="Hold/Do">
+        aria-label="Hold/Do"
+        aria-pressed={snapshotMode !== "idle"}
+        onClick={() => snapshotMode === "idle" ? beginHold() : doHold()}>
         <IconCamera size={30} />
         <IconSlides size={26} />
       </button>
@@ -114,8 +160,8 @@ export function SnapshotWindow() {
         </button>
 
         <button type="button" className="usnapwin__slidebtn"
-          title={"Slideshow Stop (0) — stops Slideshow recording or playback" + PENDING}
-          aria-label="Slideshow Stop">
+          title="Slideshow Stop (0) — stops Slideshow recording or playback"
+          aria-label="Slideshow Stop" onClick={() => stopSlideshow()}>
           <IconSlideStop size={18} />
         </button>
       </div>
@@ -140,7 +186,7 @@ export function SnapshotWindow() {
                 }
                 onClick={(e) => {
                   if (e.altKey) eraseSnapshot(i);
-                  else if (!stored || e.shiftKey) storeSnapshot(i);
+                  else if (snapshotMode !== "idle" || !stored || e.shiftKey) storeSnapshot(i);
                   else recallSnapshot(i);
                 }}>
                 {stored && (
@@ -158,27 +204,42 @@ export function SnapshotWindow() {
 
         <div className="usnapwin__shows">
           <button type="button" className="usnapwin__slidebtn"
-            title={"Slideshow Pause (Option-Tab) — pause recording or playback without stopping the music" + PENDING}
-            aria-label="Slideshow Pause">
+            title="Slideshow Pause (Option-Tab) — pause recording or playback without stopping the music"
+            aria-label="Slideshow Pause" aria-pressed={slideTransport.paused}
+            onClick={() => pauseSlideshow()}>
             <IconSlidePause size={18} />
           </button>
           <button type="button" className="usnapwin__slidebtn"
-            title={"Slideshow Loop (| or \\) — add a loop point to a recording or playing Slideshow" + PENDING}
-            aria-label="Slideshow Loop">
+            title="Slideshow Loop (| or \\) — add a loop point; option-click removes it"
+            aria-label="Slideshow Loop"
+            onClick={(event) => toggleSlideshowLoop(undefined, event.altKey)}>
             <IconSlideLoop size={18} />
           </button>
-          {SLIDESHOWS.map((n) => (
-            <button key={n} type="button" className="usnapwin__show"
-              title={`Slideshow ${n} — click or press ${n} to play · option-click to record${PENDING}`}
-              aria-label={`Slideshow ${n} (empty)`} />
-          ))}
+          {SLIDESHOWS.map((n) => {
+            const slot = n - 1;
+            const stored = slideshows[slot].events.length > 0;
+            const active = slideTransport.slot === slot && slideTransport.mode !== "idle";
+            return <button key={n} type="button"
+              className={"usnapwin__show" + (stored ? " usnapwin__show--full" : "") + (active ? " usnapwin__show--active" : "")}
+              title={`Slideshow ${n} — click or press ${n} to play · option-click to record`}
+              aria-label={`Slideshow ${n}${stored ? "" : " (empty)"}`}
+              onClick={(event) => {
+                const now = performance.now() / 1000;
+                if (event.altKey) recordSlideshow(slot, now);
+                else playSlideshow(
+                  slot, now,
+                  quantizeDelay(quantize, tempo, getRuntime().transportElapsedSec()),
+                );
+              }} />;
+          })}
         </div>
       </div>
 
       <div className="usnapwin__foot">
         <button type="button" className="usnapwin__tool"
-          title={"Edit Snapshot — blink the controls stored in the current Snapshot so they can be changed" + PENDING}
-          aria-label="Edit Snapshot">
+          disabled={currentSnapshot === null}
+          title="Edit Snapshot — blink the controls stored in the current Snapshot so they can be changed"
+          aria-label="Edit Snapshot" onClick={editCurrentSnapshot}>
           <IconEditSnapshot size={26} />
         </button>
         <button type="button" className="usnapwin__tool"
@@ -195,8 +256,8 @@ export function SnapshotWindow() {
       </div>
 
       <button type="button" className="usnapwin__globe"
-        title={"Blink Everything — blink every control that can go into a Snapshot, then click a location to store them all" + PENDING}
-        aria-label="Blink Everything">
+        title="Blink Everything — select every control that can go into a Snapshot, then click a location to store them all"
+        aria-label="Blink Everything" onClick={blinkEverything}>
         <IconGlobe size={30} />
       </button>
     </div>

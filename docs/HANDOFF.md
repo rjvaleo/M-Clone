@@ -37,7 +37,7 @@ The last committed baseline includes `82b8b94` (multi-session window rebuild),
 phases 1–2 and their documentation may be present as working-tree changes;
 inspect `git status` rather than assuming a clean tree.
 
-**Project save/load is done** — step 1 of `NEXT_STEPS.md`. `ProjectDocumentV1`
+**Project save/load is done** — step 1 of `NEXT_STEPS.md`. `ProjectDocumentV2`
 (`src/engine/document.ts`) carries the Project and Pattern material (Original
 and Scrambled), Variable and Cyclic Positions, Snapshots, Conducting Arrows and
 configuration. Workspace geometry, zoom, skin and palette stay local
@@ -193,7 +193,7 @@ Two smaller carry-overs from save/load:
 
 - Save uses a browser download, not a real file-system picker, so "Save" always
   re-downloads rather than overwriting in place.
-- Any new subsystem must be added to `ProjectDocumentV1` (or a versioned
+- Any new subsystem must be added to `ProjectDocumentV2` (or a versioned
   successor) in the same change.
 
 Do not start another broad fidelity pass before the technical-completion

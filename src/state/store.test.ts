@@ -51,6 +51,13 @@ beforeEach(() => {
     midiViewNextId: 0,
     options: { ...DEFAULT_OPTIONS },
     editorRegion: null,
+    snapshotMode: "idle",
+    snapshotDraft: null,
+    slideshows: Array.from({ length: 9 }, () => ({ events: [], loopAtSec: null })),
+    slideshowTransport: {
+      mode: "idle", slot: null, waiting: false, paused: false,
+      startedAtSec: 0, pausedAtSec: null, cursor: 0,
+    },
   });
 });
 
@@ -617,6 +624,213 @@ describe("snapshots", () => {
   });
 });
 
+describe("Hold/Do and Edit Snapshot", () => {
+  it("holds a Variable Position change until Do applies it", () => {
+    const before = g().positions.transposition.active;
+    g().beginHold();
+    g().activatePosition("transposition", 3);
+    expect(g().positions.transposition.active).toBe(before);
+    expect(g().snapshotDraft?.actives.transposition).toBe(3);
+    g().doHold();
+    expect(g().positions.transposition.active).toBe(3);
+    expect(g().snapshotMode).toBe("idle");
+  });
+
+  it("stores only controls selected during Hold", () => {
+    g().beginHold();
+    g().activatePosition("transposition", 2);
+    g().storeSnapshot(0);
+    g().activatePosition("density", 4);
+    g().recallSnapshot(0);
+    expect(g().positions.transposition.active).toBe(2);
+    expect(g().positions.density.active).toBe(4);
+  });
+
+  it("Edit Snapshot toggles membership and can copy to another location", () => {
+    g().blinkEverything();
+    g().storeSnapshot(0);
+    g().editCurrentSnapshot();
+    g().activatePosition("density", 2); // selected control: remove it
+    g().storeSnapshot(1);
+    expect(g().snapshots[1]?.included?.actives).not.toContain("density");
+    expect(g().snapshots[0]).not.toBe(g().snapshots[1]);
+  });
+
+  it("Hold/Do cancels Edit Snapshot without changing the stored Snapshot", () => {
+    g().blinkEverything();
+    g().storeSnapshot(0);
+    const before = g().snapshots[0];
+    g().editCurrentSnapshot();
+    g().activatePosition("density", 2);
+    g().doHold();
+    expect(g().snapshotMode).toBe("idle");
+    expect(g().snapshots[0]).toBe(before);
+  });
+
+  it("holds and edits Play Enable, Output Length, arrows, and Pattern Group", () => {
+    const enabled = g().project.voices[0].playEnabled;
+    const length = g().project.patterns[0].outputLength;
+    g().beginHold();
+    g().toggleVoiceEnabled(0);
+    g().setVoiceParam(0, "timeBaseNumerator", 3);
+    g().setVoiceParam(0, "timeBaseDenominator", 16);
+    g().setOutputLength(0, length - 1);
+    g().setArrow("density", { on: true, dir: "left" });
+    g().setPatternGroup(4);
+    expect(g().project.voices[0].playEnabled).toBe(enabled);
+    expect(g().project.patterns[0].outputLength).toBe(length);
+    expect(g().project.voices[0].timeBaseNumerator).toBe(1);
+    expect(g().project.voices[0].timeBaseDenominator).toBe(8);
+    g().doHold();
+    expect(g().project.voices[0].playEnabled).toBe(!enabled);
+    expect(g().project.patterns[0].outputLength).toBe(length - 1);
+    expect(g().project.voices[0].timeBaseNumerator).toBe(3);
+    expect(g().project.voices[0].timeBaseDenominator).toBe(16);
+    expect(g().arrows.density).toEqual({ on: true, dir: "left" });
+    expect(g().patternGroup).toBe(4);
+
+    g().blinkEverything();
+    g().storeSnapshot(0);
+    g().editCurrentSnapshot();
+    g().toggleVoiceEnabled(0);
+    g().setVoiceParam(0, "timeBaseDenominator", 4);
+    g().setOutputLength(0, length);
+    g().setArrow("density", { on: false, dir: "right" });
+    g().setPatternGroup(2);
+    expect(g().snapshotDraft?.included?.playEnabled).not.toContain(0);
+    expect(g().snapshotDraft?.included?.timeBase).not.toContain(0);
+    expect(g().snapshotDraft?.included?.outputLength).not.toContain(0);
+    expect(g().snapshotDraft?.included?.arrows).not.toContain("density");
+    expect(g().snapshotDraft?.included?.patternGroup).toBe(false);
+  });
+
+  it("ignores Do and Edit when no draft/current Snapshot exists", () => {
+    g().doHold();
+    g().editCurrentSnapshot();
+    expect(g().snapshotMode).toBe("idle");
+  });
+
+  it("turns a legacy whole-screen Snapshot into an editable membership list", () => {
+    g().storeSnapshot(0);
+    expect(g().snapshots[0]?.included).toBeUndefined();
+    g().editCurrentSnapshot();
+    expect(g().snapshotDraft?.included?.actives).toHaveLength(6);
+  });
+
+  it("Edit Snapshot can add a control that was not previously included", () => {
+    g().beginHold();
+    g().activatePosition("transposition", 2);
+    g().storeSnapshot(0);
+    g().editCurrentSnapshot();
+    g().activatePosition("density", 3);
+    expect(g().snapshotDraft?.included?.actives).toContain("density");
+  });
+
+  it("normalizes sparse partial Snapshots before editing", () => {
+    g().beginHold();
+    g().activatePosition("transposition", 2);
+    g().storeSnapshot(0);
+    g().snapshots[0]!.included = {};
+    g().editCurrentSnapshot();
+    expect(g().snapshotDraft?.included).toMatchObject({
+      arrows: [], playEnabled: [], timeBase: [], outputLength: [], patternGroup: false,
+    });
+  });
+});
+
+describe("Slideshows", () => {
+  it("records executed Snapshots with Record Wait timing", () => {
+    g().storeSnapshot(0);
+    g().storeSnapshot(1);
+    g().recordSlideshow(2, 10);
+    g().recallSnapshot(0, 14);
+    g().recallSnapshot(1, 15.5);
+    g().stopSlideshow(16);
+    expect(g().slideshows[2].events).toEqual([
+      { atSec: 0, action: { type: "snapshot", index: 0 } },
+      { atSec: 1.5, action: { type: "snapshot", index: 1 } },
+    ]);
+  });
+
+  it("plays recorded actions and stops at the end", () => {
+    g().storeSnapshot(0);
+    g().activatePosition("transposition", 3);
+    g().storeSnapshot(1);
+    useM.setState({
+      isPlaying: true,
+      slideshows: [{
+        events: [{ atSec: 0, action: { type: "snapshot", index: 1 } }],
+        loopAtSec: null,
+      }, ...g().slideshows.slice(1)],
+    });
+    g().playSlideshow(0, 20, 0);
+    g().advanceSlideshow(20);
+    expect(g().positions.transposition.active).toBe(3);
+    expect(g().slideshowTransport.mode).toBe("idle");
+  });
+
+  it("executes a recorded Position action", () => {
+    useM.setState({
+      isPlaying: true,
+      slideshows: [{ events: [{ atSec: 0, action: { type: "position", variable: "density", position: 3 } }], loopAtSec: null }, ...g().slideshows.slice(1)],
+    });
+    g().playSlideshow(0, 2);
+    g().advanceSlideshow(2);
+    expect(g().positions.density.active).toBe(3);
+  });
+
+  it("records Position changes and supports transport controls", () => {
+    g().recordSlideshow(0, 0);
+    g().activatePosition("density", 2);
+    expect(g().slideshows[0].events[0].action).toEqual({
+      type: "position", variable: "density", position: 2,
+    });
+    g().pauseSlideshow(1);
+    expect(g().slideshowTransport.paused).toBe(true);
+    g().pauseSlideshow(2);
+    expect(g().slideshowTransport.paused).toBe(false);
+    g().toggleSlideshowLoop(3);
+    expect(g().slideshows[0].loopAtSec).not.toBe(null);
+    expect(g().slideshowTransport.mode).toBe("idle");
+  });
+
+  it("adds and removes a playback loop, then stops playback", () => {
+    useM.setState({
+      isPlaying: true,
+      slideshows: [{ events: [{ atSec: 0, action: { type: "position", variable: "density", position: 1 } }], loopAtSec: null }, ...g().slideshows.slice(1)],
+    });
+    g().playSlideshow(0, 10, 0);
+    g().toggleSlideshowLoop(11);
+    expect(g().slideshows[0].loopAtSec).toBe(1);
+    g().toggleSlideshowLoop(11, true);
+    expect(g().slideshows[0].loopAtSec).toBe(null);
+    g().stopSlideshow(12);
+    expect(g().slideshowTransport.mode).toBe("idle");
+  });
+
+  it("ignores invalid/empty slideshow commands and idle advancement", () => {
+    g().recordSlideshow(-1, 0);
+    g().recordSlideshow(9, 0);
+    g().playSlideshow(0, 0);
+    g().playSlideshow(99, 0);
+    g().toggleSlideshowLoop(0);
+    g().advanceSlideshow(0);
+    expect(g().slideshowTransport.mode).toBe("idle");
+  });
+
+  it("pauses with music Stop and resumes with Start", () => {
+    useM.setState({
+      isPlaying: true,
+      slideshows: [{ events: [{ atSec: 5, action: { type: "snapshot", index: 0 } }], loopAtSec: null }, ...g().slideshows.slice(1)],
+    });
+    g().playSlideshow(0, 0, 0);
+    g().setPlaying(false);
+    expect(g().slideshowTransport.paused).toBe(true);
+    g().setPlaying(true);
+    expect(g().slideshowTransport.paused).toBe(false);
+  });
+});
+
 describe("Restore From Snapshot", () => {
   // "This button undoes the changes brought about by the most recently
   //  executed Snapshot."
@@ -823,7 +1037,7 @@ describe("project document export / import", () => {
     g().activatePosition("transposition", 2);
     g().setPatternGroup(4);
     const doc = g().exportDocument();
-    expect(doc.version).toBe(1);
+    expect(doc.version).toBe(2);
     expect(doc.project.tempo).toBe(137);
     expect(doc.positions.transposition.active).toBe(2);
     expect(doc.patternGroup).toBe(4);

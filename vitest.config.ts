@@ -6,7 +6,7 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     coverage: {
       provider: "v8",
-      reporter: ["text"],
+      reporter: ["text", "json"],
       // Keep coverage temp/report files off the mounted project folder.
       reportsDirectory: "/tmp/m-clone-coverage",
       // The engine logic is pure and must stay fully covered. Browser-only

@@ -15,7 +15,7 @@
 
 ![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
 ![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25-brightgreen)
-![Tests](https://img.shields.io/badge/tests-592_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-625_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
@@ -170,7 +170,9 @@ Working today:
 - **Complete channel theming:** four-voice artwork in Patterns, Variables,
   Cyclic, Midi, Pattern Editor, and auxiliary editors follows the global preset
   or custom palette rather than falling back to black and white.
-- **Snapshots:** 26 A–Z locations, quantized recall, erase, and one-step restore.
+- **Snapshots and Slideshows:** 26 partial A–Z locations with Hold/Do,
+  Edit/copy, Blink Everything, recall/erase/restore, plus nine timed
+  record/play/pause/loop/stop Slideshows and version-2 persistence.
 - **Manual-faithful Velocity Range:** per-Voice shaded low/high range bar drawn
   directly on the axis line — **click-drag on the line to draw the range** —
   plus editable endpoint numericals. Accent 0 is silent; levels 1–4 span the
