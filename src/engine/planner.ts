@@ -4,8 +4,15 @@
 
 import type { ProjectState, NoteOrderCursor } from "./types";
 import { Rng } from "./rng";
-import { stepDurationSeconds, nextStepIndex, gate } from "./transform";
-import { snapToScale, clampMidi } from "./music";
+import {
+  stepDurationSeconds,
+  nextMixedStepIndex,
+  gate,
+  velocityForAccent,
+} from "./transform";
+import { snapToScale, snapToChord, diatonicTranspose, clampMidi } from "./music";
+import { distortClockSeconds } from "./timemap";
+import { pickCyclicLevel } from "./cyclic";
 
 export type PlannedNote = {
   voice: number;
@@ -18,15 +25,55 @@ export type PlannedNote = {
 
 export type VoiceCursor = {
   order: NoteOrderCursor;
+  /** Real time of the next event — what actually gets scheduled. */
   nextTimeSec: number;
+  /** Absolute time this voice's clock started, the origin of its time map. */
+  originSec: number;
+  /**
+   * Undistorted clock time elapsed since `originSec`. Steps advance this
+   * evenly; Time Distortion decides where that lands in real time.
+   */
+  clockSec: number;
+  cyclicPos: number;
 };
+
+function cyclicMultiplier(
+  state: ProjectState,
+  kind: "legato" | "rhythm",
+  voice: number,
+  position: number,
+  rng: Rng,
+): number {
+  const cycle = state.cyclic[kind][voice];
+  const length = state.cyclicLengths[kind][voice];
+  const level = pickCyclicLevel(cycle[position % length], rng);
+  const value = state.cyclicValues[kind][level];
+  return kind === "legato" ? value / 100 : value;
+}
+
+function cyclicLevel(
+  state: ProjectState,
+  kind: "accent" | "legato" | "rhythm",
+  voice: number,
+  position: number,
+  rng: Rng,
+): number {
+  const cycle = state.cyclic[kind][voice];
+  const length = state.cyclicLengths[kind][voice];
+  return pickCyclicLevel(cycle[position % length], rng);
+}
 
 /** One fresh cursor per voice, all starting at `startSec`. */
 export function makeCursors(state: ProjectState, startSec: number): VoiceCursor[] {
-  return state.voices.map(() => ({
-    order: { pos: 0, last: -1 },
-    nextTimeSec: startSec,
-  }));
+  return state.voices.map(() => {
+    return {
+      order: { pos: 0, last: -1, bval: 0.5 },
+      nextTimeSec: startSec,
+      originSec: startSec,
+      clockSec: 0,
+      cyclicPos: 0,
+    };
+  });
 }
 
 /**
@@ -45,6 +92,16 @@ export function planWindow(
   const notes: PlannedNote[] = [];
   const nextCursors: VoiceCursor[] = [];
 
+  // Effective per-voice transposition. Second-Order Transpose stacks the
+  // voices cumulatively (a harmonizer feeding a harmonizer), so each voice
+  // adds the transpositions of the voices above it — building implied chords.
+  const baseTrans = state.voices.map((v) => v.transposition);
+  let effTrans = baseTrans;
+  if (state.secondOrderTranspose) {
+    let acc = 0;
+    effTrans = baseTrans.map((t) => (acc += t));
+  }
+
   state.voices.forEach((v, vi) => {
     const cursor = cursors[vi];
     const pat = state.patterns[v.patternIndex];
@@ -56,37 +113,69 @@ export function planWindow(
     );
 
     let order = cursor.order;
-    let t = cursor.nextTimeSec;
+    // Steps advance clock time evenly; the Time Distortion Map decides where
+    // that lands in real time. With a neutral map the two are identical.
+    const realAt = (clock: number) =>
+      cursor.originSec + distortClockSeconds(v.timeDistort, state.tempo, clock);
+
+    let clockSec = cursor.clockSec;
+    let t = realAt(clockSec);
+    let cyclicPos = cursor.cyclicPos;
 
     if (outLen <= 0) {
       // Nothing to play; keep the clock from spinning forever.
-      t = Math.max(t, windowEnd);
+      clockSec += Math.max(0, windowEnd - t);
+      t = realAt(clockSec);
     } else {
       while (t < windowEnd) {
+        const velocity = velocityForAccent(
+          v.velocityRange,
+          cyclicLevel(state, "accent", vi, cyclicPos, rng),
+        );
+        const legato = cyclicMultiplier(state, "legato", vi, cyclicPos, rng);
+        const rhythm = cyclicMultiplier(state, "rhythm", vi, cyclicPos, rng);
         if (v.playEnabled) {
-          const r = nextStepIndex(v.noteOrder, order, outLen, rng);
+          const r = nextMixedStepIndex(v.noteOrderMix, order, outLen, rng);
           order = r.cursor;
-          const step = pat.steps[r.index];
-          if (step.pitches.length > 0 && gate(v.density, rng)) {
+          const source =
+            r.source === "cyclic" ? pat.scrambledSteps : pat.steps;
+          const step = source[r.index];
+          if (velocity > 0 && step.pitches.length > 0 && gate(v.density, rng)) {
             for (const p of step.pitches) {
-              let n = p + v.transposition;
+              let n: number;
+              if (state.diatonicTranspose) {
+                n = diatonicTranspose(p, state.root, state.scale, effTrans[vi]);
+              } else {
+                n = p + effTrans[vi];
+              }
               if (state.scaleSnap) n = snapToScale(n, state.root, state.scale);
-              notes.push({
-                voice: vi,
-                note: clampMidi(n),
-                velocity: clampMidi(v.velocity),
-                channel: v.channel,
-                startSec: t,
-                durationSec: stepDur * v.legato,
-              });
+              if (state.chordTones) n = snapToChord(n, state.root, state.scale);
+              for (const channel of v.outputChannels) {
+                notes.push({
+                  voice: vi,
+                  note: clampMidi(n),
+                  velocity,
+                  channel,
+                  startSec: t,
+                  durationSec: stepDur * v.legato * legato,
+                });
+              }
             }
           }
         }
-        t += stepDur;
+        clockSec += stepDur * rhythm;
+        t = realAt(clockSec);
+        cyclicPos = (cyclicPos + 1) % 16;
       }
     }
 
-    nextCursors.push({ order, nextTimeSec: t });
+    nextCursors.push({
+      order,
+      nextTimeSec: t,
+      originSec: cursor.originSec,
+      clockSec,
+      cyclicPos,
+    });
   });
 
   return { notes, cursors: nextCursors };

@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { midiToName, snapToScale, clampMidi, SCALES, NOTE_NAMES } from "./music";
+import {
+  midiToName,
+  snapToScale,
+  diatonicTranspose,
+  snapToChord,
+  clampMidi,
+  SCALES,
+  NOTE_NAMES,
+} from "./music";
 
 describe("midiToName", () => {
   it("names middle C as C4", () => {
@@ -51,6 +59,50 @@ describe("snapToScale", () => {
       const pc = ((s % 12) + 12) % 12;
       expect(SCALES.majorPentatonic).toContain(pc);
     }
+  });
+});
+
+describe("diatonicTranspose", () => {
+  it("moves by scale steps in C major", () => {
+    expect(diatonicTranspose(60, 0, "major", 2)).toBe(64); // C -> E (a third)
+    expect(diatonicTranspose(60, 0, "major", 7)).toBe(72); // up an octave
+    expect(diatonicTranspose(60, 0, "major", -1)).toBe(59); // C -> B below
+  });
+  it("snaps an out-of-scale note before stepping", () => {
+    // C# snaps to C, then +1 step -> D
+    expect(diatonicTranspose(61, 0, "major", 1)).toBe(62);
+  });
+  it("treats steps as semitones in chromatic", () => {
+    expect(diatonicTranspose(60, 0, "chromatic", 3)).toBe(63);
+  });
+  it("stays in the scale for every step", () => {
+    for (let s = -8; s <= 8; s++) {
+      const n = diatonicTranspose(67, 0, "major", s);
+      expect(SCALES.major).toContain(((n % 12) + 12) % 12);
+    }
+  });
+  it("respects a non-zero root", () => {
+    // A minor: A(69) +2 steps -> C(72)
+    expect(diatonicTranspose(69, 9, "minor", 2)).toBe(72);
+  });
+});
+
+describe("snapToChord", () => {
+  it("leaves chord tones unchanged (C major triad)", () => {
+    expect(snapToChord(60, 0, "major")).toBe(60); // C
+    expect(snapToChord(64, 0, "major")).toBe(64); // E
+    expect(snapToChord(67, 0, "major")).toBe(67); // G
+  });
+  it("pulls a non-chord tone to the nearest chord tone", () => {
+    expect(snapToChord(62, 0, "major")).toBe(60); // D -> C
+    expect(snapToChord(65, 0, "major")).toBe(64); // F -> E
+  });
+  it("works in chromatic via a major triad fallback", () => {
+    expect(snapToChord(62, 0, "chromatic")).toBe(60);
+    expect(snapToChord(67, 0, "chromatic")).toBe(67);
+  });
+  it("respects a non-zero root (A minor triad)", () => {
+    expect(snapToChord(69, 9, "minor")).toBe(69); // A is the tonic
   });
 });
 

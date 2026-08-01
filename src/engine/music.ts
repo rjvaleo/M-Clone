@@ -65,6 +65,57 @@ export function snapToScale(note: number, root: number, scale: ScaleName): numbe
   return note + delta;
 }
 
+/**
+ * Diatonic (scale-aware) transposition: move `steps` scale degrees, folding
+ * through the key so a "third" bends major/minor to stay in the scale. In
+ * chromatic, steps are plain semitones.
+ */
+export function diatonicTranspose(
+  note: number,
+  root: number,
+  scale: ScaleName,
+  steps: number,
+): number {
+  const degrees = SCALES[scale];
+  if (degrees.length === 12) return note + steps;
+  const rootPc = ((root % 12) + 12) % 12;
+  const snapped = snapToScale(note, root, scale);
+  const relPc = ((snapped - rootPc) % 12 + 12) % 12;
+  const di = degrees.indexOf(relPc);
+  const len = degrees.length;
+  const total = di + steps;
+  const octave = Math.floor(total / len);
+  const wrapped = ((total % len) + len) % len;
+  return snapped - relPc + degrees[wrapped] + 12 * octave;
+}
+
+/**
+ * Chord-tone targeting: snap a note to the nearest tone of the key's tonic
+ * triad (1st/3rd/5th scale degrees; a major triad in chromatic). A simple
+ * "lean into the chord" guardrail — progression-aware chords come later.
+ */
+export function snapToChord(note: number, root: number, scale: ScaleName): number {
+  const degrees = SCALES[scale];
+  const chord =
+    degrees.length === 12 ? [0, 4, 7] : [degrees[0], degrees[2], degrees[4]];
+  const rootPc = ((root % 12) + 12) % 12;
+  const pc = ((note % 12) + 12) % 12;
+  const rel = ((pc - rootPc) + 12) % 12;
+
+  let best = chord[0];
+  let bestDist = 99;
+  for (const d of chord) {
+    const dist = Math.min(Math.abs(rel - d), 12 - Math.abs(rel - d));
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = d;
+    }
+  }
+  const targetPc = (rootPc + best) % 12;
+  const delta = (((targetPc - pc + 6) % 12) + 12) % 12 - 6;
+  return note + delta;
+}
+
 export function clampMidi(note: number): number {
   return Math.max(0, Math.min(127, Math.round(note)));
 }

@@ -22,3 +22,10 @@ M-Clone-preview.html
 Thumbs.db
 .idea/
 .vscode/
+
+# dev launcher runtime state
+.mclone-dev.log
+.mclone-dev.pid
+
+# personal editor/agent settings (launch.json is shared)
+.claude/settings.local.json

@@ -1,0 +1,204 @@
+# M-Clone — Project Status
+
+## 2026-07-31: end-of-session checkpoint
+
+Layout is accepted as good enough for now. The global menu bar is restored,
+the footer is removed, all fifteen panels share effective 10px/16px title
+chrome and 8px primary typography, Cyclic controls are enlarged without larger
+fonts, Pattern notes retain exact grid cadence at 150%, Time Distortion is
+content-fit, and Cyclic loop markers align exactly with their columns.
+Technical completion now takes priority; see `NEXT_STEPS.md`.
+
+## 2026-07-31: documentation alignment audit
+
+Every Markdown file in the repository was checked against the current source,
+tests, UI labels, reference-directory inventory, and known disabled controls.
+Stale pre-implementation descriptions were converted to historical/implemented
+state, the backlog was rebuilt from current gaps, and local documentation links
+were verified. `STATUS.md` is authoritative for shipped scope; `TODO.md` is the
+open backlog; implementation-plan documents retain design rationale.
+
+## 2026-07-31: visual audit and channel themes
+
+Every reference has been compared with the implementation; deferred deltas are
+in `VISUAL_AUDIT_AND_THEMING.md`. Six extensible four-Voice presets and a
+custom palette chooser are implemented. Global and module context-menu
+ownership follows the current interaction model. Further fidelity work is
+intentionally deferred until technical completion.
+
+## 2026-07-31: dedicated Cyclic Editor
+
+The editor now has a right-click Classic/Modern view toggle. Modern view keeps
+Rhythm, Legato, and Accent open together in three columns, including all six
+Positions, five level values, and four Voice grids for each variable.
+
+Six Positions per variable, four themed 5x16 Voice grids, independent cycle
+lengths, global Legato/Rhythm value tables, and planner integration are now
+implemented. Vertical drag ranges make seeded random level choices and legacy
+numeric steps migrate without changing their RNG sequence. See
+`CYCLIC_EDITOR.md`.
+
+The editor was subsequently rebuilt against `reference/cyclic editor.png` with
+the original left-grid/right-control composition and reference Rhythm/Legato
+defaults. Its current Classic window is 275×222 logical pixels; controls are
+25% larger than the earlier normalization without larger rendered fonts.
+
+## 2026-07-31: Midi View
+
+A movable four-lane tracker now records actual planned Note On/Off output with
+Voice, channel, note name/number, velocity, timestamp, and duration. It follows
+the global channel palette and maintains a bounded chronological history. See
+`MIDI_VIEW.md`.
+
+The UI is the initial delivered compact event tracker: simultaneous events
+align across the four fixed Voice columns, Follow pins the scrollable history
+to new rows, and Clear resets it. The later animated playhead and Pattern
+position/length experiment has been removed.
+
+**As of:** 2026-07-31 · **Working tree:** substantial uncommitted implementation
+**Measured against:** [`M-Clone_Build_Plan.md`](./M-Clone_Build_Plan.md)
+
+Legend: ✅ done · 🟡 partial · ⬜ not started
+
+## Snapshot
+
+**The generative engine is now feature-complete** and fully tested: the
+transform chain, the "alive" randomness (memory + 1/f Brownian), and the whole
+harmonic engine (per-voice + diatonic + second-order transposition, key/scale
+snap, chord-tone targeting). The movable classic interface is wired for the
+implemented engine, and conducting core is complete. Remaining work is the
+unfinished classic subsystems, persistence/I/O, and instruments. Layout work
+is paused by decision.
+
+| Metric | State |
+| --- | --- |
+| Unit tests | **459 passing** (22 files) |
+| Coverage (engine + state) | **100%** lines / branches / functions |
+| Typecheck (`tsc --noEmit`) | Clean |
+| Production build | Succeeds (`vite build`, `build:single`) |
+| Views | Unified movable-window canvas · light/dark skins · Classic/Modern Cyclic Editor |
+| Audio out | Built-in WebAudio synth ✅ · Web MIDI ✅ |
+
+## Roadmap phases
+
+| Phase | Scope | Status |
+| --- | --- | --- |
+| **P0 Foundations** | Scaffold, engine skeleton, Web Audio lookahead scheduler, dual sinks, store | ✅ (theme architecture 🟡) |
+| **P1 Sound & Patterns** | Pattern model, editor, transport, tempo, time base, first sound | ✅ |
+| **P2 Variables core** | Note Order, Transposition, Density, manual-faithful Velocity Range + positions + editors + harmonic engine | ✅ |
+| **P3 Cyclic + Midi + rest** | Cyclic editor, Midi window, Orchestration, Time Distortion, Phrasing, Pattern Group, Sound Choice | 🟡 (Cyclic, Midi View, Orchestration, Time Distortion, Pattern Group ✅; Phrasing ⬜; Sound Choice intentionally skipped) |
+| **P4 Conducting + Snapshots** | Conducting grid, arrows, Robot, snapshots, slideshows | 🟡 (Snapshots + conducting core ✅; slideshows ⬜) |
+| **P5 All-in-one I/O** | Record-to-tracks, WAM rack + sampler, drum routing, MIDI import/export, save/load, Input Control, Mouse Advance | ⬜ |
+| **P6 Modern theme + instruments** | Modern layouts, deeper instruments, pattern-manipulation upgrades | 🟡 (Modern Cyclic Editor + color themes ✅; broader Modern layout ⬜) |
+| **Later — Native** | Tauri build, VST/AU hosting, `.M` import | ⬜ |
+
+## The generative engine (the soul) — ✅ complete
+
+| Element | Status | Notes |
+| --- | --- | --- |
+| Per-step transform chain | ✅ | `planner.ts`, pure + tested |
+| Four-by-six model (4 voices × 6 positions) | ✅ | voices in engine; 6 positions in `variables.ts` |
+| Note Order probability mix | ✅ | Original / stored Cyclic Random / live Utterly Random; two continuously positioned, edge-contained boundaries; animation-frame-batched dragging; per Voice and a–f Position |
+| Velocity Range / Accent mapping | ✅ | draggable low/high range per Voice and a–f Position; endpoint numericals; Accent 0 silent, levels 1–4 interpolate low→high |
+| Cyclic Random | ✅ | Pattern-owned stored copy; ReScramble, Original → Scrambled, and Swap Scrambled and Original work over Patterns or Regions |
+| Utterly Random memory | ✅ | chooses anew during playback and avoids immediate repeats via `rng.pickIndexAvoiding` |
+| 1/f Brownian primitive | ✅ | `BrownianWalk` remains available for future generative contours; it is not one of M's three Note Order regions |
+| Per-voice Transposition (multi-voice harmony) | ✅ | the "notes you never played" mechanism |
+| Second-Order Transpose | ✅ | cumulative voice stacking in `planner.ts` |
+| Key / scale context + snap-to-key | ✅ | `music.snapToScale`, `scaleSnap` |
+| Diatonic (scale-aware) transposition | ✅ | `music.diatonicTranspose` (steps fold into the key) |
+| Chord-tone targeting | ✅ | `music.snapToChord` (tonic-triad snap; progression-aware later) |
+| Deterministic seed / reproducible performance | ✅ | `project.seed`, seeded `Rng` |
+
+> Note on interpretation: **Second-Order Transpose** stacks each voice's
+> transposition cumulatively onto the voices above it (a harmonizer feeding a
+> harmonizer). **Chord-tone targeting** currently snaps to the key's tonic triad;
+> progression-aware chords are a future upgrade.
+
+## Architecture (three layers)
+
+| Layer | Status | Notes |
+| --- | --- | --- |
+| A — Generator (classic M) | ✅ | engine + store |
+| B — Recorder (record-to-tracks / Movie) | ⬜ | |
+| C — Instrument rack (WAM + sampler + drum routing) | ⬜ | built-in synth only so far |
+| Engine (framework-agnostic TS) | ✅ | `src/engine/*` |
+| Control catalog + bindings (shared) | 🟡 | store is shared; formal abstract control catalog ⬜ |
+| Theme layer (per-view layout + renderers) | 🟡 | light + dark themes via a scoped `.theme-dark` skin over one layout; a formal per-theme layout provider is still 🟡 |
+| Web Audio lookahead scheduler | ✅ | `runtime.ts` |
+| Output sinks (MIDI + synth + WAM) | 🟡 | MIDI ✅, synth ✅, WAM ⬜ |
+| Document format (JSON) + save/load | ⬜ | in-memory only |
+| Standard MIDI File import/export | ⬜ | |
+| Old `.M` import | ⬜ | awaiting sample files |
+| VST/AU hosting | ⬜ | native phase |
+
+## Screen inventory
+
+| Window | Status | Wired today |
+| --- | --- | --- |
+| **Patterns** | ✅ | play-enable, voice select, output length, time base (num/den), 16-step toggles; group a–f tabs 🟡 (visual) |
+| **Conducting / "Untitled"** | ✅ | Start/Stop/Pause/Sync, six-by-six Grid, Position + Tempo conducting, Tempo Range, Sync Ratio, bounded Robot + Time Base; Movie/Sequence honestly disabled pending their subsystems |
+| **Variables** | 🟡 | 6-position activation and editors for Note Order, Transposition, Density, Velocity Range, Orchestration, and Time Distortion ✅; Pattern Group activation/conducting ✅; Phrasing ⬜; Sound Choice skipped |
+| **Cyclic Variables** | ✅ | five-level Accent/Legato/Rhythm cycles, six Positions, per-Voice lengths, and Classic/Modern editor; Accent 0 rests |
+| **Midi** | ✅ | per-voice channel, program, transpose, velocity-range readout, density, legato; six-position 4×16 Orchestration routing ✅; Sound Choice skipped |
+| **Snapshot** | 🟡 | 26 A–Z locations, store/recall/erase, quantization, keyboard recall, current mark, and Restore From Snapshot ✅; Hold/Do, Edit/Blink, Slideshows ⬜ |
+| **Pattern Editor** | ✅ | dual keyboards, dotted grid, Region tools, View/Chord/Insert/Drum/Size modes, MIDI range/counter, audition, resize, and 22 working Edit/Pattern commands including Cyclic Random operations |
+| **Midi View** | ✅ | initial compact four-lane event tracker with timestamp, Note On/Off details, Follow, Clear, and bounded history |
+| **Module context menus** | ✅ | Pattern Editor owns Edit/Pattern; Variables owns editors/colors; Conducting owns Options/Harmony/Output; commands are accessed by right-click and popups are viewport-correct |
+| **Global menu bar** | ✅ | Classic File/Edit/Variables/Pattern/Windows/Options strip restored; window and editor entries use the shared window registry |
+| **Typography standard** | ✅ | 11px global menu; uniform 10px/16px panel chrome; 8px primary body controls; 7px compact dense readouts, verified as effective rendered sizes across all fifteen panels |
+
+## Interface / window canvas — ✅
+
+| Element | Status | Notes |
+| --- | --- | --- |
+| Movable windows | ✅ | every window drags by its title bar; positions persist (localStorage) |
+| Stacking / focus | ✅ | last-clicked window comes to front (shared z-counter); focused window shadowed |
+| Chrome | ✅ | hairline 1px borders, opaque backgrounds, drop shadow |
+| Fixed-size modules | ✅ | modules keep a constant size; the Pattern Editor's size box is the one intentional exception |
+| Window open/close model | ✅ | six `color-app.gif` main windows are permanent; canvas right-click opens auxiliaries; open items are disabled; editors are movable, closable, simultaneous, and non-modal |
+| Unified window navigation | ✅ | every main and auxiliary window uses compact reference `.uwin__title` chrome with shared name/note/close layout, drag handle, border, and theme treatment; module menus are context-only |
+| 640×480 workspace + zoom | ✅ | 640×480 logical baseline; persisted 50–200% application scaling in 10% increments; −/+ /100%/Fit controls; scale-aware dragging and context menus |
+| Complete channel coloring | ✅ | four-voice artwork across main windows and editors inherits the six-preset/custom global palette |
+| Reference Patterns Window | ✅ | 228×120 Chapter 13 layout with Src/Use, colored Play Enable, Echo-Thru, Mouse Advance, three record modes, Output Length, Time Base, Phase, selection and double-click editing |
+| Reference-native editors | ✅ | Density 137×86; Velocity 165×81; Note Order 199×149; Transposition 143×95; Cyclic controls enlarged 25% to 275×222 without changing font size; Time Distortion content-fit 185×155; Orchestration 155×80 |
+| Velocity Range editor | ✅ | exact M layout (boxed low/high, dithered range block on the axis line); click-drag to draw the range |
+
+## Modern upgrades (beyond classic M)
+
+| Upgrade | Status |
+| --- | --- |
+| Variable Positions with editor | ✅ |
+| Snapshots (whole-screen recall) | ✅ |
+| Key/scale harmonic guardrail | ✅ |
+| Movable-window canvas (drag, persist, z-order) | ✅ |
+| Pattern drag-painting + auto-extending length | ✅ |
+| Pattern copy/paste/extend/variation commands | ✅ |
+| Non-destructive pattern operation stacks / undo | ⬜ |
+| All-in-one record-to-tracks | ⬜ |
+| WAM instrument rack + sampler + drum auto-routing | ⬜ |
+| VST/AU hosting (native) | ⬜ |
+| Import old `.M` files | ⬜ |
+| Automation lanes / history-undo | ⬜ |
+
+## Testing & tooling
+
+- **TDD throughout the engine:** every pure module (`music`, `rng`, `transform`,
+  `planner`, `variables`, `project`) and the `store` has co-located tests.
+- **Coverage gate:** Vitest + V8 at a 100% threshold over `src/engine` and
+  `src/state`; browser-only wiring (`runtime`, `outputs/synth`, `outputs/webmidi`,
+  React UI, type-only files) is excluded by design and kept thin.
+- Scripts: `dev`, `build`, `build:single`, `test`, `coverage`, `typecheck`.
+
+## Suggested next steps
+
+See [`NEXT_STEPS.md`](./NEXT_STEPS.md). The order is: checkpoint commit,
+versioned project save/load, finish Snapshot/Slideshow behavior, add Phrasing,
+complete performance recording/MIDI I/O, then close controller and instrument
+decisions. Visual polish is not on the technical critical path.
+
+## Known constraints
+
+- Web MIDI needs a secure origin (`https`/`localhost`); the `file://` standalone
+  preview is synth-only.
+- The built-in synth is intentionally basic (placeholder for the instrument phase).

@@ -21,6 +21,17 @@ describe("createDefaultPattern", () => {
     expect(p.outputLength).toBeGreaterThan(0);
     expect(p.outputLength).toBeLessThanOrEqual(STEP_COUNT);
   });
+  it("stores a detached Cyclic Random copy with a generation counter", () => {
+    const p = createDefaultPattern("x", true);
+    expect(p.scrambledSteps).toHaveLength(p.steps.length);
+    expect(p.scrambleGeneration).toBe(0);
+    expect(p.scrambledSteps).not.toBe(p.steps);
+    expect(p.scrambledSteps[0]).not.toBe(p.steps[0]);
+    expect(p.scrambledSteps.flatMap((s) => s.pitches).sort((a, b) => a - b))
+      .toEqual(p.steps.flatMap((s) => s.pitches).sort((a, b) => a - b));
+    expect(p.scrambledSteps.slice(0, p.outputLength))
+      .not.toEqual(p.steps.slice(0, p.outputLength));
+  });
 });
 
 describe("createDefaultVoice", () => {
@@ -41,9 +52,36 @@ describe("createDefaultProject", () => {
     expect(p.voices).toHaveLength(VOICE_COUNT);
     expect(p.tempo).toBe(120);
     expect(p.scale).toBe("major");
+    expect(p.voices[0].noteOrderMix).toEqual({
+      original: 100,
+      cyclic: 0,
+      utterly: 0,
+    });
   });
   it("gives each voice a distinct channel", () => {
     const channels = createDefaultProject().voices.map((v) => v.channel);
     expect(new Set(channels).size).toBe(VOICE_COUNT);
+  });
+  it("routes each Voice to its matching output channel by default", () => {
+    expect(createDefaultProject().voices.map((v) => v.outputChannels))
+      .toEqual([[1], [2], [3], [4]]);
+  });
+  it("creates neutral 16-step cyclic variables for every voice", () => {
+    const p = createDefaultProject();
+    expect(p.cyclic.accent).toHaveLength(VOICE_COUNT);
+    expect(p.cyclic.legato).toHaveLength(VOICE_COUNT);
+    expect(p.cyclic.rhythm).toHaveLength(VOICE_COUNT);
+    expect(p.cyclic.accent[0]).toEqual(Array(STEP_COUNT).fill(2));
+    expect(p.cyclic.legato[3]).toEqual(Array(STEP_COUNT).fill(2));
+    expect(p.cyclic.rhythm[1]).toEqual(Array(STEP_COUNT).fill(2));
+    expect(p.cyclicLengths).toEqual({
+      accent: [16, 16, 16, 16],
+      legato: [16, 16, 16, 16],
+      rhythm: [16, 16, 16, 16],
+    });
+    expect(p.cyclicValues).toEqual({
+      legato: [13, 18, 33, 69, 100],
+      rhythm: [1, 1, 1.5, 2, 5],
+    });
   });
 });
