@@ -8,9 +8,10 @@ defects that block operation, hide data, or break hit targets.
 
 ## Current green checkpoint
 
-- Branch: `master`.
-- Working tree: substantial uncommitted multi-session implementation.
-- Tests: **459 passing across 22 files**.
+Updated 2026-08-01.
+
+- Branch: `master`, working tree clean, three commits.
+- Tests: **515 passing across 23 files**.
 - Coverage: **100% statements, branches, functions, and lines** across
   `src/engine` and `src/state`.
 - Typecheck, normal production build, and single-file build: passing.
@@ -34,17 +35,27 @@ defects that block operation, hide data, or break hit targets.
    npm run build:single
    ```
 
-3. Review `git status` and checkpoint the existing work before adding another
-   subsystem. Do not discard or rewrite the current working tree.
+3. Review `git status`. The tree is clean as of 2026-08-01; keep it that way by
+   committing each subsystem as it lands.
 
 ## Technical completion sequence
 
-### 1. Versioned project document and File commands
+### 1. Versioned project document and File commands — ✅ DONE (2026-08-01)
 
-This is the first implementation task. Everything musical is currently lost
-on reload.
+Shipped in `231c372` and `ccde4dd`. `src/engine/document.ts` holds the codec,
+`src/ui/fileCommands.ts` the browser I/O, and the store gained
+`exportDocument` / `importDocument` / `newDocument` / `markSaved` plus
+document-name and dirty tracking.
 
-Build test-first:
+Acceptance gate met: round-trip equality for every musical subsystem, tests for
+malformed JSON, future versions, missing legacy fields, invalid bounds and
+detached copies, browser-verified save → wander → open, and no coverage
+regression.
+
+Still open, carried forward: Save uses a browser download rather than a real
+file-system picker, so it cannot overwrite in place.
+
+Original scope, for reference:
 
 - Add a pure `ProjectDocumentV1` codec with an explicit schema version.
 - Serialize the Project, Patterns and Scrambled material, Variable Positions,
@@ -67,7 +78,7 @@ Acceptance gate:
 - Save → reload page → Open restores an audible equivalent project.
 - No regression below 100% engine/state coverage.
 
-### 2. Finish Snapshot and Slideshow behavior
+### 2. Finish Snapshot and Slideshow behavior — ⬅ NEXT
 
 Implement the remaining honest placeholders from the manual:
 
