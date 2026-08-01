@@ -1,15 +1,25 @@
 // The runtime glues the pure planner to real time: a Web Audio clock with a
 // lookahead scheduler (the "Tale of Two Clocks" pattern) driving the output
 // sinks. This is deliberately thin — all musical decisions live in planner.ts,
-// which is fully unit-tested. Browser-only, so excluded from coverage.
+// which is fully unit-tested. Platform seams are injected and adapter behavior
+// is exercised with fake clocks, schedulers, contexts, and ports.
 
 import { planWindow, makeCursors, type VoiceCursor } from "./planner";
 import { Rng } from "./rng";
 import type { ProjectState } from "./types";
 import type { OutputSink } from "./outputs/types";
 import { SynthSink } from "./outputs/synth";
-import { MidiSink } from "./outputs/webmidi";
+import { MidiPortRegistry, MidiSink } from "./outputs/webmidi";
 import { NoteLifecycle, type OutputDestination } from "./events";
+import {
+  browserScheduler,
+  dropLateAttacks,
+  type ClockDriver,
+  SchedulingMonitor,
+  type SchedulerDriver,
+  type SchedulerHandle,
+  type SchedulingDiagnostics,
+} from "./scheduler";
 import {
   rebaseChangedTimelines,
   timingFingerprints,
@@ -25,22 +35,36 @@ export class MRuntime {
   private master: GainNode | null = null;
   private synth: SynthSink | null = null;
   private midi: MidiSink | null = null;
+  private midiRegistry: MidiPortRegistry | null = null;
   private cursors: VoiceCursor[] = [];
   private rngs: Rng[] = [];
   private lifecycle = new NoteLifecycle();
   private programs = "";
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timer: SchedulerHandle | null = null;
+  private auditionWakes = new Set<SchedulerHandle>();
   private pausedAt: number | null = null;
   private synthEnabled = true;
   private timing: TimingFingerprint[] = [];
   private onPlannedNotes: ((notes: readonly import("./planner").PlannedNote[]) => void) | null;
+  private scheduler: SchedulerDriver;
+  private scheduling = new SchedulingMonitor();
+  private expectedWakeSec = 0;
+  private clock: ClockDriver | null;
+  private suspended = false;
 
   constructor(
     getState: () => ProjectState,
     onPlannedNotes: ((notes: readonly import("./planner").PlannedNote[]) => void) | null = null,
+    options: { scheduler?: SchedulerDriver; clock?: ClockDriver } = {},
   ) {
     this.getState = getState;
     this.onPlannedNotes = onPlannedNotes;
+    this.scheduler = options.scheduler ?? browserScheduler;
+    this.clock = options.clock ?? null;
+  }
+
+  private nowSec(): number {
+    return this.clock?.nowSec() ?? this.ctx?.currentTime ?? 0;
   }
 
   /** Create audio graph lazily (must follow a user gesture). */
@@ -104,6 +128,18 @@ export class MRuntime {
     this.programs = "";
   }
 
+  selectMidiOutputs(outputs: ReadonlyMap<string, MIDIOutput>): void {
+    this.ensure();
+    this.midi!.setOutputs(outputs);
+    this.programs = "";
+  }
+
+  midiPorts(): MidiPortRegistry {
+    this.ensure();
+    if (!this.midiRegistry) this.midiRegistry = new MidiPortRegistry(this.midi!);
+    return this.midiRegistry;
+  }
+
   setSynthEnabled(on: boolean): void {
     this.synthEnabled = on;
   }
@@ -114,6 +150,10 @@ export class MRuntime {
 
   isRunning(): boolean {
     return this.timer !== null;
+  }
+
+  schedulingDiagnostics(): SchedulingDiagnostics {
+    return this.scheduling.snapshot();
   }
 
   /**
@@ -131,7 +171,7 @@ export class MRuntime {
     if (pitches.length === 0 || channels.length === 0) return;
     const ctx = this.ensure();
     if (ctx.state === "suspended") void ctx.resume();
-    const startSec = ctx.currentTime + 0.005;
+    const startSec = this.nowSec() + 0.005;
     const notes = pitches.flatMap((note) => channels.map((channel) => ({
       voice: 0, note, velocity, channel, startSec, durationSec,
       atTick: this.cursors[0]?.transportTick ?? 0,
@@ -140,7 +180,12 @@ export class MRuntime {
     this.lifecycle.ingest(notes, this.destinations());
     this.submitEvents(startSec + 0.01);
     const delay = Math.max(0, (durationSec - LOOKAHEAD_SEC) * 1000);
-    setTimeout(() => this.submitEvents(ctx.currentTime + LOOKAHEAD_SEC), delay);
+    let handle: SchedulerHandle;
+    handle = this.scheduler.once(() => {
+      this.auditionWakes.delete(handle);
+      this.submitEvents(this.nowSec() + this.scheduling.snapshot().lookaheadSec);
+    }, delay);
+    this.auditionWakes.add(handle);
   }
 
   async start(): Promise<void> {
@@ -150,22 +195,23 @@ export class MRuntime {
     const state = this.getState();
     this.resetRandom(state.seed, state.voices.length);
     this.lifecycle.reset();
-    this.cursors = makeCursors(state, ctx.currentTime + 0.06);
+    this.cursors = makeCursors(state, this.nowSec() + 0.06);
     this.timing = timingFingerprints(state);
     this.programs = "";
     this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? ctx.currentTime);
     this.pausedAt = null;
     if (this.timer === null) {
-      this.timer = setInterval(() => this.tick(), TICK_MS);
+      this.expectedWakeSec = this.nowSec() + TICK_MS / 1000;
+      this.timer = this.scheduler.repeat(() => this.tick(), TICK_MS);
     }
   }
 
   /** Pause scheduling without discarding the musical cursor. */
   pause(): void {
     if (this.timer === null || !this.ctx) return;
-    clearInterval(this.timer);
+    this.scheduler.cancel(this.timer);
     this.timer = null;
-    this.pausedAt = this.ctx.currentTime;
+    this.pausedAt = this.nowSec();
     this.synth?.panic();
     this.midi?.cancelScheduled();
     this.midi?.panic();
@@ -180,7 +226,7 @@ export class MRuntime {
     }
     const ctx = this.ensure();
     if (ctx.state === "suspended") await ctx.resume();
-    const shift = ctx.currentTime - this.pausedAt;
+    const shift = this.nowSec() - this.pausedAt;
     this.cursors = this.cursors.map((cursor) => ({
       ...cursor,
       nextTimeSec: cursor.nextTimeSec + shift,
@@ -188,7 +234,8 @@ export class MRuntime {
     }));
     this.pausedAt = null;
     if (this.timer === null) {
-      this.timer = setInterval(() => this.tick(), TICK_MS);
+      this.expectedWakeSec = this.nowSec() + TICK_MS / 1000;
+      this.timer = this.scheduler.repeat(() => this.tick(), TICK_MS);
     }
   }
 
@@ -201,7 +248,7 @@ export class MRuntime {
     const state = this.getState();
     this.resetRandom(state.seed, state.voices.length);
     this.lifecycle.reset();
-    this.cursors = makeCursors(state, this.ctx.currentTime + 0.06);
+    this.cursors = makeCursors(state, this.nowSec() + 0.06);
     this.timing = timingFingerprints(state);
     this.programs = "";
     this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? this.ctx.currentTime);
@@ -209,9 +256,11 @@ export class MRuntime {
 
   stop(): void {
     if (this.timer !== null) {
-      clearInterval(this.timer);
+      this.scheduler.cancel(this.timer);
       this.timer = null;
     }
+    for (const handle of this.auditionWakes) this.scheduler.cancel(handle);
+    this.auditionWakes.clear();
     this.synth?.cancelScheduled();
     this.midi?.cancelScheduled();
     this.midi?.panic();
@@ -221,12 +270,36 @@ export class MRuntime {
 
   private tick(): void {
     if (!this.ctx) return;
+    const now = this.nowSec();
+    if (this.ctx.state !== "running") {
+      if (!this.suspended) {
+        this.synth?.cancelScheduled();
+        this.midi?.cancelScheduled();
+        this.midi?.panic();
+        this.lifecycle.reset();
+        this.suspended = true;
+      }
+      this.expectedWakeSec = now + TICK_MS / 1000;
+      return;
+    }
+    if (this.suspended) {
+      this.recoverFromStall(now);
+      this.scheduling.recordRecovery();
+      this.suspended = false;
+      this.expectedWakeSec = now;
+    }
+    const decision = this.scheduling.observeWake(
+      now,
+      this.expectedWakeSec,
+      this.lifecycle.pendingCount(),
+    );
+    this.expectedWakeSec = now + TICK_MS / 1000;
+    if (decision.recover) this.recoverFromStall(now);
     const state = this.getState();
     const timing = timingFingerprints(state);
     this.cursors = rebaseChangedTimelines(this.cursors, this.timing, timing);
     this.timing = timing;
-    const now = this.ctx.currentTime;
-    const windowEnd = now + LOOKAHEAD_SEC;
+    const windowEnd = now + decision.lookaheadSec;
     this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? now);
     const { notes, cursors } = planWindow(state, this.cursors, this.rngs, now, windowEnd);
     this.cursors = cursors;
@@ -239,6 +312,27 @@ export class MRuntime {
   private submitEvents(windowEnd: number): void {
     const events = this.lifecycle.drainBefore(windowEnd);
     if (events.length === 0) return;
-    for (const sink of this.sinks()) sink.scheduleBatch(events);
+    const now = this.nowSec();
+    const filtered = dropLateAttacks(events, now, 0.02);
+    this.scheduling.recordDroppedEvents(filtered.dropped);
+    this.scheduling.observeBatch(filtered.events, now);
+    for (const sink of this.sinks()) sink.scheduleBatch(filtered.events);
+  }
+
+  private recoverFromStall(now: number): void {
+    this.synth?.cancelScheduled();
+    this.midi?.cancelScheduled();
+    this.midi?.panic();
+    this.lifecycle.reset();
+    const boundary = now + 0.06;
+    this.cursors = this.cursors.map((cursor) => {
+      const shift = Math.max(0, boundary - cursor.nextTimeSec);
+      return {
+        ...cursor,
+        nextTimeSec: cursor.nextTimeSec + shift,
+        originSec: cursor.originSec + shift,
+      };
+    });
+    this.programs = "";
   }
 }

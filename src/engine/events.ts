@@ -129,6 +129,10 @@ export class NoteLifecycle {
     return ready;
   }
 
+  pendingCount(): number {
+    return this.pending.length;
+  }
+
   reset(): void {
     this.pending = [];
     this.active.clear();

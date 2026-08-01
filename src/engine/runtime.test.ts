@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDefaultProject } from "./project";
 import { MRuntime } from "./runtime";
+import type { ClockDriver, SchedulerDriver } from "./scheduler";
 
 class FakeAudioContext {
   currentTime = 0;
@@ -65,7 +66,84 @@ describe("browser runtime transport", () => {
     runtime.stop();
 
     expect(order[0]).toBe("clear");
-    expect(order.slice(1)).toEqual(Array(16).fill("send"));
+    expect(order.slice(1)).toEqual(Array(48).fill("send"));
     expect(runtime.isRunning()).toBe(false);
+  });
+
+  it("uses the injected scheduler for transport and audition", async () => {
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    const repeated: Array<() => void> = [];
+    const oneShots: Array<() => void> = [];
+    const scheduler: SchedulerDriver = {
+      repeat: vi.fn((callback) => (repeated.push(callback), callback)),
+      once: vi.fn((callback) => (oneShots.push(callback), callback)),
+      cancel: vi.fn(),
+    };
+    const runtime = new MRuntime(() => createDefaultProject(), null, { scheduler });
+    runtime.setSynthEnabled(false);
+    await runtime.start();
+    runtime.audition([60], 100, [1]);
+    expect(scheduler.repeat).toHaveBeenCalledTimes(1);
+    expect(scheduler.once).toHaveBeenCalledTimes(1);
+    runtime.stop();
+    expect(scheduler.cancel).toHaveBeenCalled();
+  });
+
+  it("exposes one retained multi-port registry", () => {
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    const runtime = new MRuntime(() => createDefaultProject());
+    const first = runtime.midiPorts();
+    expect(runtime.midiPorts()).toBe(first);
+    const port = { id: "a", send: vi.fn() } as unknown as MIDIOutput;
+    runtime.selectMidiOutputs(new Map([["a", port]]));
+    expect(runtime.midiSink?.outputIds()).toEqual(["a"]);
+  });
+
+  it("recovers from a 500 ms wake stall without planning an overdue burst", async () => {
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    let wake: (() => void) | null = null;
+    const scheduler: SchedulerDriver = {
+      repeat: (callback) => (wake = callback, callback),
+      once: (callback) => callback,
+      cancel: vi.fn(),
+    };
+    const published: number[] = [];
+    let now = 0;
+    const clock: ClockDriver = { nowSec: () => now };
+    const runtime = new MRuntime(
+      () => createDefaultProject(),
+      (notes) => published.push(...notes.map((note) => note.startSec)),
+      { scheduler, clock },
+    );
+    runtime.setSynthEnabled(false);
+    await runtime.start();
+    now = 0.5;
+    wake!();
+    expect(runtime.schedulingDiagnostics()).toMatchObject({ recoveries: 1, droppedWindows: 1 });
+    expect(published.every((at) => at >= 0.5)).toBe(true);
+  });
+
+  it("clears lifecycle state during suspension and recovers at a fresh boundary", async () => {
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    let wake: (() => void) | null = null;
+    let now = 0;
+    const scheduler: SchedulerDriver = {
+      repeat: (callback) => (wake = callback, callback),
+      once: (callback) => callback,
+      cancel: vi.fn(),
+    };
+    const runtime = new MRuntime(() => createDefaultProject(), null, {
+      scheduler,
+      clock: { nowSec: () => now },
+    });
+    runtime.setSynthEnabled(false);
+    await runtime.start();
+    const context = runtime.context as unknown as FakeAudioContext;
+    context.state = "suspended";
+    wake!();
+    context.state = "running";
+    now = 5;
+    wake!();
+    expect(runtime.schedulingDiagnostics().recoveries).toBe(1);
   });
 });

@@ -15,7 +15,7 @@
 
 ![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
 ![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25-brightgreen)
-![Tests](https://img.shields.io/badge/tests-530_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-592_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)

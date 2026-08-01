@@ -14,7 +14,7 @@ Chapters 8 and 15, Chapter 22 for Options, and Appendix A for keyboard
 equivalents.
 
 **Implementation status:** Complete as of 2026-07-30. Pure conductor and store
-behavior are covered by the current 530-test, 100%-coverage engine/state suite.
+behavior are covered by the current 592-test, 100%-coverage engine/state suite.
 Production and single-file builds pass, and the localhost UI has been exercised
 with the in-app browser.
 

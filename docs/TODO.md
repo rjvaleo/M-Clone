@@ -5,21 +5,13 @@ feature scorecard; `VISUAL_AUDIT_AND_THEMING.md` owns reference-image deltas.
 
 Legend: ⬜ open · 🟡 partial · ✅ done · ❓ decision needed
 
-## Highest-priority open work
+## Open work inventory
 
 The commercial/product sequence is authoritative in
 [`PRODUCT_RELEASE_ROADMAP.md`](./PRODUCT_RELEASE_ROADMAP.md). Audio and native
 work must follow [`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md) and
 [`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md); none of that planned Studio
 scope should be counted as current implementation.
-
-0. 🟡 **MIDI reliability Phase 3.** Phases 1–2 (continuity, atomic
-   cancellation, explicit events, note lifecycle, 960 PPQN, Program Change,
-   per-Voice RNG) are complete. Still open: injected scheduler/clock, lateness
-   policy and diagnostics, adaptive lookahead, MIDI device lifecycle,
-   multi-port destinations, suspension recovery, controller state, native event
-   serialization, and stress traces. See
-   [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md).
 
 1. 🟡 **Project save/load (JSON).** `ProjectDocumentV1` and the File menu are
    done: New, Open, Save, Save As, defensive decoding, document name and
@@ -80,6 +72,10 @@ The execution order and acceptance gates for these items are in
 - ✅ MIDI reliability phases 1–2: timing segments, clear-before-panic transport,
   batch clock anchors, explicit events, lifecycle releases, Program Change,
   960-PPQN positions, destination separation, and independent Voice RNG.
+- ✅ MIDI reliability Phase 3: injected clock/scheduler seams, bounded adaptive
+  lookahead and diagnostics, late-attack/stall/suspension recovery, retained
+  multi-port lifecycle, controller-aware panic, native batch codec, and stress
+  traces.
 - ✅ Movable persistent window canvas, z-order, light/dark skins, six channel
   palettes plus custom colors.
 - ✅ Non-modal window manager: permanent six-window core, canvas right-click
