@@ -813,3 +813,113 @@ describe("cyclic variables", () => {
     expect(g().project.cyclic.accent[1][3]).toBe(2);
   });
 });
+
+describe("project document export / import", () => {
+  it("exports the live musical state", () => {
+    g().setTempo(137);
+    g().activatePosition("transposition", 2);
+    g().setPatternGroup(4);
+    const doc = g().exportDocument();
+    expect(doc.version).toBe(1);
+    expect(doc.project.tempo).toBe(137);
+    expect(doc.positions.transposition.active).toBe(2);
+    expect(doc.patternGroup).toBe(4);
+  });
+
+  it("round-trips every musical subsystem through import", () => {
+    g().setTempo(151);
+    g().setVoiceParam(1, "density", 0.42);
+    g().paintStep(0, 3, 71, true);
+    g().activatePosition("noteOrderMix", 3);
+    g().setArrow("density", { on: true, dir: "up" });
+    g().setPatternGroup(2);
+    g().storeSnapshot(5);
+    g().setSnapshotQuantize(4);
+    const doc = JSON.parse(JSON.stringify(g().exportDocument()));
+
+    // Wander away from all of it.
+    g().setTempo(90);
+    g().setVoiceParam(1, "density", 1);
+    g().activatePosition("noteOrderMix", 0);
+    g().setArrow("density", { on: false, dir: "right" });
+    g().setPatternGroup(0);
+    g().eraseSnapshot(5);
+    g().setSnapshotQuantize(0);
+
+    expect(g().importDocument(doc).ok).toBe(true);
+    expect(g().project.tempo).toBe(151);
+    expect(g().project.voices[1].density).toBeCloseTo(0.42, 9);
+    expect(g().project.patterns[0].steps[3].pitches).toContain(71);
+    expect(g().positions.noteOrderMix.active).toBe(3);
+    expect(g().arrows.density).toEqual({ on: true, dir: "up" });
+    expect(g().patternGroup).toBe(2);
+    expect(g().snapshots[5]).not.toBe(null);
+    expect(g().snapshotQuantize).toBe(4);
+  });
+
+  it("round-trips Scrambled material and Cyclic Positions", () => {
+    g().runPatternCommand(0, (steps) => steps);
+    g().setCyclicLength("rhythm", 2, 1, 7);
+    g().activateCyclicPosition("accent", 4);
+    const doc = JSON.parse(JSON.stringify(g().exportDocument()));
+    g().setCyclicLength("rhythm", 2, 1, 16);
+    g().activateCyclicPosition("accent", 0);
+
+    g().importDocument(doc);
+    expect(g().cyclicLengths.rhythm[2][1]).toBe(7);
+    expect(g().activeCyclicPositions.accent).toBe(4);
+    expect(g().project.patterns[0].scrambledSteps).toHaveLength(
+      g().project.patterns[0].steps.length,
+    );
+  });
+
+  it("stops playback before replacing live state", () => {
+    g().setPlaying(true);
+    g().importDocument(g().exportDocument());
+    expect(g().isPlaying).toBe(false);
+    expect(g().isPaused).toBe(false);
+  });
+
+  it("clears transient state that belongs to the old project", () => {
+    g().storeSnapshot(0);
+    g().recallSnapshot(0); // arms Restore From Snapshot
+    g().setClipboard([{ pitches: [60] }]);
+    expect(g().restorePoint).not.toBe(null);
+    g().importDocument(g().exportDocument());
+    expect(g().restorePoint).toBe(null);
+    expect(g().clipboard).toEqual([]);
+    expect(g().midiViewEvents).toEqual([]);
+  });
+
+  it("reports failure and changes nothing when the document is bad", () => {
+    g().setTempo(123);
+    const result = g().importDocument({ nonsense: true });
+    expect(result.ok).toBe(false);
+    expect(g().project.tempo).toBe(123);
+  });
+
+  it("surfaces repair warnings without failing", () => {
+    const doc = JSON.parse(JSON.stringify(g().exportDocument()));
+    delete doc.arrows;
+    const result = g().importDocument(doc);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("does not alias the document it imported", () => {
+    const doc = JSON.parse(JSON.stringify(g().exportDocument()));
+    g().importDocument(doc);
+    doc.project.patterns[0].steps[0].pitches = [1, 2, 3];
+    expect(g().project.patterns[0].steps[0].pitches).not.toEqual([1, 2, 3]);
+  });
+
+  it("starts a new project from the shipped defaults", () => {
+    g().setTempo(200);
+    g().paintStep(0, 5, 90, true);
+    g().newDocument();
+    expect(g().project.tempo).toBe(createDefaultProject().tempo);
+    expect(g().project.patterns[0].steps[5].pitches).not.toContain(90);
+    expect(g().snapshots.every((s) => s === null)).toBe(true);
+    expect(g().isPlaying).toBe(false);
+  });
+})
