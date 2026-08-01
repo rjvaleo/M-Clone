@@ -17,6 +17,12 @@ import type {
 import type { ScaleName } from "../engine/music";
 import { createDefaultProject } from "../engine/project";
 import {
+  type DecodeResult,
+  type ProjectDocumentV1,
+  decodeDocument,
+  encodeDocument,
+} from "../engine/document";
+import {
   makePresetPositions,
   applyActivePositions,
   applyPosition,
@@ -193,6 +199,15 @@ export type MStore = {
     patternIndex: number,
     command: (pattern: Pattern) => Pattern,
   ) => void;
+  /** Capture the whole musical document for saving. */
+  exportDocument: () => ProjectDocumentV1;
+  /**
+   * Replace the live musical state from a document. Returns the decode result
+   * so the caller can report a bad file or surface repair warnings.
+   */
+  importDocument: (raw: unknown) => DecodeResult;
+  /** Discard the piece and start again from the shipped defaults. */
+  newDocument: () => void;
   /** The Edit menu clipboard, holding copied steps. */
   clipboard: StepEvent[];
   setClipboard: (steps: StepEvent[]) => void;
@@ -294,7 +309,7 @@ function conductUpdate(s: MStore, rawPoint: BatonPoint) {
   };
 }
 
-export const useM = create<MStore>((set) => ({
+export const useM = create<MStore>((set, get) => ({
   ...freshDocument(),
   snapshots: Array<Snapshot | null>(SNAPSHOT_COUNT).fill(null),
   currentSnapshot: null,
@@ -518,6 +533,63 @@ export const useM = create<MStore>((set) => ({
         }),
       },
     })),
+
+  exportDocument: () => encodeDocument(get()),
+
+  importDocument: (raw) => {
+    const result = decodeDocument(raw);
+    if (!result.ok) return result;
+    const d = result.document;
+    set({
+      project: d.project,
+      positions: d.positions,
+      snapshots: d.snapshots,
+      currentSnapshot: d.currentSnapshot,
+      snapshotQuantize: d.snapshotQuantize,
+      arrows: d.arrows,
+      patternGroup: d.patternGroup,
+      selectedVoice: d.selectedVoice,
+      tempoRange: d.tempoRange,
+      syncRatio: d.syncRatio as MStore["syncRatio"],
+      syncRatioDirection: d.syncRatioDirection,
+      robotRange: d.robotRange,
+      robotTimeBase: d.robotTimeBase as MStore["robotTimeBase"],
+      cyclicPositions: d.cyclicPositions,
+      cyclicLengths: d.cyclicLengths,
+      activeCyclicPositions: d.activeCyclicPositions,
+      // Playback and everything derived from the old piece has to go: the
+      // transport is stopped, and undo/clipboard/monitor state belonged to a
+      // project that no longer exists.
+      isPlaying: false,
+      isPaused: false,
+      restorePoint: null,
+      clipboard: [],
+      editingVar: null,
+      midiViewEvents: [],
+      midiViewNextId: 0,
+    });
+    return result;
+  },
+
+  newDocument: () => {
+    const blank = freshDocument();
+    set({
+      ...blank,
+      snapshots: Array<Snapshot | null>(SNAPSHOT_COUNT).fill(null),
+      currentSnapshot: null,
+      restorePoint: null,
+      snapshotQuantize: 0,
+      arrows: {},
+      patternGroup: 0,
+      clipboard: [],
+      selectedVoice: 0,
+      isPlaying: false,
+      isPaused: false,
+      editingVar: null,
+      midiViewEvents: [],
+      midiViewNextId: 0,
+    });
+  },
 
   setClipboard: (steps) => set({ clipboard: steps.map((s) => ({ pitches: [...s.pitches] })) }),
 
