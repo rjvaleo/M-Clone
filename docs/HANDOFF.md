@@ -1,11 +1,41 @@
 # Handoff — read this first
 
+## MIDI reliability handoff
+
+Do not infer MIDI guarantees from the UI or older roadmap prose. The canonical
+implemented behavior, invariants, known limits, automated suites, and manual
+verification procedure are in
+[`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md). Phases 1–2 are present
+in the working tree; Phase 3 begins with injected clock/scheduler drivers and a
+defined late-event policy. Any change to planner timing, transport, event
+ordering, routing, audition, or an output adapter must update that specification
+and its verification matrix in the same change.
+
+## Product and audio handoff
+
+The approved commercial direction is free four-Voice M Classic Web →
+invite-only macOS/Windows beta → paid eight-Voice M Studio standalone/plug-in →
+paid mobile family → later M Modular. Do not infer edition scope from older WAM
+or “all-in-one” brainstorming. Use:
+
+- [`PRODUCT_RELEASE_ROADMAP.md`](./PRODUCT_RELEASE_ROADMAP.md) for editions,
+  access stages, platforms, and monetization;
+- [`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md) for four web engines, seven
+  Studio instruments, source assets, effects, mixer, and DSP order;
+- [`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md) for standalone clock,
+  plug-in host timing, multi-output buses, and real-time safety.
+
+The web product remains MIDI-first. The RJ Vallejo/*September* audio identity,
+eight Voices, signature effects, and multi-output audio define the paid Studio
+step. Mobile follows desktop. New core code must accept configurable Voice
+counts even while the current Classic UI remains four-Voice.
+
 ## Latest work — 2026-08-01
 
-**The working tree is committed.** Three commits now exist on `master`:
-`82b8b94` the multi-session window rebuild checkpoint, `231c372` the project
-document codec, `ccde4dd` the File menu. `git log` is no longer a single
-scaffold commit and there is a green base to fall back to.
+The last committed baseline includes `82b8b94` (multi-session window rebuild),
+`231c372` (project document codec), and `ccde4dd` (File menu). MIDI reliability
+phases 1–2 and their documentation may be present as working-tree changes;
+inspect `git status` rather than assuming a clean tree.
 
 **Project save/load is done** — step 1 of `NEXT_STEPS.md`. `ProjectDocumentV1`
 (`src/engine/document.ts`) carries the Project and Pattern material (Original
@@ -17,7 +47,7 @@ defaulted or clamped and returned as warnings. File ▸ New / Open / Save /
 Save As are wired in `src/ui/fileCommands.ts`, with document name and
 unsaved-changes tracking shown in the header.
 
-**Current suite: 515 tests across 23 files**, 100% coverage on `src/engine` and
+**Current suite: 530 tests across 27 files**, 100% coverage on `src/engine` and
 `src/state`, typecheck and both builds clean.
 
 ## Earlier work
@@ -56,7 +86,7 @@ backlog, [`STATUS.md`](./STATUS.md) is the feature-by-feature state.
 The generative engine was already done. This session was a **fidelity pass over
 the UI**, rebuilding windows against the real M screenshots in
 [`../reference/`](../reference/) and the M 2.7 manual (`reference/M27.pdf`)
-rather than from an impression of them. The suite is **515 tests across 23
+rather than from an impression of them. The suite is **530 tests across 27
 files**, with 100% coverage held on `src/engine` and `src/state` throughout.
 Technical completion is now underway; project save/load is the first item done.
 
@@ -128,8 +158,9 @@ Technical completion is now underway; project save/load is the first item done.
 - **The Baton is normalized state.** Grid coordinates live in the store as
   `0..1`; every armed arrow derives its axis/direction from that one point, so
   multiple Variables and Tempo change atomically.
-- **Pause is not Stop.** Runtime Pause keeps Voice/Cyclic cursors and shifts
-  their time origins on Resume. Stop followed by Start still starts fresh.
+- **Pause is not Stop.** Runtime Pause keeps Voice/Cyclic/tick cursors, cancels
+  queued output, panics, and shifts time origins on Resume. Stop followed by
+  Start starts fresh. Sync cancels and resets all Voices to one boundary.
 
 ## Known gotchas
 

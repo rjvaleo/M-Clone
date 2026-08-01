@@ -21,7 +21,12 @@ export type PlannedNote = {
   channel: number;
   startSec: number; // AudioContext time domain
   durationSec: number;
+  /** Absolute musical position on the shared 960 PPQN transport timeline. */
+  atTick?: number;
+  durationTicks?: number;
 };
+
+export const PPQN = 960;
 
 export type VoiceCursor = {
   order: NoteOrderCursor;
@@ -35,6 +40,7 @@ export type VoiceCursor = {
    */
   clockSec: number;
   cyclicPos: number;
+  transportTick: number;
 };
 
 function cyclicMultiplier(
@@ -72,6 +78,7 @@ export function makeCursors(state: ProjectState, startSec: number): VoiceCursor[
       originSec: startSec,
       clockSec: 0,
       cyclicPos: 0,
+      transportTick: 0,
     };
   });
 }
@@ -85,7 +92,7 @@ export function makeCursors(state: ProjectState, startSec: number): VoiceCursor[
 export function planWindow(
   state: ProjectState,
   cursors: VoiceCursor[],
-  rng: Rng,
+  rng: Rng | readonly Rng[],
   _windowStart: number,
   windowEnd: number,
 ): { notes: PlannedNote[]; cursors: VoiceCursor[] } {
@@ -103,6 +110,7 @@ export function planWindow(
   }
 
   state.voices.forEach((v, vi) => {
+    const voiceRng = Array.isArray(rng) ? rng[vi] : rng as Rng;
     const cursor = cursors[vi];
     const pat = state.patterns[v.patternIndex];
     const outLen = Math.min(pat.outputLength, pat.steps.length);
@@ -121,6 +129,8 @@ export function planWindow(
     let clockSec = cursor.clockSec;
     let t = realAt(clockSec);
     let cyclicPos = cursor.cyclicPos;
+    let transportTick = cursor.transportTick;
+    const baseTicks = PPQN * 4 * v.timeBaseNumerator / v.timeBaseDenominator;
 
     if (outLen <= 0) {
       // Nothing to play; keep the clock from spinning forever.
@@ -130,17 +140,17 @@ export function planWindow(
       while (t < windowEnd) {
         const velocity = velocityForAccent(
           v.velocityRange,
-          cyclicLevel(state, "accent", vi, cyclicPos, rng),
+          cyclicLevel(state, "accent", vi, cyclicPos, voiceRng),
         );
-        const legato = cyclicMultiplier(state, "legato", vi, cyclicPos, rng);
-        const rhythm = cyclicMultiplier(state, "rhythm", vi, cyclicPos, rng);
+        const legato = cyclicMultiplier(state, "legato", vi, cyclicPos, voiceRng);
+        const rhythm = cyclicMultiplier(state, "rhythm", vi, cyclicPos, voiceRng);
         if (v.playEnabled) {
-          const r = nextMixedStepIndex(v.noteOrderMix, order, outLen, rng);
+          const r = nextMixedStepIndex(v.noteOrderMix, order, outLen, voiceRng);
           order = r.cursor;
           const source =
             r.source === "cyclic" ? pat.scrambledSteps : pat.steps;
           const step = source[r.index];
-          if (velocity > 0 && step.pitches.length > 0 && gate(v.density, rng)) {
+          if (velocity > 0 && step.pitches.length > 0 && gate(v.density, voiceRng)) {
             for (const p of step.pitches) {
               let n: number;
               if (state.diatonicTranspose) {
@@ -158,12 +168,15 @@ export function planWindow(
                   channel,
                   startSec: t,
                   durationSec: stepDur * v.legato * legato,
+                  atTick: Math.round(transportTick),
+                  durationTicks: Math.max(0, Math.round(baseTicks * v.legato * legato)),
                 });
               }
             }
           }
         }
         clockSec += stepDur * rhythm;
+        transportTick += Math.round(baseTicks * rhythm);
         t = realAt(clockSec);
         cyclicPos = (cyclicPos + 1) % 16;
       }
@@ -175,6 +188,7 @@ export function planWindow(
       originSec: cursor.originSec,
       clockSec,
       cyclicPos,
+      transportTick,
     });
   });
 

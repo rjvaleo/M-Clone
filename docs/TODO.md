@@ -7,6 +7,20 @@ Legend: ⬜ open · 🟡 partial · ✅ done · ❓ decision needed
 
 ## Highest-priority open work
 
+The commercial/product sequence is authoritative in
+[`PRODUCT_RELEASE_ROADMAP.md`](./PRODUCT_RELEASE_ROADMAP.md). Audio and native
+work must follow [`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md) and
+[`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md); none of that planned Studio
+scope should be counted as current implementation.
+
+0. 🟡 **MIDI reliability Phase 3.** Phases 1–2 (continuity, atomic
+   cancellation, explicit events, note lifecycle, 960 PPQN, Program Change,
+   per-Voice RNG) are complete. Still open: injected scheduler/clock, lateness
+   policy and diagnostics, adaptive lookahead, MIDI device lifecycle,
+   multi-port destinations, suspension recovery, controller state, native event
+   serialization, and stress traces. See
+   [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md).
+
 1. 🟡 **Project save/load (JSON).** `ProjectDocumentV1` and the File menu are
    done: New, Open, Save, Save As, defensive decoding, document name and
    unsaved-changes tracking. Still open — a real file-system picker instead of
@@ -19,8 +33,14 @@ Legend: ⬜ open · 🟡 partial · ✅ done · ❓ decision needed
    Sound Choice is intentionally deferred to the instrument design work.
 4. ⬜ **Recorder / Movie / Sequence.** No performance-to-track recorder, Movie
    capture, imported Sequence playback, or MIDI file import/export exists yet.
-5. ⬜ **Instrument layer.** WAM rack, sampler, drum auto-routing, and later
-   native VST/AU hosting remain future phases.
+5. ⬜ **Instrument layer.** The approved split is four lightweight browser
+   engines followed by seven full Studio instruments, signature effects, and
+   multi-output native audio. Third-party WAM hosting is exploratory and does
+   not block Classic.
+6. ⬜ **Dynamic Voice architecture.** Remove framework-independent assumptions
+   that the engine always has four Voices. Classic exposes four, Studio eight,
+   and core structures should support a configured 1–16 without changing
+   musical algorithms.
 
 The execution order and acceptance gates for these items are in
 [`NEXT_STEPS.md`](./NEXT_STEPS.md).
@@ -57,6 +77,9 @@ The execution order and acceptance gates for these items are in
   Pause/Resume, Sync Ratio, and module context menus.
 - ✅ Four-lane Midi View initial design with timestamped Note On/Off rows,
   Follow, Clear, bounded history, and channel colors.
+- ✅ MIDI reliability phases 1–2: timing segments, clear-before-panic transport,
+  batch clock anchors, explicit events, lifecycle releases, Program Change,
+  960-PPQN positions, destination separation, and independent Voice RNG.
 - ✅ Movable persistent window canvas, z-order, light/dark skins, six channel
   palettes plus custom colors.
 - ✅ Non-modal window manager: permanent six-window core, canvas right-click

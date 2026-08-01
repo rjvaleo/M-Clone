@@ -5,11 +5,16 @@ generated Voices. The current UI is the initial delivered event-list design.
 
 ## Capture point
 
-Midi View records planned notes immediately after `planWindow` and before the
-runtime fans them out to Web Audio and Web MIDI. Each generated note is
+Midi View records planner notes after the runtime has submitted the corresponding
+explicit event batch to Web Audio and Web MIDI. Each generated note is
 captured once regardless of enabled sinks, without running a second planner or
 altering musical RNG state. Editor Sound audition notes are excluded because
 they bypass the four generative streams.
+
+Midi View is UI telemetry, not a wire-level timing analyzer. The output-first
+ordering ensures React work cannot delay the batch it displays. For clock
+domains, lifecycle ordering, device cancellation, and measurement procedures,
+see [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md).
 
 ## Display
 
@@ -34,7 +39,7 @@ when Midi View was restored to its initial delivered design.
 
 ## Tests
 
-Pure tests cover conversion of planned notes into Note On/Off messages, note
+Pure tests cover conversion of planned notes into display Note On/Off rows, note
 naming, stable chronological ordering, simultaneous row grouping, chord cells,
-history bounds, and store record/clear actions. Runtime and React wiring remain
-thin.
+history bounds, and store record/clear actions. Runtime ordering is separately
+tested with fake clocks and MIDI ports.
