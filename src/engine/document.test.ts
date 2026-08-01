@@ -208,6 +208,21 @@ describe("what the document carries", () => {
     expect(emptyResult.ok && emptyResult.document.slideshows[0].loopAtSec).toBe(1);
   });
 
+  it("keeps Cyclic Variable Position events in Slideshows", () => {
+    const raw = encodeDocument(source()) as unknown as Record<string, unknown>;
+    raw.slideshows = [{
+      events: [{ atSec: 1, action: { type: "position", variable: "legato", position: 4 } }],
+      loopAtSec: null,
+    }];
+    const result = decodeDocument(raw);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.document.slideshows[0].events).toEqual([
+        { atSec: 1, action: { type: "position", variable: "legato", position: 4 } },
+      ]);
+    }
+  });
+
   it("carries Conducting Arrows and the Pattern Group", () => {
     const src = source({
       arrows: { density: { on: true, dir: "left" } },

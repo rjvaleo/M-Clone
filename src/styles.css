@@ -107,12 +107,7 @@ body {
   padding: 5px 10px;
   font-size: 13px;
   border-bottom: 2px solid var(--line);
-  background: repeating-linear-gradient(
-    var(--panel),
-    var(--panel) 2px,
-    #e7e7e0 2px,
-    #e7e7e0 4px
-  );
+  background: var(--panel);
 }
 .window__body {
   padding: 10px;
@@ -364,7 +359,7 @@ body {
   display: flex;
   gap: 6px;
   align-items: center;
-  background: repeating-linear-gradient(#fff, #fff 1px, #e9e9e9 1px, #e9e9e9 3px);
+  background: #fff;
 }
 .uwin__slash { opacity: 0.4; }
 .uwin__note { font-weight: 400; font-size: 10px; opacity: 0.7; }
@@ -1441,6 +1436,7 @@ body {
 
 /* cyclic */
 .ucyclics { display: flex; flex-wrap: wrap; gap: 10px; }
+.ucyc__head { display: flex; align-items: center; justify-content: space-between; }
 .ucyc__name { margin-bottom: 3px; }
 .ucyc__row { display: flex; align-items: center; gap: 3px; margin-bottom: 2px; }
 .ucyc__lab { width: 8px; font-size: 9px; font-weight: 700; }
@@ -1591,53 +1587,56 @@ body {
 .umidi { min-width: 520px; }
 
 /* Midi View — four live tracker lanes fed by the runtime's planned output. */
-.u-midiview-win { width: 760px; }
+.u-midiview-win { width: 760px; --midiview-time-column: 112px; }
 .u-midiview-win > .uwin__body { padding: 0; overflow: hidden; }
-.midiview { background: #111; color: #ddd; font-family: var(--mono); }
+.midiview { background: #fff; color: #000; font-family: var(--mono); }
 .midiview__tools {
   height: 25px; display: flex; align-items: center; justify-content: flex-end;
-  gap: 5px; padding: 2px 5px; border-bottom: 1px solid #666; font-size: 10px;
+  gap: 5px; padding: 2px 5px; border-bottom: 1px solid #000; font-size: 10px;
 }
 .midiview__tools span { margin-right: auto; }
 .midiview__tools button {
-  height: 19px; padding: 0 7px; border: 1px solid #888;
-  background: #222; color: #ddd; font: inherit; cursor: pointer;
+  height: 19px; padding: 0 7px; border: 1px solid #000;
+  background: #fff; color: #000; font: inherit; cursor: pointer;
 }
-.midiview__tools button.is-on { background: #ddd; color: #111; }
+.midiview__tools button.is-on { background: #000; color: #fff; }
 .midiview__tracker-head, .midiview__row {
-  display: grid; grid-template-columns: 112px repeat(4, minmax(0, 1fr));
+  display: grid;
+  grid-template-columns: var(--midiview-time-column) repeat(4, minmax(0, 1fr));
 }
 .midiview__tracker-head {
-  height: 24px; background: #292929; border-bottom: 1px solid #777;
+  height: 24px; background: #eee; border-bottom: 1px solid #000;
 }
 .midiview__tracker-head > b {
-  padding: 5px 6px; border-right: 1px solid #555;
-  color: #aaa; font-size: 9px; letter-spacing: 0.06em;
+  padding: 5px 6px; border-right: 1px solid #aaa;
+  color: #555; font-size: 9px; letter-spacing: 0.06em;
 }
 .midiview__tracker-head > b.uvoice { color: var(--voice-color); }
 .midiview__viewport {
   position: relative; height: 300px; overflow-y: auto; overflow-x: hidden;
   background:
-    linear-gradient(90deg, transparent 111px, #555 111px 112px, transparent 112px),
-    repeating-linear-gradient(90deg, transparent 0 calc((100% - 112px) / 4 - 1px), #333 calc((100% - 112px) / 4 - 1px) calc((100% - 112px) / 4));
+    linear-gradient(90deg, transparent calc(var(--midiview-time-column) - 1px), #aaa calc(var(--midiview-time-column) - 1px) var(--midiview-time-column), transparent var(--midiview-time-column)),
+    repeating-linear-gradient(90deg, transparent 0 calc((100% - var(--midiview-time-column)) / 4 - 1px), #ddd calc((100% - var(--midiview-time-column)) / 4 - 1px) calc((100% - var(--midiview-time-column)) / 4));
 }
 .midiview__row {
   min-height: 20px;
-  border-top: 1px solid #3a3a3a; border-bottom: 1px solid #202020;
-  background: rgb(17 17 17 / 92%);
+  border-top: 1px solid #ddd; border-bottom: 1px solid #bbb;
+  background: rgb(255 255 255 / 94%);
 }
 .midiview__row > time {
-  padding: 6px; border-right: 1px solid #555; color: #aaa;
+  padding: 6px; border-right: 1px solid #aaa; color: #555;
   font-size: 9px; font-variant-numeric: tabular-nums;
 }
 .midiview__cell {
-  min-width: 0; padding: 3px 4px; border-right: 1px solid #444;
-  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0; padding: 3px 4px; border-right: 1px solid #ccc;
+  display: flex; flex-direction: column; gap: 2px; overflow: hidden;
 }
 .midiview__cell:last-child { border-right: 0; }
 .midiview__message {
-  display: grid; grid-template-columns: 25px 25px 29px 29px 25px 1fr;
-  align-items: baseline; color: #bbb; font-size: 8px; white-space: nowrap;
+  display: grid; grid-template-columns: repeat(3, max-content);
+  justify-content: space-between; align-items: baseline; row-gap: 1px;
+  width: 100%; max-width: 100%; min-width: 0;
+  color: #222; font-size: 8px; white-space: nowrap;
 }
 .midiview__message strong, .midiview__message b {
   color: var(--voice-color); font-style: normal;
@@ -1965,9 +1964,8 @@ body.dark-bg { background: #191919; }
 /* Auxiliary windows use their own reference-derived dimensions. */
 .peditor { width: 443px; }
 .cyced { width: 439px; }
-.u-midiview-win { width: 454px; }
+.u-midiview-win { width: 454px; --midiview-time-column: 60px; }
 .midiview__viewport { height: 190px; }
-.midiview__tracker-head, .midiview__row { grid-template-columns: 76px repeat(4, minmax(0, 1fr)); }
 .uvarpop { width: 273px; }
 .uvarpop-host:has([aria-label="Vel Range Editor"]) .uvarpop { width: 329px; }
 .uvarpop-host:has([aria-label="Note Order Editor"]) .uvarpop { width: 397px; }
@@ -2385,3 +2383,109 @@ body.dark-bg { background: #191919; }
   overflow: visible;
   font-size: 9.6px !important; /* 6px effective at the 0.625 content scale */
 }
+
+/* Flat module chrome. Window title bars deliberately share the surrounding
+   panel surface instead of using the old striped faux-Mac fill. */
+.uwin__title { background-image: none; }
+
+/* Late, reference-specific Patterns rules otherwise override the shared dark
+   theme. Keep the distinctive notch geometry while using the normal surfaces. */
+.theme-dark .u-patterns > .uwin__title,
+.theme-dark .u-patterns > .uwin__title::after {
+  background: #383838;
+  border-color: #5a5a5a;
+}
+.theme-dark .pwin__channel-head,
+.theme-dark .pwin__labels,
+.theme-dark .pwin__row > button,
+.theme-dark .pwin__row > input,
+.theme-dark .pwin__select,
+.theme-dark .pwin__base {
+  background: #333;
+  color: #e8e8e8;
+  border-color: #5a5a5a;
+}
+.theme-dark .pwin__select > button,
+.theme-dark .pwin__base :is(input, select) {
+  background: transparent;
+  color: #e8e8e8;
+  border: 0;
+}
+.theme-dark .pwin__row.is-selected .pwin__select { background: #555; }
+.theme-dark .pwin__mouse-head > i { border-color: #e8e8e8; }
+.theme-dark .pwin__mouse-head > span { background: #e8e8e8; }
+
+/* Conducting/transport is drawn at 2× and scaled as a unit. Theme its inner
+   drawing surface as well as its outer window chrome. */
+.theme-dark .uconduct { background: #2b2b2b; color: #e8e8e8; }
+.theme-dark .uconduct__left,
+.theme-dark .uconduct__bottom,
+.theme-dark .uconduct__bottom > *,
+.theme-dark .uconduct__tempo-readout strong { border-color: #5a5a5a; }
+.theme-dark .uconduct__transport button,
+.theme-dark .uconduct__secondary button,
+.theme-dark .uconduct__ratio-dir,
+.theme-dark .uconduct__robot,
+.theme-dark .uconduct__ratio,
+.theme-dark .uconduct__robot-time {
+  background: #333;
+  color: #e8e8e8;
+  border-color: #5a5a5a;
+}
+.theme-dark .uconduct__transport button:not(:last-child)::after,
+.theme-dark .uconduct__secondary button:not(:last-child)::after { background: #8a8a8a; }
+.theme-dark .uconduct__transport button.is-on,
+.theme-dark .uconduct__secondary button.is-on,
+.theme-dark .uconduct__robot.is-on { background: #e8e8e8; color: #141414; }
+.theme-dark .uconduct__grid {
+  background-color: #242424;
+  background-image:
+    radial-gradient(circle at 1px 1px, #9a9a9a 0 0.8px, transparent 1.2px),
+    radial-gradient(circle at 1px 1px, #9a9a9a 0 0.8px, transparent 1.2px);
+}
+.theme-dark .uconduct__grid::after { border-color: #5a5a5a; }
+.theme-dark .uconduct__baton { background: #e8e8e8; }
+.theme-dark .uconduct__range {
+  border-color: #8a8a8a;
+  background: repeating-conic-gradient(#cfcfcf 0 25%, #444 0 50%) 0 0 / 2px 2px;
+}
+.theme-dark .uconduct__range input::-webkit-slider-thumb {
+  border-color: #cfcfcf; background: #333;
+}
+.theme-dark .uconduct__range input::-moz-range-thumb {
+  border-color: #cfcfcf; background: #333;
+}
+.theme-dark .uconduct__tempo-mark { background: #e8e8e8; }
+
+/* Midi View follows the same light/dark panel palette as every other module;
+   its monospaced event typography remains a useful tracker distinction. */
+.theme-dark .midiview { background: #2b2b2b; color: #e8e8e8; }
+.theme-dark .midiview__tools { border-color: #5a5a5a; }
+.theme-dark .midiview__tools button { background: #333; color: #e8e8e8; border-color: #5a5a5a; }
+.theme-dark .midiview__tools button.is-on { background: #e8e8e8; color: #141414; }
+.theme-dark .midiview__tracker-head { background: #383838; border-color: #5a5a5a; }
+.theme-dark .midiview__tracker-head > b { color: #aaa; border-color: #5a5a5a; }
+.theme-dark .midiview__viewport {
+  background:
+    linear-gradient(90deg, transparent calc(var(--midiview-time-column) - 1px), #5a5a5a calc(var(--midiview-time-column) - 1px) var(--midiview-time-column), transparent var(--midiview-time-column)),
+    repeating-linear-gradient(90deg, transparent 0 calc((100% - var(--midiview-time-column)) / 4 - 1px), #444 calc((100% - var(--midiview-time-column)) / 4 - 1px) calc((100% - var(--midiview-time-column)) / 4));
+}
+.theme-dark .midiview__row {
+  background: rgb(43 43 43 / 94%);
+  border-top-color: #444;
+  border-bottom-color: #202020;
+}
+.theme-dark .midiview__row > time { color: #aaa; border-color: #5a5a5a; }
+.theme-dark .midiview__cell { border-color: #444; }
+.theme-dark .midiview__message { color: #cfcfcf; }
+
+/* The application menu itself stays flat too, but is not part of the module
+   title-bar stripe removal. It still needs readable dark-theme polarity. */
+.theme-dark .app__menubar {
+  background: #2b2b2b;
+  color: #e8e8e8;
+  border-bottom-color: #5a5a5a;
+}
+.theme-dark .app__menubar .umenu__title { color: #e8e8e8; }
+.theme-dark .app__menubar .umenu__title:hover,
+.theme-dark .app__menubar .umenu__title--on { background: #e8e8e8; color: #141414; }

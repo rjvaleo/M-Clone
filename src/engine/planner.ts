@@ -144,6 +144,9 @@ export function planWindow(
         );
         const legato = cyclicMultiplier(state, "legato", vi, cyclicPos, voiceRng);
         const rhythm = cyclicMultiplier(state, "rhythm", vi, cyclicPos, voiceRng);
+        const nextClockSec = clockSec + stepDur * rhythm;
+        const nextOnsetSec = realAt(nextClockSec);
+        const onsetIntervalSec = Math.max(0, nextOnsetSec - t);
         if (v.playEnabled) {
           const r = nextMixedStepIndex(v.noteOrderMix, order, outLen, voiceRng);
           order = r.cursor;
@@ -167,17 +170,17 @@ export function planWindow(
                   velocity,
                   channel,
                   startSec: t,
-                  durationSec: stepDur * v.legato * legato,
+                  durationSec: onsetIntervalSec * v.legato * legato,
                   atTick: Math.round(transportTick),
-                  durationTicks: Math.max(0, Math.round(baseTicks * v.legato * legato)),
+                  durationTicks: Math.max(0, Math.round(baseTicks * rhythm * v.legato * legato)),
                 });
               }
             }
           }
         }
-        clockSec += stepDur * rhythm;
+        clockSec = nextClockSec;
         transportTick += Math.round(baseTicks * rhythm);
-        t = realAt(clockSec);
+        t = nextOnsetSec;
         cyclicPos = (cyclicPos + 1) % 16;
       }
     }

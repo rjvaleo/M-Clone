@@ -45,12 +45,19 @@ use the same store actions in both views.
   with the grid above; selecting 8 highlights 8 and disables playback steps
   beginning at 9.
 - Vertical six-cell Position selectors beneath each variable name.
-- Reference value defaults: Rhythm 1/1/1.5/2/5 and Legato 13/18/33/69/100.
+- Manual-derived value defaults: Rhythm 1/1/1.5/2/5 and Legato
+  6/25/50/75/100. Legato is a percentage of the actual time to the next onset;
+  editable values may exceed 100% to overlap following notes.
+- Conducting Arrows for all three Cyclic Variables, with active Positions stored
+  by index in Hold/Do, Snapshots, Slideshows, and project documents.
 
 The live `project.cyclic` arrays remain the active cycles consumed by the
 planner. Six-position banks and lengths live in the store. Activating a
 Position copies its cycles and lengths into the live project; editing the active
 Position updates playback immediately.
+
+The manual's “Working with Phrasing” section describes this Legato system; it
+does not define a separate Phrasing Variable. See [`PHRASING.md`](./PHRASING.md).
 
 Each step is now either a legacy numeric level or a `{ min, max }` range.
 Numeric values normalize to point ranges without consuming RNG, preserving old

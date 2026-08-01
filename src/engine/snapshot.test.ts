@@ -93,6 +93,17 @@ describe("what a Snapshot captures", () => {
       "actives", "arrows", "outputLength", "patternGroup", "playEnabled", "timeBase",
     ]);
   });
+
+  it("stores Cyclic Variable Positions by index, not their contents", () => {
+    const { project, positions } = setup();
+    const cyclicActives = { accent: 2, legato: 4, rhythm: 5 } as const;
+    const snap = captureSnapshot(
+      project, positions, arrows, 0, undefined, cyclicActives,
+    );
+    expect(snap.cyclicActives).toEqual(cyclicActives);
+    expect(snap).not.toHaveProperty("cyclic");
+    expect(snap).not.toHaveProperty("cyclicLengths");
+  });
 });
 
 describe("executing a Snapshot", () => {

@@ -46,7 +46,7 @@ export function createDefaultVoice(index: number): VoiceState {
     timeBaseNumerator: 1,
     timeBaseDenominator: 8,
     timeDistort: neutralTimeMap(),
-    legato: 0.9,
+    legato: 1,
     channel: index + 1,
     outputChannels: [index + 1],
     program: 0,
@@ -82,7 +82,7 @@ export function createDefaultProject(): ProjectState {
       rhythm: Array(VOICE_COUNT).fill(STEP_COUNT),
     },
     cyclicValues: {
-      legato: [13, 18, 33, 69, 100],
+      legato: [6, 25, 50, 75, 100],
       rhythm: [1, 1, 1.5, 2, 5],
     },
   };

@@ -20,8 +20,10 @@ scope should be counted as current implementation.
 2. ✅ **Slideshows and Snapshot editing.** Hold/Do, partial stores, Edit/copy,
    Blink Everything, Restore, and nine timed record/play/pause/loop/stop
    Slideshows are implemented and saved in document version 2.
-3. ⬜ **Phrasing — next technical milestone.** The remaining planned classic Variable is not modeled.
-   Sound Choice is intentionally deferred to the instrument design work.
+3. ✅ **Phrasing / Legato Cyclic.** Manual review established that Phrasing is
+   Legato Cyclic, not another Variable. Onset-relative sustain, manual defaults,
+   cyclic conducting, Snapshots, Slideshows, and persistence are complete.
+   Sound Choice remains intentionally deferred to instrument design.
 4. ⬜ **Recorder / Movie / Sequence.** No performance-to-track recorder, Movie
    capture, imported Sequence playback, or MIDI file import/export exists yet.
 5. ⬜ **Instrument layer.** The approved split is four lightweight browser
@@ -50,9 +52,8 @@ The execution order and acceptance gates for these items are in
 - ⬜ Build a whole-app Modern layout. Only the Cyclic Editor currently has a
   dedicated Classic/Modern view toggle; light/dark and six channel palettes are
   skins over the shared main layout.
-- ⬜ Add cyclic-variable conducting arrows if manual review confirms their
-  intended behavior. Six Cyclic Positions already exist; they are not currently
-  targets of the Baton.
+- ✅ Cyclic-variable Conducting Arrows are manual-confirmed and implemented for
+  Accent, Legato, and Rhythm Positions.
 
 ## Completed foundations
 
@@ -77,6 +78,9 @@ The execution order and acceptance gates for these items are in
   traces.
 - ✅ Movable persistent window canvas, z-order, light/dark skins, six channel
   palettes plus custom colors.
+- ✅ Collision-free auxiliary placement and drag-release snapping with 4px
+  alignment gaps; flat module title bars and unified Patterns/Conducting/Midi
+  View theme surfaces.
 - ✅ Non-modal window manager: permanent six-window core, canvas right-click
   launcher, disabled already-open entries, closable simultaneous auxiliaries.
 - ✅ 26-location Snapshot core with quantized recall and one-step restore.

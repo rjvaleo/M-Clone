@@ -186,8 +186,8 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
 
   const hold = useHoldRepeat();
 
-  const { pos, z, onPointerDown: onTitleDown, bringToFront } = useDraggable(
-    "pattern-editor", { x: 42, y: 38 },
+  const { ref, pos, z, onPointerDown: onTitleDown, bringToFront } = useDraggable(
+    "pattern-editor", { x: 42, y: 38 }, { autoPlace: true },
   );
 
   const cols = clamp(Math.round(viewW / CELL_W), 8, 96);
@@ -435,6 +435,7 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
 
   return (
     <section
+      ref={ref}
       className="peditor-host movable"
       aria-label="Pattern Editor"
       style={{ left: pos.x, top: pos.y, zIndex: z }}

@@ -80,8 +80,9 @@ describe("createDefaultProject", () => {
       rhythm: [16, 16, 16, 16],
     });
     expect(p.cyclicValues).toEqual({
-      legato: [13, 18, 33, 69, 100],
+      legato: [6, 25, 50, 75, 100],
       rhythm: [1, 1, 1.5, 2, 5],
     });
+    expect(p.voices.every((voice) => voice.legato === 1)).toBe(true);
   });
 });

@@ -46,8 +46,9 @@ original application's musical behavior before expanding into Studio features.
 ### Required scope
 
 - Four Voices and the original M interaction model.
-- Patterns, Variables, Cyclic Variables, Conducting, Snapshots, Slideshows,
-  Phrasing, Pattern editing, and original transport semantics.
+- Patterns, Variables, Cyclic Variables (including Phrasing through Legato),
+  Conducting, Snapshots, Slideshows, Pattern editing, and original transport
+  semantics.
 - Complete Web MIDI generation and input appropriate to browser permissions.
 - MIDI Assignment and controller workflows.
 - Standard MIDI file import/export.

@@ -1,8 +1,9 @@
+import type { CyclicVariable } from "./types";
 import type { PositionVarId } from "./variables";
 
 export type SlideshowAction =
   | { type: "snapshot"; index: number }
-  | { type: "position"; variable: PositionVarId; position: number };
+  | { type: "position"; variable: PositionVarId | CyclicVariable; position: number };
 
 export type SlideshowEvent = { atSec: number; action: SlideshowAction };
 export type Slideshow = { events: SlideshowEvent[]; loopAtSec: number | null };

@@ -47,8 +47,14 @@ defaulted or clamped and returned as warnings. File ▸ New / Open / Save /
 Save As are wired in `src/ui/fileCommands.ts`, with document name and
 unsaved-changes tracking shown in the header.
 
-**Current suite: 592 tests across 31 files**, 100% coverage on `src/engine` and
+**Current suite: 641 tests across 33 files**, 100% coverage on `src/engine` and
 `src/state`, typecheck and both builds clean.
+
+Snapshot editing and Slideshows are complete. Manual review also established
+that Phrasing is Legato Cyclic rather than another Variable. Legato now uses
+onset-relative sustain and the manual defaults; cyclic Positions support
+conducting, Hold/Do, Snapshots, Slideshows, and persistence. See
+[`PHRASING.md`](./PHRASING.md).
 
 ## Earlier work
 
@@ -83,12 +89,13 @@ backlog, [`STATUS.md`](./STATUS.md) is the feature-by-feature state.
 
 ## Where things stand in one paragraph
 
-The generative engine was already done. This session was a **fidelity pass over
-the UI**, rebuilding windows against the real M screenshots in
+The generative engine and selected P3 scope are complete. Save/load,
+Snapshot/Slideshow, and Phrasing-through-Legato are done; Sound Choice remains
+intentionally skipped. The UI was rebuilt against the real M screenshots in
 [`../reference/`](../reference/) and the M 2.7 manual (`reference/M27.pdf`)
-rather than from an impression of them. The suite is **592 tests across 31
-files**, with 100% coverage held on `src/engine` and `src/state` throughout.
-Technical completion is now underway; project save/load is the first item done.
+rather than from an impression of them. The suite is **641 tests across 33
+files**, with 100% coverage held on `src/engine` and `src/state`. Performance
+recording and standard MIDI files are next.
 
 ## How we've been working — keep doing this
 
@@ -179,15 +186,11 @@ Technical completion is now underway; project save/load is the first item done.
 
 ## Start here next
 
-The tree is green, committed, and builds. Layout is frozen. Follow
-[`NEXT_STEPS.md`](./NEXT_STEPS.md) — step 1 (save/load) is done and the active
-head of the list is now **step 2, Snapshot and Slideshow behaviour** because
-MIDI Reliability Phase 3 is complete: Hold/Do, Edit Snapshot, Blink Everything, and Slideshow
-record/play/pause/loop/stop remain honest placeholders.
-
-That one needs a decision before coding: how Slideshow timing interacts with
-Pause, Stop and Robot conducting. The manual does not fully pin it down — see
-the acceptance gate in `NEXT_STEPS.md` §2.
+The tree is green and builds; the Phrasing/Legato milestone is intentionally
+local and uncommitted. Layout is frozen. Follow
+[`NEXT_STEPS.md`](./NEXT_STEPS.md): save/load, Snapshot/Slideshow, and
+Phrasing-through-Legato are done. The active head of the list is now **step 4,
+performance recording and standard MIDI files**.
 
 Two smaller carry-overs from save/load:
 

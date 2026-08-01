@@ -11,11 +11,16 @@ that desktop; its measured window geometry supplies the permanent-window sizes.
   conversion.
 - `App.tsx` owns the persisted application zoom and the −, percentage, +,
   100%, and Fit controls.
-- `.workspace-logical` is always 640 × 480. Its parent reserves the scaled
-  physical dimensions so browser scrolling and hit testing remain correct.
+- The logical workspace keeps 640 × 480 as its floor and grows to fill larger
+  viewports. Its parent reserves the scaled physical dimensions so browser
+  scrolling and hit testing remain correct.
 - `WorkspaceScaleProvider` gives dragging and context menus the same scale.
 - Window positions are stored as logical coordinates under versioned `v2`
   keys. Legacy physical-pixel positions are intentionally not reused.
+- New/reopened auxiliary windows ignore stale saved positions and use the
+  leftmost free column beyond the permanent modules. They stack downward with
+  4px gaps. Drag release aligns nearby edges and moves overlaps to the nearest
+  free padded edge; user-chosen non-overlapping order remains unconstrained.
 
 At 110%, for example, the desktop and its complete module suite render at
 704 × 528 while every saved window coordinate remains unchanged.
@@ -60,3 +65,6 @@ The workspace math was written test-first. Browser verification confirmed:
 - 110% produces 704 × 528 and scales a 220 × 111 Pattern window to 242 × 122.1.
 - Fit chooses a supported 10% increment.
 - At 120%, a 36 physical-pixel drag moves a window 30 logical pixels.
+- Auxiliary initial/reopen placement is non-overlapping, left-aligned, and
+  padded; pure collision tests cover free, overlapping, edge-snap, and stacked
+  cases.

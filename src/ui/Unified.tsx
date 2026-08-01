@@ -27,6 +27,7 @@ import { ConductingArrow } from "./ConductingArrow";
 import { ConductorWindow } from "./ConductorWindow";
 import { useContextMenu, type MenuItem } from "./WindowMenu";
 import { CyclicEditor } from "./CyclicEditor";
+import { ensureCyclicSelection, type CyclicSelection } from "./cyclicselection";
 import { normalizeCyclicStep } from "../engine/cyclic";
 import { MidiView } from "./MidiView";
 import { APP_WINDOWS, closeAppWindow, openAppWindow, type AppWindowId } from "../engine/windows";
@@ -85,10 +86,12 @@ function Win({ id, defX, defY, title, note, menuItems, children, className, onCl
   onClose?: () => void;
   children: React.ReactNode;
 }) {
-  const { pos, z, onPointerDown, bringToFront } = useDraggable(id, { x: defX, y: defY });
+  const { ref, pos, z, onPointerDown, bringToFront } = useDraggable(
+    id, { x: defX, y: defY }, { autoPlace: Boolean(onClose) },
+  );
   const context = useContextMenu(menuItems ?? []);
   return (
-    <section className={"uwin movable " + (className ?? "")}
+    <section ref={ref} className={"uwin movable " + (className ?? "")}
       style={{ left: pos.x, top: pos.y, zIndex: z }}
       onPointerDownCapture={bringToFront}
       onContextMenu={menuItems?.length ? context.onContextMenu : undefined}>
@@ -110,15 +113,16 @@ function VariableWindowHost({ id, index, children }: {
   index: number;
   children: (titleDrag: (event: React.PointerEvent) => void) => React.ReactNode;
 }) {
-  const { pos, z, onPointerDown, bringToFront } = useDraggable(
+  const { ref, pos, z, onPointerDown, bringToFront } = useDraggable(
     `variable-editor-${id}`, { x: 34 + index * 22, y: 72 + index * 20 },
+    { autoPlace: true },
   );
-  return <div className="movable uvarpop-host" style={{ left: pos.x, top: pos.y, zIndex: z }}
+  return <div ref={ref} className="movable uvarpop-host" style={{ left: pos.x, top: pos.y, zIndex: z }}
     onPointerDownCapture={bringToFront}>{children(onPointerDown)}</div>;
 }
 
 export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) => void }) {
-  const [cyclicEditor, setCyclicEditor] = useState<{ kind: CyclicVariable; position: number } | null>(null);
+  const [cyclicEditor, setCyclicEditor] = useState<CyclicSelection | null>(null);
   const [midiSetupOpen, setMidiSetupOpen] = useState(false);
   const [patternSources, setPatternSources] = useState<SourceChannel[]>(["all", "all", "all", "all"]);
   const [patternUses, setPatternUses] = useState<InputUse[]>(["disabled", "disabled", "disabled", "disabled"]);
@@ -158,8 +162,10 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
   const setMidiConduct = useM((s) => s.setMidiConduct);
 
   const showWindow = (id: AppWindowId) => {
-    if (id === "cyclic-editor" && !cyclicEditor) {
-      setCyclicEditor({ kind: "accent", position: activeCyclicPositions.accent });
+    if (id === "cyclic-editor") {
+      setCyclicEditor((current) => ensureCyclicSelection(
+        current, activeCyclicPositions.accent,
+      ));
     }
     setOpenWindows((current) => openAppWindow(current, id));
   };
@@ -590,9 +596,16 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
             <div className="ucyclics">
               {CYCLIC.map(({ id, name }) => (
                 <div key={id} className="ucyc">
-                  <div className="b ucyc__name">{name}</div>
+                  <div className="ucyc__head">
+                    <div className="b ucyc__name">{name}</div>
+                    <ConductingArrow label={name}
+                      state={arrows[id] ?? DEFAULT_ARROW}
+                      onChange={(next) => setArrow(id, next)} />
+                  </div>
                   {POSITION_LABELS.map((label, position) => (
                     <button key={label} className={"ucycpos" + (activeCyclicPositions[id] === position ? " is-on" : "")}
+                      aria-pressed={activeCyclicPositions[id] === position}
+                      aria-label={`${name} position ${label}`}
                       onClick={() => activateCyclicPosition(id, position)}
                       onDoubleClick={() => {
                         setCyclicEditor({ kind: id, position });

@@ -18,7 +18,7 @@
 // Positions, Conducting Arrows, Play-Enable, Time Base and Output Length. Src
 // Channel, Echo-Thru, Mouse Advance, Phase and the Sequence don't exist yet.
 
-import type { ProjectState } from "./types";
+import type { CyclicVariable, ProjectState } from "./types";
 import { POSITION_VARS, type PositionVarId, type VariablePositions } from "./variables";
 
 /** The four Conducting Grid axes a Conducting Arrow can point along. */
@@ -31,6 +31,7 @@ export type ArrowState = { on: boolean; dir: ArrowDir };
 /** Controls selected while Hold/Do or Edit Snapshot is active. */
 export type SnapshotInclusion = {
   actives?: PositionVarId[];
+  cyclicActives?: CyclicVariable[];
   arrows?: string[];
   playEnabled?: number[];
   timeBase?: number[];
@@ -48,6 +49,8 @@ export type Snapshot = {
   outputLength: number[];
   /** The active Pattern Group (a-f). */
   patternGroup: number;
+  /** Active Positions for Rhythm, Legato, and Accent; contents remain external. */
+  cyclicActives?: Record<CyclicVariable, number>;
   /** Absent on legacy Snapshots, which include every captured control. */
   included?: SnapshotInclusion;
 };
@@ -70,6 +73,7 @@ export function captureSnapshot(
   arrows: Record<string, ArrowState>,
   patternGroup: number,
   included?: SnapshotInclusion,
+  cyclicActives?: Record<CyclicVariable, number>,
 ): Snapshot {
   const actives = {} as Record<PositionVarId, number>;
   for (const id of POSITION_VARS) actives[id] = positions[id].active;
@@ -86,10 +90,12 @@ export function captureSnapshot(
     outputLength: project.patterns.map((p) => p.outputLength),
     patternGroup,
   };
+  if (cyclicActives) snapshot.cyclicActives = { ...cyclicActives };
   if (included) {
     snapshot.included = {
       ...included,
       actives: included.actives ? [...included.actives] : undefined,
+      cyclicActives: included.cyclicActives ? [...included.cyclicActives] : undefined,
       arrows: included.arrows ? [...included.arrows] : undefined,
       playEnabled: included.playEnabled ? [...included.playEnabled] : undefined,
       timeBase: included.timeBase ? [...included.timeBase] : undefined,
