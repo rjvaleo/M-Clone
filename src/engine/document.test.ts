@@ -28,6 +28,7 @@ function source(over: Partial<DocumentSource> = {}): DocumentSource {
     project,
     positions: makePresetPositions(),
     snapshots: Array(26).fill(null),
+    slideshows: Array.from({ length: 9 }, () => ({ events: [], loopAtSec: null })),
     currentSnapshot: null,
     snapshotQuantize: 0,
     arrows: {},
@@ -63,7 +64,7 @@ function roundTrip(src: DocumentSource) {
 describe("the document envelope", () => {
   it("stamps the schema version", () => {
     expect(encodeDocument(source()).version).toBe(DOCUMENT_VERSION);
-    expect(DOCUMENT_VERSION).toBe(1);
+    expect(DOCUMENT_VERSION).toBe(2);
   });
 
   it("survives a JSON round trip unchanged", () => {
@@ -153,6 +154,58 @@ describe("what the document carries", () => {
     expect(out.snapshots[4]?.arrows.density).toEqual({ on: true, dir: "down" });
     expect(out.currentSnapshot).toBe(4);
     expect(out.snapshotQuantize).toBe(4);
+  });
+
+  it("carries all nine Slideshow scores and loop points", () => {
+    const src = source();
+    src.slideshows[2] = {
+      events: [{ atSec: 1.25, action: { type: "snapshot", index: 4 } }],
+      loopAtSec: 2,
+    };
+    expect(roundTrip(src).slideshows[2]).toEqual(src.slideshows[2]);
+  });
+
+  it("loads version-1 documents with empty Slideshows", () => {
+    const raw = encodeDocument(source()) as unknown as Record<string, unknown>;
+    raw.version = 1;
+    delete raw.slideshows;
+    const result = decodeDocument(raw);
+    expect(result.ok && result.document.slideshows).toHaveLength(9);
+    expect(result.ok && result.document.slideshows.every((show) => show.events.length === 0)).toBe(true);
+  });
+
+  it("repairs malformed Slideshow data and validates actions", () => {
+    const bad = encodeDocument(source()) as unknown as Record<string, unknown>;
+    bad.slideshows = "broken";
+    const reset = decodeDocument(bad);
+    expect(reset.ok && reset.warnings.some((warning) => warning.includes("Slideshows"))).toBe(true);
+
+    const raw = encodeDocument(source()) as unknown as Record<string, unknown>;
+    raw.slideshows = [{
+      events: [
+        null,
+        { atSec: -1, action: { type: "snapshot", index: 0 } },
+        { atSec: 4, action: { type: "snapshot", index: 99 } },
+        { atSec: 2, action: { type: "position", variable: "density", position: 99 } },
+        { atSec: 1, action: { type: "snapshot", index: 2 } },
+        { atSec: 3, action: { type: "unknown" } },
+      ],
+      loopAtSec: 0.5,
+    }];
+    const result = decodeDocument(raw);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.document.slideshows[0]).toEqual({
+      events: [
+        { atSec: 1, action: { type: "snapshot", index: 2 } },
+        { atSec: 2, action: { type: "position", variable: "density", position: 5 } },
+      ],
+      loopAtSec: 2,
+    });
+
+    const emptyLoop = encodeDocument(source()) as unknown as Record<string, unknown>;
+    emptyLoop.slideshows = [{ events: [], loopAtSec: 1 }];
+    const emptyResult = decodeDocument(emptyLoop);
+    expect(emptyResult.ok && emptyResult.document.slideshows[0].loopAtSec).toBe(1);
   });
 
   it("carries Conducting Arrows and the Pattern Group", () => {

@@ -1,5 +1,26 @@
 # M-Clone — Project Status
 
+## 2026-08-01: Snapshot editing and Slideshows
+
+The remaining Snapshot Window controls are wired from the M 2.7 manual.
+Hold/Do defers selected Variable Positions, Play Enable, Time Base, Output
+Length, Conducting Arrows, and Pattern Group changes until Do; a held set can
+instead be stored as a partial Snapshot. Edit Snapshot toggles membership and
+can copy the edited set to another A–Z location. Blink Everything selects every
+currently supported storable control.
+
+Nine Slideshows now record executed Snapshot and Variable Position actions with
+the manual's Record Wait option, play after Snapshot quantization, pause/resume
+without losing position, stop, and add/remove or record a loop point. Stopping
+music pauses slideshow playback until Start. Definitions persist in the new
+version-2 project document; version-1 projects load with nine empty Slideshows.
+The transient transport and Hold/Edit drafts are deliberately not saved.
+
+TDD verification: **625 tests across 32 files**, 100% included engine/state
+coverage, clean typecheck, both production builds, and a fresh-server browser
+pass covering Hold → Do, Blink Everything → Snapshot A, and Option-recorded
+Slideshow 1.
+
 ## 2026-08-01: product, audio, and native roadmap approved
 
 The product family is now explicitly defined: free four-Voice **M Classic Web**,
@@ -100,8 +121,8 @@ align across the four fixed Voice columns, Follow pins the scrollable history
 to new rows, and Clear resets it. The later animated playhead and Pattern
 position/length experiment has been removed.
 
-**As of:** 2026-08-01 · **Working tree:** local Phase 3 changes intentionally
-uncommitted on `master`
+**As of:** 2026-08-01 · **Working tree:** local Snapshot/Slideshow changes
+intentionally uncommitted on `master`
 **Measured against:** [`M-Clone_Build_Plan.md`](./M-Clone_Build_Plan.md)
 
 Legend: ✅ done · 🟡 partial · ⬜ not started
@@ -118,7 +139,7 @@ is paused by decision.
 
 | Metric | State |
 | --- | --- |
-| Unit tests | **592 passing** (31 files) |
+| Unit tests | **625 passing** (32 files) |
 | Coverage (engine + state) | **100%** lines / branches / functions |
 | Typecheck (`tsc --noEmit`) | Clean |
 | Production build | Succeeds (`vite build`, `build:single`) |
@@ -133,7 +154,7 @@ is paused by decision.
 | **P1 Sound & Patterns** | Pattern model, editor, transport, tempo, time base, first sound | ✅ |
 | **P2 Variables core** | Note Order, Transposition, Density, manual-faithful Velocity Range + positions + editors + harmonic engine | ✅ |
 | **P3 Cyclic + Midi + rest** | Cyclic editor, Midi window, Orchestration, Time Distortion, Phrasing, Pattern Group, Sound Choice | 🟡 (Cyclic, Midi View, Orchestration, Time Distortion, Pattern Group ✅; Phrasing ⬜; Sound Choice intentionally skipped) |
-| **P4 Conducting + Snapshots** | Conducting grid, arrows, Robot, snapshots, slideshows | 🟡 (Snapshots + conducting core ✅; slideshows ⬜) |
+| **P4 Conducting + Snapshots** | Conducting grid, arrows, Robot, snapshots, slideshows | ✅ |
 | **P5 Classic technical I/O** | Record-to-tracks, MIDI import/export, save/load, Input Control, Mouse Advance, four lightweight playback engines | 🟡 (save/load ✅) |
 | **P6 Modern theme + instruments** | Modern layouts, deeper instruments, pattern-manipulation upgrades | 🟡 (Modern Cyclic Editor + color themes ✅; broader Modern layout ⬜) |
 | **M Classic Web** | faithful four-Voice browser MIDI product + four lightweight engines | 🟡 |
@@ -177,7 +198,7 @@ is paused by decision.
 | Web Audio lookahead scheduler | ✅ | injected monotonic clock + scheduler; 25 ms browser wake; bounded 80–250 ms adaptive horizon; stall/drop policy and diagnostics |
 | Explicit MIDI event/lifecycle layer | ✅ | ordered events, 960 PPQN, retrigger cleanup, per-Voice RNG |
 | Output sinks (MIDI + instruments) | 🟡 | explicit-event Web MIDI + prototype synth ✅; Classic/Studio and native adapters ⬜ |
-| Document format (JSON) + save/load | ✅ | `ProjectDocumentV1`; versioned, defensively decoded, File menu wired |
+| Document format (JSON) + save/load | ✅ | `ProjectDocumentV2`; Slideshows included, v1-compatible defensive decode, File menu wired |
 | Standard MIDI File import/export | ⬜ | |
 | Old `.M` import | ⬜ | awaiting sample files |
 | VST/AU hosting | ⬜ | native phase |
@@ -191,7 +212,7 @@ is paused by decision.
 | **Variables** | 🟡 | 6-position activation and editors for Note Order, Transposition, Density, Velocity Range, Orchestration, and Time Distortion ✅; Pattern Group activation/conducting ✅; Phrasing ⬜; Sound Choice skipped |
 | **Cyclic Variables** | ✅ | five-level Accent/Legato/Rhythm cycles, six Positions, per-Voice lengths, and Classic/Modern editor; Accent 0 rests |
 | **Midi** | ✅ | per-voice channel, program, transpose, velocity-range readout, density, legato; six-position 4×16 Orchestration routing ✅; Sound Choice skipped |
-| **Snapshot** | 🟡 | 26 A–Z locations, store/recall/erase, quantization, keyboard recall, current mark, and Restore From Snapshot ✅; Hold/Do, Edit/Blink, Slideshows ⬜ |
+| **Snapshot** | ✅ | 26 partial A–Z stores, Hold/Do, Edit/copy, Blink Everything, restore, keyboard control, and nine record/play/pause/loop/stop Slideshows |
 | **File menu** | ✅ | New / Open / Save / Save As over a versioned document, with document name and unsaved-changes tracking; browser download rather than a file-system picker |
 | **Pattern Editor** | ✅ | dual keyboards, dotted grid, Region tools, View/Chord/Insert/Drum/Size modes, MIDI range/counter, audition, resize, and 22 working Edit/Pattern commands including Cyclic Random operations |
 | **Midi View** | ✅ | initial compact four-lane event tracker with timestamp, Note On/Off details, Follow, Clear, and bounded history |
@@ -247,8 +268,8 @@ is paused by decision.
 ## Suggested next steps
 
 See [`NEXT_STEPS.md`](./NEXT_STEPS.md). Project save/load and MIDI Reliability
-Phase 3 are complete. The active order is Snapshot/Slideshow behavior, Phrasing,
-performance recording/MIDI I/O, then controller and instrument work. Visual
+Phase 3 and Snapshot/Slideshow behavior are complete. The active order is
+Phrasing, performance recording/MIDI I/O, then controller and instrument work. Visual
 polish is not on the technical critical path.
 
 ## Known constraints

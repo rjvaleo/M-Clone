@@ -686,6 +686,11 @@ body {
 }
 .usnapwin__tool:last-child { border-right: none; }
 .usnapwin__tool:disabled { opacity: 0.3; cursor: default; }
+.usnapwin__holddo[aria-pressed="true"],
+.usnapwin__slidebtn[aria-pressed="true"],
+.usnapwin__show--active { animation: snapshot-blink 0.7s steps(2, end) infinite; }
+.usnapwin__show--full { background: #000 !important; }
+@keyframes snapshot-blink { 50% { filter: invert(1); } }
 .usnapwin__globe {
   padding: 4px;
   border: none;

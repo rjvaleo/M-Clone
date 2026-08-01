@@ -30,10 +30,12 @@ import { createDefaultProject } from "./project";
 import { makePresetPositions } from "./variables";
 import { neutralTimeMap } from "./timemap";
 import { DEFAULT_OPTIONS, OPTION_IDS, type Options } from "./options";
+import type { Slideshow, SlideshowAction } from "./slideshow";
 
-export const DOCUMENT_VERSION = 1;
+export const DOCUMENT_VERSION = 2;
 
 const SNAPSHOT_SLOTS = 26;
+const SLIDESHOW_SLOTS = 9;
 const CYCLIC_KINDS: CyclicVariable[] = ["accent", "legato", "rhythm"];
 const MIN_TEMPO = 1;
 const MAX_TEMPO = 999;
@@ -43,6 +45,7 @@ export type DocumentSource = {
   project: ProjectState;
   positions: VariablePositions;
   snapshots: (Snapshot | null)[];
+  slideshows: Slideshow[];
   currentSnapshot: number | null;
   snapshotQuantize: number;
   arrows: Record<string, ArrowState>;
@@ -59,10 +62,10 @@ export type DocumentSource = {
   options: Options;
 };
 
-export type ProjectDocumentV1 = DocumentSource & { version: number };
+export type ProjectDocumentV2 = DocumentSource & { version: 2 };
 
 export type DecodeResult =
-  | { ok: true; document: ProjectDocumentV1; warnings: string[] }
+  | { ok: true; document: ProjectDocumentV2; warnings: string[] }
   | { ok: false; error: string };
 
 /* ===== Encoding ===== */
@@ -70,12 +73,13 @@ export type DecodeResult =
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 /** Capture the musical document from live state, fully detached. */
-export function encodeDocument(source: DocumentSource): ProjectDocumentV1 {
+export function encodeDocument(source: DocumentSource): ProjectDocumentV2 {
   return {
     version: DOCUMENT_VERSION,
     project: clone(source.project),
     positions: clone(source.positions),
     snapshots: clone(source.snapshots),
+    slideshows: clone(source.slideshows),
     currentSnapshot: source.currentSnapshot,
     snapshotQuantize: source.snapshotQuantize,
     arrows: clone(source.arrows),
@@ -317,6 +321,45 @@ function readSnapshots(value: unknown, warn: (m: string) => void): (Snapshot | n
   });
 }
 
+function readSlideshows(value: unknown, warn: (m: string) => void): Slideshow[] {
+  if (value === undefined) {
+    return Array.from({ length: SLIDESHOW_SLOTS }, () => ({ events: [], loopAtSec: null }));
+  }
+  if (!Array.isArray(value)) {
+    warn("The saved Slideshows were unreadable and were reset.");
+    return Array.from({ length: SLIDESHOW_SLOTS }, () => ({ events: [], loopAtSec: null }));
+  }
+  return Array.from({ length: SLIDESHOW_SLOTS }, (_, i) => {
+    const show = isBag(value[i]) ? value[i] as Bag : {};
+    const events = Array.isArray(show.events) ? show.events.flatMap((rawEvent) => {
+      if (!isBag(rawEvent) || !isBag(rawEvent.action)) return [];
+      const atSec = num(rawEvent.atSec, -1);
+      const action = rawEvent.action as Bag;
+      if (atSec < 0) return [];
+      if (action.type === "snapshot") {
+        const index = Math.round(num(action.index, -1));
+        return index >= 0 && index < SNAPSHOT_SLOTS
+          ? [{ atSec, action: { type: "snapshot", index } as SlideshowAction }]
+          : [];
+      }
+      if (action.type === "position" && POSITION_VARS.includes(action.variable as never)) {
+        return [{
+          atSec,
+          action: {
+            type: "position", variable: action.variable,
+            position: clamp(Math.round(num(action.position, 0)), 0, POSITION_COUNT - 1),
+          } as SlideshowAction,
+        }];
+      }
+      return [];
+    }).sort((a, b) => a.atSec - b.atSec) : [];
+    const loopAtSec = typeof show.loopAtSec === "number" && Number.isFinite(show.loopAtSec)
+      ? Math.max(events[events.length - 1]?.atSec ?? 0, show.loopAtSec)
+      : null;
+    return { events, loopAtSec };
+  });
+}
+
 function readArrows(value: unknown, warn: (m: string) => void): Record<string, ArrowState> {
   if (!isBag(value)) {
     warn("No Conducting Arrows in the document, none armed");
@@ -449,6 +492,7 @@ export function decodeDocument(raw: unknown): DecodeResult {
       project,
       positions: readPositions(raw.positions, warn),
       snapshots: readSnapshots(raw.snapshots, warn),
+      slideshows: readSlideshows(raw.slideshows, warn),
       currentSnapshot:
         typeof currentSnapshot === "number" &&
         currentSnapshot >= 0 &&

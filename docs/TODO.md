@@ -13,15 +13,14 @@ work must follow [`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md) and
 [`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md); none of that planned Studio
 scope should be counted as current implementation.
 
-1. 🟡 **Project save/load (JSON).** `ProjectDocumentV1` and the File menu are
+1. 🟡 **Project save/load (JSON).** `ProjectDocumentV2` and the File menu are
    done: New, Open, Save, Save As, defensive decoding, document name and
    unsaved-changes tracking. Still open — a real file-system picker instead of
    download/upload, and promoting the format when new subsystems land.
-2. ⬜ **Slideshows and Snapshot editing.** The Snapshot window has 26 working
-   A–Z locations, quantized recall, erase, keyboard recall, and Restore. Hold/Do,
-   Edit Snapshot, Blink Everything, and Slideshow record/play/loop remain honest
-   placeholders.
-3. ⬜ **Phrasing.** The remaining planned classic Variable is not modeled.
+2. ✅ **Slideshows and Snapshot editing.** Hold/Do, partial stores, Edit/copy,
+   Blink Everything, Restore, and nine timed record/play/pause/loop/stop
+   Slideshows are implemented and saved in document version 2.
+3. ⬜ **Phrasing — next technical milestone.** The remaining planned classic Variable is not modeled.
    Sound Choice is intentionally deferred to the instrument design work.
 4. ⬜ **Recorder / Movie / Sequence.** No performance-to-track recorder, Movie
    capture, imported Sequence playback, or MIDI file import/export exists yet.
@@ -81,7 +80,8 @@ The execution order and acceptance gates for these items are in
 - ✅ Non-modal window manager: permanent six-window core, canvas right-click
   launcher, disabled already-open entries, closable simultaneous auxiliaries.
 - ✅ 26-location Snapshot core with quantized recall and one-step restore.
-- ✅ Versioned `ProjectDocumentV1` save/load with defensive decoding, File menu
+- ✅ Versioned `ProjectDocumentV2` save/load (including Slideshows and v1
+  migration) with defensive decoding, File menu
   commands, and document-name / unsaved-changes tracking.
 
 ## Deliberately paused experiment

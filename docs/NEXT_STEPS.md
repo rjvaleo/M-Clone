@@ -20,7 +20,7 @@ Updated 2026-08-01.
 
 - Branch at the earlier checkpoint: `master`; inspect the current working tree
   before making additional changes.
-- Tests: **592 passing across 31 files**.
+- Tests: **625 passing across 32 files**.
 - Coverage: **100% statements, branches, functions, and lines** across
   `src/engine` and `src/state`.
 - Typecheck, normal production build, and single-file build: passing.
@@ -133,7 +133,20 @@ Acceptance gate:
 - Save → reload page → Open restores an audible equivalent project.
 - No regression below 100% engine/state coverage.
 
-### 2. Finish Snapshot and Slideshow behavior
+### 2. Finish Snapshot and Slideshow behavior — ✅ DONE (2026-08-01)
+
+Implemented through red → green → coverage:
+
+- partial Snapshot membership plus Hold/Do, Edit/copy, and Blink Everything;
+- a pure deterministic slideshow recorder/player with Record Wait, pause/resume,
+  restart, stop, loop insertion/removal, and quantized playback start;
+- music Stop/Start pause and resume semantics;
+- keyboard and visible Snapshot Window controls;
+- nine persisted scores in `ProjectDocumentV2`, with version-1 migration;
+- 625 tests across 32 files, 100% engine/state coverage, both production builds,
+  and fresh-server browser verification.
+
+Original scope, for reference:
 
 Implement the remaining honest placeholders from the manual:
 
@@ -152,7 +165,7 @@ Acceptance gate:
 - Stop/Resume semantics are covered explicitly.
 - Browser verification with an audible A→B→C slideshow.
 
-### 3. Implement the remaining Phrasing Variable
+### 3. Implement the remaining Phrasing Variable — NEXT
 
 - Read the complete Phrasing sections of the M 2.7 manual before modeling it.
 - Document the inferred data model and any ambiguity.

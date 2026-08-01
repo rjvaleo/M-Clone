@@ -28,6 +28,16 @@ export type ArrowDir = (typeof ARROW_DIRS)[number];
 /** A Conducting Arrow: whether it's armed, and which Grid axis it reads. */
 export type ArrowState = { on: boolean; dir: ArrowDir };
 
+/** Controls selected while Hold/Do or Edit Snapshot is active. */
+export type SnapshotInclusion = {
+  actives?: PositionVarId[];
+  arrows?: string[];
+  playEnabled?: number[];
+  timeBase?: number[];
+  outputLength?: number[];
+  patternGroup?: boolean;
+};
+
 export type Snapshot = {
   /** Active Position per Variable — the index, deliberately not the contents. */
   actives: Record<PositionVarId, number>;
@@ -38,7 +48,20 @@ export type Snapshot = {
   outputLength: number[];
   /** The active Pattern Group (a-f). */
   patternGroup: number;
+  /** Absent on legacy Snapshots, which include every captured control. */
+  included?: SnapshotInclusion;
 };
+
+export function snapshotIncludes(
+  snap: Snapshot,
+  kind: keyof SnapshotInclusion,
+  id?: string | number,
+): boolean {
+  if (!snap.included) return true;
+  const value = snap.included[kind];
+  if (kind === "patternGroup") return value === true;
+  return Array.isArray(value) && id !== undefined && value.includes(id as never);
+}
 
 /** Take the picture. */
 export function captureSnapshot(
@@ -46,10 +69,11 @@ export function captureSnapshot(
   positions: VariablePositions,
   arrows: Record<string, ArrowState>,
   patternGroup: number,
+  included?: SnapshotInclusion,
 ): Snapshot {
   const actives = {} as Record<PositionVarId, number>;
   for (const id of POSITION_VARS) actives[id] = positions[id].active;
-  return {
+  const snapshot: Snapshot = {
     actives,
     arrows: Object.fromEntries(
       Object.entries(arrows).map(([k, v]) => [k, { ...v }]),
@@ -62,6 +86,17 @@ export function captureSnapshot(
     outputLength: project.patterns.map((p) => p.outputLength),
     patternGroup,
   };
+  if (included) {
+    snapshot.included = {
+      ...included,
+      actives: included.actives ? [...included.actives] : undefined,
+      arrows: included.arrows ? [...included.arrows] : undefined,
+      playEnabled: included.playEnabled ? [...included.playEnabled] : undefined,
+      timeBase: included.timeBase ? [...included.timeBase] : undefined,
+      outputLength: included.outputLength ? [...included.outputLength] : undefined,
+    };
+  }
+  return snapshot;
 }
 
 /**
@@ -74,16 +109,21 @@ export function applySnapshot(project: ProjectState, snap: Snapshot): ProjectSta
     ...project,
     voices: project.voices.map((v, i) => ({
       ...v,
-      playEnabled: snap.playEnabled[i] ?? v.playEnabled,
-      timeBaseNumerator: snap.timeBase[i]?.numerator ?? v.timeBaseNumerator,
-      timeBaseDenominator: snap.timeBase[i]?.denominator ?? v.timeBaseDenominator,
+      playEnabled: snapshotIncludes(snap, "playEnabled", i)
+        ? snap.playEnabled[i] ?? v.playEnabled
+        : v.playEnabled,
+      timeBaseNumerator: snapshotIncludes(snap, "timeBase", i)
+        ? snap.timeBase[i]?.numerator ?? v.timeBaseNumerator
+        : v.timeBaseNumerator,
+      timeBaseDenominator: snapshotIncludes(snap, "timeBase", i)
+        ? snap.timeBase[i]?.denominator ?? v.timeBaseDenominator
+        : v.timeBaseDenominator,
     })),
     patterns: project.patterns.map((p, i) => ({
       ...p,
-      outputLength: Math.min(
-        p.steps.length,
-        snap.outputLength[i] ?? p.outputLength,
-      ),
+      outputLength: snapshotIncludes(snap, "outputLength", i)
+        ? Math.min(p.steps.length, snap.outputLength[i] ?? p.outputLength)
+        : p.outputLength,
     })),
   };
 }

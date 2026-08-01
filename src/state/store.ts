@@ -18,7 +18,7 @@ import type { ScaleName } from "../engine/music";
 import { createDefaultProject } from "../engine/project";
 import {
   type DecodeResult,
-  type ProjectDocumentV1,
+  type ProjectDocumentV2,
   decodeDocument,
   encodeDocument,
 } from "../engine/document";
@@ -42,10 +42,26 @@ import {
 import {
   type ArrowState,
   type Snapshot,
+  type SnapshotInclusion,
   QUANTIZE_VALUES,
   applySnapshot,
   captureSnapshot,
+  snapshotIncludes,
 } from "../engine/snapshot";
+import {
+  EMPTY_SLIDESHOW,
+  IDLE_SLIDESHOW_TRANSPORT,
+  addSlideshowAction,
+  addSlideshowLoop,
+  advanceSlideshow as advanceSlideshowState,
+  beginSlideshowPlayback,
+  beginSlideshowRecording,
+  finishSlideshowRecording,
+  pauseSlideshow as pauseSlideshowState,
+  resumeSlideshow as resumeSlideshowState,
+  type Slideshow,
+  type SlideshowTransport,
+} from "../engine/slideshow";
 import { scrambleSteps } from "../engine/patterncmd";
 import {
   axisValue,
@@ -120,6 +136,7 @@ function executeSnapshot(
 ): { project: ProjectState; positions: VariablePositions; arrows: Record<string, ArrowState>; patternGroup: number } {
   let positions = s.positions;
   for (const id of POSITION_VARS) {
+    if (!snapshotIncludes(snap, "actives", id)) continue;
     const active = snap.actives[id];
     if (active === undefined) continue;
     positions = { ...positions, [id]: { ...positions[id], active } };
@@ -128,11 +145,36 @@ function executeSnapshot(
   return {
     project: { ...project, voices: applyActivePositions(project.voices, positions) },
     positions,
-    arrows: Object.fromEntries(
-      Object.entries(snap.arrows).map(([k, v]) => [k, { ...v }]),
-    ),
-    patternGroup: snap.patternGroup,
+    arrows: snap.included
+      ? Object.fromEntries([
+          ...Object.entries((s as MStore).arrows),
+          ...Object.entries(snap.arrows)
+            .filter(([id]) => snapshotIncludes(snap, "arrows", id))
+            .map(([id, value]) => [id, { ...value }]),
+        ])
+      : Object.fromEntries(Object.entries(snap.arrows).map(([k, v]) => [k, { ...v }])),
+    patternGroup: snapshotIncludes(snap, "patternGroup")
+      ? snap.patternGroup
+      : (s as MStore).patternGroup,
   };
+}
+
+const nowSeconds = () => performance.now() / 1000;
+const emptyInclusion = (): SnapshotInclusion => ({
+  actives: [], arrows: [], playEnabled: [], timeBase: [], outputLength: [],
+  patternGroup: false,
+});
+const everythingInclusion = (): SnapshotInclusion => ({
+  actives: [...POSITION_VARS],
+  arrows: [],
+  playEnabled: [0, 1, 2, 3],
+  timeBase: [0, 1, 2, 3],
+  outputLength: [0, 1, 2, 3],
+  patternGroup: true,
+});
+
+function toggleIncluded<T extends string | number>(values: T[], value: T): T[] {
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
 export type MStore = {
@@ -145,6 +187,10 @@ export type MStore = {
   restorePoint: Snapshot | null;
   /** Snapshot Quantization: 0 is the wave, meaning no quantization. */
   snapshotQuantize: number;
+  snapshotMode: "idle" | "holding" | "editing";
+  snapshotDraft: Snapshot | null;
+  slideshows: Slideshow[];
+  slideshowTransport: SlideshowTransport;
   /** Which Variables are armed for Conducting; captured by Snapshots. */
   arrows: Record<string, ArrowState>;
   /** The active Pattern Group (a-f); captured by Snapshots. */
@@ -214,7 +260,7 @@ export type MStore = {
   /** Record a successful save under `name`. */
   markSaved: (name: string) => void;
   /** Capture the whole musical document for saving. */
-  exportDocument: () => ProjectDocumentV1;
+  exportDocument: () => ProjectDocumentV2;
   /**
    * Replace the live musical state from a document. Returns the decode result
    * so the caller can report a bad file or surface repair warnings.
@@ -277,7 +323,7 @@ export type MStore = {
   closeEditor: () => void;
 
   storeSnapshot: (index: number) => void;
-  recallSnapshot: (index: number) => void;
+  recallSnapshot: (index: number, nowSec?: number) => void;
   /** Erase Snapshot, from the Edit menu. */
   eraseSnapshot: (index: number) => void;
   /** Undo the changes brought about by the most recently executed Snapshot. */
@@ -285,6 +331,16 @@ export type MStore = {
   setSnapshotQuantize: (value: number) => void;
   setArrow: (id: string, next: ArrowState) => void;
   setPatternGroup: (index: number) => void;
+  beginHold: () => void;
+  doHold: () => void;
+  editCurrentSnapshot: () => void;
+  blinkEverything: () => void;
+  recordSlideshow: (index: number, nowSec?: number) => void;
+  playSlideshow: (index: number, nowSec?: number, delaySec?: number) => void;
+  stopSlideshow: (nowSec?: number) => void;
+  pauseSlideshow: (nowSec?: number) => void;
+  toggleSlideshowLoop: (nowSec?: number, remove?: boolean) => void;
+  advanceSlideshow: (nowSec?: number) => void;
 
   setMidiConduct: (on: boolean) => void;
   setRobot: (on: boolean) => void;
@@ -342,6 +398,10 @@ export const useM = create<MStore>((set, get) => ({
   currentSnapshot: null,
   restorePoint: null,
   snapshotQuantize: 0,
+  snapshotMode: "idle",
+  snapshotDraft: null,
+  slideshows: Array.from({ length: 9 }, () => ({ ...EMPTY_SLIDESHOW, events: [] })),
+  slideshowTransport: IDLE_SLIDESHOW_TRANSPORT,
   arrows: {},
   patternGroup: 0,
   clipboard: [],
@@ -384,22 +444,57 @@ export const useM = create<MStore>((set, get) => ({
 
   setTempo: (bpm) => set((s) => ({ project: { ...s.project, tempo: bpm } })),
 
-  setPlaying: (playing) => set({ isPlaying: playing }),
+  setPlaying: (playing) => {
+    set((s) => ({
+      isPlaying: playing,
+      slideshowTransport: playing
+        ? resumeSlideshowState(s.slideshowTransport, nowSeconds())
+        : pauseSlideshowState(s.slideshowTransport, nowSeconds()),
+    }));
+  },
 
   selectVoice: (index) => set({ selectedVoice: index }),
 
   toggleVoiceEnabled: (index) =>
-    set((s) => ({
-      project: {
+    set((s) => {
+      if (s.snapshotMode !== "idle" && s.snapshotDraft) {
+        const included = s.snapshotDraft.included!;
+        const selected = s.snapshotMode === "editing"
+          ? toggleIncluded(included.playEnabled!, index)
+          : [...new Set([...included.playEnabled!, index])];
+        const playEnabled = [...s.snapshotDraft.playEnabled];
+        playEnabled[index] = !playEnabled[index];
+        return { snapshotDraft: {
+          ...s.snapshotDraft, playEnabled,
+          included: { ...included, playEnabled: selected },
+        } };
+      }
+      return { project: {
         ...s.project,
-        voices: s.project.voices.map((v, i) =>
-          i === index ? { ...v, playEnabled: !v.playEnabled } : v,
-        ),
-      },
-    })),
+        voices: s.project.voices.map((v, i) => i === index ? { ...v, playEnabled: !v.playEnabled } : v),
+      } };
+    }),
 
   setVoiceParam: (index, key, value) =>
     set((s) => {
+      if (
+        s.snapshotMode !== "idle" && s.snapshotDraft &&
+        (key === "timeBaseNumerator" || key === "timeBaseDenominator")
+      ) {
+        const included = s.snapshotDraft.included!;
+        const selected = s.snapshotMode === "editing"
+          ? toggleIncluded(included.timeBase!, index)
+          : [...new Set([...included.timeBase!, index])];
+        const timeBase = s.snapshotDraft.timeBase.map((entry, voice) =>
+          voice !== index ? entry : {
+            ...entry,
+            [key === "timeBaseNumerator" ? "numerator" : "denominator"]: Number(value),
+          });
+        return { snapshotDraft: {
+          ...s.snapshotDraft, timeBase,
+          included: { ...included, timeBase: selected },
+        } };
+      }
       const voices = s.project.voices.map((v, i) =>
         i === index ? { ...v, [key]: value } : v,
       );
@@ -479,16 +574,28 @@ export const useM = create<MStore>((set, get) => ({
     }),
 
   setOutputLength: (patternIndex, length) =>
-    set((s) => ({
-      project: {
+    set((s) => {
+      if (s.snapshotMode !== "idle" && s.snapshotDraft) {
+        const included = s.snapshotDraft.included!;
+        const selected = s.snapshotMode === "editing"
+          ? toggleIncluded(included.outputLength!, patternIndex)
+          : [...new Set([...included.outputLength!, patternIndex])];
+        const outputLength = [...s.snapshotDraft.outputLength];
+        outputLength[patternIndex] = Math.max(0, Math.min(s.project.patterns[patternIndex].steps.length, length));
+        return { snapshotDraft: {
+          ...s.snapshotDraft, outputLength,
+          included: { ...included, outputLength: selected },
+        } };
+      }
+      return { project: {
         ...s.project,
         patterns: s.project.patterns.map((p, pi) =>
           pi !== patternIndex
             ? p
             : { ...p, outputLength: Math.max(0, Math.min(p.steps.length, length)) },
         ),
-      },
-    })),
+      } };
+    }),
 
   // The Size Numerical is a ceiling, so it can never be pulled below the
   // material the Pattern already holds.
@@ -583,6 +690,7 @@ export const useM = create<MStore>((set, get) => ({
       project: d.project,
       positions: d.positions,
       snapshots: d.snapshots,
+      slideshows: d.slideshows,
       currentSnapshot: d.currentSnapshot,
       snapshotQuantize: d.snapshotQuantize,
       arrows: d.arrows,
@@ -603,6 +711,9 @@ export const useM = create<MStore>((set, get) => ({
       isPlaying: false,
       isPaused: false,
       restorePoint: null,
+      snapshotMode: "idle",
+      snapshotDraft: null,
+      slideshowTransport: IDLE_SLIDESHOW_TRANSPORT,
       clipboard: [],
       editorRegion: null,
       editingVar: null,
@@ -620,8 +731,12 @@ export const useM = create<MStore>((set, get) => ({
       documentEpoch: s.documentEpoch + 1,
       ...blank,
       snapshots: Array<Snapshot | null>(SNAPSHOT_COUNT).fill(null),
+      slideshows: Array.from({ length: 9 }, () => ({ ...EMPTY_SLIDESHOW, events: [] })),
       currentSnapshot: null,
       restorePoint: null,
+      snapshotMode: "idle",
+      snapshotDraft: null,
+      slideshowTransport: IDLE_SLIDESHOW_TRANSPORT,
       snapshotQuantize: 0,
       arrows: {},
       patternGroup: 0,
@@ -800,6 +915,19 @@ export const useM = create<MStore>((set, get) => ({
 
   activatePosition: (id, posIndex) =>
     set((s) => {
+      if (s.snapshotMode !== "idle" && s.snapshotDraft) {
+        const included = s.snapshotDraft.included!;
+        const actives = s.snapshotMode === "editing"
+          ? toggleIncluded(included.actives!, id)
+          : [...new Set([...included.actives!, id])];
+        return {
+          snapshotDraft: {
+            ...s.snapshotDraft,
+            actives: { ...s.snapshotDraft.actives, [id]: posIndex },
+            included: { ...included, actives },
+          },
+        };
+      }
       const positions = {
         ...s.positions,
         [id]: { ...s.positions[id], active: posIndex },
@@ -809,7 +937,17 @@ export const useM = create<MStore>((set, get) => ({
         id,
         positions[id].slots[posIndex],
       );
-      return { positions, project: { ...s.project, voices } };
+      let slideshowTransport = s.slideshowTransport;
+      let slideshows = s.slideshows;
+      if (slideshowTransport.mode === "recording" && slideshowTransport.slot !== null) {
+        const result = addSlideshowAction(
+          slideshowTransport, slideshows[slideshowTransport.slot],
+          { type: "position", variable: id, position: posIndex }, nowSeconds(),
+        );
+        slideshowTransport = result.state;
+        slideshows = slideshows.map((show, i) => i === slideshowTransport.slot ? result.slideshow : show);
+      }
+      return { positions, project: { ...s.project, voices }, slideshows, slideshowTransport };
     }),
 
   setSlotValue: (id, posIndex, voiceIndex, value) =>
@@ -829,13 +967,16 @@ export const useM = create<MStore>((set, get) => ({
     set((s) => {
       if (index < 0 || index >= SNAPSHOT_COUNT) return {};
       const snapshots = [...s.snapshots];
-      snapshots[index] = captureSnapshot(
-        s.project, s.positions, s.arrows, s.patternGroup,
-      );
-      return { snapshots, currentSnapshot: index };
+      snapshots[index] = s.snapshotDraft
+        ? structuredClone(s.snapshotDraft)
+        : captureSnapshot(s.project, s.positions, s.arrows, s.patternGroup);
+      return {
+        snapshots, currentSnapshot: index,
+        snapshotMode: "idle", snapshotDraft: null,
+      };
     }),
 
-  recallSnapshot: (index) =>
+  recallSnapshot: (index, atSec = nowSeconds()) =>
     set((s) => {
       if (index < 0 || index >= SNAPSHOT_COUNT) return {};
       const snap = s.snapshots[index];
@@ -844,7 +985,20 @@ export const useM = create<MStore>((set, get) => ({
       const restorePoint = captureSnapshot(
         s.project, s.positions, s.arrows, s.patternGroup,
       );
-      return { ...executeSnapshot(s, snap), restorePoint, currentSnapshot: index };
+      let slideshowTransport = s.slideshowTransport;
+      let slideshows = s.slideshows;
+      if (slideshowTransport.mode === "recording" && slideshowTransport.slot !== null) {
+        const slot = slideshowTransport.slot;
+        const result = addSlideshowAction(
+          slideshowTransport, slideshows[slot], { type: "snapshot", index }, atSec,
+        );
+        slideshowTransport = result.state;
+        slideshows = slideshows.map((show, i) => i === slot ? result.slideshow : show);
+      }
+      return {
+        ...executeSnapshot(s, snap), restorePoint, currentSnapshot: index,
+        slideshowTransport, slideshows,
+      };
     }),
 
   eraseSnapshot: (index) =>
@@ -870,12 +1024,131 @@ export const useM = create<MStore>((set, get) => ({
     ),
 
   setArrow: (id, next) =>
-    set((s) => ({ arrows: { ...s.arrows, [id]: { ...next } } })),
+    set((s) => {
+      if (s.snapshotMode !== "idle" && s.snapshotDraft) {
+        const included = s.snapshotDraft.included!;
+        const selected = s.snapshotMode === "editing"
+          ? toggleIncluded(included.arrows!, id)
+          : [...new Set([...included.arrows!, id])];
+        return { snapshotDraft: {
+          ...s.snapshotDraft,
+          arrows: { ...s.snapshotDraft.arrows, [id]: { ...next } },
+          included: { ...included, arrows: selected },
+        } };
+      }
+      return { arrows: { ...s.arrows, [id]: { ...next } } };
+    }),
 
   setPatternGroup: (index) =>
-    set(() =>
-      index >= 0 && index < POSITION_COUNT ? { patternGroup: index } : {},
+    set((s) => {
+      if (index < 0 || index >= POSITION_COUNT) return {};
+      if (s.snapshotMode !== "idle" && s.snapshotDraft) {
+        const included = s.snapshotDraft.included!;
+        return { snapshotDraft: {
+          ...s.snapshotDraft, patternGroup: index,
+          included: { ...included, patternGroup: s.snapshotMode === "editing" ? !included.patternGroup : true },
+        } };
+      }
+      return { patternGroup: index };
+    }),
+
+  beginHold: () => set((s) => ({
+    snapshotMode: "holding",
+    snapshotDraft: captureSnapshot(
+      s.project, s.positions, s.arrows, s.patternGroup, emptyInclusion(),
     ),
+  })),
+
+  doHold: () => set((s) => {
+    if (s.snapshotMode === "editing") return { snapshotMode: "idle", snapshotDraft: null };
+    if (s.snapshotMode !== "holding" || !s.snapshotDraft) return {};
+    return { ...executeSnapshot(s, s.snapshotDraft), snapshotMode: "idle", snapshotDraft: null };
+  }),
+
+  editCurrentSnapshot: () => set((s) => {
+    if (s.currentSnapshot === null || !s.snapshots[s.currentSnapshot]) return {};
+    const source = structuredClone(s.snapshots[s.currentSnapshot]!);
+    source.included = source.included ? {
+      actives: source.included.actives ?? [],
+      arrows: source.included.arrows ?? [],
+      playEnabled: source.included.playEnabled ?? [],
+      timeBase: source.included.timeBase ?? [],
+      outputLength: source.included.outputLength ?? [],
+      patternGroup: source.included.patternGroup ?? false,
+    } : { ...everythingInclusion(), arrows: Object.keys(source.arrows) };
+    return { snapshotMode: "editing", snapshotDraft: source };
+  }),
+
+  blinkEverything: () => set((s) => ({
+    snapshotMode: "holding",
+    snapshotDraft: captureSnapshot(s.project, s.positions, s.arrows, s.patternGroup, {
+      ...everythingInclusion(), arrows: Object.keys(s.arrows),
+    }),
+  })),
+
+  recordSlideshow: (index, atSec = nowSeconds()) => set((s) => {
+    if (index < 0 || index >= s.slideshows.length) return {};
+    const slideshows = s.slideshows.map((show, i) =>
+      i === index ? { ...EMPTY_SLIDESHOW, events: [] } : show);
+    return {
+      slideshows,
+      slideshowTransport: beginSlideshowRecording(index, atSec, s.options.slideshowRecordWait),
+    };
+  }),
+
+  playSlideshow: (index, atSec = nowSeconds(), delaySec = 0) => set((s) => {
+    if (index < 0 || index >= s.slideshows.length || s.slideshows[index].events.length === 0) return {};
+    return { slideshowTransport: beginSlideshowPlayback(index, atSec, delaySec, s.isPlaying) };
+  }),
+
+  stopSlideshow: (atSec = nowSeconds()) => set((s) => {
+    if (s.slideshowTransport.mode !== "recording" || s.slideshowTransport.slot === null) {
+      return { slideshowTransport: IDLE_SLIDESHOW_TRANSPORT };
+    }
+    const slot = s.slideshowTransport.slot;
+    const result = finishSlideshowRecording(
+      s.slideshowTransport, s.slideshows[slot], atSec, false,
+    );
+    return {
+      slideshowTransport: result.state,
+      slideshows: s.slideshows.map((show, i) => i === slot ? result.slideshow : show),
+    };
+  }),
+
+  pauseSlideshow: (atSec = nowSeconds()) => set((s) => ({
+    slideshowTransport: s.slideshowTransport.paused
+      ? resumeSlideshowState(s.slideshowTransport, atSec)
+      : pauseSlideshowState(s.slideshowTransport, atSec),
+  })),
+
+  toggleSlideshowLoop: (atSec = nowSeconds(), remove = false) => set((s) => {
+    const transport = s.slideshowTransport;
+    if (transport.slot === null || transport.mode === "idle") return {};
+    const slot = transport.slot;
+    if (transport.mode === "recording") {
+      const result = finishSlideshowRecording(transport, s.slideshows[slot], atSec, true);
+      return {
+        slideshowTransport: result.state,
+        slideshows: s.slideshows.map((show, i) => i === slot ? result.slideshow : show),
+      };
+    }
+    const elapsed = Math.max(0, atSec - transport.startedAtSec);
+    return { slideshows: s.slideshows.map((show, i) => i === slot
+      ? remove ? { ...show, loopAtSec: null } : addSlideshowLoop(show, elapsed)
+      : show) };
+  }),
+
+  advanceSlideshow: (atSec = nowSeconds()) => {
+    const before = get();
+    const transport = before.slideshowTransport;
+    if (transport.mode !== "playing" || transport.slot === null) return;
+    const result = advanceSlideshowState(transport, before.slideshows[transport.slot], atSec);
+    set({ slideshowTransport: result.state });
+    for (const action of result.actions) {
+      if (action.type === "snapshot") get().recallSnapshot(action.index, atSec);
+      else get().activatePosition(action.variable, action.position);
+    }
+  },
 
   setMidiConduct: (on) => set({ midiConduct: on }),
   setRobot: (on) => set({ robotConductor: on }),
@@ -931,6 +1204,7 @@ export const useM = create<MStore>((set, get) => ({
  */
 const MUSICAL_SLICES = [
   "project", "positions", "snapshots", "currentSnapshot", "snapshotQuantize",
+  "slideshows",
   "arrows", "patternGroup", "cyclicPositions", "cyclicLengths",
   "activeCyclicPositions", "tempoRange", "syncRatio", "syncRatioDirection",
   "robotRange", "robotTimeBase", "options",

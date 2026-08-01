@@ -25,6 +25,18 @@ afterEach(() => {
 });
 
 describe("browser runtime transport", () => {
+  it("reports musical elapsed time from the transport origin", async () => {
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    let now = 10;
+    const runtime = new MRuntime(() => createDefaultProject(), null, {
+      clock: { nowSec: () => now },
+    });
+    expect(runtime.transportElapsedSec()).toBe(0);
+    await runtime.start();
+    now = 11;
+    expect(runtime.transportElapsedSec()).toBeCloseTo(0.94, 9);
+    runtime.stop();
+  });
   it("submits MIDI before publishing UI telemetry and makes start idempotent", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("AudioContext", FakeAudioContext);
