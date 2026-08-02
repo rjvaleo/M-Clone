@@ -51,6 +51,13 @@ beforeEach(() => {
     activeCyclicPositions: { accent: 0, legato: 0, rhythm: 0 },
     midiViewEvents: [],
     midiViewNextId: 0,
+    midiEditRange: { from: 0, to: 15 },
+    midiEditCounter: 0,
+    midiHeldNotes: [[], [], [], []],
+    midiChordNotes: [[], [], [], []],
+    inputControlCode: null,
+    inputControlTapAt: null,
+    stepAdvanceCounters: [0, 0, 0, 0],
     movieRecorder: EMPTY_MOVIE_RECORDER,
     synthSettings: Array.from({ length: 4 }, () => ({ ...DEFAULT_SYNTH_SETTINGS })),
     options: { ...DEFAULT_OPTIONS },
@@ -442,6 +449,17 @@ describe("Pattern and Edit menu commands", () => {
     expect(g().clipboard).toEqual([]);
   });
 
+  it("Shift-selects arbitrary Patterns and detaches a whole-Pattern clipboard", () => {
+    g().newDocument();
+    g().selectPattern(0);
+    g().selectPattern(2, true);
+    expect(g().selectedPatternIndices).toEqual([0, 2]);
+    const pattern = g().project.patterns[0];
+    g().setPatternClipboard(pattern);
+    g().patternClipboard!.steps[0].pitches.push(99);
+    expect(pattern.steps[0].pitches).not.toContain(99);
+  });
+
   const material = (steps: { pitches: number[] }[]) =>
     steps.map((step) => [...step.pitches].sort((a, b) => a - b).join(",")).sort();
 
@@ -689,6 +707,7 @@ describe("Hold/Do and Edit Snapshot", () => {
     g().beginHold();
     g().activatePosition("transposition", 2);
     g().storeSnapshot(0);
+    expect(g().positions.transposition.active).toBe(2);
     g().activatePosition("density", 4);
     g().recallSnapshot(0);
     expect(g().positions.transposition.active).toBe(2);
@@ -1001,6 +1020,17 @@ describe("the Conducting Grid", () => {
       .toBe(g().positions.transposition.slots[0][0]);
   });
 
+  it("records Shift-conducted Variable choices into an active Slideshow", () => {
+    g().recordSlideshow(0, 10);
+    g().setArrow("density", { on: true, dir: "right" });
+    g().setArrow("rhythm", { on: true, dir: "down" });
+    g().conductAt(0.9, 0.2, { record: true });
+    expect(g().slideshows[0].events.map((event) => event.action)).toEqual([
+      { type: "position", variable: "density", position: 5 },
+      { type: "position", variable: "rhythm", position: 1 },
+    ]);
+  });
+
   it("reverses left/up arrows and conducts Pattern Group", () => {
     g().setArrow("patternGroup", { on: true, dir: "left" });
     g().conductAt(0.9, 0.5);
@@ -1009,11 +1039,60 @@ describe("the Conducting Grid", () => {
     expect(g().patternGroup).toBe(5);
   });
 
+  it("keeps six independent Pattern Group banks and restores banked timing", () => {
+    g().newDocument();
+    expect(g().project.patterns).toHaveLength(24);
+    g().setVoiceParam(1, "timeBaseDenominator", 16);
+    g().setVoiceParam(1, "phase", 48);
+    g().paintStep(0, 0, 90, true);
+    g().setPatternGroup(1);
+    expect(g().project.voices.map((voice) => voice.patternIndex)).toEqual([4, 5, 6, 7]);
+    expect(g().project.patterns[4].steps[0].pitches).not.toContain(90);
+    g().setVoiceParam(1, "timeBaseDenominator", 4);
+    g().setPatternGroup(0);
+    expect(g().project.voices[1]).toMatchObject({ timeBaseDenominator: 16, phase: 48 });
+    expect(g().project.patterns[0].steps[0].pitches).toContain(90);
+  });
+
   it("conducts Tempo continuously inside its selected range", () => {
     g().setTempoRange(80, 160);
     g().setArrow("tempo", { on: true, dir: "up" });
     g().conductAt(0.5, 0.75);
     expect(g().project.tempo).toBe(100);
+  });
+
+  it("conducts per-Voice Velocity and Legato continuously and Option-clear restores base", () => {
+    g().newDocument();
+    const activeRange = g().positions.velocityRange
+      .slots[g().positions.velocityRange.active][0];
+    g().setContinuousConducting("velocityRange", 0, true, "right");
+    g().setContinuousConducting("legato", 1, true, "left");
+    const velocityPosition = g().positions.velocityRange.active;
+    const legatoPosition = g().activeCyclicPositions.legato;
+    g().conductAt(1, 0.5);
+    expect(g().positions.velocityRange.active).toBe(velocityPosition);
+    expect(g().activeCyclicPositions.legato).toBe(legatoPosition);
+    expect(g().project.voices[0].velocityRange.high).toBe(127);
+    expect(g().project.voices[1].legato).toBeCloseTo(0.25);
+    g().clearContinuousConducting();
+    expect(g().project.voices[0].velocityRange).toEqual(activeRange);
+    expect(g().project.voices[1].legato).toBe(1);
+    g().setContinuousConducting("velocityRange", 0, false);
+    g().setContinuousConducting("legato", 1, false);
+  });
+
+  it("conducts the first six stored Snapshots from the Snapshot arrow", () => {
+    g().activatePosition("density", 0);
+    g().beginHold();
+    g().activatePosition("density", 4);
+    g().storeSnapshot(4);
+    g().activatePosition("density", 0);
+    useM.setState({ currentSnapshot: null });
+    g().setArrow("snapshot", { on: true, dir: "right" });
+    g().conductAt(0.7, 0.5);
+    expect(g().currentSnapshot).toBe(4);
+    expect(g().positions.density.active).toBe(4);
+    expect(g().restorePoint).not.toBeNull();
   });
 
   // "After setting the tempo range, the midpoint becomes the new tempo."
@@ -1351,6 +1430,51 @@ describe("the Options menu in the store", () => {
     g().newDocument();
     expect(g().options).toEqual(DEFAULT_OPTIONS);
   });
+
+  it("keeps the Options-menu and planner Second Order Transpose state identical", () => {
+    g().setOption("secondOrderTranspose", true);
+    expect(g().project.secondOrderTranspose).toBe(true);
+    g().setSecondOrderTranspose(false);
+    expect(g().options.secondOrderTranspose).toBe(false);
+  });
+
+  it("preserves rest locations when an edit regenerates Cyclic Random ordering", () => {
+    useM.setState((state) => ({
+      project: {
+        ...state.project,
+        patterns: state.project.patterns.map((pattern, index) => index === 0 ? {
+          ...pattern,
+          steps: [
+            { pitches: [60] }, { pitches: [] },
+            { pitches: [62] }, { pitches: [] },
+          ],
+          scrambledSteps: [
+            { pitches: [60] }, { pitches: [] },
+            { pitches: [62] }, { pitches: [] },
+          ],
+          outputLength: 4,
+        } : pattern),
+      },
+    }));
+    g().setOption("dontScrambleRests", true);
+    g().runPatternCommand(0, (steps) => steps.map((step) => ({ pitches: [...step.pitches] })));
+    expect(g().project.patterns[0].scrambledSteps.map((step) => step.pitches.length === 0))
+      .toEqual([false, true, false, true]);
+  });
+
+  it("persists Variable marks and locks marked Position contents", () => {
+    g().newDocument();
+    g().toggleVariableMark("density", 0);
+    const saved = g().exportDocument();
+    expect(saved.variableMarks.density[0]).toBe(true);
+    const before = g().positions.density.slots[0][0];
+    g().setOption("lockedMarkedVariables", true);
+    g().setSlotValue("density", 0, 0, 0.99);
+    expect(g().positions.density.slots[0][0]).toBe(before);
+    g().newDocument();
+    g().importDocument(saved);
+    expect(g().variableMarks.density[0]).toBe(true);
+  });
 });
 
 describe("the Pattern Editor's selected Region", () => {
@@ -1382,3 +1506,304 @@ describe("the Pattern Editor's selected Region", () => {
     expect("editorRegion" in g().exportDocument()).toBe(false);
   });
 })
+
+describe("live MIDI recording", () => {
+  const note = (pitch: number, velocity = 64) =>
+    g().receiveMidi({ type: "note-on" as const, channel: 1, note: pitch, velocity });
+  const off = (pitch: number) =>
+    g().receiveMidi({ type: "note-off" as const, channel: 1, note: pitch, velocity: 0 });
+
+  it("routes, records, advances the counter, and keyboard-transposes relative to C3", () => {
+    g().setVoiceInput(0, { sourceChannel: 2, inputUse: "record" });
+    g().setMidiEditState({ from: 0, to: 15 }, 1);
+    g().receiveMidi({ type: "note-on", channel: 1, note: 64, velocity: 90 });
+    expect(g().midiEditCounter).toBe(1);
+    g().receiveMidi({ type: "note-on", channel: 2, note: 64, velocity: 90 });
+    expect(g().project.patterns[0].steps[1].pitches).toEqual([64]);
+    expect(g().midiEditCounter).toBe(2);
+
+    g().setVoiceInput(1, { sourceChannel: 2, inputUse: "keyboard-transpose" });
+    g().receiveMidi({ type: "note-on", channel: 2, note: 62, velocity: 90 });
+    expect(g().project.voices[1].transposition).toBe(2);
+  });
+
+  it("persists all sixteen MIDI assignment rows and their global controls", () => {
+    g().setMidiAssignment("inputs", 3, { deviceId: "kbd", channel: 7 });
+    g().setMidiAssignmentConfig({ programBase: 1, latencyMs: 42, conductXController: 20 });
+    const saved = g().exportDocument();
+    expect(saved.project.midiAssignments.inputs[3]).toEqual({ deviceId: "kbd", channel: 7 });
+    expect(saved.project.midiAssignments).toMatchObject({ programBase: 1, latencyMs: 42, conductXController: 20 });
+  });
+
+  it("conducts from assigned controllers and can enter a rest from sustain", () => {
+    g().setMidiAssignmentConfig({ conductXController: 20, conductYController: 21 });
+    g().setOption("midiConduct", true);
+    g().receiveMidi({ type: "control", channel: 1, controller: 20, value: 127 });
+    expect(g().baton.x).toBe(1);
+    g().setVoiceInput(0, { inputUse: "record" });
+    g().setOption("sustainEntersRests", true);
+    g().setMidiEditState({ from: 0, to: 15 }, 2);
+    g().receiveMidi({ type: "control", channel: 1, controller: 64, value: 127 });
+    expect(g().project.patterns[0].steps[2].pitches).toEqual([]);
+    expect(g().midiEditCounter).toBe(3);
+  });
+
+  it("executes one-step and two-step Appendix B controls", () => {
+    g().setVoiceInput(0, { inputUse: "control" });
+    expect(g().receiveMidi({ type: "note-on", channel: 1, note: 60, velocity: 64 }))
+      .toEqual([{ type: "start" }]);
+    g().receiveMidi({ type: "note-on", channel: 1, note: 36, velocity: 64 });
+    expect(g().project.voices[0].playEnabled).toBe(false);
+    g().receiveMidi({ type: "note-on", channel: 1, note: 49, velocity: 64 });
+    g().receiveMidi({ type: "note-on", channel: 1, note: 45, velocity: 64 }); // value 5
+    expect(g().patternGroup).toBe(4);
+    g().receiveMidi({ type: "note-on", channel: 1, note: 58, velocity: 64 });
+    g().receiveMidi({ type: "note-on", channel: 1, note: 40, velocity: 64 }); // value 2
+    expect(g().positions.transposition.active).toBe(1);
+  });
+
+  it("silences sa voices in the clocked planner and advances them from mapped keys", () => {
+    g().setVoiceInput(0, { inputUse: "control" });
+    g().setVoiceParam(0, "timeBaseDenominator", 0);
+    const first = g().project.patterns[0].steps[0].pitches[0];
+    const responses = g().receiveMidi({ type: "note-on", channel: 1, note: 50, velocity: 73 });
+    expect(responses).toEqual([{ type: "step", voice: 0, note: first, velocity: 73 }]);
+    expect(g().stepAdvanceCounters[0]).toBe(1);
+  });
+
+  it("advances only enabled Mouse Advance voices and derives a bounded velocity", () => {
+    g().setVoiceInput(0, { mouseAdvance: true });
+    const first = g().project.patterns[0].steps[0].pitches[0];
+    expect(g().advanceMouseVoices(200)).toEqual([
+      { type: "step", voice: 0, note: first, velocity: 127 },
+    ]);
+    expect(g().stepAdvanceCounters[0]).toBe(1);
+  });
+
+  it("makes Drum Machine Record follow the live output step", () => {
+    g().setVoiceInput(0, { inputUse: "record" });
+    g().setPatternMode(0, "drumMachine", true);
+    g().followDrumMachine([{ voice: 0, step: 7 }]);
+    expect(g().midiEditCounter).toBe(7);
+  });
+
+  it("toggles and uses every Echo routing path", () => {
+    g().toggleEchoMapChannel(3);
+    g().toggleEchoMapChannel(1);
+    expect(g().project.echoMapChannels).toEqual([1, 3]);
+    g().setVoiceInput(0, { inputUse: "echo-map" });
+    expect(note(67, 99)).toEqual([
+      { type: "echo", voice: 0, note: 67, velocity: 99, channels: [1, 3] },
+    ]);
+    g().toggleEchoMapChannel(1);
+    expect(g().project.echoMapChannels).toEqual([3]);
+    g().setVoiceInput(0, { inputUse: "record", echoInput: true });
+    expect(note(65, 80)).toContainEqual({ type: "echo", voice: 0, note: 65, velocity: 80 });
+  });
+
+  it("records complete chords and evolving build steps, including counter wrap", () => {
+    g().setVoiceInput(0, { inputUse: "record" });
+    g().setPatternMode(0, "chordMode", "chord");
+    g().setPatternMode(0, "insertMode", "replace");
+    g().setMidiEditState({ from: 2, to: 2 }, 2);
+    note(60); note(64); off(60); off(64);
+    expect(g().project.patterns[0].steps[2].pitches).toEqual([60, 64]);
+    expect(g().midiEditCounter).toBe(2);
+
+    g().setPatternMode(0, "chordMode", "build");
+    g().setPatternMode(0, "insertMode", "insert");
+    note(67); note(71); off(67); off(71);
+    expect(g().project.patterns[0].steps[2].pitches).toEqual([67, 71]);
+    expect(g().midiHeldNotes[0]).toEqual([]);
+  });
+
+  it("covers the complete Appendix B one-step control surface", () => {
+    g().setVoiceInput(0, { inputUse: "control" });
+    note(43); // clear Pattern 1
+    expect(g().project.patterns[0].steps.every((step) => step.pitches.length === 0)).toBe(true);
+    note(71); expect(g().snapshotMode).toBe("holding");
+    note(71); expect(g().snapshotMode).toBe("idle");
+    note(77); expect(g().slideshowTransport.mode).toBe("idle");
+    note(80); // Edit Snapshot, safely ignored with no current Snapshot
+    useM.setState((s) => ({ project: { ...s.project, tempo: 120 } }));
+    note(83); expect(g().project.tempo).toBe(121);
+    note(79); expect(g().project.tempo).toBe(120);
+    useM.setState({ inputControlTapAt: 0 });
+    note(53); expect(g().inputControlTapAt).not.toBeNull();
+    g().setOption("tapAffectsVelocity", true);
+    const before = g().project.voices[0].velocityRange.high;
+    expect(note(84, 32)).toEqual([{ type: "start" }]);
+    expect(g().project.voices[0].velocityRange.high).toBeLessThan(before);
+    note(81); // Freeze retains the current tapped tempo.
+  });
+
+  it("covers Appendix B two-step Variable, cyclic, Snapshot, Slideshow, and sa values", () => {
+    g().setVoiceInput(0, { inputUse: "control" });
+    const twoStep = (code: number, value: number) => { note(code); note(value); };
+    twoStep(51, 40); expect(g().positions.noteOrderMix.active).toBe(1);
+    twoStep(56, 40); expect(g().positions.outputChannels.active).toBe(1);
+    twoStep(61, 40); expect(g().positions.velocityRange.active).toBe(1);
+    twoStep(63, 40); expect(g().positions.density.active).toBe(1);
+    twoStep(68, 40); expect(g().activeCyclicPositions.accent).toBe(1);
+    twoStep(70, 40); expect(g().activeCyclicPositions.legato).toBe(1);
+    twoStep(66, 40); expect(g().activeCyclicPositions.rhythm).toBe(1);
+    twoStep(39, 36); expect(g().project.voices[0].timeBaseDenominator).toBe(0);
+    twoStep(39, 40); expect(g().project.voices[0].timeBaseDenominator).toBe(2);
+    g().storeSnapshot(0);
+    twoStep(37, 38); expect(g().currentSnapshot).toBe(0);
+    twoStep(78, 38); expect(g().slideshowTransport.mode).toBe("recording");
+    g().recallSnapshot(0, 1);
+    g().stopSlideshow();
+    twoStep(75, 38); expect(g().slideshowTransport.slot).toBe(0);
+    twoStep(54, 40); // excluded Sound Choice consumes and resets without mutation
+    expect(g().inputControlCode).toBeNull();
+  });
+
+  it("steps all and individual sa Voices while ignoring non-sa or disabled Voices", () => {
+    g().setVoiceInput(0, { inputUse: "control" });
+    g().setVoiceParam(0, "timeBaseDenominator", 0);
+    g().setVoiceParam(1, "timeBaseDenominator", 0);
+    g().toggleVoiceEnabled(1);
+    expect(note(62)).toHaveLength(1);
+    g().setVoiceParam(0, "timeBaseDenominator", 8);
+    expect(note(50)).toEqual([]);
+  });
+
+  it("handles non-conducting controllers and vertical MIDI Conducting", () => {
+    g().receiveMidi({ type: "control", channel: 1, controller: 99, value: 64 });
+    expect(g().baton).toEqual({ x: 0.5, y: 0.5 });
+    g().setOption("midiConduct", true);
+    g().receiveMidi({ type: "control", channel: 1,
+      controller: g().project.midiAssignments.conductYController, value: 0 });
+    expect(g().baton.y).toBe(0);
+  });
+});
+
+describe("coverage of state mutation guard paths", () => {
+  it("removes an additively selected Pattern without leaving an empty selection", () => {
+    g().selectPattern(2, true);
+    expect(g().selectedPatternIndices).toContain(2);
+    g().selectPattern(2, true);
+    expect(g().selectedPatternIndices).not.toContain(2);
+    g().selectPattern(0, true);
+    expect(g().selectedPatternIndices).toEqual([0]);
+  });
+
+  it("signals only the requested cyclic Voice resets", () => {
+    g().signalCyclicReset([1, 3]);
+    expect(g().cyclicResetEpochs).toEqual([0, 1, 0, 1]);
+  });
+
+  it("guards and performs every Variable position transfer form", () => {
+    g().transferVariablePosition("density", -1, 0, true);
+    g().transferVariablePosition("density", 6, 0, true);
+    g().transferVariablePosition("density", 0, -1, true);
+    g().transferVariablePosition("density", 0, 6, true);
+    expect(g().positions.density.active).toBe(0);
+
+    g().setOption("lockedMarkedVariables", true);
+    g().transferVariablePosition("density", 0, 1, true);
+    g().toggleVariableMark("density", 0);
+    g().transferVariablePosition("density", 0, 1, true);
+    g().toggleVariableMark("density", 0);
+    g().toggleVariableMark("density", 1);
+    g().transferVariablePosition("density", 0, 1, true);
+    g().toggleVariableMark("density", 1);
+    g().setSlotValue("density", 0, 0, 12);
+    g().transferVariablePosition("density", 0, 1, true);
+    expect(g().positions.density.slots[1][0]).toBe(1);
+    g().transferVariablePosition("density", 1, 2, false);
+    expect(g().positions.density.slots[2][0]).toBe(1);
+  });
+
+  it("guards and performs every Variable Voice transfer form", () => {
+    g().transferVariableVoice("density", -1, 0, 1, true);
+    g().transferVariableVoice("density", 6, 0, 1, true);
+    g().transferVariableVoice("density", 0, -1, 1, true);
+    g().transferVariableVoice("density", 0, 4, 1, true);
+    g().transferVariableVoice("density", 0, 0, -1, true);
+    g().transferVariableVoice("density", 0, 0, 4, true);
+    g().setOption("lockedMarkedVariables", true);
+    g().transferVariableVoice("density", 0, 0, 1, true);
+    g().toggleVariableMark("density", 0);
+    g().transferVariableVoice("density", 0, 0, 1, true);
+    g().toggleVariableMark("density", 0);
+    g().setSlotValue("density", 0, 0, 23);
+    g().transferVariableVoice("density", 0, 0, 1, true);
+    expect(g().positions.density.slots[0][1]).toBe(1);
+    g().transferVariableVoice("density", 0, 1, 2, false);
+    expect(g().positions.density.slots[0][2]).toBe(1);
+  });
+
+  it("turns off both continuous conductors and restores their neutral values", () => {
+    g().setArrow("velocityRange", { on: true, dir: "right" });
+    g().setArrow("velocityRange", { on: false, dir: "right" });
+    expect(g().continuousConducting.velocityRange.enabled).toEqual([false, false, false, false]);
+    g().setVoiceParam(0, "legato", 0.25);
+    g().setArrow("legato", { on: true, dir: "right" });
+    g().setArrow("legato", { on: false, dir: "right" });
+    expect(g().project.voices.every((voice) => voice.legato === 1)).toBe(true);
+  });
+
+  it("covers public guard and fallback branches without mutating valid state", () => {
+    g().selectVoice(99);
+    expect(g().selectedPatternIndices).toEqual([0]);
+    g().selectPattern(-1);
+    g().selectPattern(g().project.patterns.length);
+    g().selectPattern(5);
+    expect(g().selectedVoice).toBe(99);
+
+    g().toggleVariableMark("density", -1);
+    g().toggleVariableMark("density", 6);
+    g().setOption("lockedMarkedVariables", false);
+    g().transferVariablePosition("density", 0, 1, true);
+    g().transferVariableVoice("density", 0, 0, 1, true);
+    g().setPatternClipboard(null);
+    expect(g().patternClipboard).toBeNull();
+    g().followDrumMachine([]);
+
+    g().setContinuousConducting("legato", -1, true);
+    g().setContinuousConducting("legato", 4, true);
+    g().setContinuousConducting("legato", 0, true);
+    g().setContinuousConducting("legato", 0, false);
+    expect(g().continuousConducting.legato.enabled[0]).toBe(false);
+  });
+
+  it("covers MIDI rests, empty advance steps, and non-wrapping build release", () => {
+    g().setVoiceInput(0, { sourceChannel: 2, inputUse: "record" });
+    g().setOption("sustainEntersRests", true);
+    g().setMidiEditState({ from: 0, to: 4 }, 1);
+    g().receiveMidi({ type: "control", channel: 1, controller: 64, value: 127 });
+    expect(g().midiEditCounter).toBe(2);
+    g().setMidiEditState({ from: 0, to: 2 }, 2);
+    g().receiveMidi({ type: "control", channel: 1, controller: 64, value: 127 });
+    expect(g().midiEditCounter).toBe(0);
+
+    g().setVoiceInput(0, { sourceChannel: "all", inputUse: "record" });
+    g().setPatternMode(0, "chordMode", "build");
+    g().receiveMidi({ type: "note-on", channel: 1, note: 60, velocity: 64 });
+    g().receiveMidi({ type: "note-off", channel: 1, note: 60, velocity: 0 });
+    expect(g().midiEditCounter).toBe(1);
+
+    useM.setState((s) => ({ project: { ...s.project, patterns: s.project.patterns.map((pattern, index) =>
+      index === 0 ? { ...pattern, steps: [], outputLength: 1 } : pattern) } }));
+    g().setVoiceInput(0, { inputUse: "control", mouseAdvance: true });
+    g().setVoiceParam(0, "timeBaseDenominator", 0);
+    expect(g().advanceMouseVoices(64)).toEqual([]);
+    expect(g().receiveMidi({ type: "note-on", channel: 1, note: 50, velocity: 64 })).toEqual([]);
+  });
+
+  it("uses current-Snapshot and invalid-startup fallbacks", () => {
+    g().storeSnapshot(0);
+    g().recallSnapshot(0, 0);
+    g().setArrow("snapshot", { on: true, dir: "right" });
+    g().conductAt(0, 0, { snapshots: true });
+    expect(g().currentSnapshot).toBe(0);
+    g().newDocument({ nope: true });
+    expect(g().selectedVoice).toBe(0);
+    const startup = g().exportDocument();
+    startup.project.tempo = 137;
+    g().newDocument(startup);
+    expect(g().project.tempo).toBe(137);
+  });
+});

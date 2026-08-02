@@ -2,47 +2,52 @@ import { useEffect, useRef } from "react";
 import { useM } from "../state/store";
 import { getRuntime } from "./runtime";
 import { ConductingArrow } from "./ConductingArrow";
+import { runSnapshotGesture } from "./snapshotgesture";
+import { positionFromBaton } from "../engine/conductor";
+import {
+  classicConductorLayoutStyle,
+  conductorControlTone,
+  type ConductorControl,
+} from "./conductorappearance";
 
 const RATIOS = [1, 2, 4, 8, 16] as const;
 
-function TransportGlyph({ kind }: {
-  kind: "start" | "stop" | "pause" | "movie" | "sequence" | "robot";
-}) {
+function TransportGlyph({ kind }: { kind: ConductorControl | "robot" }) {
   if (kind === "start") {
-    return <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 4 25 16 8 28Z" /></svg>;
+    return <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+      <path d="M8 4 25 16 8 28Z" />
+    </svg>;
   }
   if (kind === "stop") {
-    return <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M10 4h12l6 6v12l-6 6H10l-6-6V10Z" /></svg>;
+    return <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+      <path d="M11 4h10l7 7v10l-7 7H11l-7-7V11Z" />
+    </svg>;
   }
   if (kind === "pause") {
-    return <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 5h5v22H8zm11 0h5v22h-5z" /></svg>;
+    return <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+      <path d="M8 5h6v22H8zm11 0h6v22h-6z" />
+    </svg>;
   }
   if (kind === "movie") {
     return (
-      <svg viewBox="0 0 32 32" aria-hidden="true">
-        <rect x="3" y="6" width="26" height="20" />
-        {[6, 13, 20].map((x) => <rect key={`top-${x}`} x={x} y="8" width="4" height="5" fill="var(--panel)" />)}
-        {[6, 13, 20].map((x) => <rect key={`bottom-${x}`} x={x} y="19" width="4" height="5" fill="var(--panel)" />)}
-        <rect x="4" y="15" width="24" height="2" fill="var(--panel)" />
+      <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+        <path d="M3 5h26v22H3zM6 8v5h4V8zm8 0v5h4V8zm8 0v5h4V8zM6 19v5h4v-5zm8 0v5h4v-5zm8 0v5h4v-5zM5 15v2h22v-2z" fillRule="evenodd" />
       </svg>
     );
   }
   if (kind === "sequence") {
     return (
-      <svg viewBox="0 0 32 32" aria-hidden="true">
-        <path fill="none" stroke="currentColor" strokeWidth="2" d="M7 3h14l5 5v21H7Z" />
-        <path fill="none" stroke="currentColor" strokeWidth="2" d="M21 3v6h5" />
-        <circle cx="17" cy="20" r="6" />
-        <circle cx="17" cy="20" r="2.5" fill="var(--panel)" />
-        <path d="M16 11h2v4h-2zm0 14h2v4h-2zM8 19h4v2H8zm14 0h4v2h-4z" />
+      <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+        <path fill="none" stroke="currentColor" strokeWidth="2" d="M6 2h15l6 6v22H6Z M21 2v7h6" />
+        <path d="M13 14h8v2h3v8h-3v3h-8v-3h-3v-8h3zm3 3v7h3v-7z" fillRule="evenodd" />
       </svg>
     );
   }
   return (
-    <svg viewBox="0 0 32 32" aria-hidden="true">
+    <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+      <path d="M21 3h6v3h-2v3h-3v3h-4V9h2V6h1z" />
       <path fill="none" stroke="currentColor" strokeWidth="2"
-        d="M5 27c3-7 7-9 12-8l3-7 3 1-1 7c4 2 5 5 5 7M7 25l9 3m-6-8 5 3" />
-      <path d="M18 7c2-4 7-3 8 0-2 3-5 5-8 5-2-1-2-4 0-5Z" />
+        d="M4 27h23M7 24l5-8 5 2 3-8 3 1-2 10 5 3M9 21l7 6M13 17l-4-5" />
     </svg>
   );
 }
@@ -64,6 +69,7 @@ export function ConductorWindow() {
   const setPaused = useM((s) => s.setPaused);
   const setArrow = useM((s) => s.setArrow);
   const conductAt = useM((s) => s.conductAt);
+  const clearContinuousConducting = useM((s) => s.clearContinuousConducting);
   const setTempoRange = useM((s) => s.setTempoRange);
   const setTempo = useM((s) => s.setTempo);
   const setRobot = useM((s) => s.setRobot);
@@ -98,7 +104,12 @@ export function ConductorWindow() {
       setPlaying(false);
     }
   };
-  const sync = () => getRuntime().sync();
+  const sync = () => runSnapshotGesture({
+    quantize: useM.getState().snapshotQuantize,
+    tempo: useM.getState().project.tempo,
+    elapsedSec: getRuntime().transportElapsedSec(),
+    recall: () => getRuntime().sync(),
+  });
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -131,34 +142,59 @@ export function ConductorWindow() {
 
   const pointFromEvent = (event: React.PointerEvent<HTMLDivElement>) => {
     const rect = grid.current!.getBoundingClientRect();
-    conductAt(
-      (event.clientX - rect.left) / rect.width,
-      (event.clientY - rect.top) / rect.height,
-    );
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    const state = useM.getState();
+    if (event.altKey) {
+      clearContinuousConducting();
+      return;
+    }
+    const quantized = {
+      quantize: state.snapshotQuantize,
+      tempo: state.project.tempo,
+      elapsedSec: getRuntime().transportElapsedSec(),
+    };
+    if (event.shiftKey) {
+      runSnapshotGesture({
+        ...quantized,
+        recall: () => useM.getState().conductAt(x, y, { record: true }),
+      });
+      return;
+    }
+    conductAt(x, y, { snapshots: false });
+    const arrow = state.arrows.snapshot;
+    if (!arrow?.on) return;
+    const index = positionFromBaton({ x, y }, arrow.dir);
+    if (!state.snapshots[index]) return;
+    runSnapshotGesture({
+      ...quantized,
+      recall: () => useM.getState().recallSnapshot(index),
+    });
   };
 
   return (
-    <div className="uconduct">
+    <div className="uconduct" style={classicConductorLayoutStyle()}>
       <div className="uconduct__left">
         <div className="uconduct__transport">
           <button aria-label="Start" title="Start (Space)" onClick={() => void start()}
-            className={isPlaying ? "is-on" : ""}><TransportGlyph kind="start" /></button>
-          <button aria-label="Stop" title="Stop (Return)" onClick={stop}>
+            className={`uconduct__tone--${conductorControlTone("start")}${isPlaying ? " is-on" : ""}`}><TransportGlyph kind="start" /></button>
+          <button aria-label="Stop" title="Stop (Return)" onClick={stop}
+            className={`uconduct__tone--${conductorControlTone("stop")}`}>
             <TransportGlyph kind="stop" />
           </button>
           <button aria-label="Pause" title="Pause (Tab)" onClick={pause}
-            className={isPaused ? "is-on" : ""}><TransportGlyph kind="pause" /></button>
+            className={`uconduct__tone--${conductorControlTone("pause")}${isPaused ? " is-on" : ""}`}><TransportGlyph kind="pause" /></button>
         </div>
         <div className="uconduct__secondary">
-          <button className="uconduct__sync" onClick={sync}>Sync</button>
+          <button className={`uconduct__sync uconduct__tone--${conductorControlTone("sync")}`} onClick={sync}>Sync</button>
           <button title={movieMode === "idle"
               ? "Arm Movie recording before Start"
               : "Movie is armed or recording — click to finish"}
             aria-label="Movie recording" onClick={toggleMovieRecording}
-            className={movieMode === "idle" ? "" : "is-on"}>
+            className={`uconduct__tone--${conductorControlTone("movie")}${movieMode === "idle" ? "" : " is-on"}`}>
             <TransportGlyph kind="movie" />
           </button>
-          <button disabled title="No imported MIDI Sequence is loaded"
+          <button disabled className={`uconduct__tone--${conductorControlTone("sequence")}`} title="No imported MIDI Sequence is loaded"
             aria-label="Sequence Play Enable"><TransportGlyph kind="sequence" /></button>
         </div>
       </div>

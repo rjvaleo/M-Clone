@@ -1,4 +1,5 @@
 import type { ArrowDir } from "./snapshot";
+import type { VelocityRange } from "./types";
 
 export type BatonPoint = { x: number; y: number };
 export type TempoRange = { low: number; high: number };
@@ -37,6 +38,17 @@ export function conductedTempo(range: TempoRange, value: number): number {
   return Math.round(
     normalized.low + (normalized.high - normalized.low) * clamp01(value),
   );
+}
+
+export function continuousVelocityRange(range: VelocityRange, value: number): VelocityRange {
+  const width = Math.max(0, Math.min(127, range.high - range.low));
+  const low = Math.round(clamp01(value) * (127 - width));
+  return { low, high: low + width };
+}
+
+/** 0.25x at one edge, 1x at center, and 4x at the other edge. */
+export function continuousLegato(value: number): number {
+  return 0.25 * Math.pow(16, clamp01(value));
 }
 
 export function robotMove(

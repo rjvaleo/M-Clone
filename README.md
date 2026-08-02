@@ -7,15 +7,16 @@
 ![Vite](https://img.shields.io/badge/Vite-5.4.21-646CFF?logo=vite&logoColor=white)
 ![Zustand](https://img.shields.io/badge/Zustand-4.5.7-433E38)
 ![Vitest](https://img.shields.io/badge/Vitest-2.1.9-6E9F18?logo=vitest&logoColor=white)
+![Node](https://img.shields.io/badge/local_verification-Node_24.18.0-339933?logo=node.js&logoColor=white)
 ![npm](https://img.shields.io/badge/npm-package_tooling-CB3837?logo=npm&logoColor=white)
 ![Web Audio API](https://img.shields.io/badge/Web_Audio_API-timestamped_synthesis-8A2BE2)
-![Web MIDI API](https://img.shields.io/badge/Web_MIDI_API-timestamped_output-0A7EA4)
+![Web MIDI API](https://img.shields.io/badge/Web_MIDI_API-live_input_%2B_timestamped_output-0A7EA4)
 ![HTML5](https://img.shields.io/badge/HTML5-semantic_UI-E34F26?logo=html5&logoColor=white)
 ![CSS3](https://img.shields.io/badge/CSS3-responsive_vector_UI-1572B6?logo=css&logoColor=white)
 
 ![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
 ![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25_lines%20%7C%20branches%20%7C%20functions-brightgreen)
-![Tests](https://img.shields.io/badge/tests-672_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-757_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
@@ -25,15 +26,18 @@
 ![Browser first](https://img.shields.io/badge/platform-browser_first-F57C00)
 ![Document format](https://img.shields.io/badge/document_format-.mclone_v2-263238?logo=json&logoColor=white)
 
-### Planned platform stack
+### Roadmap candidates and targets
 
-![Tauri planned](https://img.shields.io/badge/Tauri-native_shell_planned-24C8DB?logo=tauri&logoColor=white)
-![Rust planned](https://img.shields.io/badge/Rust-native_timing_planned-000000?logo=rust&logoColor=white)
-![WAM planned](https://img.shields.io/badge/Web_Audio_Modules-instrument_host_planned-5C2D91)
+![Tauri candidate](https://img.shields.io/badge/Tauri-native_shell_candidate-24C8DB?logo=tauri&logoColor=white)
+![Rust candidate](https://img.shields.io/badge/Rust-native_adapter_candidate-000000?logo=rust&logoColor=white)
+![WAM exploratory](https://img.shields.io/badge/Web_Audio_Modules-hosting_exploratory-5C2D91)
 ![Platforms planned](https://img.shields.io/badge/targets-macOS_%7C_Windows_%7C_iOS_%7C_Android-607D8B)
 ![Editions](https://img.shields.io/badge/editions-Classic_%7C_Studio_%7C_Modular-7B1FA2)
 
-Badges labeled **planned** describe the roadmap, not current shipped capability.
+These badges describe product targets and implementation candidates, not the
+current shipped stack. The exact resolved versions, architecture boundaries,
+build tools, and current/candidate distinction are in
+[`docs/TECH_STACK.md`](docs/TECH_STACK.md).
 The exact MIDI guarantees and remaining native work are defined in
 [`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md).
 
@@ -50,6 +54,9 @@ Movie capture and deterministic Standard MIDI File export are documented in
 [`docs/MOVIES_AND_MIDI.md`](docs/MOVIES_AND_MIDI.md).
 The manual/reference parity audit for Patterns, Transport, and Conductor is in
 [`docs/PATTERNS_TRANSPORT_AUDIT.md`](docs/PATTERNS_TRANSPORT_AUDIT.md).
+The executable 180-capability M 2.7 audit—163 implemented behaviors, 17 explicit
+exceptions, and no remaining red work queues—is in
+[`docs/MANUAL_CONFORMANCE.md`](docs/MANUAL_CONFORMANCE.md).
 The configurable click-safe Web Audio monitor is documented in
 [`docs/BUILT_IN_SYNTH.md`](docs/BUILT_IN_SYNTH.md).
 The authoritative MIDI timing, transport, lifecycle, verification, and known-
@@ -58,13 +65,15 @@ limits specification is
 The technical-completion sequence for the next session is in
 [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md).
 
-Current verified checkpoint: **672 passing tests across 41 files**, **100%**
+Current verified checkpoint: **757 passing tests across 61 files**, **100%**
 statement/branch/function/line coverage for the included engine and state
 modules, clean TypeScript checking, and successful normal and single-file
-production builds. P3 is complete for the selected scope (Sound Choice remains
-intentionally skipped). Movie capture/SMF export and the focused
-Patterns/Transport/Conductor audit are complete; MIDI import and Sequence
-playback are next.
+production builds. The retained M 2.7 manual gap queues are closed. Live MIDI
+input, recording, routing, Input Control, Mouse/Step Advance, metronome, clock,
+and the sixteen-channel assignment matrix are implemented. Sound Choice and
+MIDI import/imported Sequence playback remain intentional exclusions. The next
+local frontier is the role-specific Classic audio rack. Hardware/browser MIDI
+certification proceeds in parallel when representative devices are available.
 
 Projects save as `.mclone` files. Their payload is readable, versioned JSON,
 but it represents the complete musical project—not merely a graph. Legacy
@@ -79,8 +88,12 @@ but it represents the complete musical project—not merely a graph. Legacy
 - [`docs/TODO.md`](docs/TODO.md) — current open backlog and deferred decisions.
 - [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md) — ordered technical-completion plan
   with acceptance gates.
+- [`docs/MANUAL_CONFORMANCE.md`](docs/MANUAL_CONFORMANCE.md) — exhaustive
+  manual capability inventory, behavioral evidence, and explicit exceptions.
 - [`docs/HANDOFF.md`](docs/HANDOFF.md) — implementation handoff, working rules,
   architectural decisions, and known development gotchas.
+- [`docs/TECH_STACK.md`](docs/TECH_STACK.md) — canonical current dependencies,
+  resolved tool versions, architecture boundaries, and roadmap candidates.
 - [`docs/M-Clone_Build_Plan.md`](docs/M-Clone_Build_Plan.md) — product vision,
   architecture, technology choices, phased build plan, and native direction.
 - [`docs/PRODUCT_RELEASE_ROADMAP.md`](docs/PRODUCT_RELEASE_ROADMAP.md) —
@@ -106,7 +119,8 @@ but it represents the complete musical project—not merely a graph. Legacy
 - [`docs/MIDI_VIEW.md`](docs/MIDI_VIEW.md) — four-Voice diagnostic tracker,
   capture semantics, display behavior, and tests.
 - [`docs/MOVIES_AND_MIDI.md`](docs/MOVIES_AND_MIDI.md) — manual-derived Movie
-  capture, timestamp model, deterministic SMF export, and remaining import work.
+  capture, timestamp model, deterministic SMF export, and the import-scope
+  decision.
 - [`docs/PATTERNS_TRANSPORT_AUDIT.md`](docs/PATTERNS_TRANSPORT_AUDIT.md) —
   corrected Pattern/transport/conductor parity and dependency-bound gaps.
 - [`docs/CONDUCTING_WINDOW.md`](docs/CONDUCTING_WINDOW.md) — Conducting Window
@@ -184,6 +198,9 @@ Working today:
 - **Window manager:** right-click blank canvas to open any available window.
   The six reference main windows stay open; auxiliary editors and Midi View can
   close and reopen, and all editor windows can coexist without modal overlays.
+  Right-clicking occupied module space retains that module's commands and adds
+  the same available-window launcher beneath them, so free canvas space is not
+  required to open another module.
   New/reopened auxiliaries occupy the leftmost free column beyond the permanent
   modules and stack with 4px padding. Dragged windows snap to nearby aligned
   edges and resolve overlaps on release.
@@ -210,11 +227,19 @@ Working today:
   selected low→high range.
 - **Transport:** Start / Stop / Pause / Sync, Tempo; **Key + Scale** with snap-to-key.
 - **Conducting Window:** manual-faithful Start / Stop / Pause / Sync, six-by-six
-  Baton grid, conducted Tempo range, Sync Ratio, and bounded Robot Conductor.
-- **Per-voice Midi:** channel, program, transpose, velocity range, density, legato.
-- **Orchestration:** each of six a–f Positions stores a 4-Voice × 16-channel
+  Baton grid, conducted Tempo range, Sync Ratio, bounded Robot Conductor,
+  reference-colored controls, clipped-safe lower numericals, and pull-out
+  per-Voice Continuous Conducting for Velocity Range and Legato.
+- **Midi performance strip:** each of six a–f Orchestration Positions stores a 4-Voice × 16-channel
   routing matrix; a Voice can layer across multiple MIDI channels or be silent.
+- **Separate Midi Assignment window:** sixteen input/output device mappings,
+  latency, program-number base, conducting controllers, and channel messages
+  stay in their File-menu setup window instead of expanding the quick strip.
 - **Dual output:** built-in synth (zero setup) **and** Web MIDI to any device/DAW.
+- **Live MIDI input:** sixteen assignable device/channel rows feed per-Voice
+  Source and Use modes, Echo-Thru/Echo Map, Keyboard Transpose, Pattern
+  recording, `sa` Step Advance, Mouse Advance, and the Appendix B Input Control
+  System. Controller X/Y assignments drive the Baton.
 - **Four independent monitor patches:** each stream has its own color-coded,
   click-safe subtractive Synth patch with dual oscillators, sub/noise mixer,
   routable LFO, resonant multimode filter, dual ADSR envelopes, glide, velocity,
@@ -232,8 +257,8 @@ to the next onset and may exceed 100% for overlapping articulation. All three
 Cyclic Variables have six conductable, Snapshot/Slideshow-aware Positions.
 Their dedicated editor has a reference-derived Classic view and a right-click
 Modern view that exposes all three variables and all twelve Voice grids at once.
-Time Distortion, Grid conducting, and the Robot Conductor are audible; external
-Midi-Conduct remains a visual option until MIDI controller assignment lands.
+Time Distortion, Grid conducting, Robot Conducting, and assigned external MIDI
+Conducting are active performance paths.
 
 ## Run it
 
@@ -255,8 +280,9 @@ npm run dev
 ```
 
 Open the local URL Vite prints, press **Start**, edit the grid, activate positions,
-ride the sliders. For MIDI, click **Enable MIDI** and pick an output (Chromium
-browsers). To build a single self-contained HTML preview: `npm run build:single`
+and ride the sliders. For MIDI, choose **File ▸ Midi Assignment**, click
+**Enable / Refresh MIDI**, and map input/output ports (Chromium browsers). To
+build a single self-contained HTML preview: `npm run build:single`
 then open `dist-single/index.html`.
 
 ## Develop
@@ -284,6 +310,10 @@ src/
     scheduler.ts   adaptive lookahead policy + diagnostics
     events.ts      explicit event protocol + note lifecycle
     eventbatch.ts  versioned adapter-neutral MIDI event batches
+    midiinput.ts   normalized live MIDI input and routing helpers
+    inputcontrol.ts Appendix B Input Control command mapping
+    clockoutput.ts 24-PPQN MIDI Clock scheduling
+    movie.ts       performance capture + deterministic SMF encoding
     variables.ts   Variable Positions (a–f) model
     snapshot.ts    partial Snapshot capture/apply + quantization
     slideshow.ts   deterministic recording/playback state machine
@@ -297,8 +327,12 @@ src/
     PatternEditor.tsx  M-style editor (paint, resize, auto-length)
     CyclicEditor.tsx   Classic/Modern five-level cyclic editor
     MidiView.tsx       four-Voice generated-output tracker
+    ConductorWindow.tsx transport, Baton, tempo, Robot, and Movie controls
+    SynthWindow.tsx    four-patch subtractive monitor control surface
+    windowlauncher.tsx canvas-wide auxiliary-window launcher
     useDraggable.ts    draggable/persisted window positions + z-order
-docs/              build plan, status, and UI to-dos
+  manual/          executable manual capability inventory
+docs/              stack, plans, specifications, audits, status, and backlog
 reference/         original M manual, screenshots, layout mockup
 ```
 

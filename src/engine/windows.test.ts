@@ -20,4 +20,11 @@ describe("application window registry", () => {
     expect(closeAppWindow(opened, "midi-view").has("midi-view")).toBe(false);
     expect(APP_WINDOWS).toContainEqual({ id: "synth", label: "Synth", permanent: false });
   });
+
+  it("keeps MIDI Assignment separate from the permanent compact Midi window", () => {
+    expect(APP_WINDOWS).toContainEqual({
+      id: "midi-assignment", label: "Midi Assignment", permanent: false,
+    });
+    expect(APP_WINDOWS.find((window) => window.id === "midi")?.permanent).toBe(true);
+  });
 });

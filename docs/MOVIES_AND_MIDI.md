@@ -50,14 +50,15 @@ The pure recorder and byte encoder are pinned by deterministic tests, including
 arming/finalization, chord and Voice retention, pause-gap exclusion, tempo-map
 changes, exact SMF structure, retrigger ordering, clamping, and filenames.
 
-Still open in P5:
-
-- MIDI-file parsing and import choices for chords, timing, rests,
-  quantization, and source channels;
-- import into Pattern Positions;
-- independent Sequence storage, playback, and play-enable/mute;
-- editable multitrack Movie presentation and document persistence.
+MIDI-file parsing, Pattern import choices, and imported Sequence
+storage/playback were removed from active product scope on 2026-08-01 because
+the product has no intended import workflow. They remain visible as red manual
+conformance decisions rather than being described as implemented. Editable
+multitrack Movie presentation and document persistence can be considered
+independently if they gain a concrete workflow.
 
 The Patterns, Transport, and Conductor parity audit is complete; see
-[`PATTERNS_TRANSPORT_AUDIT.md`](./PATTERNS_TRANSPORT_AUDIT.md). MIDI import is
-the next slice.
+[`PATTERNS_TRANSPORT_AUDIT.md`](./PATTERNS_TRANSPORT_AUDIT.md). Live MIDI input,
+the sixteen-row assignment matrix, controller conducting, metronome, and MIDI
+Clock output are implemented. The next local product work is the Classic audio
+rack; physical MIDI/browser certification remains a release-verification lane.

@@ -6,7 +6,11 @@
 This specification defines M Studio's native desktop, hosted plug-in, transport,
 audio-bus, and real-time requirements. It complements
 [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md) and
-[`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md).
+[`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md). It does not select an
+implementation framework: Tauri/Rust are prototype candidates, VST3 is a
+required investigation, and Audio Unit is an evaluated Apple target. The
+current-versus-candidate boundary is canonical in
+[`TECH_STACK.md`](./TECH_STACK.md).
 
 ## 1. Deliverables
 

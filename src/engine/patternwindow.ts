@@ -1,11 +1,12 @@
 import type { ChordMode, InsertMode } from "./types";
+import type { MidiInputUse } from "./midiinput";
 
 export type SourceChannel = "all" | number;
-export type InputUse = "disabled" | "record";
+export type InputUse = MidiInputUse;
 
 /** Chapter 13's numeric Time Base denominator values; `sa` awaits Input Control. */
 export const TIME_BASE_DENOMINATORS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 15, 16, 24,
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 15, 16, 24,
 ] as const;
 
 export function cycleSourceChannel(value: SourceChannel): SourceChannel {
@@ -14,7 +15,8 @@ export function cycleSourceChannel(value: SourceChannel): SourceChannel {
 }
 
 export function cycleInputUse(value: InputUse): InputUse {
-  return value === "disabled" ? "record" : "disabled";
+  const values: InputUse[] = ["disabled", "record", "control", "keyboard-transpose", "echo-map"];
+  return values[(values.indexOf(value) + 1) % values.length];
 }
 
 export function cycleChordMode(value: ChordMode): ChordMode {

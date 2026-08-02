@@ -7,21 +7,23 @@ Last audited: 2026-08-01
 This began as the requested analysis of window/font consistency and the delta
 between every image in `reference/` and the implementation. Shared typography,
 logical sizing, global/context menus, and current clipping/alignment defects
-were subsequently normalized. Further fidelity work is paused until technical
-behavior is complete.
+were subsequently normalized. Broad overlay work is deferred to release
+hardening; targeted clipping, collision, and broken-control defects continue
+to be fixed as found.
 
 Implemented outcomes include the extensible four-Voice color-theme system, six
 initial presets, custom palette chooser, menu ownership, shared rendered
 typography, logical panel sizing, collision-free auxiliary placement, compact
-Synth control containment, and explicit right/bottom safety gutters for the
-Note Density editor.
+Synth control containment, explicit right/bottom safety gutters for Note
+Density, hidden pull-out Continuous Conducting controls, and the
+reference-colored/notched Conducting module.
 
 ## Reference scale caveat
 
 The reference files do not share one pixel scale. Several isolated windows are
 approximately 2x captures. For example, `transport and conductor.png` is
-922 x 432 but represents roughly a 461 x 216 internal window and is currently
-rendered at 50% (230.5 x 108 CSS pixels) at the user's direction. Raw bitmap
+922 x 432 and is normalized to a 459 x 214 drawing rendered at approximately
+50% (229 x 107 logical pixels). Raw bitmap
 dimensions must therefore never be copied directly. Future matching should use
 control ratios, text cap height, line weight, and comparison with the full-app
 captures to infer display scale.
@@ -41,12 +43,10 @@ The three competing title systems have now been consolidated on the majority
 generic `.uwin` chrome. Main windows, Pattern Editor, Cyclic Editor, variable
 editors, Midi View, and Conducting all use the same compact flat title bar, title/note
 layout, inline controls, drag handle, border, and theme treatment. Conducting's
-body alone remains scaled to preserve its compact control geometry. Title height,
-diagonal notch angle, border weight, menu placement, shadow, and drag hit area
-are inconsistent. The original uses flat white panels, black hairlines,
-diagonal title notches, and essentially no decorative shadow. A future shared
-window primitive may later parameterize notch/title width while retaining the
-shared metrics; that is reference-fidelity work, not a remaining consistency bug.
+body alone remains scaled to preserve its compact control geometry, and its
+reference-specific title notch is now explicit. Some source-era notch angles,
+bitmap line weights, shadows, and drag-hit proportions still differ. Those are
+release-polish deltas, not hidden or broken controls.
 
 The application now renders inside a 640 × 480 logical desktop. The permanent
 window composition has been resized to the measured `color-app.gif` footprint,
@@ -80,15 +80,17 @@ remain associated with their owning panels through right-click menus. Manual-bac
 - Conducting: supported performance Options, Harmony, and Output.
 - MIDI: routing controls, not unrelated global options.
 
-Unsupported historical File, Windows, MIDI Assignment, slideshow, external
-clock, and OS lifecycle commands remain documented gaps. Reference controls
-that are visible before their subsystem exists are disabled or carry explicit
-"not yet wired" tooltips.
+File/Windows navigation, Midi Assignment, Snapshot/Slideshow controls,
+metronome, and MIDI Clock output are implemented. Legacy registration/Quit,
+external clock input, Standard MIDI import, and imported Sequence playback are
+explicit browser/product exceptions. Sequence remains visibly disabled with an
+honest tooltip.
 
-The browser replacement for M's Windows menu is a right-click menu on blank
-canvas. It lists every window, disables those already open, and can reopen any
-auxiliary. The six windows visible in `color-app.gif` are permanent; edit
-windows and Midi View are non-modal, independently movable, and closable.
+The Windows menu and canvas-wide right-click launcher share one registry. They
+list every window, disable those already open, and can reopen auxiliaries;
+module context menus append the launcher after local commands. The six windows
+visible in `color-app.gif` are permanent; edit windows and Midi View are
+non-modal, independently movable, and closable.
 
 ## Screen-by-screen delta
 
@@ -97,8 +99,8 @@ windows and Midi View are non-modal, independently movable, and closable.
 | `color-app.gif` | Unified desktop | Global menu restored and footer removed; logical scaling, shared typography, Voice colors, and compact proportions are in place. Exact header branding, notches, gaps, and pixel placement remain deferred. |
 | `b&w-open-window.jpg` | Unified desktop / B&W preset | B&W supplies distinct grays, but monochrome chrome, menu geometry, overlap order, and compact desktop dimensions are not matched. |
 | `all-windows-open-overlapping.png` | Movable windows | Movement/z-order exists. Auxiliary windows now open/reopen in a collision-free padded column and snap away from overlaps after dragging; user order remains free. |
-| `patterns module.png` | Patterns window | 🟡 Rebuilt at the reference's effective 228×120 size with corrected Option-click modes, full numeric Time Bases, and functional Phase. Input-dependent Src/Use/Echo/Mouse Advance and six independent Pattern Group banks remain incomplete. |
-| `transport and conductor.png` | Conducting window | Inventory and geometry are close. Exact bitmap font, diagonal/border pixels, native controls, title-menu fit, and lower icons remain deltas. |
+| `patterns module.png` | Patterns window | ✅ Rebuilt at the reference's effective 228×120 size with Source/Use/Echo/Mouse Advance, Option-click modes, full numeric/`sa` Time Bases, functional Phase, and independent Pattern Group banks wired. Exact bitmap glyph and spacing differences remain polish. |
+| `transport and conductor.png` | Conducting window | ✅ The title now occupies only the transport column while the grid reaches the top edge; diagonal separators sit behind crisp glyphs; semantic transport colors match the color reference; Tempo, ratio and Robot Time Base values fit; and H/V use compact vertical controls in both themes. Exact bitmap font remains a source-era delta. |
 | `variables.png` | Variables / `VarThumb` | Six positions and miniature concepts exist. Width, labels/arrows, four-color miniature rows, and exact cell/title metrics differ. |
 | `cyclic editor.png` | Dedicated Cyclic Editor | Classic controls are enlarged 25% to 275×222 logical pixels without enlarging typography. Four stacked 5×16 grids, aligned loop numerals, dual axes, controls, Positions, defaults, and random ranges work; Modern exposes all three variables. |
 | `note density.png` | Note Density popup | ✅ Reference raster normalized to 145×90 logical geometry, with a fixed-width drawing area, right/bottom safety gutter, compact four-Voice percentage/slider rows, and global channel colors. |
@@ -128,15 +130,16 @@ creates a Custom palette. State persists locally. Colors are exposed as
 miniatures/editors, both Cyclic Editor views, Cyclic Variables, and MIDI/Midi
 View Voice rows. Further reference work can reuse the same API.
 
-## Deferred fidelity work — frozen until technical completion
+## Deferred fidelity work — release-polish lane
 
 Completed: reference scale inference, shared typography, common window chrome,
-Patterns reconstruction, auxiliary sizing, global/context menu ownership, and
-removal of the footer. The remaining fidelity queue is deliberately paused:
+Patterns reconstruction, auxiliary sizing, global/context menu ownership,
+Conducting correction, clipping fixes, and removal of the footer. Broad overlay
+work is deferred until release hardening:
 
 1. Optional reference-accurate title notches without separate chrome systems.
-2. Remaining one-bit icon normalization.
-3. Snapshot, Conducting, and Classic Cyclic pixel-detail passes.
+2. Remaining one-bit icon normalization outside the corrected Conducting face.
+3. Snapshot and Classic Cyclic pixel-detail passes.
 4. Fixed-viewport overlay comparisons for every reference.
 5. Decide the permanent home or final styling of the non-reference app header
    and theme controls.

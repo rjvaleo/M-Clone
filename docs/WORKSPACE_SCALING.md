@@ -30,20 +30,25 @@ At 110%, for example, the desktop and its complete module suite render at
 | Window | Logical size at 100% |
 |---|---:|
 | Patterns | 228 × 120 |
-| Conducting | 229 × 113 |
+| Conducting | 229 × 107 |
 | Snapshot | 62 × 315 |
 | Variables | 220 × 156 |
 | Cyclic Variables | 229 × 156 |
-| Midi, collapsed | 454 × 45 |
+| Midi performance strip | 454 × 45 |
 
-Midi's modern detailed controls remain available through its right-click Setup
-button; collapsing Setup restores the reference-sized strip.
+The permanent Midi strip contains only the compact Orchestration performance
+view. File > Midi Assignment opens the independent, movable 16-channel device
+mapping and message window; it never expands or replaces the performance strip.
 
 ## Shared design and color
 
 All windows use the same navigation, border, menu, close, focus, movement, and
 theme rules. Per-window dimensions describe content geometry rather than
 introducing alternate chrome systems.
+
+The available-window launcher is canvas-wide: blank-space right-clicks show it
+directly, while occupied module right-clicks append it after any module-local
+commands. Opening modules therefore does not depend on finding exposed canvas.
 
 Four-voice artwork inherits `--channel-1` through `--channel-4`, including the
 Patterns rows, Pattern Editor notes, Variables thumbnails and editors, Cyclic

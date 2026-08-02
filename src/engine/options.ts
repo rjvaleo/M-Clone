@@ -52,10 +52,6 @@ export const OPTION_LABELS: Record<OptionId, string> = {
  */
 const NEEDS_MIDI_INPUT: ReadonlySet<OptionId> = new Set<OptionId>([
   "externalClock",
-  "tapAffectsVelocity",
-  "sustainEntersRests",
-  "midiConduct",
-  "echoInBackground",
 ]);
 
 export function isOptionAvailable(id: OptionId): boolean {

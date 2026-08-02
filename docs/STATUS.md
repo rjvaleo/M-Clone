@@ -1,5 +1,64 @@
 # M-Clone — Project Status
 
+## 2026-08-01: documentation and Conducting visual reconciliation
+
+The README, stack, backlog, handoff, reliability, visual, and implementation
+documents are reconciled against the resolved install and executable manual
+inventory. `TECH_STACK.md` is now the canonical current-stack boundary; Tauri,
+Rust, Audio Unit, and WAM are labeled candidates or evaluations rather than
+shipped dependencies.
+
+The Conducting module now follows the color reference at 100%: its notched title
+ends over the transport field while the Grid reaches the top edge, diagonal
+separators no longer cross glyphs, semantic transport colors remain independent
+of Voice palettes, lower numericals fit, and H/V Robot ranges use compact
+vertical controls. Continuous Velocity/Legato controls are hidden by default
+and appear only from the manual-derived Conducting Arrow pull gesture.
+
+The next local implementation is the four-engine Classic audio rack. Dynamic
+Voice-count work and release hardening follow; physical browser/MIDI
+certification remains a parallel device-dependent release lane.
+
+## 2026-08-01: M 2.7 manual gap closure
+
+All 194 manual pages were audited, including visual inspection of the complete
+reference/control section and Appendix B keyboard map. The 180-capability
+inventory now records **163 passes, zero partials, zero failures, and 17
+explicit exceptions**. Its executable run is **184 tests: 167 passed and 17
+skipped**; both the existing-functionality and new-capability queues are empty.
+
+The completed work adds live MIDI input, sixteen-channel input/output device
+assignment, Source/Use/Echo routing, full Pattern recording modes, Keyboard
+Transpose, `sa` Step Advance, Mouse Advance, sustain-entered rests, Appendix B
+Input Control, controller conducting, metronome, MIDI Clock, output latency,
+and program display base. The ordinary suite is **757 passing tests across 61
+files** at 100% included engine/state coverage. See
+[`MANUAL_CONFORMANCE.md`](./MANUAL_CONFORMANCE.md).
+
+Sound Choice and Standard MIDI import/imported Sequence playback are explicit
+not-applicable product decisions. Deterministic Standard MIDI export remains
+complete and green.
+
+## 2026-08-01: stream color continuity in auxiliary editors
+
+Velocity Range, Note Order, and the Cyclic Editor now carry the same four
+sequencer-stream colors used by the rest of the application. Velocity axes,
+bands, endpoint boxes, and values inherit their Voice color. Note Order keeps
+the manual's solid, hatched, and dotted Original/Cyclic/Utterly semantics while
+colorizing all three regions and both boundary handles. Cyclic lanes add a
+subtle stream tint and colored lane edge around the existing colored levels.
+Both light and dark themes were verified at the normal 150% workspace scale.
+The Classic Cyclic side panel is also collision-free at the 100% baseline: its
+wrapped descriptor and three control banks occupy explicit non-overlapping
+rows, unselected selectors retain the selected tab's complete angled polygon
+as an outline, value boxes are fitted to their three-digit contents, and every
+a–f Position bank keeps all six cells inside its control section.
+Density, Velocity Range, Note Order, and Transposition now share one 46×24
+logical per-Voice field rectangle. At the 100% baseline every numerical and
+Note Order boundary handle renders at exactly 23×12 CSS pixels, with matching
+Voice-colored text and borders. The Note Order clamps account for the wider
+handles at both probability-bar edges.
+
 ## 2026-08-01: configurable click-safe built-in Synth
 
 Each of the four sequencer streams now owns an independent, color-coded patch
@@ -28,7 +87,7 @@ suffix; the payload remains versioned JSON and legacy `.mclone.json` / `.json`
 files remain openable. The Conducting/transport caption shows only the filename
 stem, without any project suffix.
 
-TDD verification is **672 tests across 41 files** with 100% included
+TDD verification at the latest checkpoint is **757 tests across 61 files** with 100% included
 engine/state coverage. Browser verification covered dark-theme layout,
 close/reopen through Windows, live control exposure, a generated sixteenth-note
 run, compact select/knob containment, and Note Density geometry at 150%.
@@ -43,9 +102,9 @@ Sequence glyphs have been redrawn toward the printed filmstrip and document
 symbols. Dependency-bound gaps are catalogued without claiming they work in
 [`PATTERNS_TRANSPORT_AUDIT.md`](./PATTERNS_TRANSPORT_AUDIT.md).
 
-TDD verification is **657 tests across 34 files** with 100% included
-engine/state coverage. The next P5 slice is MIDI import and Sequence playback;
-live input later owns Source/Use/Echo-Thru, Mouse Advance, and `sa` Step Advance.
+At that historical checkpoint TDD verification was **657 tests across 34
+files**. The dependency-bound controls described there have since been closed;
+MIDI import/Sequence playback were explicitly excluded.
 
 ## 2026-08-01: Movie capture and deterministic MIDI export
 
@@ -223,8 +282,8 @@ align across the four fixed Voice columns, Follow pins the scrollable history
 to new rows, and Clear resets it. The later animated playhead and Pattern
 position/length experiment has been removed.
 
-**As of:** 2026-08-01 · **Working tree:** local Synth, density-layout, and
-documentation refinements intentionally uncommitted
+**As of:** 2026-08-01 · **Working tree:** manual-gap closure, MIDI/input,
+interface, Conducting, Synth, and documentation refinements intentionally uncommitted
 **Measured against:** [`M-Clone_Build_Plan.md`](./M-Clone_Build_Plan.md)
 
 Legend: ✅ done · 🟡 partial · ⬜ not started
@@ -235,13 +294,14 @@ Legend: ✅ done · 🟡 partial · ⬜ not started
 transform chain, the "alive" randomness (memory + 1/f Brownian), and the whole
 harmonic engine (per-voice + diatonic + second-order transposition, key/scale
 snap, chord-tone targeting). The movable classic interface is wired for the
-implemented engine, and conducting core is complete. Remaining work is the
-unfinished classic subsystems, persistence/I/O, and instruments. Layout work
-is paused by decision.
+implemented engine, and conducting core is complete. Remaining product work is
+the role-specific Classic audio rack, configurable Voice-count core, release
+hardening, and physical browser/MIDI certification. The retained manual
+behavior, project I/O, live MIDI, and Movie export are done.
 
 | Metric | State |
 | --- | --- |
-| Unit tests | **672 passing** (41 files) |
+| Unit tests | **757 passing** (61 files) |
 | Coverage (engine + state) | **100%** lines / branches / functions |
 | Typecheck (`tsc --noEmit`) | Clean |
 | Production build | Succeeds (`vite build`, `build:single`) |
@@ -257,7 +317,7 @@ is paused by decision.
 | **P2 Variables core** | Note Order, Transposition, Density, manual-faithful Velocity Range + positions + editors + harmonic engine | ✅ |
 | **P3 Cyclic + Midi + rest** | Cyclic editor, Midi window, Orchestration, Time Distortion, Phrasing, Pattern Group, Sound Choice | ✅ for selected scope (Phrasing is Legato Cyclic ✅; Sound Choice intentionally skipped) |
 | **P4 Conducting + Snapshots** | Conducting grid, arrows, Robot, snapshots, slideshows | ✅ |
-| **P5 Classic technical I/O** | Record-to-tracks, MIDI import/export, save/load, Input Control, Mouse Advance, four lightweight playback engines | 🟡 (save/load ✅; Movie capture + SMF export ✅) |
+| **P5 Classic technical I/O** | Movie/MIDI export, save/load, Input Control, Mouse Advance, four lightweight playback engines | 🟡 (technical MIDI/File/recording scope ✅; four role-specific engines ⬜) |
 | **P6 Modern theme + instruments** | Modern layouts, deeper instruments, pattern-manipulation upgrades | 🟡 (Modern Cyclic Editor + color themes ✅; broader Modern layout ⬜) |
 | **M Classic Web** | faithful four-Voice browser MIDI product + four lightweight engines | 🟡 |
 | **M Studio Desktop** | paid eight-Voice standalone + plug-in, seven instruments, signature FX, multi-output | ⬜ |
@@ -292,7 +352,7 @@ is paused by decision.
 | Layer | Status | Notes |
 | --- | --- | --- |
 | A — Generator (classic M) | ✅ | engine + store |
-| B — Recorder (record-to-tracks / Movie) | ⬜ | |
+| B — Recorder (record-to-tracks / Movie) | ✅ | Movie capture and deterministic SMF export |
 | C — Instrument rack | 🟡 | configurable subtractive monitor synth complete; four role-specific Classic engines then seven first-party Studio engines remain planned |
 | Engine (framework-agnostic TS) | ✅ | `src/engine/*` |
 | Control catalog + bindings (shared) | 🟡 | store is shared; formal abstract control catalog ⬜ |
@@ -301,26 +361,27 @@ is paused by decision.
 | Explicit MIDI event/lifecycle layer | ✅ | ordered events, 960 PPQN, retrigger cleanup, per-Voice RNG |
 | Output sinks (MIDI + instruments) | 🟡 | explicit-event Web MIDI + configurable four-stream monitor synth ✅; Classic/Studio and native adapters ⬜ |
 | Document format (`.mclone`, JSON payload) + save/load | ✅ | `ProjectDocumentV2`; Slideshows included, v1-compatible defensive decode, legacy JSON import, File menu wired |
-| Standard MIDI File import/export | ⬜ | |
+| Standard MIDI File export | ✅ | deterministic format-1 Movie export |
+| Standard MIDI File import / imported Sequence | ⛔ out of active scope | explicit not-applicable product decisions |
 | Old `.M` import | ⬜ | awaiting sample files |
-| VST/AU hosting | ⬜ | native phase |
+| VST3/Audio Unit deliverables | ⬜ | native phase; framework selection and host-adapter prototypes remain ahead |
 
 ## Screen inventory
 
 | Window | Status | Wired today |
 | --- | --- | --- |
-| **Patterns** | ✅ | play-enable, voice select, output length, time base (num/den), 16-step toggles; Pattern Group a–f selection, conducting, snapshots, and persistence ✅ |
-| **Conducting / "Untitled"** | 🟡 | Start/Stop/Pause/Sync, six-by-six Grid, Position + Tempo conducting, editable Tempo, Tempo Range, Sync Ratio, bounded Robot + Time Base, corrected Movie/Sequence glyphs, and Movie capture; Sequence remains disabled pending import/playback |
+| **Patterns** | ✅ | play-enable, Source/Use/Echo, Mouse Advance, recording modes, voice select, output length, numeric/`sa` Time Base, 16-step toggles; Pattern Group a–f selection, conducting, snapshots, and persistence |
+| **Conducting / "Untitled"** | ✅ selected scope | Start/Stop/Pause/Sync, six-by-six Grid, Position + Tempo/MIDI conducting, editable Tempo, Tempo Range, Sync Ratio, metronome/MIDI Clock, bounded Robot + Time Base, and Movie capture; Sequence is deliberately excluded |
 | **Variables** | ✅ for selected scope | 6-position activation/editors for Note Order, Transposition, Density, Velocity Range, Orchestration, and Time Distortion; Pattern Group activation/conducting; Sound Choice skipped |
 | **Cyclic Variables** | ✅ | five-level Accent/Legato/Rhythm cycles, six Positions, per-Voice lengths, conducting, Snapshot/Slideshow integration, and Classic/Modern editor; Legato supplies Phrasing |
-| **Midi** | ✅ | per-voice channel, program, transpose, velocity-range readout, density, legato; six-position 4×16 Orchestration routing ✅; Sound Choice skipped |
+| **Midi** | ✅ | permanent quick view contains only six-position 4×16 Orchestration; the separate File > Midi Assignment window owns sixteen-row input/output mapping, latency, program base, controller assignments, and channel messages; Sound Choice skipped |
 | **Snapshot** | ✅ | 26 partial A–Z stores, Hold/Do, Edit/copy, Blink Everything, restore, keyboard control, and nine record/play/pause/loop/stop Slideshows |
 | **File menu** | ✅ | New / Open / Save / Save As over a versioned `.mclone` document, with the stored filename in the application header and a suffix-free name in the Conducting/transport title; an app-owned filename dialog and encoded download keep embedded-browser saves deterministic |
 | **Pattern Editor** | ✅ | dual keyboards, dotted grid, Region tools, View/Chord/Insert/Drum/Size modes, MIDI range/counter, audition, resize, and 22 working Edit/Pattern commands including Cyclic Random operations |
 | **Midi View** | ✅ | initial compact four-lane event tracker with timestamp, Note On/Off details, Follow, Clear, and bounded history |
 | **Synth** | ✅ monitor scope | four independent stream-colored subtractive patches; compact themed dual-oscillator/LFO/filter/dual-ADSR control surface; click-safe Web Audio scheduling |
 | **Module context menus** | ✅ | Pattern Editor owns Edit/Pattern; Variables owns editors/colors; Conducting owns Options/Harmony/Output; commands are accessed by right-click and popups are viewport-correct |
-| **Global menu bar** | ✅ | Classic File/Edit/Variables/Pattern/Windows/Options strip restored; window and editor entries use the shared window registry |
+| **Global menu bar** | ✅ | Classic File/Edit/Variables/Pattern/Windows/Options strip restored; window and editor entries use the shared window registry; every module context menu also exposes available windows after its local commands |
 | **Typography standard** | ✅ | 11px global menu; uniform 10px/16px panel chrome; 8px primary body controls; 7px compact dense readouts, verified as effective rendered sizes across all fifteen panels |
 
 ## Interface / window canvas — ✅
@@ -335,7 +396,7 @@ is paused by decision.
 | Unified window navigation | ✅ | every main and auxiliary window uses compact reference `.uwin__title` chrome with shared name/note/close layout, drag handle, border, and theme treatment; module menus are context-only |
 | 640×480 workspace + zoom | ✅ | 640×480 logical baseline; persisted 50–200% application scaling in 10% increments; −/+ /100%/Fit controls; scale-aware dragging and context menus |
 | Complete channel coloring | ✅ | four-voice artwork across main windows and editors inherits the six-preset/custom global palette |
-| Reference Patterns Window | 🟡 | 228×120 Chapter 13 layout; Play Enable, Option-click Record Modes, Output Length, full numeric Time Base, functional Phase, selection and double-click editing work. Src/Use/Echo/Mouse Advance and independent a–f banks await input/group architecture |
+| Reference Patterns Window | ✅ selected scope | 228×120 Chapter 13 layout; Play Enable, Source/Use/Echo/Mouse Advance, Option-click Record Modes, Output Length, full numeric/`sa` Time Base, functional Phase, selection/double-click editing, and independent a–f Pattern Group banks are wired |
 | Reference-native editors | ✅ | Density 145×90 with right/bottom gutter; Velocity 165×81; Note Order 199×149; Transposition 143×95; Cyclic controls enlarged 25% to 275×222 without changing font size; Time Distortion content-fit 185×155; Orchestration 155×80 |
 | Velocity Range editor | ✅ | exact M layout (boxed low/high, dithered range block on the axis line); click-drag to draw the range |
 
@@ -350,11 +411,12 @@ is paused by decision.
 | Pattern drag-painting + auto-extending length | ✅ |
 | Pattern copy/paste/extend/variation commands | ✅ |
 | Non-destructive pattern operation stacks / undo | ⬜ |
-| All-in-one record-to-tracks | ⬜ |
+| Movie capture and deterministic SMF export | ✅ |
+| Editable record-to-tracks/DAW timeline | ⬜ |
 | Classic four-engine rack | ⬜ | browser milestone; scope in `AUDIO_ENGINE_SPEC.md` |
 | Studio seven-engine rack + signature effects | ⬜ | paid native milestone |
 | Third-party WAM hosting | ⬜ | exploratory; not a Classic release requirement |
-| VST/AU hosting (native) | ⬜ |
+| VST3/Audio Unit instrument builds | ⬜ |
 | Import old `.M` files | ⬜ |
 | Automation lanes / history-undo | ⬜ |
 
@@ -370,11 +432,11 @@ is paused by decision.
 
 ## Suggested next steps
 
-See [`NEXT_STEPS.md`](./NEXT_STEPS.md). Project save/load and MIDI Reliability
-Phase 3 (with Sound Choice intentionally skipped), Phrasing/Legato, and
-Snapshot/Slideshow behavior are complete. The active order is performance
-recording/MIDI I/O, then controller and instrument work. Visual
-polish is not on the technical critical path.
+See [`NEXT_STEPS.md`](./NEXT_STEPS.md). The retained manual gaps, performance
+recording, live MIDI I/O, and controller work are complete. The active local
+order is the four role-specific Classic engines, configurable Voice-count
+architecture, then release hardening. Real-hardware/browser certification runs
+in parallel when representative devices are available.
 
 ## Known constraints
 

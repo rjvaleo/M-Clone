@@ -9,6 +9,8 @@ commercial progression, and compatibility. Technical MIDI behavior belongs to
 [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md); instruments and effects
 belong to [`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md); native and plug-in
 behavior belongs to [`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md).
+Current dependencies and native-technology candidates are separated in
+[`TECH_STACK.md`](./TECH_STACK.md).
 
 ## 1. Three independent roadmaps
 
@@ -40,6 +42,11 @@ lead, and chord/pad engines in the table remain release work; the monitor is an
 implemented audition/routing foundation, not a claim that the Classic rack is
 complete.
 
+The next local product slice is the four role-specific Classic engines and
+basic stereo effects. Hardware/browser MIDI certification remains a parallel
+release gate requiring representative devices; it is not a substitute for the
+local audio-rack implementation.
+
 ## 3. M Classic Web — free
 
 ### Product promise
@@ -57,8 +64,10 @@ original application's musical behavior before expanding into Studio features.
   semantics.
 - Complete Web MIDI generation and input appropriate to browser permissions.
 - MIDI Assignment and controller workflows.
-- Standard MIDI file import/export.
-- Movie/Sequence recording and playback where defined by the original.
+- Deterministic Standard MIDI file export from a captured Movie.
+- Movie recording and export. Standard MIDI import and imported Sequence
+  playback are deliberately excluded unless a future workflow creates real
+  user value for them.
 - Versioned project save/load.
 - Four lightweight internal playback engines:
   - drum sampler;
@@ -70,6 +79,7 @@ original application's musical behavior before expanding into Studio features.
 
 ### Deliberate exclusions
 
+- Standard MIDI File import and imported Sequence playback.
 - Seven full Studio instruments.
 - Signature granular glitch, Smooth Crusher, and full Spatial Enhancer.
 - Multiple instrument output buses.

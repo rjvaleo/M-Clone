@@ -11,6 +11,7 @@ export type Pos = { x: number; y: number };
 // Shared stacking counter: whichever window was clicked last gets the highest
 // z-index and therefore sits in front of the others.
 let zCounter = 10;
+let zBackCounter = 0;
 
 // Absolutely positioned windows don't extend their container, so the stage has
 // no way to know a window was dragged past its edge — the page would simply
@@ -46,6 +47,16 @@ export function useDraggable(id: string, def: Pos, options: { autoPlace?: boolea
     zCounter += 1;
     setZ(zCounter);
   }, []);
+
+  useLayoutEffect(() => {
+    const sendToBack = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== id) return;
+      zBackCounter -= 1;
+      setZ(zBackCounter);
+    };
+    window.addEventListener("mclone:send-window-back", sendToBack);
+    return () => window.removeEventListener("mclone:send-window-back", sendToBack);
+  }, [id]);
 
   const [pos, setPos] = useState<Pos>(() => {
     if (autoPlace) return def;

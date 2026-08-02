@@ -12,11 +12,12 @@ the behavior described by the manual.
 | Area | Confirmed mismatch | Correction |
 | --- | --- | --- |
 | Patterns / Phase | The numerical was component-local and had no musical effect. | Phase now belongs to each Voice, persists in project JSON, is captured/restored with its Pattern-window Snapshot settings, and delays Start/Sync by 1/96-quarter-note M ticks. The Movie timestamp reflects the delayed onset. |
-| Patterns / Time Base | Only 1, 2, 4, 8, and 16 were offered. | The denominator offers every numeric Chapter 13 value: 1–9, 11, 12, 13, 15, 16, and 24. `sa` remains deferred with Step Advance/Input Control rather than being presented as functional. |
+| Patterns / Time Base | Only 1, 2, 4, 8, and 16 were offered. | The denominator offers every numeric Chapter 13 value plus `sa`; clocked planning skips `sa` Voices and Step/Mouse Advance drives them. |
 | Patterns / Record Modes | Clicking a Chord, Insertion, or Drum icon immediately changed it. | Ordinary clicks now select the Pattern; Option-click changes the chosen mode, matching the Pattern Select box instructions. Double-click still opens the Pattern Editor. Tooltips expose the modifier. |
 | Conductor / Tempo | The displayed Tempo Numerical could not set tempo. | It is now an editable, bounded 40–240 numerical and continues to follow the range midpoint/conducting path. |
 | Conductor / Movie icon | The glyph resembled a clapper board. | It is redrawn as the manual/reference filmstrip button. |
 | Conductor / Sequence icon | The internal mark was an arbitrary star. | It is redrawn as the reference document-and-mechanism symbol; it remains disabled until a Sequence exists. |
+| Conductor / module geometry | Generic chrome pushed the Grid below a full-width title, separator strokes crossed glyphs, lower numericals clipped, and transport controls were monochrome. | The title/notch now ends over the transport column while the Grid begins at the top; separators render behind crisp one-bit glyphs; semantic reference colors are fixed independently of the Voice palette; lower columns reserve measured widths; and H/V ranges use vertical tracks. |
 
 ## Confirmed correct behavior
 
@@ -32,25 +33,13 @@ the behavior described by the manual.
 - Play Enable, Pattern selection/double-click editing, Output Length, Time Base,
   Chord Mode, Insertion Mode, and Drum Machine state reach engine/store state.
 
-## Still incomplete by dependency
+## Dependency closure
 
-These controls are retained visually but are not being described as complete:
+The former dependency-bound controls are now wired end-to-end: all Use modes,
+Source filtering, Echo-Thru/Echo Map, MIDI recording modes and edit counter,
+Keyboard Transpose, Mouse Advance, `sa` Step Advance, Pattern Group banks,
+controller assignment, audible metronome, and Web MIDI Clock at Sync Ratio.
 
-- **Use Picture Matrix:** Disable and Record are represented; Keyboard
-  Transpose, Input Control, and Echo Map require live MIDI input.
-- **Source Channel and Echo-Thru-Orchestration:** the UI state exists, but there
-  is no MIDI-input routing/recording path yet.
-- **Mouse Advance:** the toggle exists, but mouse-gesture clocking and its
-  modifier-key gate await the Input Control milestone.
-- **Pattern Groups:** the a–f selector is snapshot/conducting-aware, but six
-  independent banks of Pattern-window settings and material are not yet
-  modeled.
-- **`sa` Time Base:** this is specifically Step Advance mode and remains absent
-  until Step Advance is real.
-- **Sequence Play Enable:** remains disabled until MIDI import creates an
-  independent Sequence.
-- **Sync Ratio output, MIDI clock, and metronome:** the UI state is present but
-  no clock/metronome output consumer exists yet.
-
-The next P5 slice is MIDI import and Sequence playback. Live-input work then
-owns Source, Use, Echo-Thru, Mouse Advance, `sa`, and full input recording.
+Sequence Play Enable remains intentionally absent because Standard MIDI import
+and imported Sequence playback are excluded from the product. Its disabled
+state is not a retained implementation gap.

@@ -7,6 +7,8 @@ import {
   axisValue,
   clampBaton,
   conductedTempo,
+  continuousLegato,
+  continuousVelocityRange,
   normalizeTempoRange,
   positionFromBaton,
   robotMove,
@@ -68,5 +70,18 @@ describe("the Automatic Conductor", () => {
       { x: 1, y: -1 },
       { x: 1, y: 1 },
     )).toEqual({ x: 1, y: 0 });
+  });
+});
+
+describe("Continuous Conducting", () => {
+  it("slides a Velocity Range without changing its width", () => {
+    expect(continuousVelocityRange({ low: 48, high: 110 }, 0)).toEqual({ low: 0, high: 62 });
+    expect(continuousVelocityRange({ low: 48, high: 110 }, 1)).toEqual({ low: 65, high: 127 });
+  });
+
+  it("scales Legato from one quarter through four times its current value", () => {
+    expect(continuousLegato(0)).toBeCloseTo(0.25);
+    expect(continuousLegato(0.5)).toBeCloseTo(1);
+    expect(continuousLegato(1)).toBeCloseTo(4);
   });
 });

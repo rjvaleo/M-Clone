@@ -77,10 +77,10 @@ describe("the Options menu", () => {
     // Everything that needs MIDI input is unavailable until that is wired.
     expect(isOptionAvailable("useMetronome")).toBe(true);
     expect(isOptionAvailable("externalClock")).toBe(false);
-    expect(isOptionAvailable("midiConduct")).toBe(false);
-    expect(isOptionAvailable("echoInBackground")).toBe(false);
-    expect(isOptionAvailable("tapAffectsVelocity")).toBe(false);
-    expect(isOptionAvailable("sustainEntersRests")).toBe(false);
+    expect(isOptionAvailable("midiConduct")).toBe(true);
+    expect(isOptionAvailable("echoInBackground")).toBe(true);
+    expect(isOptionAvailable("tapAffectsVelocity")).toBe(true);
+    expect(isOptionAvailable("sustainEntersRests")).toBe(true);
   });
 
   it("lists options in menu order with their label, state and availability", () => {

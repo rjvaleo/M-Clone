@@ -24,8 +24,8 @@ import type {
 } from "./types";
 import type { ArrowState, Snapshot } from "./snapshot";
 import { QUANTIZE_VALUES } from "./snapshot";
-import type { VariablePositions } from "./variables";
-import { POSITION_COUNT, POSITION_VARS } from "./variables";
+import type { VariableMarks, VariablePositions } from "./variables";
+import { makeEmptyVariableMarks, POSITION_COUNT, POSITION_VARS } from "./variables";
 import { createDefaultProject } from "./project";
 import { makePresetPositions } from "./variables";
 import { neutralTimeMap } from "./timemap";
@@ -44,6 +44,7 @@ const MAX_TEMPO = 999;
 export type DocumentSource = {
   project: ProjectState;
   positions: VariablePositions;
+  variableMarks?: VariableMarks;
   snapshots: (Snapshot | null)[];
   slideshows: Slideshow[];
   currentSnapshot: number | null;
@@ -62,7 +63,7 @@ export type DocumentSource = {
   options: Options;
 };
 
-export type ProjectDocumentV2 = DocumentSource & { version: 2 };
+export type ProjectDocumentV2 = DocumentSource & { version: 2; variableMarks: VariableMarks };
 
 export type DecodeResult =
   | { ok: true; document: ProjectDocumentV2; warnings: string[] }
@@ -78,6 +79,7 @@ export function encodeDocument(source: DocumentSource): ProjectDocumentV2 {
     version: DOCUMENT_VERSION,
     project: clone(source.project),
     positions: clone(source.positions),
+    variableMarks: clone(source.variableMarks ?? makeEmptyVariableMarks()),
     snapshots: clone(source.snapshots),
     slideshows: clone(source.slideshows),
     currentSnapshot: source.currentSnapshot,
@@ -167,6 +169,9 @@ function readPattern(value: unknown, index: number, warn: (m: string) => void) {
     chordMode,
     insertMode,
     drumMachine: bool(value.drumMachine, defaults.drumMachine),
+    timeBaseNumerator: Math.max(1, Math.round(num(value.timeBaseNumerator, defaults.timeBaseNumerator!))),
+    timeBaseDenominator: Math.max(0, Math.round(num(value.timeBaseDenominator, defaults.timeBaseDenominator!))),
+    phase: clamp(Math.round(num(value.phase, defaults.phase!)), 0, 999),
   } satisfies Pattern;
 }
 
@@ -186,7 +191,7 @@ function readVoice(value: unknown, index: number): VoiceState {
   const low = clamp(Math.round(num(range?.low, defaults.velocityRange.low)), 0, 127);
 
   return {
-    patternIndex: clamp(Math.round(num(value.patternIndex, defaults.patternIndex)), 0, 3),
+    patternIndex: clamp(Math.round(num(value.patternIndex, defaults.patternIndex)), 0, 23),
     playEnabled: bool(value.playEnabled, defaults.playEnabled),
     transposition: clamp(Math.round(num(value.transposition, 0)), -127, 127),
     noteOrderMix: mix
@@ -202,7 +207,7 @@ function readVoice(value: unknown, index: number): VoiceState {
       high: clamp(Math.round(num(range?.high, defaults.velocityRange.high)), low, 127),
     },
     timeBaseNumerator: Math.max(1, Math.round(num(value.timeBaseNumerator, defaults.timeBaseNumerator))),
-    timeBaseDenominator: Math.max(1, Math.round(num(value.timeBaseDenominator, defaults.timeBaseDenominator))),
+    timeBaseDenominator: Math.max(0, Math.round(num(value.timeBaseDenominator, defaults.timeBaseDenominator))),
     phase: clamp(Math.round(num(value.phase, defaults.phase)), 0, 999),
     timeDistort: map
       ? {
@@ -221,6 +226,12 @@ function readVoice(value: unknown, index: number): VoiceState {
           .filter((c, i, all) => all.indexOf(c) === i)
       : [...defaults.outputChannels],
     program: clamp(Math.round(num(value.program, defaults.program)), 0, 127),
+    sourceChannel: value.sourceChannel === "all" ? "all"
+      : clamp(Math.round(num(value.sourceChannel, index + 1)), 1, 16),
+    inputUse: ["disabled", "record", "control", "keyboard-transpose", "echo-map"].includes(value.inputUse as string)
+      ? value.inputUse as VoiceState["inputUse"] : defaults.inputUse,
+    echoInput: bool(value.echoInput, defaults.echoInput),
+    mouseAdvance: bool(value.mouseAdvance, defaults.mouseAdvance),
   };
 }
 
@@ -234,17 +245,20 @@ function readCyclicStep(value: unknown): CyclicStep {
 
 function readProject(value: unknown, warn: (m: string) => void): ProjectState | null {
   if (!isBag(value)) return null;
-  if (!Array.isArray(value.patterns) || value.patterns.length !== 4) return null;
+  if (!Array.isArray(value.patterns) || ![4, 24].includes(value.patterns.length)) return null;
   if (!Array.isArray(value.voices) || value.voices.length !== 4) return null;
 
   const patterns: Pattern[] = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < value.patterns.length; i++) {
     const pattern = readPattern(value.patterns[i], i, warn);
     if (!pattern) return null;
     patterns.push(pattern);
   }
 
   const defaults = createDefaultProject();
+  while (patterns.length < defaults.patterns.length) {
+    patterns.push(structuredClone(defaults.patterns[patterns.length]));
+  }
   const readBank = (source: unknown, fallback: CyclicStep[][]) =>
     Array.isArray(source)
       ? (source as unknown[]).map((voice, vi) =>
@@ -257,6 +271,15 @@ function readProject(value: unknown, warn: (m: string) => void): ProjectState | 
   const cyclicSource = isBag(value.cyclic) ? (value.cyclic as Bag) : {};
   const lengthsSource = isBag(value.cyclicLengths) ? (value.cyclicLengths as Bag) : {};
   const valuesSource = isBag(value.cyclicValues) ? (value.cyclicValues as Bag) : {};
+  const assignmentSource = isBag(value.midiAssignments) ? value.midiAssignments as Bag : {};
+  const readAssignments = (raw: unknown, fallback: ProjectState["midiAssignments"]["inputs"]) =>
+    Array.from({ length: 16 }, (_, i) => {
+      const entry = Array.isArray(raw) && isBag(raw[i]) ? raw[i] as Bag : {};
+      return {
+        deviceId: typeof entry.deviceId === "string" ? entry.deviceId : fallback[i].deviceId,
+        channel: clamp(Math.round(num(entry.channel, fallback[i].channel)), 1, 16),
+      };
+    });
 
   return {
     tempo: clamp(num(value.tempo, defaults.tempo), MIN_TEMPO, MAX_TEMPO),
@@ -269,6 +292,17 @@ function readProject(value: unknown, warn: (m: string) => void): ProjectState | 
     diatonicTranspose: bool(value.diatonicTranspose, false),
     secondOrderTranspose: bool(value.secondOrderTranspose, false),
     chordTones: bool(value.chordTones, false),
+    midiAssignments: {
+      inputs: readAssignments(assignmentSource.inputs, defaults.midiAssignments.inputs),
+      outputs: readAssignments(assignmentSource.outputs, defaults.midiAssignments.outputs),
+      programBase: num(assignmentSource.programBase, 0) === 1 ? 1 : 0,
+      latencyMs: clamp(Math.round(num(assignmentSource.latencyMs, 0)), 0, 999),
+      conductXController: clamp(Math.round(num(assignmentSource.conductXController, 16)), 0, 127),
+      conductYController: clamp(Math.round(num(assignmentSource.conductYController, 17)), 0, 127),
+    },
+    echoMapChannels: Array.isArray(value.echoMapChannels)
+      ? [...new Set(value.echoMapChannels.map((entry) => clamp(Math.round(num(entry, 1)), 1, 16)))]
+      : [],
     cyclic: Object.fromEntries(
       CYCLIC_KINDS.map((kind) => [kind, readBank(cyclicSource[kind], defaults.cyclic[kind])]),
     ) as ProjectState["cyclic"],
@@ -494,6 +528,13 @@ export function decodeDocument(raw: unknown): DecodeResult {
       version: DOCUMENT_VERSION,
       project,
       positions: readPositions(raw.positions, warn),
+      variableMarks: isBag(raw.variableMarks)
+        ? Object.fromEntries(POSITION_VARS.map((id) => {
+          const marks = (raw.variableMarks as Bag)[id];
+          return [id, Array.from({ length: POSITION_COUNT }, (_, index) =>
+            Array.isArray(marks) ? bool(marks[index], false) : false)];
+        })) as VariableMarks
+        : makeEmptyVariableMarks(),
       snapshots: readSnapshots(raw.snapshots, warn),
       slideshows: readSlideshows(raw.slideshows, warn),
       currentSnapshot:

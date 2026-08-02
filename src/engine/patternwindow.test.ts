@@ -10,7 +10,7 @@ import {
 describe("Patterns Window picture controls", () => {
   it("offers every numeric Time Base denominator printed in Chapter 13", () => {
     expect(TIME_BASE_DENOMINATORS).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 15, 16, 24,
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 15, 16, 24,
     ]);
   });
   it("cycles Source through All and the sixteen M Input Channels", () => {
@@ -19,9 +19,12 @@ describe("Patterns Window picture controls", () => {
     expect(cycleSourceChannel(16)).toBe("all");
   });
 
-  it("cycles the Use picture between disabled and record", () => {
+  it("cycles every live-input Use mode", () => {
     expect(cycleInputUse("disabled")).toBe("record");
-    expect(cycleInputUse("record")).toBe("disabled");
+    expect(cycleInputUse("record")).toBe("control");
+    expect(cycleInputUse("control")).toBe("keyboard-transpose");
+    expect(cycleInputUse("keyboard-transpose")).toBe("echo-map");
+    expect(cycleInputUse("echo-map")).toBe("disabled");
   });
 
   it("cycles all three Pattern Select chord modes", () => {

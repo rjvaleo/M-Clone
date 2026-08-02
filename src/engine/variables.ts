@@ -61,6 +61,13 @@ export type PositionData = {
 };
 
 export type VariablePositions = Record<PositionVarId, PositionData>;
+export type VariableMarks = Record<PositionVarId, boolean[]>;
+
+export function makeEmptyVariableMarks(): VariableMarks {
+  return Object.fromEntries(
+    POSITION_VARS.map((id) => [id, Array(POSITION_COUNT).fill(false)]),
+  ) as VariableMarks;
+}
 
 /** Seed all six positions of every variable from the current voice values. */
 export function makeDefaultPositions(voices: VoiceState[]): VariablePositions {
@@ -236,5 +243,40 @@ export function setSlot(
   const slots = data.slots.map((row, p) =>
     p !== posIndex ? row : row.map((cell, v) => (v !== voiceIndex ? cell : value)),
   );
+  return { ...positions, [id]: { ...data, slots } };
+}
+
+export function transferPosition(
+  positions: VariablePositions,
+  id: PositionVarId,
+  source: number,
+  destination: number,
+  copy: boolean,
+): VariablePositions {
+  if (source === destination) return positions;
+  const data = positions[id];
+  const slots = data.slots.map((row) => row.map(clonePositionValue));
+  const sourceRow = data.slots[source].map(clonePositionValue);
+  const destinationRow = data.slots[destination].map(clonePositionValue);
+  slots[destination] = sourceRow;
+  if (!copy) slots[source] = destinationRow;
+  return { ...positions, [id]: { ...data, slots } };
+}
+
+export function transferPositionVoice(
+  positions: VariablePositions,
+  id: PositionVarId,
+  position: number,
+  sourceVoice: number,
+  destinationVoice: number,
+  copy: boolean,
+): VariablePositions {
+  if (sourceVoice === destinationVoice) return positions;
+  const data = positions[id];
+  const slots = data.slots.map((row) => row.map(clonePositionValue));
+  const source = clonePositionValue(data.slots[position][sourceVoice]);
+  const destination = clonePositionValue(data.slots[position][destinationVoice]);
+  slots[position][destinationVoice] = source;
+  if (!copy) slots[position][sourceVoice] = destination;
   return { ...positions, [id]: { ...data, slots } };
 }

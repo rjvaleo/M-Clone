@@ -22,16 +22,23 @@ import {
   type PositionVarId,
   type PositionValue,
 } from "../engine/variables";
-import type { ArrowState } from "../engine/snapshot";
+import type { ArrowDir, ArrowState } from "../engine/snapshot";
 import { ConductingArrow } from "./ConductingArrow";
 import { ConductorWindow } from "./ConductorWindow";
 import { useContextMenu, type MenuItem } from "./WindowMenu";
+import { WindowLauncherProvider, useWindowContextMenu } from "./windowlauncher";
 import { CyclicEditor } from "./CyclicEditor";
+import { voiceColorClass } from "./voicecolor";
+import { noteOrderHandlePosition } from "./variablefield";
 import { ensureCyclicSelection, type CyclicSelection } from "./cyclicselection";
 import { normalizeCyclicStep } from "../engine/cyclic";
 import { MidiView } from "./MidiView";
 import { SynthWindow } from "./SynthWindow";
 import { transportDocumentTitle } from "./documenttitle";
+import { patternGroupSelectionSyncs } from "./patterngroupgesture";
+import { focusWindowPointerDown } from "./windowfocus";
+import { runSnapshotGesture } from "./snapshotgesture";
+import { variablePositionGesture } from "./variablepositiongesture";
 import { APP_WINDOWS, closeAppWindow, openAppWindow, type AppWindowId } from "../engine/windows";
 import {
   cycleChordMode,
@@ -39,8 +46,6 @@ import {
   cycleInsertMode,
   cycleSourceChannel,
   TIME_BASE_DENOMINATORS,
-  type InputUse,
-  type SourceChannel,
 } from "../engine/patternwindow";
 import {
   IconBuild,
@@ -70,6 +75,44 @@ const VAR_ROWS: { id: PositionVarId; name: string; lines: [string, string] }[] =
 ];
 
 const DEFAULT_ARROW: ArrowState = { on: false, dir: "right" };
+const CONTINUOUS_DIRS: ArrowDir[] = ["right", "down", "left", "up"];
+const CONTINUOUS_GLYPH: Record<ArrowDir, string> = {
+  right: "→", down: "↓", left: "←", up: "↑",
+};
+
+type ContinuousKind = "velocityRange" | "legato";
+
+function ContinuousControls({ kind, onClose }: { kind: ContinuousKind; onClose: () => void }) {
+  const state = useM((s) => s.continuousConducting[kind]);
+  const setContinuous = useM((s) => s.setContinuousConducting);
+  const title = kind === "velocityRange" ? "Velocity" : "Legato";
+  return <div className="ucontinuous-popover">
+    <div className="ucontinuous-popover__head">
+      <b>{title} Continuous</b>
+      <button type="button" aria-label={`Close ${title} Continuous Conducting`} onClick={onClose}>×</button>
+    </div>
+    <div className="ucontinuous" role="group" aria-label={`${title} Continuous Conducting`}>
+      {state.enabled.map((enabled, voice) => <button type="button" key={voice}
+        className={enabled ? "is-on" : ""}
+        aria-pressed={enabled}
+        aria-label={`Voice ${voice + 1} Continuous Conducting ${state.directions[voice]}`}
+        title="Click the brick to enable; right-click to rotate direction"
+        onClick={() => setContinuous(kind, voice, !enabled, state.directions[voice])}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const direction = CONTINUOUS_DIRS[
+            (CONTINUOUS_DIRS.indexOf(state.directions[voice]) + 1) % CONTINUOUS_DIRS.length
+          ];
+          setContinuous(kind, voice, true, direction);
+        }}>
+        <span aria-hidden="true">{enabled ? "■" : "□"}</span>
+        <span aria-hidden="true">{CONTINUOUS_GLYPH[state.directions[voice]]}</span>
+        <span className="sr-only">Voice {voice + 1}</span>
+      </button>)}
+    </div>
+  </div>;
+}
 
 const CYCLIC: { id: CyclicVariable; name: string }[] = [
   { id: "accent", name: "Accent" },
@@ -91,11 +134,11 @@ function Win({ id, defX, defY, title, note, menuItems, children, className, onCl
   const { ref, pos, z, onPointerDown, bringToFront } = useDraggable(
     id, { x: defX, y: defY }, { autoPlace: Boolean(onClose) },
   );
-  const context = useContextMenu(menuItems ?? []);
+  const context = useWindowContextMenu(menuItems ?? []);
   return (
     <section ref={ref} className={"uwin movable " + (className ?? "")}
       style={{ left: pos.x, top: pos.y, zIndex: z }}
-      onPointerDownCapture={bringToFront}
+      onPointerDownCapture={(event) => focusWindowPointerDown(event, bringToFront)}
       onContextMenu={menuItems?.length ? context.onContextMenu : undefined}>
       {context.menu}
       <div className="uwin__title movable__handle" onPointerDown={onPointerDown}>
@@ -120,24 +163,23 @@ function VariableWindowHost({ id, index, children }: {
     { autoPlace: true },
   );
   return <div ref={ref} className="movable uvarpop-host" style={{ left: pos.x, top: pos.y, zIndex: z }}
-    onPointerDownCapture={bringToFront}>{children(onPointerDown)}</div>;
+    onPointerDownCapture={(event) => focusWindowPointerDown(event, bringToFront)}>
+    {children(onPointerDown)}</div>;
 }
 
 export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) => void }) {
   const [cyclicEditor, setCyclicEditor] = useState<CyclicSelection | null>(null);
-  const [midiSetupOpen, setMidiSetupOpen] = useState(false);
-  const [patternSources, setPatternSources] = useState<SourceChannel[]>(["all", "all", "all", "all"]);
-  const [patternUses, setPatternUses] = useState<InputUse[]>(["disabled", "disabled", "disabled", "disabled"]);
-  const [patternEcho, setPatternEcho] = useState([false, false, false, false]);
-  const [patternMouseAdvance, setPatternMouseAdvance] = useState([false, false, false, false]);
+  const [continuousEditor, setContinuousEditor] = useState<ContinuousKind | null>(null);
+  const [editingPositions, setEditingPositions] = useState<Partial<Record<PositionVarId, number>>>({});
   const [openWindows, setOpenWindows] = useState<Set<string>>(() => new Set([
     ...APP_WINDOWS.filter((window) => window.permanent).map((window) => window.id),
     "pattern-editor", "midi-view", "synth",
   ]));
   const project = useM((s) => s.project);
   const documentName = useM((s) => s.documentName);
-  const selectedVoice = useM((s) => s.selectedVoice);
+  const selectedPatternIndices = useM((s) => s.selectedPatternIndices);
   const positions = useM((s) => s.positions);
+  const variableMarks = useM((s) => s.variableMarks);
   const arrows = useM((s) => s.arrows);
   const setArrow = useM((s) => s.setArrow);
   const group = useM((s) => s.patternGroup);
@@ -145,8 +187,13 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
   const midiConduct = useM((s) => s.midiConduct);
 
   const selectVoice = useM((s) => s.selectVoice);
+  const selectPattern = useM((s) => s.selectPattern);
   const toggleVoiceEnabled = useM((s) => s.toggleVoiceEnabled);
   const setVoiceParam = useM((s) => s.setVoiceParam);
+  const setVoiceInput = useM((s) => s.setVoiceInput);
+  const setMidiAssignment = useM((s) => s.setMidiAssignment);
+  const setMidiAssignmentConfig = useM((s) => s.setMidiAssignmentConfig);
+  const toggleEchoMapChannel = useM((s) => s.toggleEchoMapChannel);
   const setOutputLength = useM((s) => s.setOutputLength);
   const setPatternMode = useM((s) => s.setPatternMode);
   const setRoot = useM((s) => s.setRoot);
@@ -161,13 +208,55 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
   const cyclicPositions = useM((s) => s.cyclicPositions);
   const activatePosition = useM((s) => s.activatePosition);
   const setSlotValue = useM((s) => s.setSlotValue);
+  const transferVariablePosition = useM((s) => s.transferVariablePosition);
+  const transferVariableVoice = useM((s) => s.transferVariableVoice);
+  const toggleVariableMark = useM((s) => s.toggleVariableMark);
   const setMidiConduct = useM((s) => s.setMidiConduct);
+
+  const revealContinuousConducting = (kind: ContinuousKind, direction: ArrowDir) => {
+    const current = useM.getState().continuousConducting[kind];
+    current.enabled.forEach((enabled, voice) => {
+      useM.getState().setContinuousConducting(kind, voice, enabled, direction);
+    });
+    setArrow(kind, { on: true, dir: direction });
+    setContinuousEditor(kind);
+  };
+
+  useEffect(() => {
+    let frame: number | null = null;
+    let velocity = 0;
+    const move = (event: MouseEvent) => {
+      if (!(event.metaKey && event.altKey) && !event.getModifierState("CapsLock")) return;
+      velocity = Math.max(velocity, Math.hypot(event.movementX, event.movementY) * 10);
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        const responses = useM.getState().advanceMouseVoices(velocity);
+        velocity = 0;
+        for (const response of responses) if ("voice" in response) {
+          const voice = useM.getState().project.voices[response.voice];
+          getRuntime().audition([response.note], response.velocity, voice.outputChannels, 0.12, response.voice);
+        }
+      });
+    };
+    window.addEventListener("mousemove", move);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, []);
 
   const showWindow = (id: AppWindowId) => {
     if (id === "cyclic-editor") {
       setCyclicEditor((current) => ensureCyclicSelection(
         current, activeCyclicPositions.accent,
       ));
+    }
+    if ((["density", "velocityRange", "noteOrderMix", "transposition", "timeDistort", "outputChannels"] as string[]).includes(id)) {
+      const variable = id as PositionVarId;
+      setEditingPositions((current) => ({
+        ...current, [variable]: current[variable] ?? positions[variable].active,
+      }));
     }
     setOpenWindows((current) => openAppWindow(current, id));
   };
@@ -187,32 +276,43 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
           (open, window) => (window.permanent ? open : closeAppWindow(open, window.id)),
           current,
         ));
+    const openMidiAssignment = () => showWindow("midi-assignment");
     window.addEventListener("mclone:open-window", openRequestedWindow);
     window.addEventListener("mclone:close-edit-windows", closeEditWindows);
+    window.addEventListener("mclone:open-midi-assignment", openMidiAssignment);
     return () => {
       window.removeEventListener("mclone:open-window", openRequestedWindow);
       window.removeEventListener("mclone:close-edit-windows", closeEditWindows);
+      window.removeEventListener("mclone:open-midi-assignment", openMidiAssignment);
     };
   });
   const showVariableEditor = (id: PositionVarId) => showWindow(id);
-  const canvasMenu = useContextMenu(APP_WINDOWS.flatMap((window, index) => [
+  const windowLauncherItems: MenuItem[] = APP_WINDOWS.flatMap((window, index) => [
     ...(index === 6 ? ["separator" as const] : []),
     {
       label: window.label,
       enabled: !openWindows.has(window.id),
       run: () => showWindow(window.id),
     },
-  ]));
+  ]);
+  const canvasMenu = useContextMenu(windowLauncherItems);
 
   // Which Voice's Time Map the Time Distortion window is editing.
   const [tdVoice, setTdVoice] = useState(0);
   const [midiOuts, setMidiOuts] = useState<MIDIOutput[]>([]);
+  const [midiIns, setMidiIns] = useState<MIDIInput[]>([]);
   const [midiIds, setMidiIds] = useState<string[]>([]);
   const enableMidi = async () => {
     const registry = getRuntime().midiPorts();
     const list = await registry.enable();
     setMidiOuts(list);
+    setMidiIns(registry.availableInputs());
     registry.subscribe(setMidiOuts);
+    registry.subscribeInputs(setMidiIns);
+    registry.select(project.midiAssignments.outputs.flatMap((row) => row.deviceId ? [row.deviceId] : []));
+    registry.selectInputs(project.midiAssignments.inputs.flatMap((row) => row.deviceId ? [row.deviceId] : []));
+    getRuntime().setMidiOutputAssignments(project.midiAssignments.outputs);
+    getRuntime().setMidiLatency(project.midiAssignments.latencyMs);
   };
   const chooseMidi = (id: string) => {
     const next = id === "" ? [] : midiIds.includes(id)
@@ -222,8 +322,9 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
     getRuntime().midiPorts().select(next);
   };
 
+  const editPositionFor = (id: PositionVarId) => editingPositions[id] ?? positions[id].active;
   const editSlot = (id: PositionVarId, voice: number, value: PositionValue) =>
-    setSlotValue(id, positions[id].active, voice, value);
+    setSlotValue(id, editPositionFor(id), voice, value);
 
   const startNoteOrderBoundaryDrag = (
     voice: number,
@@ -237,12 +338,12 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
     const apply = () => {
       frame = null;
       const store = useM.getState();
-      const active = store.positions.noteOrderMix.active;
-      const mix = store.positions.noteOrderMix.slots[active][voice] as NoteOrderMix;
+      const editing = editPositionFor("noteOrderMix");
+      const mix = store.positions.noteOrderMix.slots[editing][voice] as NoteOrderMix;
       const position = ((latestX - bar.left) / bar.width) * 100;
       store.setSlotValue(
         "noteOrderMix",
-        active,
+        editing,
         voice,
         setNoteOrderBoundary(mix, boundary, position),
       );
@@ -271,7 +372,7 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
     end: "low" | "high",
     rawValue: number,
   ) => {
-    const active = useM.getState().positions.velocityRange.active;
+    const active = editPositionFor("velocityRange");
     const current = useM.getState().positions.velocityRange
       .slots[active][voice] as VelocityRange;
     const value = Math.max(0, Math.min(127, Math.round(rawValue)));
@@ -282,7 +383,7 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
   };
 
   const setVelocityRange = (voice: number, a: number, b: number) => {
-    const active = useM.getState().positions.velocityRange.active;
+    const active = editPositionFor("velocityRange");
     const lo = Math.max(0, Math.min(127, Math.round(Math.min(a, b))));
     const hi = Math.max(0, Math.min(127, Math.round(Math.max(a, b))));
     useM.getState().setSlotValue("velocityRange", active, voice, { low: lo, high: hi });
@@ -291,7 +392,7 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
   // Note Density is stored 0..1 but presented as M's percentage, so the two
   // conversions live here rather than being spelled out at each call site.
   const setDensityPercent = (voice: number, percent: number) => {
-    const active = useM.getState().positions.density.active;
+    const active = editPositionFor("density");
     const clamped = Math.max(0, Math.min(100, Math.round(percent)));
     useM.getState().setSlotValue("density", active, voice, clamped / 100);
   };
@@ -430,28 +531,35 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
     ...conductorOptions, "separator", ...conductorHarmony, "separator", ...conductorMidi,
   ];
   const midiMenu: MenuItem[] = [{
-    label: midiSetupOpen ? "Hide Setup" : "Setup",
-    run: () => setMidiSetupOpen((open) => !open),
+    label: "Midi Assignment…",
+    run: () => showWindow("midi-assignment"),
   }];
 
   return (
+    <WindowLauncherProvider items={windowLauncherItems}>
     <div className="uroot">
       <div
         className="ustage"
         onContextMenu={(event) => {
-          if ((event.target as HTMLElement).closest(".movable")) return;
+          if (event.defaultPrevented) return;
           canvasMenu.onContextMenu(event);
         }}
       >
         {canvasMenu.menu}
         {/* Row 1 */}
         <div className="urow">
-          <Win id="patterns" defX={4} defY={4} title="Patterns" className="u-patterns"
+          <Win id="patterns" defX={4} defY={4} title={`Patterns ${POSITION_LABELS[group]}`} className="u-patterns"
             menuItems={patternGroupMenu}>
             <div className="pwin__channel-head" aria-label="M Input Channels 1 through 16">
               <span className="pwin__input-icon" aria-hidden="true">⌁</span>
-              <span>{Array.from({ length: 8 }, (_, i) => <i key={i}>{i + 1}</i>)}</span>
-              <span>{Array.from({ length: 8 }, (_, i) => <i key={i}>{i + 9}</i>)}</span>
+              <span>{Array.from({ length: 8 }, (_, i) => <button type="button" key={i}
+                className={project.echoMapChannels.includes(i + 1) ? "is-on" : ""}
+                aria-pressed={project.echoMapChannels.includes(i + 1)}
+                onClick={() => toggleEchoMapChannel(i + 1)}>{i + 1}</button>)}</span>
+              <span>{Array.from({ length: 8 }, (_, i) => <button type="button" key={i}
+                className={project.echoMapChannels.includes(i + 9) ? "is-on" : ""}
+                aria-pressed={project.echoMapChannels.includes(i + 9)}
+                onClick={() => toggleEchoMapChannel(i + 9)}>{i + 9}</button>)}</span>
             </div>
             <div className="pwin__labels" aria-hidden="true">
               <b>Src</b><b>Use</b><b className="pwin__speaker-head"><IconSpeaker size={12} /></b>
@@ -466,32 +574,34 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
                   : pattern.chordMode === "chord" ? <IconChord size={11} /> : <IconBuild size={11} />;
                 const insertIcon = pattern.insertMode === "insert" ? <IconInsert size={11} />
                   : pattern.insertMode === "replace" ? <IconReplace size={11} /> : <IconOverdub size={11} />;
-                return <div key={i} className={`pwin__row uvoice uvoice--${i + 1}${i === selectedVoice ? " is-selected" : ""}`}>
-                  <button className="pwin__src" onClick={() => setPatternSources((values) =>
-                    values.map((value, at) => at === i ? cycleSourceChannel(value) : value))}
-                    aria-label={`Voice ${i + 1} Source Channel: ${patternSources[i] === "all" ? "All" : patternSources[i]}`}>
-                    {patternSources[i] === "all" ? "All" : patternSources[i]}
+                return <div key={i} className={`pwin__row uvoice uvoice--${i + 1}${selectedPatternIndices.includes(voice.patternIndex) ? " is-selected" : ""}`}>
+                  <button className="pwin__src" onClick={() => setVoiceInput(i, {
+                    sourceChannel: cycleSourceChannel(voice.sourceChannel),
+                  })}
+                    aria-label={`Voice ${i + 1} Source Channel: ${voice.sourceChannel === "all" ? "All" : voice.sourceChannel}`}>
+                    {voice.sourceChannel === "all" ? "All" : voice.sourceChannel}
                   </button>
-                  <button className="pwin__use" onClick={() => setPatternUses((values) =>
-                    values.map((value, at) => at === i ? cycleInputUse(value) : value))}
-                    aria-label={`Voice ${i + 1} Use: ${patternUses[i]}`}>
-                    {patternUses[i] === "record" ? "R" : "-"}
+                  <button className="pwin__use" onClick={() => setVoiceInput(i, {
+                    inputUse: cycleInputUse(voice.inputUse),
+                  })}
+                    aria-label={`Voice ${i + 1} Use: ${voice.inputUse}`}>
+                    {{ disabled: "-", record: "R", control: "C", "keyboard-transpose": "T", "echo-map": "E" }[voice.inputUse]}
                   </button>
                   <button className="pwin__play" onClick={() => toggleVoiceEnabled(i)}
                     aria-pressed={voice.playEnabled} aria-label={`Play Voice ${i + 1}`}>
                     {voice.playEnabled && <IconSpeaker size={12} />}
                   </button>
-                  <button className="pwin__echo" onClick={() => setPatternEcho((values) =>
-                    values.map((value, at) => at === i ? !value : value))}
-                    aria-pressed={patternEcho[i]} aria-label={`Echo-Thru-Orchestration Voice ${i + 1}`}>
-                    {patternEcho[i] ? "✓" : ""}
+                  <button className="pwin__echo" onClick={() => setVoiceInput(i, { echoInput: !voice.echoInput })}
+                    aria-pressed={voice.echoInput} aria-label={`Echo-Thru-Orchestration Voice ${i + 1}`}>
+                    {voice.echoInput ? "✓" : ""}
                   </button>
-                  <button className="pwin__mouse" onClick={() => setPatternMouseAdvance((values) =>
-                    values.map((value, at) => at === i ? !value : value))}
-                    aria-pressed={patternMouseAdvance[i]} aria-label={`Mouse Advance Voice ${i + 1}`}>
-                    {patternMouseAdvance[i] ? "✓" : ""}
+                  <button className="pwin__mouse" onClick={() => setVoiceInput(i, { mouseAdvance: !voice.mouseAdvance })}
+                    aria-pressed={voice.mouseAdvance} aria-label={`Mouse Advance Voice ${i + 1}`}>
+                    {voice.mouseAdvance ? "✓" : ""}
                   </button>
-                  <div className="pwin__select" onClick={() => selectVoice(i)}
+                  <div className="pwin__select" onClick={(event) => selectPattern(
+                    voice.patternIndex, event.shiftKey,
+                  )}
                     onDoubleClick={() => { selectVoice(i); showWindow("pattern-editor"); }}>
                     <button aria-label={`Voice ${i + 1} Chord Mode: ${pattern.chordMode}`}
                       title="Option-click to change Chord Mode"
@@ -531,7 +641,7 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
                     <i>|</i>
                     <select value={voice.timeBaseDenominator} aria-label={`Voice ${i + 1} Time Base Denominator`}
                       onChange={(event) => setVoiceParam(i, "timeBaseDenominator", Number(event.target.value))}>
-                      {TIME_BASE_DENOMINATORS.map((value) => <option key={value} value={value}>{value}</option>)}
+                      {TIME_BASE_DENOMINATORS.map((value) => <option key={value} value={value}>{value === 0 ? "sa" : value}</option>)}
                     </select>
                   </span>
                   <input className="pwin__phase" type="number" min={0} max={999}
@@ -574,7 +684,10 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
                       className={"umini umini--group" + (group === p ? " umini--on" : "")}
                       aria-pressed={group === p}
                       aria-label={`Pattern Group ${label}`}
-                      onClick={() => setGroup(p)}>
+                      onClick={(event) => {
+                        setGroup(p);
+                        if (patternGroupSelectionSyncs(event.altKey)) getRuntime().sync();
+                      }}>
                       <span className="umini__letter">{label}</span>
                     </button>
                   ))}
@@ -588,14 +701,38 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
                   </div>
                   <ConductingArrow label={name}
                     state={arrows[id] ?? DEFAULT_ARROW}
-                    onChange={(next) => setArrow(id, next)} />
+                    onChange={(next) => {
+                      setArrow(id, next);
+                      if (id === "velocityRange" && !next.on) setContinuousEditor(null);
+                    }}
+                    onPull={id === "velocityRange"
+                      ? (direction) => revealContinuousConducting("velocityRange", direction)
+                      : undefined} />
+                  {id === "velocityRange" && continuousEditor === "velocityRange" &&
+                    <ContinuousControls kind="velocityRange" onClose={() => setContinuousEditor(null)} />}
                   <div className="uvars__cells">
                     {positions[id].slots.map((slot, p) => (
                       <button key={p} type="button"
+                        draggable
                         className={"umini" + (positions[id].active === p ? " umini--on" : "")}
                         aria-pressed={positions[id].active === p}
                         aria-label={`${name} position ${POSITION_LABELS[p]}`}
                         title={`${name} ${POSITION_LABELS[p]} — double-click to edit`}
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData("application/x-mclone-position", JSON.stringify({ id, p }));
+                        }}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          try {
+                            const source = JSON.parse(event.dataTransfer.getData(
+                              "application/x-mclone-position",
+                            )) as { id: PositionVarId; p: number };
+                            if (source.id === id) {
+                              transferVariablePosition(id, source.p, p, event.altKey);
+                            }
+                          } catch { /* ignore foreign drags */ }
+                        }}
                         onClick={() => activatePosition(id, p)}
                         onDoubleClick={() => showVariableEditor(id)}>
                         <VarThumb id={id} slot={slot} />
@@ -616,7 +753,15 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
                     <div className="b ucyc__name">{name}</div>
                     <ConductingArrow label={name}
                       state={arrows[id] ?? DEFAULT_ARROW}
-                      onChange={(next) => setArrow(id, next)} />
+                      onChange={(next) => {
+                        setArrow(id, next);
+                        if (id === "legato" && !next.on) setContinuousEditor(null);
+                      }}
+                      onPull={id === "legato"
+                        ? (direction) => revealContinuousConducting("legato", direction)
+                        : undefined} />
+                    {id === "legato" && continuousEditor === "legato" &&
+                      <ContinuousControls kind="legato" onClose={() => setContinuousEditor(null)} />}
                   </div>
                   {POSITION_LABELS.map((label, position) => (
                     <button key={label} className={"ucycpos" + (activeCyclicPositions[id] === position ? " is-on" : "")}
@@ -645,7 +790,7 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
 
         {/* Row 3 — Midi */}
         <Win id="midi" defX={4} defY={280} title="Midi" note="output"
-          className={midiSetupOpen ? "u-midi u-midi--open" : "u-midi"}
+          className="u-midi"
           menuItems={midiMenu}>
           {/* Orchestration lives here rather than in the Variables Window —
               chapter 16 lists the Variables Window's six rows, and routing
@@ -673,40 +818,74 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
             </div>
           </div>
 
-          {midiSetupOpen && <table className="utable umidi">
-            <thead>
-              <tr>
-                <th>V</th><th>Channel</th><th>Program</th><th>Transpose</th>
-                <th>Velocity</th><th>Density</th><th>Legato</th>
-              </tr>
-            </thead>
-            <tbody>
-              {project.voices.map((v, i) => (
-                <tr key={i} className={`uvoice uvoice--${i + 1}`}>
-                  <td className="b">{i + 1}</td>
-                  <td><input type="number" min={1} max={16} value={v.channel} className="unum"
-                    title="Sets a single-channel Orchestration assignment"
-                    onChange={(e) => {
-                      const channel = Number(e.target.value);
-                      setVoiceParam(i, "channel", channel);
-                      setVoiceParam(i, "outputChannels", [channel]);
-                    }} /></td>
-                  <td><input type="number" min={0} max={127} value={v.program} className="unum"
-                    onChange={(e) => setVoiceParam(i, "program", Number(e.target.value))} /></td>
-                  <td><input type="number" min={-24} max={24} value={v.transposition} className="unum"
-                    onChange={(e) => setVoiceParam(i, "transposition", Number(e.target.value))} /></td>
-                  <td className="umidi__velocity">
-                    {v.velocityRange.low}–{v.velocityRange.high}
-                  </td>
-                  <td><input type="range" min={0} max={1} step={0.05} value={v.density}
-                    onChange={(e) => setVoiceParam(i, "density", Number(e.target.value))} /></td>
-                  <td><input type="range" min={0.1} max={1.5} step={0.05} value={v.legato}
-                    onChange={(e) => setVoiceParam(i, "legato", Number(e.target.value))} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>}
         </Win>
+
+        {openWindows.has("midi-assignment") && <Win id="midi-assignment" defX={80} defY={180}
+          title="Midi Assignment" note="input / output routing" className="u-midi-assignment"
+          onClose={() => hideWindow("midi-assignment")}>
+          <div className="umidi__assignment-head">
+            <button type="button" onClick={() => void enableMidi()}>Enable / Refresh MIDI</button>
+            <label>Program numbers <select value={project.midiAssignments.programBase}
+              onChange={(event) => setMidiAssignmentConfig({ programBase: Number(event.target.value) as 0 | 1 })}>
+              <option value={0}>0–127</option><option value={1}>1–128</option>
+            </select></label>
+            <label>Latency <input className="unum" type="number" min={0} max={999}
+              value={project.midiAssignments.latencyMs} onChange={(event) => {
+                const latencyMs = Number(event.target.value);
+                setMidiAssignmentConfig({ latencyMs });
+                getRuntime().setMidiLatency(latencyMs);
+              }} /> ms</label>
+            <label>Conduct X CC <input className="unum" type="number" min={0} max={127}
+              value={project.midiAssignments.conductXController}
+              onChange={(event) => setMidiAssignmentConfig({ conductXController: Number(event.target.value) })} /></label>
+            <label>Y CC <input className="unum" type="number" min={0} max={127}
+              value={project.midiAssignments.conductYController}
+              onChange={(event) => setMidiAssignmentConfig({ conductYController: Number(event.target.value) })} /></label>
+          </div>
+          <table className="utable umidi-assign" aria-label="MIDI Input and Output Assignments">
+            <thead><tr><th>M</th><th>Input device</th><th>Ch</th><th>Output device</th><th>Ch</th></tr></thead>
+            <tbody>{project.midiAssignments.inputs.map((input, row) => {
+              const output = project.midiAssignments.outputs[row];
+              return <tr key={row}><td>{row + 1}</td>
+                <td><select value={input.deviceId ?? ""} onChange={(event) => {
+                  const deviceId = event.target.value || null;
+                  setMidiAssignment("inputs", row, { ...input, deviceId });
+                  const ids = project.midiAssignments.inputs.flatMap((entry, index) =>
+                    (index === row ? deviceId : entry.deviceId) ? [(index === row ? deviceId : entry.deviceId)!] : []);
+                  getRuntime().midiPorts().selectInputs(ids);
+                }}><option value="">—</option>{midiIns.map((port) =>
+                  <option value={port.id} key={port.id}>{port.name}</option>)}</select></td>
+                <td><input className="unum" type="number" min={1} max={16} value={input.channel}
+                  onChange={(event) => setMidiAssignment("inputs", row, { ...input, channel: Number(event.target.value) })} /></td>
+                <td><select value={output.deviceId ?? ""} onChange={(event) => {
+                  const deviceId = event.target.value || null;
+                  setMidiAssignment("outputs", row, { ...output, deviceId });
+                  const ids = project.midiAssignments.outputs.flatMap((entry, index) =>
+                    (index === row ? deviceId : entry.deviceId) ? [(index === row ? deviceId : entry.deviceId)!] : []);
+                  getRuntime().midiPorts().select(ids);
+                  getRuntime().setMidiOutputAssignments(project.midiAssignments.outputs.map((entry, index) =>
+                    index === row ? { ...entry, deviceId } : entry));
+                }}><option value="">—</option>{midiOuts.map((port) =>
+                  <option value={port.id} key={port.id}>{port.name}</option>)}</select></td>
+                <td><input className="unum" type="number" min={1} max={16} value={output.channel}
+                  onChange={(event) => {
+                    const channel = Number(event.target.value);
+                    setMidiAssignment("outputs", row, { ...output, channel });
+                    getRuntime().setMidiOutputAssignments(project.midiAssignments.outputs.map((entry, index) =>
+                      index === row ? { ...entry, channel } : entry));
+                  }} /></td>
+              </tr>;
+            })}</tbody>
+          </table>
+          <div className="umidi__modes" role="group" aria-label="MIDI channel mode messages">
+            <button type="button" onClick={() => getRuntime().sendMidiChannelMode("omni-on")}>Omni On</button>
+            <button type="button" onClick={() => getRuntime().sendMidiChannelMode("omni-off")}>Omni Off</button>
+            <button type="button" onClick={() => getRuntime().sendMidiChannelMode("local-on")}>Local On</button>
+            <button type="button" onClick={() => getRuntime().sendMidiChannelMode("local-off")}>Local Off</button>
+            <button type="button" onClick={() => getRuntime().sendMidiChannelMode("all-notes-off")}>All Notes Off</button>
+            <button type="button" onClick={() => getRuntime().sendMidiChannelMode("system-reset")}>System Reset</button>
+          </div>
+        </Win>}
 
         {openWindows.has("midi-view") && <Win id="midi-view" defX={80} defY={180} title="Midi View"
           note="generated output tracker" className="u-midiview-win"
@@ -727,7 +906,9 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
       }
 
       {(["density", "velocityRange", "noteOrderMix", "transposition", "timeDistort", "outputChannels"] as PositionVarId[])
-        .filter((id) => openWindows.has(id)).map((editingVar, editorIndex) => (
+        .filter((id) => openWindows.has(id)).map((editingVar, editorIndex) => {
+        const editPosition = editPositionFor(editingVar);
+        return (
         <VariableWindowHost id={editingVar} index={editorIndex} key={editingVar}>{(titleDrag) => (
           <section
             className={"uvarpop" + (editingVar === "timeDistort" || editingVar === "transposition"
@@ -742,11 +923,35 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
               <div className="uposbox" role="group" aria-label="Variable position">
                 {POSITION_LABELS.map((label, position) => (
                   <button key={label}
-                    className={"uposcell" + (positions[editingVar].active === position ? " uposcell--on" : "")}
-                    onClick={() => activatePosition(editingVar, position)}
-                    aria-pressed={positions[editingVar].active === position}
+                    className={"uposcell" + (editPosition === position ? " uposcell--on" : "")
+                      + (variableMarks[editingVar][position] ? " uposcell--marked" : "")}
+                    onPointerDown={(event) => {
+                      const startY = event.clientY;
+                      const pointerId = event.pointerId;
+                      const up = (finish: PointerEvent) => {
+                        if (finish.pointerId !== pointerId) return;
+                        window.removeEventListener("pointerup", up);
+                        if (finish.clientY - startY >= 6) toggleVariableMark(editingVar, position);
+                      };
+                      window.addEventListener("pointerup", up);
+                    }}
+                    onClick={(event) => {
+                      setEditingPositions((current) => ({ ...current, [editingVar]: position }));
+                      const gesture = variablePositionGesture(event.altKey, event.shiftKey);
+                      if (!gesture.activate) return;
+                      if (!gesture.quantized) activatePosition(editingVar, position);
+                      else runSnapshotGesture({
+                        quantize: useM.getState().snapshotQuantize,
+                        tempo: useM.getState().project.tempo,
+                        elapsedSec: getRuntime().transportElapsedSec(),
+                        recall: () => useM.getState().activatePosition(editingVar, position),
+                      });
+                    }}
+                    aria-pressed={editPosition === position}
                     aria-label={`Position ${label}`}
-                    title={`Position ${label}`} />
+                    title={`Position ${label} — pull down to ${variableMarks[editingVar][position] ? "unmark" : "mark"}`}>
+                    {variableMarks[editingVar][position] ? "*" : ""}
+                  </button>
                 ))}
               </div>
               <button className="uvarpop__close" onClick={() => hideWindow(editingVar)} aria-label="Close variable editor">
@@ -773,17 +978,22 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
             {/* The one edit window that isn't four sets of controls: a single
                 graph carrying all four Voices' maps. */}
             {editingVar === "timeDistort" && (
-              <TimeDistortEditor editVoice={tdVoice} onEditVoice={setTdVoice} />
+              <TimeDistortEditor editVoice={tdVoice} onEditVoice={setTdVoice}
+                editPosition={editPosition} />
             )}
             {editingVar === "transposition" && (
               <TransposeEditor
                 slot={
                   positions.transposition.slots[
-                    positions.transposition.active
+                    editPosition
                   ] as number[]
                 }
                 onChange={(voice, semitones) =>
                   editSlot("transposition", voice, semitones)}
+                onTransfer={(source, destination, copy) => transferVariableVoice(
+                  "transposition", editPosition,
+                  source, destination, copy,
+                )}
               />
             )}
 
@@ -797,14 +1007,32 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
 
             <div className="uvarpop__voices">
               {editingVar !== "timeDistort" && editingVar !== "transposition" &&
-                positions[editingVar].slots[positions[editingVar].active].map((val, voice) => (
+                positions[editingVar].slots[editPosition].map((val, voice) => (
                 <label
                   className={"uvarcontrol"
                     + (editingVar === "velocityRange" ? " uvarcontrol--vel" : "")
                     + (editingVar === "density" ? " uvarcontrol--dens" : "")
-                    + ` uvoice uvoice--${voice + 1}`}
+                    + " " + (editingVar === "velocityRange"
+                      ? voiceColorClass("velocity-range", voice)
+                      : editingVar === "noteOrderMix"
+                        ? voiceColorClass("note-order", voice)
+                        : editingVar === "density"
+                          ? voiceColorClass("density", voice)
+                          : `uvoice uvoice--${voice + 1}`)}
                   key={voice}>
-                  <span className="uvarcontrol__voice">
+                  <span className="uvarcontrol__voice" draggable
+                    onDragStart={(event) => event.dataTransfer.setData(
+                      "application/x-mclone-voice", String(voice),
+                    )}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const source = Number(event.dataTransfer.getData("application/x-mclone-voice"));
+                      if (Number.isInteger(source)) transferVariableVoice(
+                        editingVar, editPosition,
+                        source, voice, event.altKey,
+                      );
+                    }}>
                     {editingVar === "outputChannels" || editingVar === "noteOrderMix"
                       ? voice + 1 : `Voice ${voice + 1}`}
                   </span>
@@ -819,7 +1047,10 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
                           style={{ width: `${(val as NoteOrderMix).utterly}%` }} />
                         <button type="button"
                           className="unoteorder__handle unoteorder__handle--original"
-                          style={{ left: `clamp(24px, ${noteOrderHandleLayout(val as NoteOrderMix).originalEnd}%, calc(100% - 24px))` }}
+                          style={{ left: noteOrderHandlePosition(
+                            "originalEnd",
+                            noteOrderHandleLayout(val as NoteOrderMix).originalEnd,
+                          ) }}
                           role="slider" aria-valuemin={0} aria-valuemax={100}
                           aria-valuenow={(val as NoteOrderMix).original}
                           aria-label={`Voice ${voice + 1} Original/Cyclic boundary`}
@@ -833,7 +1064,10 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
                         </button>
                         <button type="button"
                           className="unoteorder__handle unoteorder__handle--utterly"
-                          style={{ left: `clamp(24px, ${noteOrderHandleLayout(val as NoteOrderMix).utterlyStart}%, calc(100% - 24px))` }}
+                          style={{ left: noteOrderHandlePosition(
+                            "utterlyStart",
+                            noteOrderHandleLayout(val as NoteOrderMix).utterlyStart,
+                          ) }}
                           role="slider" aria-valuemin={0} aria-valuemax={100}
                           aria-valuenow={100 - (val as NoteOrderMix).utterly}
                           aria-label={`Voice ${voice + 1} Cyclic/Utterly boundary`}
@@ -957,7 +1191,8 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
             </div>
           </section>
         )}</VariableWindowHost>
-      ))}
+      )})}
     </div>
+    </WindowLauncherProvider>
   );
 }

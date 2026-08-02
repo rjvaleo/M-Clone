@@ -50,9 +50,13 @@ export function usePatternMenus(): { editMenu: MenuItem[]; patternMenu: MenuItem
   const voices = useM((s) => s.project.voices);
   const patterns = useM((s) => s.project.patterns);
   const clipboard = useM((s) => s.clipboard);
+  const patternClipboard = useM((s) => s.patternClipboard);
+  const selectedPatternIndices = useM((s) => s.selectedPatternIndices);
   const projectSeed = useM((s) => s.project.seed);
+  const dontScrambleRests = useM((s) => s.options.dontScrambleRests);
   const region = useM((s) => s.editorRegion);
   const setClipboard = useM((s) => s.setClipboard);
+  const setPatternClipboard = useM((s) => s.setPatternClipboard);
   const runPatternCommand = useM((s) => s.runPatternCommand);
   const runPatternDocumentCommand = useM((s) => s.runPatternDocumentCommand);
   const eraseSnapshot = useM((s) => s.eraseSnapshot);
@@ -67,9 +71,17 @@ export function usePatternMenus(): { editMenu: MenuItem[]; patternMenu: MenuItem
   const sel: cmd.Region =
     region && !region.point ? { from: region.from, to: region.to } : null;
   const selLabel = sel ? "Region" : "Pattern";
-  const run = (fn: (steps: StepEvent[], maxSize: number) => StepEvent[]) => () =>
-    runPatternCommand(patternIndex, fn);
-  const hasClipboard = clipboard.length > 0;
+  const targets = sel ? [patternIndex]
+    : selectedPatternIndices.includes(patternIndex) ? selectedPatternIndices : [patternIndex];
+  const run = (fn: (steps: StepEvent[], maxSize: number) => StepEvent[]) => () => {
+    for (const target of targets) runPatternCommand(target, fn);
+  };
+  const runDocument = (fn: (current: typeof pattern, index: number) => typeof pattern) => {
+    for (const target of targets) {
+      runPatternDocumentCommand(target, (current) => fn(current, target));
+    }
+  };
+  const hasClipboard = clipboard.length > 0 || (!sel && patternClipboard !== null);
   const pointwise = Boolean(sel || region?.point);
 
   const editMenu = build(EDIT_MENU_ITEMS, {
@@ -77,17 +89,31 @@ export function usePatternMenus(): { editMenu: MenuItem[]; patternMenu: MenuItem
       hint: `Remove the ${selLabel} to the clipboard`,
       run: () => {
         setClipboard(cmd.copyRegion(pattern.steps, sel));
-        runPatternCommand(patternIndex, (st) => cmd.clearSteps(st, sel));
+        if (!sel) setPatternClipboard(cmd.copyPattern(pattern));
+        for (const target of targets) {
+          runPatternCommand(target, (st) => cmd.clearSteps(st, sel));
+        }
       },
     },
     copy: {
       hint: `Copy the ${selLabel} to the clipboard`,
-      run: () => setClipboard(cmd.copyRegion(pattern.steps, sel)),
+      run: () => {
+        setClipboard(cmd.copyRegion(pattern.steps, sel));
+        setPatternClipboard(sel ? null : cmd.copyPattern(pattern));
+      },
     },
     paste: {
       hint: "Replace the selection with the clipboard",
       enabled: hasClipboard,
-      run: run((st) => cmd.pasteSteps(st, sel, clipboard)),
+      run: () => {
+        if (!sel && patternClipboard) {
+          runDocument((current) => cmd.pastePattern(current, patternClipboard));
+        } else {
+          for (const target of targets) {
+            runPatternCommand(target, (st) => cmd.pasteSteps(st, sel, clipboard));
+          }
+        }
+      },
     },
     pasteNotes: {
       hint: "Replace only the notes, leaving the length alone",
@@ -137,22 +163,21 @@ export function usePatternMenus(): { editMenu: MenuItem[]; patternMenu: MenuItem
     transposeDownOctave: { run: run((st) => cmd.transposeSteps(st, sel, -12)) },
     reScramble: {
       hint: `Generate a new Cyclic Random ordering of the ${selLabel}`,
-      run: () => runPatternDocumentCommand(patternIndex, (current) =>
+      run: () => runDocument((current, target) =>
         cmd.reScramble(
           current,
           sel,
-          projectSeed + patternIndex * 997 + (current.scrambleGeneration + 1) * 7919,
+          projectSeed + target * 997 + (current.scrambleGeneration + 1) * 7919,
+          dontScrambleRests,
         )),
     },
     originalToScrambled: {
       hint: `Copy the ${selLabel}'s Original list to its Cyclic Random list`,
-      run: () => runPatternDocumentCommand(patternIndex, (current) =>
-        cmd.originalToScrambled(current, sel)),
+      run: () => runDocument((current) => cmd.originalToScrambled(current, sel)),
     },
     swapScrambledAndOriginal: {
       hint: `Exchange the ${selLabel}'s Original and Cyclic Random lists`,
-      run: () => runPatternDocumentCommand(patternIndex, (current) =>
-        cmd.swapScrambledAndOriginal(current, sel)),
+      run: () => runDocument((current) => cmd.swapScrambledAndOriginal(current, sel)),
     },
     rotateForward: { run: run((st) => cmd.rotateForward(st, sel)) },
     rotateBackward: { run: run((st) => cmd.rotateBackward(st, sel)) },

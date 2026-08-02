@@ -16,6 +16,8 @@ import {
   openProject,
   saveMovieAsMidiFile,
   saveProject,
+  loadStartupState,
+  saveStartupState,
 } from "./fileCommands";
 import { WindowMenu, type MenuItem } from "./WindowMenu";
 import { APP_WINDOWS, type AppWindowId } from "../engine/windows";
@@ -27,6 +29,10 @@ import {
 } from "../engine/menus";
 import { optionEntries } from "../engine/options";
 import { usePatternMenus } from "./patternMenus";
+import { draggableIdForMainWindow, windowBackShortcut } from "./windowstack";
+import {
+  copiedNumericalValue, draggedNumericalValue, setNumericalInput,
+} from "./numericalgesture";
 
 type Theme = "light" | "dark";
 
@@ -105,6 +111,7 @@ function useElementSize() {
 }
 
 export function App() {
+  const lastNumerical = useRef<number | null>(null);
   const [workspaceZoom, setWorkspaceZoom] = useState(() => {
     try {
       return clampWorkspaceZoom(Number(localStorage.getItem("mclone.workspaceZoom") ?? 100));
@@ -119,6 +126,26 @@ export function App() {
       return "light";
     }
   });
+
+  useEffect(() => {
+    const sendWindowBack = (event: KeyboardEvent) => {
+      const id = windowBackShortcut(event);
+      if (!id) return;
+      event.preventDefault();
+      window.dispatchEvent(new CustomEvent("mclone:send-window-back", {
+        detail: draggableIdForMainWindow(id),
+      }));
+    };
+    window.addEventListener("keydown", sendWindowBack);
+    return () => window.removeEventListener("keydown", sendWindowBack);
+  }, []);
+
+  useEffect(() => {
+    const state = useM.getState();
+    if (state.documentEpoch === 0 && !state.isDirty && state.documentName === null) {
+      state.newDocument(loadStartupState());
+    }
+  }, []);
   const [channelPreset, setChannelPreset] = useState<ChannelThemePresetId | "custom">(
     () => {
       try {
@@ -142,6 +169,7 @@ export function App() {
   });
   const [saveNameDialogOpen, setSaveNameDialogOpen] = useState(false);
   const [saveName, setSaveName] = useState("Untitled");
+  const [fileActionAfterSave, setFileActionAfterSave] = useState<"new" | "open" | null>(null);
 
   useEffect(() => {
     document.body.classList.toggle("dark-bg", theme === "dark");
@@ -193,6 +221,15 @@ export function App() {
     setSaveNameDialogOpen(true);
   };
 
+  useEffect(() => {
+    const requestName = (event: Event) => {
+      setFileActionAfterSave((event as CustomEvent<"new" | "open">).detail);
+      showSaveNameDialog();
+    };
+    window.addEventListener("mclone:save-before-file-action", requestName);
+    return () => window.removeEventListener("mclone:save-before-file-action", requestName);
+  });
+
   const runSave = async (saveAs: boolean) => {
     // Use the app-owned filename step for downloads. Some embedded browsers
     // expose a picker that resolves late and otherwise overwrites the title.
@@ -211,14 +248,24 @@ export function App() {
     )?.click();
 
   const fileItems = buildMenu(FILE_MENU_ITEMS, {
-    new: { run: newProject },
-    open: { run: openProject },
+    new: { run: () => { void newProject(); } },
+    open: { run: () => { void openProject(); } },
     save: { run: () => { void runSave(false); } },
     saveAs: { run: () => { void runSave(true); } },
     saveMovieAsMidiFile: {
       run: saveMovieAsMidiFile,
       enabled: movie !== null,
       hint: movie ? "Save the completed Movie as a Standard MIDI File" : "Record a Movie first",
+    },
+    saveStateAsStartup: {
+      run: () => {
+        if (!saveStartupState()) window.alert("The Startup State could not be saved locally.");
+      },
+      hint: "Save the current screen locally; Patterns and Time Maps remain fresh",
+    },
+    midiAssignment: {
+      run: () => window.dispatchEvent(new CustomEvent("mclone:open-midi-assignment")),
+      hint: "Open the sixteen-channel Web MIDI assignment matrix",
     },
   });
 
@@ -257,7 +304,7 @@ export function App() {
     label: entry.label,
     checked: entry.checked,
     enabled: entry.available,
-    hint: entry.available ? undefined : "Needs MIDI input, which isn't built yet",
+    hint: entry.available ? undefined : "Unavailable in this browser build",
     run: () => setOption(entry.id, !entry.checked),
   }));
 
@@ -277,6 +324,47 @@ export function App() {
 
   return (
     <div className={"app" + (theme === "dark" ? " theme-dark" : "")}
+      onInputCapture={(event) => {
+        const input = event.target as HTMLInputElement;
+        if (input.tagName === "INPUT" && input.type === "number"
+          && Number.isFinite(input.valueAsNumber)) lastNumerical.current = input.valueAsNumber;
+      }}
+      onPointerDownCapture={(event) => {
+        const input = event.target as HTMLInputElement;
+        if (input.tagName !== "INPUT" || input.type !== "number") return;
+        event.preventDefault();
+        const min = input.min === "" ? Number.NEGATIVE_INFINITY : Number(input.min);
+        const max = input.max === "" ? Number.POSITIVE_INFINITY : Number(input.max);
+        const step = input.step === "" || input.step === "any" ? 1 : Number(input.step);
+        if (event.shiftKey && lastNumerical.current !== null) {
+          setNumericalInput(input, copiedNumericalValue(lastNumerical.current, min, max, step));
+          return;
+        }
+        const initial = input.valueAsNumber;
+        if (!Number.isFinite(initial)) return;
+        const startX = event.clientX;
+        const upper = event.clientY < input.getBoundingClientRect().top
+          + input.getBoundingClientRect().height / 2;
+        let moved = false;
+        const move = (pointer: PointerEvent) => {
+          if (pointer.pointerId !== event.pointerId) return;
+          const delta = pointer.clientX - startX;
+          if (Math.abs(delta) >= 3) moved = true;
+          if (moved) setNumericalInput(
+            input, draggedNumericalValue(initial, delta, upper, min, max, step),
+          );
+        };
+        const up = (pointer: PointerEvent) => {
+          if (pointer.pointerId !== event.pointerId) return;
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          if (!moved) setNumericalInput(
+            input, draggedNumericalValue(initial, 0, upper, min, max, step),
+          );
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+      }}
       style={channelThemeVariables(channelTheme) as React.CSSProperties}>
       <nav className="app__menubar" aria-label="Application menu bar">
         <span className="app__apple" aria-hidden="true">◆</span>
@@ -344,8 +432,15 @@ export function App() {
             onSubmit={(event) => {
               event.preventDefault();
               if (!saveName.trim()) return;
-              setSaveNameDialogOpen(false);
-              void saveProject(true, saveName);
+              void (async () => {
+                const result = await saveProject(true, saveName);
+                if (result !== "saved") return;
+                setSaveNameDialogOpen(false);
+                const pending = fileActionAfterSave;
+                setFileActionAfterSave(null);
+                if (pending === "new") await newProject(true);
+                else if (pending === "open") await openProject(true);
+              })();
             }}>
             <h2 id="save-name-title">Save Project As</h2>
             <label>
@@ -355,7 +450,10 @@ export function App() {
                 onFocus={(event) => event.currentTarget.select()} />
             </label>
             <div className="save-name-dialog__actions">
-              <button type="button" onClick={() => setSaveNameDialogOpen(false)}>Cancel</button>
+              <button type="button" onClick={() => {
+                setSaveNameDialogOpen(false);
+                setFileActionAfterSave(null);
+              }}>Cancel</button>
               <button type="submit">Save</button>
             </div>
           </form>

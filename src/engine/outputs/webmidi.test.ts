@@ -99,6 +99,23 @@ describe("Web MIDI output", () => {
       .toEqual([[64, 0], [121, 0], [123, 0]]);
   });
 
+  it("sends the manual's channel-mode and system-reset messages", () => {
+    const sink = new MidiSink({ currentTime: 0 } as unknown as AudioContext);
+    const target = output();
+    sink.setOutput(target.port);
+    target.calls.length = 0;
+    sink.sendChannelMode("omni-on", [1]);
+    sink.sendChannelMode("omni-off", [2]);
+    sink.sendChannelMode("local-on", [3]);
+    sink.sendChannelMode("local-off", [4]);
+    sink.sendChannelMode("all-notes-off", [5]);
+    sink.sendChannelMode("system-reset");
+    expect(target.calls.map((call) => call.data)).toEqual([
+      [0xb0, 125, 0], [0xb1, 124, 0], [0xb2, 122, 127],
+      [0xb3, 122, 0], [0xb4, 123, 0], [0xff],
+    ]);
+  });
+
   it("retains selected IDs across disconnect and restores them on reconnect", async () => {
     const sink = new MidiSink({ currentTime: 0 } as unknown as AudioContext);
     const a = output();
@@ -126,5 +143,36 @@ describe("Web MIDI output", () => {
     stateChange!({ port: a.port } as unknown as MIDIConnectionEvent);
     expect(sink.outputIds()).toEqual(["a", "b"]);
     registry.dispose();
+  });
+
+  it("connects selected input ports and forwards their MIDI messages", async () => {
+    const sink = new MidiSink({ currentTime: 0 } as unknown as AudioContext);
+    const received: number[][] = [];
+    const input = { id: "kbd", state: "connected", onmidimessage: null } as unknown as MIDIInput;
+    const access = {
+      inputs: new Map([["kbd", input]]), outputs: new Map(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    } as unknown as MIDIAccess;
+    const registry = new MidiPortRegistry(sink, (event) => received.push(Array.from(event.data!)));
+    await registry.enable(async () => access);
+    registry.selectInputs(["kbd"]);
+    (input.onmidimessage as (event: MIDIMessageEvent) => void)({ data: new Uint8Array([0x90, 60, 90]) } as MIDIMessageEvent);
+    expect(received).toEqual([[0x90, 60, 90]]);
+    registry.selectInputs([]);
+    expect(input.onmidimessage).toBeNull();
+  });
+
+  it("maps each internal output channel to its assigned device and physical channel", () => {
+    const sink = new MidiSink({ currentTime: 0 } as unknown as AudioContext);
+    const a = output(); const b = output();
+    Object.defineProperty(a.port, "id", { value: "a" });
+    Object.defineProperty(b.port, "id", { value: "b" });
+    sink.setOutputs(new Map([["a", a.port], ["b", b.port]]));
+    a.calls.length = 0; b.calls.length = 0;
+    sink.setChannelAssignments([{ deviceId: "b", channel: 9 }]);
+    sink.scheduleBatch([{ type: "note-on", destination: "midi", voice: 0,
+      channel: 1, note: 60, velocity: 100, atSec: 0, atTick: 0, sequence: 1, noteId: 1 }]);
+    expect(a.calls).toHaveLength(0);
+    expect(b.calls[0].data[0]).toBe(0x98);
   });
 });

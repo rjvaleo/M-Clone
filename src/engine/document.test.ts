@@ -323,6 +323,29 @@ describe("decoding rejects what it cannot trust", () => {
 });
 
 describe("decoding repairs what it can", () => {
+  it("expands legacy four-Pattern documents and defaults new MIDI input settings", () => {
+    const raw = encodeDocument(source());
+    raw.project.patterns = raw.project.patterns.slice(0, 4);
+    delete (raw.project as unknown as Record<string, unknown>).midiAssignments;
+    delete (raw.project as unknown as Record<string, unknown>).echoMapChannels;
+    const result = decodeDocument(raw);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.document.project.patterns).toHaveLength(24);
+    expect(result.document.project.midiAssignments.inputs).toHaveLength(16);
+    expect(result.document.project.echoMapChannels).toEqual([]);
+  });
+
+  it("clamps persisted MIDI assignment and Echo Map values", () => {
+    const raw = encodeDocument(source());
+    raw.project.midiAssignments.inputs[0] = { deviceId: "kbd", channel: 99 };
+    raw.project.midiAssignments.latencyMs = 5000;
+    raw.project.echoMapChannels = [0, 3, 30];
+    const result = decodeDocument(raw);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.document.project.midiAssignments.inputs[0]).toEqual({ deviceId: "kbd", channel: 16 });
+    expect(result.document.project.midiAssignments.latencyMs).toBe(999);
+    expect(result.document.project.echoMapChannels).toEqual([1, 3, 16]);
+  });
   it("supplies defaults for fields absent from an older document", () => {
     const raw = encodeDocument(source()) as Record<string, unknown>;
     delete raw.snapshots;
@@ -437,6 +460,25 @@ describe("a thoroughly corrupted but loadable document", () => {
 
   it("still loads", () => {
     expect(decodeDocument(garbage()).ok).toBe(true);
+  });
+
+  it("repairs a missing variable-mark bank", () => {
+    const raw = JSON.parse(JSON.stringify(encodeDocument(source()))) as Record<string, unknown>;
+    delete raw.variableMarks;
+    const result = decodeDocument(raw);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.document.variableMarks.density).toEqual([false, false, false, false, false, false]);
+  });
+
+  it("repairs missing marks within a bank and accepts one-based Program display", () => {
+    const raw = JSON.parse(JSON.stringify(encodeDocument(source()))) as Record<string, unknown>;
+    raw.variableMarks = {};
+    const project = raw.project as Record<string, unknown>;
+    (project.midiAssignments as Record<string, unknown>).programBase = 1;
+    const result = decodeDocument(raw);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.document.variableMarks.density).toEqual([false, false, false, false, false, false]);
+    expect(result.document.project.midiAssignments.programBase).toBe(1);
   });
 
   it("repairs every field to something legal", () => {

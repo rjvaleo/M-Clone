@@ -1,4 +1,4 @@
-# Conducting Window — Dependency Map and Implementation Plan
+# Conducting Window — Implementation and Dependency Record
 
 Transport timing, tempo-continuity segments, Pause/Resume/Sync cancellation,
 MIDI event ordering, and the precise browser limitations are specified in
@@ -15,7 +15,7 @@ equivalents.
 
 **Implementation status:** Core conducting plus Movie capture/export are
 implemented. Pure conductor, Movie, and store behavior are covered by the
-current 672-test, 100%-coverage engine/state suite. Its window title follows
+current 757-test, 100%-coverage engine/state suite. Its window title follows
 the saved project filename stem (without `.mclone`) and returns to Untitled for
 a new unsaved document.
 Production and single-file builds pass, and the localhost UI has been exercised
@@ -48,9 +48,10 @@ The manual defines these behaviors:
 - **Sync Ratio:** stores the relationship between M’s quarter-note pulse and
   MIDI clock/metronome output, with a reversible direction.
 
-Movie capture and Standard MIDI File export are implemented. Imported Sequence
-playback, MIDI clock output, and an audible metronome still depend on unfinished
-subsystems; Sequence remains disabled with an explicit tooltip.
+Movie capture, Standard MIDI File export, audible metronome, and 24-PPQN Web
+MIDI Clock output are implemented. Imported Sequence playback is deliberately
+excluded from product scope, so Sequence remains disabled with an explicit
+tooltip.
 
 ## Implemented state
 
@@ -69,6 +70,11 @@ subsystems; Sequence remains disabled with an explicit tooltip.
   Baton conducting continue to update the same project tempo.
 - Movie and Sequence glyphs follow the reference filmstrip and
   document/mechanism symbols. Full audit: `PATTERNS_TRANSPORT_AUDIT.md`.
+- The title ends over the transport field while the Grid reaches the top edge;
+  diagonal separators render behind crisp glyphs. Start, Stop, Pause, Sync,
+  Movie, and Sequence use fixed semantic reference colors independently of the
+  selected Voice palette. Tempo/ratio/time-base values and vertical H/V Robot
+  controls remain inside their lower boxes in both themes.
 
 ## Target data flow
 
@@ -87,7 +93,7 @@ normalize and clamp x/y to 0..1
 
 ## Pure engine layer
 
-Add `src/engine/conductor.ts`:
+`src/engine/conductor.ts` implements:
 
 - clamp a Baton point into the unit square;
 - select x or y according to an Arrow direction;
@@ -101,7 +107,7 @@ clamping, midpoint selection, normalized tempo ranges, and robot bounds.
 
 ## Store layer
 
-Add conductor state:
+The store owns conductor state:
 
 ```ts
 baton: { x: number; y: number }
@@ -113,7 +119,7 @@ robotRange: { x: number; y: number }
 robotTimeBase: 1 | 2 | 4 | 8 | 16
 ```
 
-Add actions:
+Implemented actions:
 
 - `conductAt(x, y)` updates the Baton and every armed supported target in one
   atomic store transition.
@@ -133,12 +139,16 @@ Supported in this implementation:
 - Time Distortion
 - Orchestration
 
-Cyclic Variables now have six stored Positions, but cyclic conducting arrows
-are not yet part of the conducting target model.
+Cyclic Variables have six stored Positions and conducting targets. Velocity
+Range and Legato additionally support the manual's Continuous Conducting mode:
+pull either Conducting Arrow outward to reveal the temporary four-Voice panel.
+Click a Voice brick to enable it, right-click its arrow to rotate direction,
+and close the panel to return to the compact module layout. The panel is never
+inserted into the normal Variables or Cyclic Variables row flow.
 
 ## Runtime layer
 
-Add true `pause()` and `resume()`:
+The runtime provides true `pause()` and `resume()`:
 
 - Pause stops the scheduling timer and silences current notes without replacing
   Voice cursors.
@@ -152,14 +162,14 @@ logic stays in tested pure/store layers.
 
 ## Interface layer
 
-Create `src/ui/ConductorWindow.tsx` and replace the generic `Untitled` body.
+`src/ui/ConductorWindow.tsx` supplies the compact transport body.
 
-The reference image is a 2× capture. The window retains a 461 × 216 internal
-coordinate system for exact control geometry and is rendered at 50%, producing
-a 230.5 × 108 on-screen footprint.
+The reference image is a 2× capture. The drawing uses a measured 459 × 214
+internal coordinate system and is rendered at approximately 50%, producing a
+229 × 107 logical footprint.
 
-- Use monochrome CSS-drawn icons and shapes; do not embed the screenshot.
-- Match the 1× reference geometry: 461×216 outer window, 265×158 left control
+- Use CSS/SVG-drawn icons and shapes; do not embed the screenshot.
+- Match the normalized reference geometry: 459×214 drawing, 265×158 left control
   field, 194×158 Grid, and a 56px bottom strip.
 - Use a six-by-six dotted grid with pointer capture and a visible Baton mark.
 - Render the tempo range as a dual-handle range line with a current-tempo mark.
@@ -175,7 +185,7 @@ a 230.5 × 108 on-screen footprint.
 The shared context-menu implementation also serves the Pattern, Variables,
 Midi, and Cyclic modules.
 
-## TDD sequence
+## TDD and verification history
 
 1. Write failing `conductor.test.ts` cases from the manual.
 2. Implement the pure coordinate/range/robot functions.

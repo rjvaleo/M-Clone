@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useM } from "../state/store";
-import { needsDownloadName, saveProject } from "./fileCommands";
+import {
+  loadStartupState, needsDownloadName, saveProject, saveStartupState,
+  unsavedActionDecision,
+} from "./fileCommands";
 
 describe("project file saving", () => {
   beforeEach(() => {
@@ -87,5 +90,23 @@ describe("project file saving", () => {
     expect(result).toBe("needs-name");
     expect(useM.getState().documentName).toBe(null);
     expect(click).not.toHaveBeenCalled();
+  });
+
+  it("persists and reloads the local Startup State", () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    });
+    useM.getState().setTempo(177);
+    expect(saveStartupState()).toBe(true);
+    expect(loadStartupState()).toMatchObject({ project: { tempo: 177 } });
+  });
+
+  it("models Save, Discard, and Cancel before destructive file actions", () => {
+    expect(unsavedActionDecision(false, false, false)).toBe("discard");
+    expect(unsavedActionDecision(true, true, false)).toBe("save");
+    expect(unsavedActionDecision(true, false, true)).toBe("discard");
+    expect(unsavedActionDecision(true, false, false)).toBe("cancel");
   });
 });
