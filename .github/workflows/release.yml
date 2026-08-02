@@ -1,0 +1,118 @@
+name: Build Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and publish (e.g. v0.8.0-alpha)'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve release version
+        id: version
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          case "$TAG" in
+            *-alpha*|*-beta*|*-rc*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Verify tag matches package.json version
+        run: |
+          PKG="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$PKG" != "$TAG_VERSION" ]; then
+            echo "::error::package.json version ($PKG) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Run product tests with coverage
+        run: npm run coverage
+
+      - name: Run manual-conformance tests
+        run: npm run test:manual
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Build self-contained single-file app
+        run: npm run build:single
+
+      - name: Package release artifacts
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p release
+          cp dist-single/index.html "release/m-clone-$VERSION-standalone.html"
+          (cd dist && zip -qr "../release/m-clone-$VERSION-web.zip" .)
+          (cd release && sha256sum ./* > "m-clone-$VERSION-SHA256SUMS.txt")
+          ls -la release
+
+      - name: Extract release notes for this version
+        id: notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { inside = 1; next }
+            inside && /^## / { exit }
+            inside { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ -s release-notes.md ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          HAS_NOTES: ${{ steps.notes.outputs.found }}
+        run: |
+          NOTES_FLAG=(--generate-notes)
+          if [ "$HAS_NOTES" = "true" ]; then
+            NOTES_FLAG=(--notes-file release-notes.md)
+          fi
+          FLAGS=()
+          if [ "$PRERELEASE" = "true" ]; then
+            FLAGS+=(--prerelease)
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          else
+            gh release create "$TAG" release/* \
+              --title "M-Clone $VERSION" \
+              "${NOTES_FLAG[@]}" \
+              "${FLAGS[@]}"
+          fi

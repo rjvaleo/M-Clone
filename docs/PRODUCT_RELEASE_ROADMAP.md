@@ -2,7 +2,8 @@
 
 **Status:** approved product direction; implementation state is tracked in
 [`STATUS.md`](./STATUS.md)  
-**Last updated:** 2026-08-01
+**Last updated:** 2026-08-02  
+**Current version:** 0.8.0-alpha — free public web alpha of M Classic Web
 
 This document is authoritative for editions, platforms, access stages,
 commercial progression, and compatibility. Technical MIDI behavior belongs to
@@ -193,7 +194,9 @@ a scaled desktop window. Tablet is the primary mobile composition surface.
 ### Commercial progression
 
 ```text
-Free M Classic Web
+Free M Classic Web public alpha   ← current (0.8.0-alpha)
+        ↓
+Free M Classic Web 1.0
         ↓
 Invite-only desktop alpha
         ↓
@@ -277,7 +280,31 @@ Rules:
   discard paid-edition state.
 - All project migrations are versioned and tested.
 
-## 10. Brand and rights gates
+## 10. Versioning and release tags
+
+Version numbers describe the shipped build. They are independent of the edition
+and access axes in section 1: `0.8.0-alpha` is a free public web build of M
+Classic Web, not an "alpha edition".
+
+- Semantic versioning. Pre-1.0 builds are alpha and may change the interface,
+  the audio rack, and the `.mclone` document between minor versions.
+- `0.8.x-alpha` — public web alpha. The M 2.7 manual audit is closed apart from
+  documented exclusions; the Classic audio rack, dynamic Voice counts, release
+  hardening, and hardware certification are open.
+- `0.9.x` — Classic release-hardening candidates once the four role-specific
+  engines and basic stereo effects exist.
+- `1.0.0` — M Classic Web, gated on section 3's release gate: published
+  browser/MIDI matrices, long-session tests, no non-deferred placeholders, and a
+  document format proven migratable into Studio.
+- After 1.0, `.mclone` documents written by any released version must remain
+  readable by later versions.
+
+Every release is cut from an annotated `vX.Y.Z[-stage]` tag. The tag must match
+`package.json`; the release workflow fails the build otherwise. Release scope,
+exclusions, known limitations, and the verification recorded at each tag belong
+in [`../CHANGELOG.md`](../CHANGELOG.md), not in this document.
+
+## 11. Brand and rights gates
 
 Before public monetization, obtain qualified advice concerning product names,
 historic interface similarity, marketing language, and the rights needed for

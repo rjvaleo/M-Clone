@@ -1,11 +1,27 @@
 # M-Clone
 
+[![Version](https://img.shields.io/badge/version-0.8.0--alpha-E65100)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-alpha_prerelease-FF6F00?logo=github)](https://github.com/rjvaleo/M-Clone/releases/latest)
 [![GitHub Pages deployment](https://github.com/rjvaleo/M-Clone/actions/workflows/pages.yml/badge.svg)](https://github.com/rjvaleo/M-Clone/actions/workflows/pages.yml)
+[![Build Release](https://github.com/rjvaleo/M-Clone/actions/workflows/release.yml/badge.svg)](https://github.com/rjvaleo/M-Clone/actions/workflows/release.yml)
 [![Launch M-Clone](https://img.shields.io/badge/Launch_M--Clone-GitHub_Pages-222222?logo=github)](https://rjvaleo.github.io/M-Clone/)
+
+> **Alpha — 0.8.0.** M Classic Web is feature-complete against the M 2.7 manual
+> audit apart from documented exclusions, and every gate below is green. It is
+> not a 1.0: the role-specific Classic audio rack, release hardening, and
+> hardware/browser MIDI certification are still open. The interface and the
+> `.mclone` document format may change before 1.0. See
+> [`CHANGELOG.md`](CHANGELOG.md) for what this build includes, what it excludes,
+> and its known limitations.
 
 **Live web app:** [Launch M-Clone on GitHub Pages](https://rjvaleo.github.io/M-Clone/).
 Every push to `master` is tested, compiled, and deployed automatically by
 GitHub Actions.
+
+**Downloads:** [the latest release](https://github.com/rjvaleo/M-Clone/releases/latest)
+ships a self-contained `m-clone-<version>-standalone.html` (open it directly in a
+browser — no server, no install) and `m-clone-<version>-web.zip` (the static
+build for your own hosting), with `SHA256SUMS.txt`.
 
 ### Current stack and engineering practices
 
@@ -72,7 +88,8 @@ limits specification is
 The technical-completion sequence for the next session is in
 [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md).
 
-Current verified checkpoint: **758 passing tests across 62 files**, **100%**
+Current verified checkpoint (**0.8.0-alpha**): **758 passing tests across 62
+files**, **100%**
 statement/branch/function/line coverage for the included engine and state
 modules, clean TypeScript checking, and successful normal and single-file
 production builds. The retained M 2.7 manual gap queues are closed. Live MIDI
@@ -90,6 +107,8 @@ but it represents the complete musical project—not merely a graph. Legacy
 
 ### Project direction and current state
 
+- [`CHANGELOG.md`](CHANGELOG.md) — released versions, per-release scope,
+  exclusions, known limitations, and the verification recorded at each tag.
 - [`docs/STATUS.md`](docs/STATUS.md) — authoritative implemented-feature
   scorecard, verification checkpoint, and roadmap status.
 - [`docs/TODO.md`](docs/TODO.md) — current open backlog and deferred decisions.
@@ -307,6 +326,35 @@ The output is written to `dist-pages/` with `/M-Clone/` asset URLs. The workflow
 runs the 100%-coverage product gate and manual-conformance suite before it
 uploads that directory. GitHub Pages supplies the HTTPS secure context required
 by Web MIDI; device access still depends on browser support and user permission.
+
+## Releases
+
+Releases are cut from annotated tags. Pushing a `v*` tag runs
+[`.github/workflows/release.yml`](.github/workflows/release.yml), which checks
+the tag against `package.json`, runs the 100%-coverage product gate and the
+manual-conformance suite, builds the normal and single-file bundles, and
+publishes a GitHub Release with:
+
+| Artifact | What it is |
+| --- | --- |
+| `m-clone-<version>-standalone.html` | The whole application inlined into one HTML file. Open it in a browser; no server or install. |
+| `m-clone-<version>-web.zip` | The static `dist/` build, for hosting on your own domain. |
+| `m-clone-<version>-SHA256SUMS.txt` | Checksums for both artifacts. |
+
+Any tag containing `-alpha`, `-beta`, or `-rc` is published as a GitHub
+prerelease. Release notes come from the matching section of
+[`CHANGELOG.md`](CHANGELOG.md).
+
+To cut one:
+
+```bash
+git tag -a v0.8.0-alpha -m "M-Clone 0.8.0-alpha" && git push origin v0.8.0-alpha
+```
+
+For MIDI hardware, prefer the hosted
+[GitHub Pages app](https://rjvaleo.github.io/M-Clone/) or your own HTTPS host:
+Web MIDI requires a secure context and explicit permission, and browsers may
+restrict device access for a local file. The built-in Synth works everywhere.
 
 ## Develop
 

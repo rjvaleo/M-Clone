@@ -1,6 +1,12 @@
 # Technical Completion Plan
 
-**Updated:** 2026-08-01
+**Updated:** 2026-08-02  
+**Current version:** 0.8.0-alpha
+
+The 0.8.0-alpha build is published from the `v0.8.0-alpha` tag. Everything in
+this plan below the green checkpoint is 1.0 work; alpha is a distribution stage,
+not a claim that Classic is complete. Per-release scope, exclusions, and known
+limitations live in [`../CHANGELOG.md`](../CHANGELOG.md).
 
 The manual gap-closing plan is complete. Work was executed TDD-first: existing
 partial/unwired behavior, then live-input/controller capabilities, then
