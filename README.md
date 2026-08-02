@@ -292,6 +292,8 @@ The repository includes a tested Pages build and `.github/workflows/pages.yml`.
 It publishes the static application below the repository subpath at
 `https://rjvaleo.github.io/M-Clone/` after the workflow is pushed to `master`
 and **Settings ▸ Pages ▸ Source** is set to **GitHub Actions**.
+Making the repository public does not enable the Pages site by itself; that
+one-time source selection must exist before `configure-pages` can read it.
 
 ```bash
 npm run build:pages
