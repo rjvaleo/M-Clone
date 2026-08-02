@@ -1,5 +1,12 @@
 # M-Clone
 
+[![GitHub Pages deployment](https://github.com/rjvaleo/M-Clone/actions/workflows/pages.yml/badge.svg)](https://github.com/rjvaleo/M-Clone/actions/workflows/pages.yml)
+[![Launch M-Clone](https://img.shields.io/badge/Launch_M--Clone-GitHub_Pages-222222?logo=github)](https://rjvaleo.github.io/M-Clone/)
+
+**Live web app:** [Launch M-Clone on GitHub Pages](https://rjvaleo.github.io/M-Clone/).
+Every push to `master` is tested, compiled, and deployed automatically by
+GitHub Actions.
+
 ### Current stack and engineering practices
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript&logoColor=white)
@@ -19,7 +26,6 @@
 ![Tests](https://img.shields.io/badge/tests-758_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
-![GitHub Pages](https://img.shields.io/badge/GitHub_Pages-deployment_ready-222222?logo=github)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
 ![Timing](https://img.shields.io/badge/timing-960_PPQN_%2B_adaptive_lookahead-6A1B9A)
 ![Deterministic](https://img.shields.io/badge/generation-seeded_%26_deterministic-795548)
@@ -288,12 +294,10 @@ then open `dist-single/index.html`.
 
 ## Deploy to GitHub Pages
 
-The repository includes a tested Pages build and `.github/workflows/pages.yml`.
-It publishes the static application below the repository subpath at
-`https://rjvaleo.github.io/M-Clone/` after the workflow is pushed to `master`
-and **Settings ▸ Pages ▸ Source** is set to **GitHub Actions**.
-Making the repository public does not enable the Pages site by itself; that
-one-time source selection must exist before `configure-pages` can read it.
+The live application runs at
+[rjvaleo.github.io/M-Clone](https://rjvaleo.github.io/M-Clone/). The tested
+`.github/workflows/pages.yml` pipeline rebuilds and deploys it automatically on
+every push to `master`; generated files are not committed to the repository.
 
 ```bash
 npm run build:pages
