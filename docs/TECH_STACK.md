@@ -28,12 +28,14 @@ not dependencies of the browser application.
 | Vite | 5.4.21 development server and production bundler |
 | `@vitejs/plugin-react` | 4.7.0 React transform |
 | `vite-plugin-singlefile` | 2.3.3 self-contained `dist-single/index.html` build |
+| GitHub Pages | Static `/M-Clone/` production build in `dist-pages`; Actions deployment after tests |
 | Vitest | 2.1.9 unit and executable manual-conformance suites |
 | V8 coverage | 2.1.9 provider; included engine/state surface held at 100% |
 | Local verification runtime | Node 24.18.0 and npm 11.16.0; these are the current development environment, not a published minimum-support promise |
 
 Current gates are `npm test`, `npm run test:manual`, `npm run coverage`,
-`npm run typecheck`, `npm run build`, and `npm run build:single`.
+`npm run typecheck`, `npm run build`, `npm run build:pages`, and
+`npm run build:single`.
 
 ## Architecture boundaries
 
@@ -45,7 +47,7 @@ Current gates are `npm test`, `npm run test:manual`, `npm run coverage`,
 - `src/engine/outputs` and `src/ui/runtime.ts` are platform adapters around the
   explicit event protocol.
 - `src/manual` is an executable 180-capability M 2.7 inventory, separate from
-  the 757-test product suite.
+  the 758-test product suite.
 
 ## Roadmap technologies, not current stack
 

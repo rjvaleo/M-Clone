@@ -1,5 +1,14 @@
 # M-Clone — Project Status
 
+## 2026-08-01: GitHub Pages deployment
+
+A dedicated Vite Pages build now emits repository-subpath production assets
+under `/M-Clone/` into `dist-pages/`. The Actions workflow runs product
+coverage, the executable manual audit, and typechecked Pages compilation before
+uploading and deploying the static artifact. Once the workflow is pushed and
+GitHub Pages is set to use Actions, the expected public URL is
+`https://rjvaleo.github.io/M-Clone/`.
+
 ## 2026-08-01: documentation and Conducting visual reconciliation
 
 The README, stack, backlog, handoff, reliability, visual, and implementation
@@ -31,7 +40,7 @@ The completed work adds live MIDI input, sixteen-channel input/output device
 assignment, Source/Use/Echo routing, full Pattern recording modes, Keyboard
 Transpose, `sa` Step Advance, Mouse Advance, sustain-entered rests, Appendix B
 Input Control, controller conducting, metronome, MIDI Clock, output latency,
-and program display base. The ordinary suite is **757 passing tests across 61
+and program display base. The ordinary suite is **758 passing tests across 62
 files** at 100% included engine/state coverage. See
 [`MANUAL_CONFORMANCE.md`](./MANUAL_CONFORMANCE.md).
 
@@ -87,7 +96,7 @@ suffix; the payload remains versioned JSON and legacy `.mclone.json` / `.json`
 files remain openable. The Conducting/transport caption shows only the filename
 stem, without any project suffix.
 
-TDD verification at the latest checkpoint is **757 tests across 61 files** with 100% included
+TDD verification at the latest checkpoint is **758 tests across 62 files** with 100% included
 engine/state coverage. Browser verification covered dark-theme layout,
 close/reopen through Windows, live control exposure, a generated sixteenth-note
 run, compact select/knob containment, and Note Density geometry at 150%.
@@ -301,7 +310,7 @@ behavior, project I/O, live MIDI, and Movie export are done.
 
 | Metric | State |
 | --- | --- |
-| Unit tests | **757 passing** (61 files) |
+| Unit tests | **758 passing** (62 files) |
 | Coverage (engine + state) | **100%** lines / branches / functions |
 | Typecheck (`tsc --noEmit`) | Clean |
 | Production build | Succeeds (`vite build`, `build:single`) |

@@ -275,7 +275,7 @@ npm run build
 npm run build:single
 ```
 
-Current verified result: 757 tests in 61 files, 167 passing executable manual
+Current verified result: 758 tests in 62 files, 167 passing executable manual
 checks plus 17 explicit skips, both production builds passing, and
 100% included engine/state statement, branch, function, and line coverage.
 

@@ -16,9 +16,10 @@
 
 ![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
 ![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25_lines%20%7C%20branches%20%7C%20functions-brightgreen)
-![Tests](https://img.shields.io/badge/tests-757_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-758_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
+![GitHub Pages](https://img.shields.io/badge/GitHub_Pages-deployment_ready-222222?logo=github)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
 ![Timing](https://img.shields.io/badge/timing-960_PPQN_%2B_adaptive_lookahead-6A1B9A)
 ![Deterministic](https://img.shields.io/badge/generation-seeded_%26_deterministic-795548)
@@ -65,7 +66,7 @@ limits specification is
 The technical-completion sequence for the next session is in
 [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md).
 
-Current verified checkpoint: **757 passing tests across 61 files**, **100%**
+Current verified checkpoint: **758 passing tests across 62 files**, **100%**
 statement/branch/function/line coverage for the included engine and state
 modules, clean TypeScript checking, and successful normal and single-file
 production builds. The retained M 2.7 manual gap queues are closed. Live MIDI
@@ -285,6 +286,22 @@ and ride the sliders. For MIDI, choose **File ▸ Midi Assignment**, click
 build a single self-contained HTML preview: `npm run build:single`
 then open `dist-single/index.html`.
 
+## Deploy to GitHub Pages
+
+The repository includes a tested Pages build and `.github/workflows/pages.yml`.
+It publishes the static application below the repository subpath at
+`https://rjvaleo.github.io/M-Clone/` after the workflow is pushed to `master`
+and **Settings ▸ Pages ▸ Source** is set to **GitHub Actions**.
+
+```bash
+npm run build:pages
+```
+
+The output is written to `dist-pages/` with `/M-Clone/` asset URLs. The workflow
+runs the 100%-coverage product gate and manual-conformance suite before it
+uploads that directory. GitHub Pages supplies the HTTPS secure context required
+by Web MIDI; device access still depends on browser support and user permission.
+
 ## Develop
 
 ```bash
@@ -293,6 +310,7 @@ npm run coverage  # tests + coverage (engine/state held at 100%)
 npm run test:watch # interactive test watch mode
 npm run typecheck # tsc --noEmit
 npm run build     # typecheck + production build
+npm run build:pages # typechecked GitHub Pages build in dist-pages/
 npm run build:single # self-contained dist-single/index.html
 npm run preview   # preview the normal production build
 ```
