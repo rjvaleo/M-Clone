@@ -77,7 +77,7 @@ Two product decisions account for the remaining musical exceptions:
 
 ## Verification checkpoint
 
-- Product suite: **757 tests across 61 files**.
+- Product suite: **758 tests across 62 files**.
 - Coverage: **100% statements, branches, functions, and lines** for the included
   engine/state surface.
 - Manual audit: **184 tests; 167 passed, 17 skipped, zero failures**.

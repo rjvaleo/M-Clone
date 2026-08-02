@@ -85,6 +85,8 @@ The execution order and acceptance gates for these items are in
 
 ## Completed foundations
 
+- ✅ GitHub Pages build and Actions deployment pipeline, with `/M-Clone/`
+  subpath assets and product/manual test gates before artifact upload.
 - ✅ Pure generative engine, harmonic options, seeded randomness, four Voices.
 - ✅ Pattern Editor with Region tools, audition, resizing, fixed-cell painting,
   auto-extension, and 22 working Edit/Pattern commands.

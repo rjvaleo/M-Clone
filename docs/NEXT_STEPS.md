@@ -9,7 +9,7 @@ playback and Sound Choice remain deliberate exclusions.
 
 ## Green checkpoint
 
-- **757 tests across 61 files**.
+- **758 tests across 62 files**.
 - **100% statements, branches, functions, and lines** across included engine
   and state modules.
 - **184 manual-conformance tests: 167 passed, 17 explicit skips**.
