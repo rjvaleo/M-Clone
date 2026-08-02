@@ -7,6 +7,10 @@ dist-pages/
 dist-single/
 *.local
 
+# release packaging (produced by .github/workflows/release.yml)
+release/
+release-notes.md
+
 # test coverage
 coverage/
 

@@ -1,7 +1,8 @@
 # Current Technical Stack
 
-**Verified:** 2026-08-01 against `package-lock.json`, the resolved local install,
-the Vite/Vitest/TypeScript configuration, and the production builds.
+**Verified:** 2026-08-02 against `package-lock.json`, the resolved local install,
+the Vite/Vitest/TypeScript configuration, and the production builds.  
+**Application version:** 0.8.0-alpha
 
 This page describes the software that exists now. Native shells, plug-in hosts,
 mobile targets, and third-party Web Audio Module hosting are roadmap candidates,
@@ -28,7 +29,8 @@ not dependencies of the browser application.
 | Vite | 5.4.21 development server and production bundler |
 | `@vitejs/plugin-react` | 4.7.0 React transform |
 | `vite-plugin-singlefile` | 2.3.3 self-contained `dist-single/index.html` build |
-| GitHub Pages | Static `/M-Clone/` production build in `dist-pages`; Actions deployment after tests |
+| GitHub Pages | Static `/M-Clone/` production build in `dist-pages`; Actions deployment after tests on every push to `master` |
+| GitHub Releases | `.github/workflows/release.yml` on `v*` tags; version/tag agreement check, full gates, then a published standalone HTML, static zip, and checksums |
 | Vitest | 2.1.9 unit and executable manual-conformance suites |
 | V8 coverage | 2.1.9 provider; included engine/state surface held at 100% |
 | Local verification runtime | Node 24.18.0 and npm 11.16.0; these are the current development environment, not a published minimum-support promise |

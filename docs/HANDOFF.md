@@ -1,5 +1,16 @@
 # Handoff — read this first
 
+## Release handoff
+
+The shipped version is **0.8.0-alpha**, published from the `v0.8.0-alpha` tag.
+Releases are cut by pushing an annotated `vX.Y.Z[-stage]` tag;
+`.github/workflows/release.yml` fails the build if that tag disagrees with
+`package.json`, so bump the version and add the matching
+[`../CHANGELOG.md`](../CHANGELOG.md) section in the same commit as the tag.
+Alpha is a distribution stage, not a capability claim — do not describe Classic
+as complete. Versioning rules and the 1.0 gate are in
+[`PRODUCT_RELEASE_ROADMAP.md`](./PRODUCT_RELEASE_ROADMAP.md) § 10.
+
 ## MIDI reliability handoff
 
 Do not infer MIDI guarantees from the UI or older roadmap prose. The canonical

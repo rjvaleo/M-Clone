@@ -1,5 +1,32 @@
 # M-Clone — Project Status
 
+**Current version:** 0.8.0-alpha (public alpha prerelease)
+
+## 2026-08-02: 0.8.0-alpha release build
+
+The project is versioned and tagged for public alpha distribution.
+`package.json` moves from the placeholder `0.0.1` to `0.8.0-alpha`, and
+[`../CHANGELOG.md`](../CHANGELOG.md) becomes the authoritative per-release
+record of scope, deliberate exclusions, known limitations, and the verification
+captured at each tag.
+
+A second workflow, `.github/workflows/release.yml`, triggers on `v*` tags. It
+refuses to publish when the tag and `package.json` version disagree, then runs
+the 100%-coverage product gate and the manual-conformance suite, builds the
+normal and single-file bundles, and publishes a GitHub Release containing the
+self-contained `m-clone-<version>-standalone.html`, the static
+`m-clone-<version>-web.zip`, and a checksum file. Tags carrying `-alpha`,
+`-beta`, or `-rc` publish as prereleases. Pages deployment on `master` is
+unchanged and remains the canonical live application.
+
+Verification at this tag: 758 tests across 62 files, 167 passed and 17 skipped
+across 184 manual-conformance tests, 100% included engine/state coverage, clean
+typecheck, and successful normal, Pages, and single-file builds.
+
+Alpha is a distribution stage, not a capability claim. The role-specific Classic
+audio rack, dynamic Voice counts, release hardening, and hardware/browser MIDI
+certification remain open 1.0 work; see [`NEXT_STEPS.md`](./NEXT_STEPS.md).
+
 ## 2026-08-01: GitHub Pages deployment
 
 A dedicated Vite Pages build now emits repository-subpath production assets

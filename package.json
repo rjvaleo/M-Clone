@@ -1,7 +1,7 @@
 {
   "name": "m-clone",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.8.0-alpha",
   "type": "module",
   "description": "A modern browser-first recreation of M, the interactive composing instrument.",
   "scripts": {
