@@ -23,24 +23,6 @@ ships a self-contained `m-clone-<version>-standalone.html` (open it directly in 
 browser — no server, no install) and `m-clone-<version>-web.zip` (the static
 build for your own hosting), with `SHA256SUMS.txt`.
 
-## Screens
-
-![M-Clone at 150% in the Red channel palette, light theme: Patterns, transport,
-Snapshot, Pattern Editor, Cyclic Variables, Variables, the Cyclic Editor in
-Classic view, the Midi output strip and Midi View, with Transposition,
-Orchestration, Velocity Range, Note Density, Note Order, and Time Distortion
-open down the right side.](docs/screenshots/m-clone-red-theme.png)
-
-*The full window suite at 150%, Red channel palette, light theme.*
-
-![The same interface at 100% in the Classic four-color palette, showing the
-project "Suffix Check.mclone" with the built-in Synth module open alongside
-Midi View, the Pattern Editor, the Cyclic Editor, Note Order, Velocity Range,
-Note Density, and Transposition.](docs/screenshots/m-clone-classic-theme.png)
-
-*The Classic four-color palette at 100%, with the built-in Synth open. Each
-Voice keeps its color across every module.*
-
 ### Current stack and engineering practices
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript&logoColor=white)
@@ -209,6 +191,22 @@ for the full design and roadmap.
 **Unified classic interface — it plays.** A pure, fully-tested generative engine
 drives both a built-in WebAudio synth and Web MIDI output, behind a movable
 recreation of M's main windows plus dedicated Pattern, Cyclic, and Midi View tools.
+
+![M-Clone at 150% in the Red channel palette, light theme: Patterns, transport,
+Snapshot, Pattern Editor, Cyclic Variables, Variables, the Cyclic Editor in
+Classic view, the Midi output strip and Midi View, with Transposition,
+Orchestration, Velocity Range, Note Density, Note Order, and Time Distortion
+open down the right side.](docs/screenshots/m-clone-red-theme.png)
+
+*The full window suite at 150%, Red channel palette, light theme.*
+
+![The same interface at 100% in the Classic four-color palette, showing the
+project "Suffix Check.mclone" with the built-in Synth module open alongside
+Midi View, the Pattern Editor, the Cyclic Editor, Note Order, Velocity Range,
+Note Density, and Transposition.](docs/screenshots/m-clone-classic-theme.png)
+
+*The Classic four-color palette at 100%, with the built-in Synth open. Each
+Voice keeps its color across every module.*
 
 Working today:
 
