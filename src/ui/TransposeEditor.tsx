@@ -16,6 +16,7 @@ import {
   stepOctave,
   toNoteOctave,
 } from "../engine/transpose";
+import { voiceColorClass } from "./voicecolor";
 
 /** A Numerical: click the top half to go up, the bottom half to go down. */
 function Numerical({ value, label, title, onStep }: {
@@ -40,9 +41,10 @@ function Numerical({ value, label, title, onStep }: {
   );
 }
 
-export function TransposeEditor({ slot, onChange }: {
+export function TransposeEditor({ slot, onChange, onTransfer }: {
   slot: number[];
   onChange: (voice: number, semitones: number) => void;
+  onTransfer: (source: number, destination: number, copy: boolean) => void;
 }) {
   return (
     <div className="utr">
@@ -56,8 +58,17 @@ export function TransposeEditor({ slot, onChange }: {
           const { note, octave } = toNoteOctave(semitones);
           const reading = formatTranspose(semitones);
           return (
-            <div className={`utr__row uvoice uvoice--${voice + 1}`} key={voice}>
-              <span className="utr__voice">{voice + 1}</span>
+            <div className={`utr__row ${voiceColorClass("transposition", voice)}`} key={voice}>
+              <span className="utr__voice" draggable
+                onDragStart={(event) => event.dataTransfer.setData(
+                  "application/x-mclone-voice", String(voice),
+                )}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const source = Number(event.dataTransfer.getData("application/x-mclone-voice"));
+                  if (Number.isInteger(source)) onTransfer(source, voice, event.altKey);
+                }}>{voice + 1}</span>
               <Numerical
                 value={TRANSPOSE_NOTES[note]}
                 label={`Voice ${voice + 1} transposition note: ${reading}`}

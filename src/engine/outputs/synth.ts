@@ -47,6 +47,22 @@ export class SynthSink implements OutputSink {
     this.settings = settings.map(normalizeSynthSettings);
   }
 
+  metronome(atSec: number, accent = false): void {
+    const start = Math.max(atSec, this.ctx.currentTime);
+    const oscillator = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(accent ? 1760 : 1320, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.08, start + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.035);
+    oscillator.connect(gain).connect(this.master);
+    oscillator.start(start);
+    oscillator.stop(start + 0.04);
+    this.active.add(oscillator);
+    oscillator.onended = () => this.active.delete(oscillator);
+  }
+
   private oscillator(
     waveform: SynthWaveform,
     frequency: number,

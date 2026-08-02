@@ -28,8 +28,12 @@ import {
 import { midiToName } from "../engine/music";
 import { getRuntime } from "./runtime";
 import { useDraggable } from "./useDraggable";
-import { useContextMenu } from "./WindowMenu";
+import { useWindowContextMenu } from "./windowlauncher";
 import { usePatternMenus } from "./patternMenus";
+import { editorSoundAllowed } from "./editorsound";
+import { isLegacyClearKey } from "./editorkeys";
+import { focusWindowPointerDown } from "./windowfocus";
+import { clearSteps } from "../engine/patterncmd";
 import type { ChordMode, InsertMode } from "../engine/types";
 import {
   IconBuild,
@@ -161,6 +165,10 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
   const insertSteps = useM((s) => s.insertSteps);
   const deleteRegion = useM((s) => s.deleteRegion);
   const selectVoice = useM((s) => s.selectVoice);
+  const runPatternCommand = useM((s) => s.runPatternCommand);
+  const isPlaying = useM((s) => s.isPlaying);
+  const editorSoundWhilePlaying = useM((s) => s.options.editorSoundWhilePlaying);
+  const patternGroup = useM((s) => s.patternGroup);
 
   const patternIndex = voices[selectedVoice].patternIndex;
   const pattern = patterns[patternIndex];
@@ -179,8 +187,12 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
   const region = useM((s) => s.editorRegion);
   const setRegion = useM((s) => s.setEditorRegion);
   const [legend, setLegend] = useState<{ step: number; pitch: number } | null>(null);
-  const [range, setRange] = useState({ from: 0, to: Math.max(0, len - 1) });
-  const [counter, setCounter] = useState(0);
+  const range = useM((s) => s.midiEditRange);
+  const counter = useM((s) => s.midiEditCounter);
+  const setMidiEditState = useM((s) => s.setMidiEditState);
+  const setRange = (next: { from: number; to: number }) => setMidiEditState(next, counter);
+  const setCounter = (next: number | ((current: number) => number)) =>
+    setMidiEditState(range, typeof next === "function" ? next(counter) : next);
   const [soundOn, setSoundOn] = useState(true);
   const [soundVel, setSoundVel] = useState(64);
 
@@ -203,7 +215,8 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
   const inkW = clamp(len - start, 0, cols) * CELL_W;
 
   const audition = (notes: number[]) => {
-    if (!soundOn || notes.length === 0) return;
+    if (!editorSoundAllowed(soundOn, isPlaying, editorSoundWhilePlaying)
+      || notes.length === 0) return;
     getRuntime().audition(
       notes, soundVel, voices[selectedVoice].outputChannels, 0.35, selectedVoice,
     );
@@ -221,6 +234,14 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
       if (e.repeat || e.metaKey || e.ctrlKey) return;
       const el = e.target as HTMLElement | null;
       if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      if (isLegacyClearKey(e.key)) {
+        e.preventDefault();
+        const selection = region && !region.point
+          ? { from: region.from, to: region.to }
+          : null;
+        runPatternCommand(patternIndex, (steps) => clearSteps(steps, selection));
+        return;
+      }
       const step =
         e.key === "`" || e.key === "~"
           ? counter
@@ -278,7 +299,7 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
   // bar always offer exactly the same commands.
   const { editMenu, patternMenu } = usePatternMenus();
 
-  const context = useContextMenu([...editMenu, "separator", ...patternMenu]);
+  const context = useWindowContextMenu([...editMenu, "separator", ...patternMenu]);
 
   /* ---- Step Editing Tools, which operate in the strip above the grid ---- */
 
@@ -441,7 +462,7 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
       className="peditor-host movable"
       aria-label="Pattern Editor"
       style={{ left: pos.x, top: pos.y, zIndex: z }}
-      onPointerDownCapture={bringToFront}
+      onPointerDownCapture={(event) => focusWindowPointerDown(event, bringToFront)}
       onContextMenu={context.onContextMenu}
     >
       {context.menu}
@@ -449,7 +470,7 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
       <div className="uwin__title movable__handle" onPointerDown={onTitleDown}>
         <span className="uwin__name">Pattern Editor</span>
         <span className="uwin__slash">/</span>
-        <span className="uwin__note">group a</span>
+        <span className="uwin__note">group {String.fromCharCode(97 + patternGroup)}</span>
         {onClose && <button className="uwin__close" onClick={onClose}
           aria-label="Close Pattern Editor">×</button>}
         <div className="peditor__tools" role="group" aria-label="Step Editing Tools">

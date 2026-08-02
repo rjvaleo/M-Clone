@@ -39,6 +39,10 @@ function voice(over: Partial<VoiceState> = {}): VoiceState {
     channel: 1,
     outputChannels: [1],
     program: 0,
+    sourceChannel: "all",
+    inputUse: "disabled",
+    echoInput: false,
+    mouseAdvance: false,
     ...over,
   };
 }
@@ -52,6 +56,12 @@ function project(patterns: Pattern[], voices: VoiceState[], over: Partial<Projec
     scale: "chromatic",
     scaleSnap: false,
     seed: 1,
+    midiAssignments: {
+      inputs: Array.from({ length: 16 }, (_, i) => ({ deviceId: null, channel: i + 1 })),
+      outputs: Array.from({ length: 16 }, (_, i) => ({ deviceId: null, channel: i + 1 })),
+      programBase: 0, latencyMs: 0, conductXController: 16, conductYController: 17,
+    },
+    echoMapChannels: [],
     cyclic: {
       accent: voices.map(() => Array(16).fill(2)),
       legato: voices.map(() => Array(16).fill(2)),
@@ -111,6 +121,19 @@ describe("planWindow — basic playback", () => {
     const { notes } = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 1.0);
     expect(notes).toHaveLength(1);
     expect(notes[0].note).toBe(60);
+  });
+});
+
+describe("planWindow - manual advance gates", () => {
+  it("leaves sa and Mouse Advance cursors untouched for their manual drivers", () => {
+    const st = project([pattern("p", [[60]])], [
+      voice({ timeBaseDenominator: 0 }),
+      voice({ mouseAdvance: true }),
+    ]);
+    const cursors = makeCursors(st, 0);
+    const result = planWindow(st, cursors, [new Rng(1), new Rng(2)], 0, 1);
+    expect(result.notes).toEqual([]);
+    expect(result.cursors).toEqual(cursors);
   });
 });
 

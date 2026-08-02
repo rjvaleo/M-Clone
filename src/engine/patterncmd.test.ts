@@ -18,6 +18,8 @@ import {
   pasteAtEnd,
   pasteNotes,
   pasteSteps,
+  copyPattern,
+  pastePattern,
   reverseOrder,
   rotateBackward,
   rotateForward,
@@ -433,5 +435,20 @@ describe("Insert Paste", () => {
 
   it("stops at the Pattern Size Numerical", () => {
     expect(insertPaste(scale(), 0, S("70 | 71 | 72"), 5)).toHaveLength(5);
+  });
+});
+
+describe("whole Pattern clipboard", () => {
+  it("copies all settings and keeps the destination identity on paste", () => {
+    const source = { ...P("60 | 62", "62 | 60"), chordMode: "chord" as const,
+      insertMode: "overdub" as const, drumMachine: true, outputLength: 1 };
+    const target = { ...P("70", "70"), id: "destination" };
+    const clipboard = copyPattern(source);
+    source.steps[0].pitches[0] = 1;
+    const pasted = pastePattern(target, clipboard);
+    expect(pasted.id).toBe("destination");
+    expect(pasted.steps[0].pitches).toEqual([60]);
+    expect(pasted).toMatchObject({ chordMode: "chord", insertMode: "overdub",
+      drumMachine: true, outputLength: 1 });
   });
 });

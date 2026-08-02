@@ -14,6 +14,8 @@ Edition and release scope is defined in
 engine remains upstream of the audio rack specified in
 [`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md); native adapters and hosted
 transport are specified in [`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md).
+Resolved browser/tool versions and current architecture boundaries are listed
+in [`TECH_STACK.md`](./TECH_STACK.md).
 
 ## 1. Product targets and terminology
 
@@ -148,9 +150,11 @@ Stable equal-time priority is Program Change, Note Off, then Note On. Remaining
 ties use destination, channel, and sequence. This ensures patch selection occurs
 before a note and retrigger release occurs before replacement attack.
 
-Control Change, Bank Select, sustain ownership, Pitch Bend, Channel Pressure,
-MIDI clock, SysEx, MIDI input, and MIDI 2.0 UMP are not implemented and must not
-be represented as shipped functionality.
+Generated musical Control Change, Bank Select, sustain ownership, Pitch Bend,
+Channel Pressure, external MIDI Clock input, SysEx, and MIDI 2.0 UMP are not
+implemented and must not be represented as shipped functionality. Live Note
+and controller input plus realtime MIDI Start/Clock/Stop output are implemented
+through dedicated adapters rather than this planned-note event union.
 
 ## 6. Note lifecycle and overlap policy
 
@@ -250,11 +254,12 @@ scheduler as transport, including cancellation of outstanding one-shot wakes.
 | Device `statechange` | Implemented | `webmidi.test.ts` |
 | Reconnect/state restoration | Implemented | retained selected-ID trace |
 | Multiple MIDI output ports | Implemented | independent loss/fan-out trace |
-| MIDI input/controller assignment | Not implemented | later I/O phase |
-| MIDI file import/export | Not implemented | later I/O phase |
-| MIDI clock output/input | Not implemented | later conducting/I/O phase |
+| MIDI input/controller assignment | Implemented | 16-row device/channel matrix, routing/store tests |
+| MIDI file export | Implemented | deterministic Movie/SMF tests |
+| MIDI file import / imported Sequence | Deliberately excluded | no product workflow |
+| MIDI clock output/input | Output implemented; input excluded | realtime Start/Clock/Stop at 24 PPQN and Sync Ratio; manual excludes External Clock |
 | Controller-aware panic | Implemented | CC 64 / 121 / 123 on all channels |
-| General CC/bank/sustain musical events | Not implemented | later I/O/instrument phase |
+| Generated general CC, Bank Select, Pitch Bend, Channel Pressure | Not implemented | later I/O/instrument phase; live sustain input and panic CCs are implemented |
 | Native MIDI adapters | Not implemented | native milestone |
 
 ## 11. Automated verification
@@ -263,13 +268,15 @@ Run the complete gate:
 
 ```bash
 npm run typecheck
-npm test -- --run
+npm test
+npm run test:manual
 npm run coverage
 npm run build
+npm run build:single
 ```
 
-Current verified result after Phase 3 implementation: 592 tests in 31 files,
-both production builds passing, and
+Current verified result: 757 tests in 61 files, 167 passing executable manual
+checks plus 17 explicit skips, both production builds passing, and
 100% included engine/state statement, branch, function, and line coverage.
 
 Relevant suites:
@@ -284,6 +291,9 @@ Relevant suites:
 | `scheduler.test.ts` | injected drivers, adaptive bounds, late attacks, 500 ms recovery, 100,000 wakes |
 | `eventbatch.test.ts` | V1 ordered round trip and damaged/future rejection |
 | `midiview.test.ts` | diagnostic conversion/order/history; not device timing |
+| `midiinput.test.ts` | normalized live messages and device/channel routing helpers |
+| `inputcontrol.test.ts` | Appendix B command lookup and value handling |
+| `clockoutput.test.ts` | 24-PPQN Start/Clock/Stop scheduling at Sync Ratio |
 
 Browser-only adapters remain excluded from the global coverage percentage, but
 their behavior is exercised with fake clocks, AudioContext objects, timers, and
@@ -341,10 +351,11 @@ Still open for later product phases:
 1. physical-device integration measurements across the published browser matrix;
 2. native high-priority clock, scheduler, and MIDI adapters consuming the V1
    event-batch boundary;
-3. general Control Change, Bank Select, sustain ownership, Pitch Bend, and
-   controller assignment semantics;
+3. generated musical Control Change, Bank Select, sustain ownership, Pitch
+   Bend, and Channel Pressure semantics;
 4. platform-specific background/sleep certification and recovery telemetry;
-5. MIDI clock, MIDI input, SysEx, and MIDI 2.0 only in their named future phases.
+5. physical live-input and MIDI Clock-output certification in the browser/device
+   matrix; external clock input, SysEx, and MIDI 2.0 remain outside this phase.
 
 The browser build must not be described as “zero jitter.” The implemented claim
 is narrower: deterministic musical planning, equal batch timestamps, bounded

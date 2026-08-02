@@ -1,5 +1,6 @@
 import type { ScaleName } from "./music";
 import type { TimeMap } from "./timemap";
+import type { MidiInputUse } from "./midiinput";
 
 /** A single step of a Pattern. An empty `pitches` array is a rest. */
 export type StepEvent = {
@@ -63,6 +64,9 @@ export type Pattern = {
   insertMode: InsertMode;
   /** Drum Machine Record: the MIDI Edit Counter follows the output counter. */
   drumMachine: boolean;
+  timeBaseNumerator?: number;
+  timeBaseDenominator?: number;
+  phase?: number;
 };
 
 /** Live state of one of the four Voices (a "path" through the program). */
@@ -83,6 +87,20 @@ export type VoiceState = {
   channel: number; // 1..16 MIDI output channel
   outputChannels: number[]; // Orchestration: any combination of channels 1..16
   program: number; // 0..127 program/patch
+  sourceChannel: "all" | number;
+  inputUse: MidiInputUse;
+  echoInput: boolean;
+  mouseAdvance: boolean;
+};
+
+export type MidiChannelAssignment = { deviceId: string | null; channel: number };
+export type MidiAssignments = {
+  inputs: MidiChannelAssignment[];
+  outputs: MidiChannelAssignment[];
+  programBase: 0 | 1;
+  latencyMs: number;
+  conductXController: number;
+  conductYController: number;
 };
 
 export type CyclicVariable = "accent" | "legato" | "rhythm";
@@ -96,7 +114,7 @@ export type CyclicPositionLengths = Record<CyclicVariable, number[][]>;
 /** The whole project (document) state. */
 export type ProjectState = {
   tempo: number; // BPM
-  patterns: Pattern[]; // exactly 4
+  patterns: Pattern[]; // six banks of four
   voices: VoiceState[]; // exactly 4
   root: number; // 0..11 key root pitch class
   scale: ScaleName;
@@ -105,6 +123,8 @@ export type ProjectState = {
   diatonicTranspose?: boolean; // interpret transposition as scale steps
   secondOrderTranspose?: boolean; // stack voice transpositions cumulatively
   chordTones?: boolean; // snap final pitches to the tonic triad
+  midiAssignments: MidiAssignments;
+  echoMapChannels: number[];
   /** Five-level (0..4), 16-step modulation cycles for each voice. */
   cyclic: CyclicVariables;
   cyclicLengths: Record<CyclicVariable, number[]>;

@@ -47,15 +47,17 @@ const px = (p: TimeMapPoint) => ({
   y: PAD + (1 - p.y) * PLOT,
 });
 
-export function TimeDistortEditor({ editVoice, onEditVoice }: {
+export function TimeDistortEditor({ editVoice, onEditVoice, editPosition }: {
   editVoice: number;
   onEditVoice: (voice: number) => void;
+  editPosition: number;
 }) {
   const positions = useM((s) => s.positions);
   const setSlotValue = useM((s) => s.setSlotValue);
+  const transferVariableVoice = useM((s) => s.transferVariableVoice);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const active = positions.timeDistort.active;
+  const active = editPosition;
   const maps = positions.timeDistort.slots[active] as unknown as TimeMap[];
   const map = maps[editVoice];
 
@@ -124,9 +126,21 @@ export function TimeDistortEditor({ editVoice, onEditVoice }: {
         <div className="utd__voices" role="group" aria-label="Map Edit selector">
           {[0, 1, 2, 3].map((v) => (
             <button key={v} type="button"
+              draggable
               className={"utd__voice" + (v === editVoice ? " utd__voice--on" : "")}
               aria-pressed={v === editVoice}
               aria-label={`Edit Voice ${v + 1}'s time map`}
+              onDragStart={(event) => event.dataTransfer.setData(
+                "application/x-mclone-voice", String(v),
+              )}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                const source = Number(event.dataTransfer.getData("application/x-mclone-voice"));
+                if (Number.isInteger(source)) transferVariableVoice(
+                  "timeDistort", active, source, v, event.altKey,
+                );
+              }}
               onClick={() => onEditVoice(v)}>
               {v + 1}
             </button>

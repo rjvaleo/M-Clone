@@ -25,6 +25,7 @@ export type PlannedNote = {
   atTick?: number;
   durationTicks?: number;
 };
+export type PlannedStep = { voice: number; step: number };
 
 export const PPQN = 960;
 
@@ -97,8 +98,9 @@ export function planWindow(
   rng: Rng | readonly Rng[],
   _windowStart: number,
   windowEnd: number,
-): { notes: PlannedNote[]; cursors: VoiceCursor[] } {
+): { notes: PlannedNote[]; cursors: VoiceCursor[]; steps: PlannedStep[] } {
   const notes: PlannedNote[] = [];
+  const steps: PlannedStep[] = [];
   const nextCursors: VoiceCursor[] = [];
 
   // Effective per-voice transposition. Second-Order Transpose stacks the
@@ -114,6 +116,10 @@ export function planWindow(
   state.voices.forEach((v, vi) => {
     const voiceRng = Array.isArray(rng) ? rng[vi] : rng as Rng;
     const cursor = cursors[vi];
+    if (v.timeBaseDenominator <= 0 || v.mouseAdvance) {
+      nextCursors.push(cursor); // `sa`: advanced only by Input Control
+      return;
+    }
     const pat = state.patterns[v.patternIndex];
     const outLen = Math.min(pat.outputLength, pat.steps.length);
     const stepDur = stepDurationSeconds(
@@ -152,6 +158,7 @@ export function planWindow(
         if (v.playEnabled) {
           const r = nextMixedStepIndex(v.noteOrderMix, order, outLen, voiceRng);
           order = r.cursor;
+          steps.push({ voice: vi, step: r.index });
           const source =
             r.source === "cyclic" ? pat.scrambledSteps : pat.steps;
           const step = source[r.index];
@@ -197,5 +204,5 @@ export function planWindow(
     });
   });
 
-  return { notes, cursors: nextCursors };
+  return { notes, cursors: nextCursors, steps };
 }

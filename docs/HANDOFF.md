@@ -5,9 +5,9 @@
 Do not infer MIDI guarantees from the UI or older roadmap prose. The canonical
 implemented behavior, invariants, known limits, automated suites, and manual
 verification procedure are in
-[`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md). Phases 1–2 are present
-in the working tree; Phase 3 now includes injected clock/scheduler drivers and a
-defined late-event policy. Any change to planner timing, transport, event
+[`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md). Phases 1–3 are present;
+live input, assignment, metronome, and MIDI Clock are now part of the browser
+surface. Any change to planner timing, transport, event
 ordering, routing, audition, or an output adapter must update that specification
 and its verification matrix in the same change.
 
@@ -32,9 +32,9 @@ counts even while the current Classic UI remains four-Voice.
 
 ## Latest work — 2026-08-01
 
-The last committed baseline includes `82b8b94` (multi-session window rebuild),
-`231c372` (project document codec), and `ccde4dd` (File menu). MIDI reliability
-phases 1–2 and their documentation may be present as working-tree changes;
+The latest committed checkpoint is `905e510` (project file naming), after the
+per-stream Synth, Movie/SMF, and File-workflow commits. The later manual-gap,
+live-MIDI, Conducting, interface, and documentation work is present locally;
 inspect `git status` rather than assuming a clean tree.
 
 **Project save/load is done** — step 1 of `NEXT_STEPS.md`. `ProjectDocumentV2`
@@ -47,8 +47,10 @@ defaulted or clamped and returned as warnings. File ▸ New / Open / Save /
 Save As are wired in `src/ui/fileCommands.ts`, with document name and
 unsaved-changes tracking shown in the header.
 
-**Current suite: 672 tests across 41 files**, 100% coverage on `src/engine` and
+**Current suite: 757 tests across 61 files**, 100% coverage on `src/engine` and
 `src/state`, typecheck and both builds clean.
+The resolved browser stack and the distinction between current dependencies and
+native candidates are canonical in [`TECH_STACK.md`](./TECH_STACK.md).
 
 Snapshot editing and Slideshows are complete. Manual review also established
 that Phrasing is Legato Cyclic rather than another Variable. Legato now uses
@@ -61,8 +63,9 @@ conducting, Hold/Do, Snapshots, Slideshows, and persistence. See
 `VISUAL_AUDIT_AND_THEMING.md` contains the full reference audit. The app now
 has six channel-color presets, editable Voice colors, persisted palette state,
 a restored global menu bar, module right-click menus, shared rendered
-typography, and a 640×480 logical workspace. Layout is now considered good
-enough and is frozen while the remaining technical systems are completed.
+typography, and a 640×480 logical workspace. Broad pixel-fidelity work is
+deferred to release hardening; targeted clipping, collision, theming, and
+broken-control defects continue to be fixed when found.
 
 The dedicated Cyclic Editor is complete with six Positions, per-Voice lengths,
 global Legato/Rhythm values, horizontal painting, vertical random level ranges,
@@ -93,7 +96,7 @@ The generative engine and selected P3 scope are complete. Save/load,
 Snapshot/Slideshow, and Phrasing-through-Legato are done; Sound Choice remains
 intentionally skipped. The UI was rebuilt against the real M screenshots in
 [`../reference/`](../reference/) and the M 2.7 manual (`reference/M27.pdf`)
-rather than from an impression of them. The suite is **672 tests across 41
+rather than from an impression of them. The suite is **757 tests across 61
 files**, with 100% coverage held on `src/engine` and `src/state`. Movie capture,
 deterministic SMF export, and the Patterns/Transport/Conductor parity correction
 are complete. Each sequencer stream now owns an independent color-coded patch
@@ -102,7 +105,10 @@ subtractive synth. The panel is designed for the normal 150% workspace scale.
 Its compact rows now use contained knob hit areas, measured caption clearance,
 and value-sized selects with one-character side padding. The Note Density
 editor is 145×90 with fixed drawing geometry and visible right/bottom gutters.
-MIDI import and Sequence playback follow.
+MIDI import and imported Sequence playback were removed from active scope. The
+manual conformance gate is green: live input, recording, Input Control,
+controller conducting, Mouse/Step Advance, metronome, clock, and the assignment
+matrix close both former work queues.
 
 ## How we've been working — keep doing this
 
@@ -119,7 +125,8 @@ MIDI import and Sequence playback follow.
    hiding a divide-by-zero, a missing stale-snapshot case. When it flags dead
    code, delete the code rather than adding a token test.
 4. **Verify in the browser, don't ask the user to check.** Start with
-   `./mclone.sh start`; the default URL is `http://localhost:5173/`.
+   `./mclone.sh start`; the default URL is `http://localhost:5173/`. Set
+   `MCLONE_PORT` when that port is occupied.
 5. **Be explicit about what isn't wired.** Controls that exist but don't do
    anything yet say so in their tooltip. No fake features.
 
@@ -154,6 +161,10 @@ MIDI import and Sequence playback follow.
   old code cloned the whole project, which made Snapshots a save format.
 - **Orchestration lives in the Midi window,** not Variables. Chapter 16 lists
   the Variables Window's six rows and Orchestration isn't among them.
+- **Midi Assignment is not the Midi window.** The permanent Midi strip remains
+  the compact Orchestration performance surface. Device/channel mapping,
+  latency, controller assignment, and MIDI messages live in a separate
+  File-menu auxiliary window; do not merge setup/detail controls into the strip.
 - **Time Distortion is a curve, not a scalar.** Corners pinned at (0,0) and
   (1,1) so a cycle always takes exactly as long as it would have.
 - **Transposition stays stored as semitones.** Note/Octave is a presentation
@@ -162,6 +173,9 @@ MIDI import and Sequence playback follow.
   describing only the latter as "without deleting steps". Flip it if you read
   that differently.
 - **The global menu bar is restored** — it provides application-wide navigation; module-specific commands are available by right-click rather than title-bar pull-downs.
+- **Right-click works across occupied canvas space.** Module context menus keep
+  their local commands and append the available-window launcher; modules with
+  no local commands show the launcher directly.
 - **Do not add component-local transforms for resizing.** New modules are
   authored in logical pixels and inherit the one workspace transform.
 - **Cyclic Random is Pattern-owned musical material.** It is stored as a
@@ -195,11 +209,12 @@ MIDI import and Sequence playback follow.
 ## Start here next
 
 The tree is green and builds; the current milestones are intentionally local
-and uncommitted. Follow
-[`NEXT_STEPS.md`](./NEXT_STEPS.md): save/load, Snapshot/Slideshow, and
-Phrasing-through-Legato are done. The active head of the list is now **step 4,
-performance recording and standard MIDI files**. Movie capture/export and the
-Patterns/Transport/Conductor parity audit are green; continue with MIDI import.
+and uncommitted. Both manual gap queues are closed. Follow
+[`NEXT_STEPS.md`](./NEXT_STEPS.md): the next local implementation is the four
+role-specific Classic audio engines, followed by configurable Voice-count core
+work and release hardening. Real-hardware/browser MIDI certification is a
+parallel release lane that requires representative devices. Do not revive
+Sound Choice or MIDI import without a concrete product workflow.
 
 Two smaller carry-overs from save/load:
 
@@ -212,8 +227,9 @@ Two smaller carry-overs from save/load:
 - Any new subsystem must be added to `ProjectDocumentV2` (or a versioned
   successor) in the same change.
 
-Do not start another broad fidelity pass before the technical-completion
-checklist is closed.
+Keep broad fidelity work in the release-hardening lane; continue fixing
+targeted defects that hide data, break controls, or contradict supplied
+references.
 
 ```bash
 npm run dev

@@ -6,7 +6,7 @@ import { scrambleSteps } from "./patterncmd";
 
 export const STEP_COUNT = 16;
 export const VOICE_COUNT = 4;
-export const PATTERN_COUNT = 4;
+export const PATTERN_COUNT = 24;
 export const CYCLIC_NEUTRAL_LEVEL = 2;
 /** Default ceiling of the Pattern Size Numerical, as M shipped it. */
 export const DEFAULT_MAX_SIZE = 100;
@@ -32,6 +32,9 @@ export function createDefaultPattern(id: string, seedRiff = false): Pattern {
     chordMode: "single",
     insertMode: "insert",
     drumMachine: false,
+    timeBaseNumerator: 1,
+    timeBaseDenominator: 8,
+    phase: 0,
   };
 }
 
@@ -51,6 +54,10 @@ export function createDefaultVoice(index: number): VoiceState {
     channel: index + 1,
     outputChannels: [index + 1],
     program: 0,
+    sourceChannel: "all",
+    inputUse: "disabled",
+    echoInput: false,
+    mouseAdvance: false,
   };
 }
 
@@ -72,6 +79,15 @@ export function createDefaultProject(): ProjectState {
     diatonicTranspose: false,
     secondOrderTranspose: false,
     chordTones: false,
+    midiAssignments: {
+      inputs: Array.from({ length: 16 }, (_, i) => ({ deviceId: null, channel: i + 1 })),
+      outputs: Array.from({ length: 16 }, (_, i) => ({ deviceId: null, channel: i + 1 })),
+      programBase: 0,
+      latencyMs: 0,
+      conductXController: 16,
+      conductYController: 17,
+    },
+    echoMapChannels: [],
     cyclic: {
       accent: neutralCycle(),
       legato: neutralCycle(),

@@ -10,6 +10,7 @@ import { encodeMovieAsSmf, movieFileName } from "../engine/movie";
 
 const EXTENSION = ".mclone";
 const DEFAULT_NAME = `Untitled${EXTENSION}`;
+const STARTUP_STATE_KEY = "mclone.startup-state.v2";
 
 type ProjectWritable = {
   write: (data: string) => Promise<void>;
@@ -45,20 +46,59 @@ export function needsDownloadName(
   return !hasPicker && (saveAs || documentName === null);
 }
 
-/** Ask before throwing away unsaved music. Returns false to cancel. */
-function confirmDiscard(action: string): boolean {
+export function unsavedActionDecision(
+  dirty: boolean,
+  wantsSave: boolean,
+  wantsDiscard: boolean,
+): "save" | "discard" | "cancel" {
+  if (!dirty) return "discard";
+  if (wantsSave) return "save";
+  return wantsDiscard ? "discard" : "cancel";
+}
+
+/** Offer Save / Discard / Cancel before throwing away unsaved music. */
+async function guardUnsaved(action: "new" | "open"): Promise<boolean> {
   const { isDirty, documentName } = useM.getState();
-  if (!isDirty) return true;
   const what = documentName ?? "this project";
-  return window.confirm(
-    `${what} has unsaved changes.\n\n${action} anyway and lose them?`,
+  const wantsSave = isDirty && window.confirm(
+    `${what} has unsaved changes.\n\nSave before ${action === "new" ? "starting a new project" : "opening another project"}?`,
   );
+  const wantsDiscard = isDirty && !wantsSave && window.confirm(
+    `Discard the unsaved changes in ${what}?\n\nChoose Cancel to keep working.`,
+  );
+  const decision = unsavedActionDecision(isDirty, wantsSave, wantsDiscard);
+  if (decision === "cancel") return false;
+  if (decision === "discard") return true;
+  const result = await saveProject(false);
+  if (result === "saved") return true;
+  if (result === "needs-name") {
+    window.dispatchEvent(new CustomEvent("mclone:save-before-file-action", { detail: action }));
+  }
+  return false;
 }
 
 /** File ▸ New. */
-export function newProject(): void {
-  if (!confirmDiscard("Start a new project")) return;
-  useM.getState().newDocument();
+export async function newProject(skipGuard = false): Promise<void> {
+  if (!skipGuard && !await guardUnsaved("new")) return;
+  useM.getState().newDocument(loadStartupState());
+}
+
+export function saveStartupState(): boolean {
+  try {
+    localStorage.setItem(STARTUP_STATE_KEY, JSON.stringify(useM.getState().exportDocument()));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function loadStartupState(): unknown | undefined {
+  try {
+    const saved = localStorage.getItem(STARTUP_STATE_KEY);
+    return saved ? JSON.parse(saved) as unknown : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** File ▸ Save / Save As — writes through the picker or a download fallback. */
@@ -121,8 +161,8 @@ export async function saveProject(
 }
 
 /** File ▸ Open — picks a .mclone or legacy JSON project and imports it. */
-export function openProject(): void {
-  if (!confirmDiscard("Open another project")) return;
+export async function openProject(skipGuard = false): Promise<void> {
+  if (!skipGuard && !await guardUnsaved("open")) return;
 
   const input = document.createElement("input");
   input.type = "file";

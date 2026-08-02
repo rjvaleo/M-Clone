@@ -6,7 +6,8 @@ the configurable four-stream Web Audio monitor synth
 
 This document defines the intended audio identity of M Studio and the constrained
 audio scope of M Classic Web. Platform and plug-in details are in
-[`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md).
+[`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md); current browser dependencies
+and build tools are in [`TECH_STACK.md`](./TECH_STACK.md).
 
 ## 1. Audio identity
 

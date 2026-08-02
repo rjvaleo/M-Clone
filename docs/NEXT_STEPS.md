@@ -1,288 +1,91 @@
-# Tomorrow Morning — Technical Completion Plan
+# Technical Completion Plan
 
-Date prepared: 2026-07-31
+**Updated:** 2026-08-01
 
-Product sequencing is now fixed by
-[`PRODUCT_RELEASE_ROADMAP.md`](./PRODUCT_RELEASE_ROADMAP.md): finish free
-four-Voice M Classic Web, then invite-only native desktop work, then paid
-eight-Voice M Studio standalone/plug-in, then mobile stores, with M Modular as a
-later premium platform. Instrument/effect and native requirements live in
-[`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md) and
-[`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md).
+The manual gap-closing plan is complete. Work was executed TDD-first: existing
+partial/unwired behavior, then live-input/controller capabilities, then
+documentation and release verification. Standard MIDI import/imported Sequence
+playback and Sound Choice remain deliberate exclusions.
 
-The current layout is accepted as good enough. Do not begin another broad
-reference-fidelity or resizing pass while this plan is active. Fix only visual
-defects that block operation, hide data, or break hit targets.
+## Green checkpoint
 
-## Current green checkpoint
+- **757 tests across 61 files**.
+- **100% statements, branches, functions, and lines** across included engine
+  and state modules.
+- **184 manual-conformance tests: 167 passed, 17 explicit skips**.
+- Versioned `.mclone` project save/load, Movie capture, and deterministic
+  format-1 Standard MIDI export.
+- Web MIDI output, multi-port lifecycle, live input assignment/routing,
+  recording, Input Control, controller conducting, metronome, and MIDI Clock.
+- Typecheck, normal production build, and single-file build are required before
+  handoff.
+- Resolved browser/tooling versions and architecture boundaries are recorded in
+  [`TECH_STACK.md`](./TECH_STACK.md).
 
-Updated 2026-08-01.
+## Completed sequence
 
-- Branch at the earlier checkpoint: `master`; inspect the current working tree
-  before making additional changes.
-- Tests: **672 passing across 41 files**.
-- Coverage: **100% statements, branches, functions, and lines** across
-  `src/engine` and `src/state`.
-- Typecheck, normal production build, and single-file build: passing.
-- Native workspace: 640×480 with persisted 50–200% scaling.
-- Layout decision: frozen until technical completion.
-- Latest bounded visual fixes: Synth controls are contained at 150%, and the
-  145×90 Note Density editor has explicit right/bottom safety gutters.
+1. ✅ MIDI reliability phases 1–3.
+2. ✅ Versioned project document and File commands.
+3. ✅ Snapshot, Slideshow, and Phrasing/Legato behavior.
+4. ✅ Movie recording and Standard MIDI export.
+5. ✅ All retained gaps in existing manual functionality.
+6. ✅ Live MIDI input, recording, routing, Input Control, Mouse/Step Advance,
+   controller conducting, metronome, clock, and assignment UI.
+7. ⛔ Sound Choice and Standard MIDI import/Sequence playback intentionally
+   excluded from Classic Web.
 
-## First 15 minutes
+## Next local implementation frontier
 
-1. Start the app with the supplied launcher:
+Proceed in this order:
 
-   ```bash
-   ./mclone.sh start
-   ```
+### 1. Complete the M Classic audio rack
 
-2. Confirm the checkpoint:
+The current four-stream subtractive synth is a capable color-coded monitor, not
+the approved role-specific rack. Implement the four lightweight Classic engines
+defined in [`AUDIO_ENGINE_SPEC.md`](./AUDIO_ENGINE_SPEC.md): drum sampler,
+monophonic bass, lead, and chord/pad, followed by the basic stereo mixer,
+reverb, and delay. Preserve one patch per sequencer stream.
 
-   ```bash
-   npm run typecheck
-   npm run coverage
-   npm run build
-   npm run build:single
-   ```
+### 2. Remove fixed-four assumptions from the core
 
-3. Review `git status`; preserve unrelated work and commit each subsystem
-   intentionally when requested.
+Make framework-independent project, planner, event, MIDI, and document code
+accept a configured 1–16 Voice count. Classic UI remains four Voices; Studio
+will expose eight. Start with tests that run identical planning/routing traces
+at 1, 4, 8, and 16 Voices.
 
-## Technical completion sequence
+### 3. Classic release hardening
 
-### 0. MIDI reliability Phase 3 — ✅ DONE (2026-08-01)
+- Long-session CPU/memory and asset-loading tests.
+- Save/load migration fixtures and failure recovery.
+- Accessibility/keyboard audit for dense controls.
+- Remove or clearly defer every remaining visible placeholder.
 
-Phases 1–2 are implemented: timing continuity segments, cancellation-before-
-panic transitions, synchronized batch clock anchors, explicit ordered events,
-960-PPQN positions, note lifecycle/retrigger cleanup, Program Change, destination
-separation, and per-Voice RNG. The authoritative requirements and verification
-matrix are in [`MIDI_RELIABILITY_SPEC.md`](./MIDI_RELIABILITY_SPEC.md).
+### 4. Hardware/browser certification
 
-Implemented:
+This is a parallel release-verification lane rather than the next purely local
+coding task:
 
-- injected monotonic clock and scheduler drivers;
-- one scheduler for transport and audition;
-- late-wake/event diagnostics and bounded adaptive lookahead;
-- explicit drop/recovery behavior after serious stalls;
-- retained `MIDIAccess`, port `statechange`, reconnect, and multiple port IDs;
-- background/suspension/sleep recovery;
-- stronger controller-aware panic;
-- versioned native event-batch serialization;
-- forced-stall, device-loss, and long-duration conformance traces.
+- Exercise the 16× input/output assignment matrix with representative USB and
+  virtual MIDI devices.
+- Verify reconnect, device replacement, permission denial, tab suspension, and
+  foreground recovery in each supported browser.
+- Measure clock jitter, note latency, and configured latency compensation on
+  real hardware; publish the supported-browser/device matrix.
+- Add any reproducible failures as red automated adapter/runtime tests before
+  changing implementation.
 
-Acceptance gate:
+### 5. Native desktop foundation
 
-- no uncontrolled catch-up burst after a simulated 500 ms stall;
-- no hanging lifecycle owners after Stop, suspension, or device removal;
-- measured diagnostics identify minimum lead, maximum lateness, and queue depth;
-- multi-port loss does not interrupt unaffected destinations;
-- browser and simulated native adapters pass the same event-order traces;
-- the canonical reliability specification is updated with measured results.
-
-Executed plan (TDD, in this order):
-
-1. Add a pure bounded-lookahead policy that measures wake lateness, minimum
-   submission lead, maximum event lateness, queue depth, dropped windows, and
-   recovery count. A serious stall rebases unscheduled Voice timelines instead
-   of emitting an uncontrolled catch-up burst.
-2. Inject monotonic clock and scheduler drivers into the browser runtime and use
-   the same scheduler for transport and audition release wakes.
-3. Replace the single disposable Web MIDI output lookup with retained access,
-   multi-port selection, statechange reconciliation, unaffected-port isolation,
-   reconnect restoration, and controller-aware panic.
-4. Add a versioned adapter-neutral event-batch codec and conformance traces that
-   drive browser and simulated-native consumers from identical ordered events.
-5. Forced 500 ms stalls, device-loss/reconnect, 100,000-wake boundedness,
-   coverage, typecheck, and both production builds pass. The measured result is
-   592 tests across 31 files at 100% included engine/state coverage.
-
-### 1. Versioned project document and File commands — ✅ DONE (2026-08-01)
-
-Shipped in `231c372` and `ccde4dd`. `src/engine/document.ts` holds the codec,
-`src/ui/fileCommands.ts` the browser I/O, and the store gained
-`exportDocument` / `importDocument` / `newDocument` / `markSaved` plus
-document-name and dirty tracking.
-
-Acceptance gate met: round-trip equality for every musical subsystem, tests for
-malformed JSON, future versions, missing legacy fields, invalid bounds and
-detached copies, browser-verified save → wander → open, and no coverage
-regression.
-
-Still open, carried forward: Save uses and reuses a File System Access handle
-where supported, but restricted embedded browsers fall back to an encoded
-download and cannot overwrite in place. Open still uses a file input.
-
-Original scope, for reference:
-
-- Add a pure `ProjectDocumentV1` codec with an explicit schema version.
-- Serialize the Project, Patterns and Scrambled material, Variable Positions,
-  Cyclic Positions and lengths, active positions, conducting arrows, Pattern
-  Group, Snapshots, and required playback configuration.
-- Keep workspace positions, application zoom, light/dark skin, and palette as
-  user preferences unless a deliberate decision makes them document state.
-- Decode defensively: reject malformed required data, clamp bounded values,
-  and supply defaults for fields absent from older documents.
-- Add atomic store export/import actions. Stop playback before replacing live
-  state and rebuild runtime-derived state after import.
-- Wire global File menu commands: New, Open JSON, Save, and Save As.
-- Track document name and dirty state; do not silently overwrite a file.
-
-Acceptance gate:
-
-- Round-trip equality for every musical subsystem.
-- Tests for malformed JSON, unknown future versions, missing legacy fields,
-  invalid bounds, and detached array/object copies.
-- Save → reload page → Open restores an audible equivalent project.
-- No regression below 100% engine/state coverage.
-
-### 2. Finish Snapshot and Slideshow behavior — ✅ DONE (2026-08-01)
-
-Implemented through red → green → coverage:
-
-- partial Snapshot membership plus Hold/Do, Edit/copy, and Blink Everything;
-- a pure deterministic slideshow recorder/player with Record Wait, pause/resume,
-  restart, stop, loop insertion/removal, and quantized playback start;
-- music Stop/Start pause and resume semantics;
-- keyboard and visible Snapshot Window controls;
-- nine persisted scores in `ProjectDocumentV2`, with version-1 migration;
-- 625 tests across 32 files, 100% engine/state coverage, both production builds,
-  and fresh-server browser verification.
-
-Original scope, for reference:
-
-Implement the remaining honest placeholders from the manual:
-
-- Hold/Do semantics.
-- Edit Snapshot.
-- Blink Everything feedback state.
-- Slideshow record, play, pause, loop, quantization, and stop.
-- Decide and test how slideshow timing interacts with Pause, Stop, and Robot
-  conducting.
-- Include all new state in `ProjectDocumentV1` or a versioned successor.
-
-Acceptance gate:
-
-- Deterministic pure slideshow state transitions.
-- Quantized recall does not lose or double-trigger locations.
-- Stop/Resume semantics are covered explicitly.
-- Browser verification with an audible A→B→C slideshow.
-
-### 3. Complete Phrasing through Legato Cyclic — ✅ DONE (2026-08-01)
-
-Manual review established that the section heading “Working with Phrasing”
-describes Legato Cyclic; it does not introduce a separate Variable. Implemented
-through red → green → coverage:
-
-- corrected Legato defaults to 6/25/50/75/100%;
-- made sustain a percentage of the actual interval to the next onset, including
-  Rhythm and Time Distortion and values above 100%;
-- added cyclic-position conducting, Snapshot/Hold/Do/Restore/Blink integration,
-  Slideshow recording/playback, and document compatibility;
-- fixed double-click selection when opening the Cyclic Editor;
-- documented the manual-derived model in [`PHRASING.md`](./PHRASING.md).
-
-Acceptance gate:
-
-- Met: audible timing/articulation is handled by Legato without a duplicate
-  model; Active Position, conducting, snapshots, Slideshows, and save/load agree.
-
-### 4. Performance recording and standard MIDI files — IN PROGRESS
-
-- ✅ Define one 960-PPQN timestamped performance-event model fed by the existing
-  planner output rather than scraping Midi View.
-- ✅ Implement manual-faithful Movie arm, capture, stop, and completed-take
-  behavior, including pause-gap exclusion and tempo-map capture.
-- ✅ Implement deterministic format-1 Standard MIDI File export with a tempo
-  track and one track per used Voice.
-- ✅ Audited Patterns, Transport, and Conductor icons/behavior against the
-  manual and reference images; corrected Phase, numeric Time Bases,
-  Option-click Record Modes, editable Tempo, and Movie/Sequence glyphs.
-- Implement Standard MIDI File import with documented chord,
-  timing, rest, quantization, and source-channel choices.
-- Implement imported Sequence storage, playback, stop, clear, and play-enable.
-- Keep Web MIDI, built-in synth, Midi View, and recorder as consumers of the
-  same planned events.
-
-Acceptance gate:
-
-- Deterministic event-to-SMF tests using known fixtures.
-- Exported file re-imports with equivalent notes, channels, velocities, and
-  timing within the chosen quantization.
-- Recording remains correct across Pause/Resume and tempo changes.
-
-### 5. Complete live input and controller assignments
-
-- Implement MIDI Assignment for supported controls.
-- Finish the Input Control System and verify Mouse Advance end-to-end.
-- Persist assignments as preferences, with optional document overrides only if
-  explicitly chosen.
-- Cover disconnect/reconnect and missing-device behavior without crashing or
-  changing the musical document.
-
-### 6. Close the instrument and Sound Choice decision
-
-Hold the queued instrument-design conversation before coding this phase.
-
-Decide:
-
-- Whether Sound Choice is an M-style Variable, an instrument-rack concern, or
-  a bridge between them.
-- Whether third-party WAM hosting belongs in a later milestone at all.
-- Built-in sampler format and asset ownership.
-- Drum auto-routing rules.
-- What belongs in the browser milestone versus later native/Tauri work.
-
-The product decision is now partially closed:
-
-- Classic Web receives four lightweight engines and basic stereo reverb/delay.
-- The click-safe subtractive monitor has one independent patch per stream and
-  a full control window; reuse its normalized settings/envelope patterns where
-  useful.
-- Studio receives seven full instruments, signature effects, and multi-output.
-- The instrument rack remains downstream of the explicit MIDI/event engine.
-- Third-party WAM hosting is not part of the approved Classic promise and needs
-  a separate scope decision.
-
-Implement only the lightweight Classic engines during the browser milestone.
-Follow `AUDIO_ENGINE_SPEC.md`; do not pull Studio DSP into Classic by accident.
-
-### 7. Native invite beta and M Studio — after Classic Web
-
-- Native macOS/Windows standalone adapters and real-time audio foundation.
-- External MIDI clock in standalone mode.
-- Host tempo/position/loop context in plug-in mode; do not depend on MIDI clock
-  from the host.
-- Eight Voices, seven instruments, signature effects, and multi-output buses.
-- Invite-only standalone beta before hosted plug-in beta.
-- Paid release only after the native and host certification gates in
-  `NATIVE_PLUGIN_SPEC.md` pass.
-
-## Definition of technical completion
-
-The browser milestone is technically complete when:
-
-- Project save/load is versioned and reliable.
-- Every visible non-deferred control either works or is removed.
-- Snapshot/Slideshow and Phrasing-through-Legato are complete.
-- Performance recording and Standard MIDI File import/export work.
-- Input control and MIDI assignments work with graceful device loss.
-- The instrument/Sound Choice scope is implemented or explicitly moved to the
-  named next milestone.
-- All engine/state work remains test-first at 100% coverage.
-- Typecheck and both builds pass.
-- `STATUS.md`, `TODO.md`, `HANDOFF.md`, and feature documents are updated in the
-  same change as each subsystem.
-
-The following do **not** block this browser milestone: pixel-perfect fidelity,
-whole-app Modern layout, native VST/AU hosting, Tauri packaging, or old `.M`
-import without representative source files.
+After the Classic Web release gate, follow
+[`NATIVE_PLUGIN_SPEC.md`](./NATIVE_PLUGIN_SPEC.md) for native monotonic timing,
+audio/MIDI device adapters, packaging, signing, and host integration.
 
 ## Working rules
 
-- Manual behavior outranks screenshots; screenshots define presentation.
-- Write the failing test before implementation.
-- Keep engine logic pure and UI wiring thin.
-- Reuse the planner event stream; do not create parallel musical truth.
-- No fake controls or silent no-ops.
-- Do not broaden a technical task into another layout refactor.
+- TDD: red focused test, implementation, focused green, full suite, 100%
+  coverage, typecheck, and both builds.
+- Keep manual capability dispositions honest; do not revive excluded systems
+  without a concrete product workflow.
+- The current layout is accepted. Fix visual defects that hide data or break
+  controls, but do not start another broad fidelity pass before release
+  hardening.

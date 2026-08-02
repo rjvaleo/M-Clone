@@ -3,8 +3,11 @@ import { POSITION_LABELS } from "../engine/variables";
 import type { CyclicVariable } from "../engine/types";
 import { useM } from "../state/store";
 import { cyclicLengthFromStepIndex, normalizeCyclicStep } from "../engine/cyclic";
-import { useContextMenu } from "./WindowMenu";
+import { useWindowContextMenu } from "./windowlauncher";
 import { useDraggable } from "./useDraggable";
+import { focusWindowPointerDown } from "./windowfocus";
+import { voiceColorClass } from "./voicecolor";
+import { classicCyclicSideLayout } from "./cycliclayout";
 
 const KINDS: { id: CyclicVariable; name: string }[] = [
   { id: "rhythm", name: "Rhythm" },
@@ -21,6 +24,8 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
   onClose: () => void;
 }) {
   const banks = useM((s) => s.cyclicPositions);
+  const resetEpochs = useM((s) => s.cyclicResetEpochs);
+  const noBlink = useM((s) => s.options.noCyclicBlinking);
   const lengths = useM((s) => s.cyclicLengths);
   const values = useM((s) => s.project.cyclicValues);
   const activePositions = useM((s) => s.activeCyclicPositions);
@@ -41,7 +46,7 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
     kind: CyclicVariable; position: number; voice: number; step: number; level: number;
   } | null>(null);
 
-  const context = useContextMenu([
+  const context = useWindowContextMenu([
     { label: `${view === "classic" ? "✓ " : ""}Classic View`, run: () => setView("classic") },
     { label: `${view === "modern" ? "✓ " : ""}Modern View`, run: () => setView("modern") },
   ]);
@@ -55,7 +60,8 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
   const voiceGrids = (editKind: CyclicVariable, editPosition: number, modern = false) => (
     <div className={modern ? "cyced__voices cyced__voices--modern" : "cyced__voices"}>
       {banks[editKind][editPosition].map((cycle, voice) => (
-        <div className={`cyced__voice uvoice uvoice--${voice + 1}`} key={voice}>
+        <div className={`cyced__voice ${voiceColorClass("cyclic", voice)}${noBlink ? "" : " cyced__voice--reset"}`}
+          key={`${voice}-${noBlink ? 0 : resetEpochs[voice]}`}>
           <b>{voice + 1}</b>
           <span className="cyced__levels">4<br />3<br />2<br />1<br />0</span>
           <div className="cyced__grid" onPointerLeave={() => { painting.current = null; }}>
@@ -119,7 +125,8 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
   return (
     <section ref={ref} className={`cyced uwin cyced--${view} movable`} aria-label="Cyclic Editor"
       style={{ left: pos.x, top: pos.y, zIndex: z }}
-      onPointerDownCapture={bringToFront} onContextMenu={context.onContextMenu}>
+      onPointerDownCapture={(event) => focusWindowPointerDown(event, bringToFront)}
+      onContextMenu={context.onContextMenu}>
       {context.menu}
       <header className="uwin__title movable__handle" onPointerDown={onTitleDown}>
         <span className="uwin__name">Cyclic Editor</span>
@@ -129,7 +136,7 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
       </header>
       {view === "classic" ? <div className="cyced__body">
         {voiceGrids(kind, position)}
-        <aside className="cyced__side">
+        <aside className="cyced__side" style={classicCyclicSideLayout()}>
           <div className="cyced__descriptor">
             <b>NOTE</b>
             <span>Rhythm: steps</span>
@@ -140,7 +147,9 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
             <div key={id} className={`cyced__control cyced__control--${id}`
               + (id === kind ? " is-current" : "") }>
               <div className="cyced__pick">
-                <button className="cyced__kind" onClick={() => onSelect(id, position)}>{name}</button>
+                <button className="cyced__kind" onClick={() => onSelect(id, position)}>
+                  <span>{name}</span>
+                </button>
                 <div className="cyced__positions">
                   {POSITION_LABELS.map((label, p) => (
                     <button key={label} aria-label={`${name} position ${label}`}

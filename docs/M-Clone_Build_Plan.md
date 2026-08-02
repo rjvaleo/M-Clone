@@ -173,8 +173,9 @@ third-party hosting is exploratory and is not a Classic release requirement.
   coordinate and theme system; individual modules do not apply local zoom.
 
 ### 4.3 Stack
+- **Canonical resolved versions:** see [`TECH_STACK.md`](./TECH_STACK.md).
 - **Vite + React + TypeScript** for UI.
-- **Lightweight store** (Zustand‑style) that both the engine and React can touch.
+- **Zustand** state shared by the engine/runtime bindings and React.
 - **Timing:** the Web Audio clock timestamps output through a 120 ms lookahead;
   the current browser wake driver is a 25 ms main-thread `setInterval`. Events
   execute from Web Audio/Web MIDI timestamps rather than callback timing, but
@@ -192,16 +193,23 @@ third-party hosting is exploratory and is not a Classic release requirement.
   paid desktop milestone.
 
 ### 4.4 Data & file formats
-- **Document format:** a fresh JSON project format (patterns, variables, snapshots, tempo, routing, instrument rack).
-- **Standard MIDI File** import/export.
+- **Document format:** versioned `.mclone` JSON (`ProjectDocumentV2`) with
+  defensive decoding, v1 migration, and legacy JSON import. The current monitor
+  Synth patches remain application state until a rack-aware format version is
+  designed.
+- **Standard MIDI File export.** Import and imported Sequence playback are
+  deliberately excluded unless a future workflow supplies a concrete need.
 - **Old `.M` file import:** planned, **deferred until sample files are available.** A `.M` file stores saved *state* (patterns, snapshot values, variable positions, tempo), not M's code — so it feeds the importer, not the algorithm. Not needed to start.
 
 ### 4.5 VST / plugin reality
 A browser **cannot** load VST/VST3/AU binaries. Path:
-1. **Now:** internal synth + SoundFonts, plus Web MIDI out to drive existing VSTs in an external host.
+1. **Now:** the four-patch internal subtractive monitor plus Web MIDI out to
+   drive existing instruments in an external host.
 2. **Browser audio:** ship four lightweight first-party engines; evaluate WAM
    separately rather than making it a Classic dependency.
-3. **Real VST hosting:** in the **Tauri native build**, where the Rust shell bridges to VST/AU so existing plugins load inside M‑Clone.
+3. **Real plug-in hosting:** in a native build after framework prototyping;
+   Tauri/Rust are candidates, not selected dependencies. VST3 is the first
+   desktop investigation and Audio Unit remains an evaluated Apple target.
 
 ---
 
@@ -228,14 +236,17 @@ A browser **cannot** load VST/VST3/AU binaries. Path:
 - **Per‑Variable editors** — Density, Velocity Range, Note Order, etc.
 
 ### Dialogs
-- MIDI Assignment / MIDI Setup → **Web MIDI device pickers**.
-- Open / Save (JSON project).
-- Open MIDI File (import); Save Movie As MIDI File (export).
-- Movie import dialog (Chord Method / Timing / Rests / Quant / Source Channels / Import as Sequence).
-- Registration/serial → repurpose as About.
+- **Midi Assignment:** sixteen Web MIDI input/output device/channel rows,
+  latency, program-number base, controller assignments, and channel messages.
+- **Open / Save / Save As:** versioned `.mclone` project documents.
+- **Save Movie As Midi File:** deterministic SMF export.
+- Standard MIDI import/Sequence dialogs and registration/serial UI are excluded.
 
 ### Menus
-File, Edit, Variables, Pattern, Windows, Options (all the toggles: Metronome, clock sources, Second‑Order Transpose, Midi Conduct, No Cyclic Blinking, etc.).
+File, Edit, Variables, Pattern, Windows, and Options are implemented. Metronome,
+MIDI Clock output, Second-Order Transpose, Midi Conduct, and supported display/
+performance options are wired; external clock input and imported Sequence
+commands remain explicit exceptions.
 
 ### Performance systems
 Conducting Grid (mouse baton), Input Control System (MIDI‑keyboard one‑step / two‑step controls), Mouse Advance, transpose‑from‑MIDI‑keyboard, play‑along.
@@ -258,7 +269,9 @@ Conducting Grid (mouse baton), Input Control System (MIDI‑keyboard one‑step 
 
 **Midi** — per‑voice channel and program change; device assignment.
 
-**I/O** — MIDI file import/export, Movie record; (later) `.M` import.
+**I/O** — deterministic MIDI file export and Movie record; Standard MIDI import
+and imported Sequence playback deliberately excluded; (later) `.M` import only
+with representative files and a product need.
 
 ---
 
@@ -270,7 +283,8 @@ Conducting Grid (mouse baton), Input Control System (MIDI‑keyboard one‑step 
 - **Instrument rack** — four lightweight browser engines for Classic; seven
   first-party native engines, automatic drum routing, signature effects, and
   multi-output buses for Studio. Third-party WAM hosting is exploratory.
-- **VST/AU hosting** in the native build.
+- **VST3/Audio Unit instrument deliverables** in the native build; this does
+  not mean hosting arbitrary third-party plug-ins inside M.
 - **Import old `.M` files** once samples are available.
 - Quality‑of‑life: automation lanes for slider moves, richer conducting, project save/load, and cross‑platform native.
 
@@ -278,22 +292,24 @@ Conducting Grid (mouse baton), Input Control System (MIDI‑keyboard one‑step 
 
 ## 8. Phased Roadmap
 
-**Current checkpoint (2026-08-01):** P0–P2 and P4 are complete; the implemented
-parts of P3 are stable. P5 now includes Movie capture and deterministic SMF
-export plus the completed Patterns/Transport/Conductor parity correction. MIDI
-import is next. The built-in monitor now has four independent stream patches
-and a complete click-safe subtractive control surface; role-specific Classic
-engines remain later in P5.
+**Current checkpoint (2026-08-01):** P0–P4 are complete for the selected scope.
+P5 technical MIDI/File work is complete: Movie/SMF export, project documents,
+live input/recording, Input Control, Mouse/Step Advance, metronome, clock, and
+assignment. The built-in monitor has four independent stream patches and a
+complete click-safe subtractive control surface; the four role-specific Classic
+engines remain the unfinished P5 product slice.
 
 - **P0 — Foundations.** Repo scaffold (Vite/React/TS), engine skeleton, Web Audio clock + lookahead scheduler, dual output sinks (MIDI + synth), theme architecture (control catalog + theme provider), state store.
 - **P1 — Sound & Patterns.** Pattern model, Pattern Editor, transport (Start/Stop/Pause/Sync), Tempo, Time Base / Output Length / Play‑Enable. **First sound.**
 - **P2 — Variables core.** Note Order, Transposition (+ harmonic engine start), Density, Velocity/Accents; Positions, miniatures, Active Position, edit windows.
 - **P3 — Cyclic + Midi + remaining Variables.** Cyclic Editor, Midi window, Orchestration, Time Distortion, Phrasing through Legato Cyclic, Pattern Group; Sound Choice intentionally skipped.
 - **P4 — Conducting + Snapshots.** Conducting Grid, arrows, Robot Conductor; snapshots + slideshows. *(Classic M feature‑complete.)*
-- **P5 — Classic technical I/O.** Record-to-tracks, MIDI import/export, Options,
-  project save/load, Input Control, Mouse Advance, and four lightweight engines.
+- **P5 — Classic technical I/O and audio rack.** Movie recording/MIDI export,
+  Options, project save/load, live input, Input Control, Mouse Advance,
+  metronome/MIDI Clock ✅; four lightweight engines remain.
 - **P6 — Modern theme + instruments.** Second theme; deeper instrument work; pattern‑manipulation upgrades.
-- **Later — Native.** Tauri build; VST/AU hosting; `.M` import.
+- **Later — Native.** Select a native framework after prototyping; investigate
+  VST3 and Audio Unit hosting; retain `.M` import as sample-file-dependent work.
 
 ---
 
@@ -305,7 +321,8 @@ engines remain later in P5.
   is implemented; a fully decoupled whole-app layout system is not yet built.
 - **Audio:** configurable four-stream monitor synth + Web MIDI are implemented; four Classic engines,
   seven Studio engines, signature effects, and native multi-output remain planned.
-- **VST:** browser can't host VST; real VST hosting arrives with the native/Tauri build (decided).
+- **VST:** the browser cannot host VST; VST3 hosting belongs to the native
+  phase, whose framework is not yet selected (decided boundary, open technology).
 - **`.M` import:** wanted; deferred until sample files are provided.
 - **Instruments:** RJ has specific instruments in mind — **dedicated design conversation still queued.**
 - **To confirm later:** scale/key snapping behavior of transposition (validate by ear); native wrapper specifics.

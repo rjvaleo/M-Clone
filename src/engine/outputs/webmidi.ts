@@ -4,10 +4,16 @@
 import type { EngineEvent } from "../events";
 import type { OutputSink } from "./types";
 
+export type MidiChannelMode =
+  | "omni-on" | "omni-off" | "local-on" | "local-off"
+  | "all-notes-off" | "system-reset";
+
 export class MidiSink implements OutputSink {
   readonly destination = "midi" as const;
   private ctx: AudioContext;
   private outputs = new Map<string, MIDIOutput>();
+  private latencyMs = 0;
+  private channelAssignments: { deviceId: string | null; channel: number }[] = [];
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
@@ -35,6 +41,11 @@ export class MidiSink implements OutputSink {
     return this.outputs.size > 0;
   }
 
+  setLatency(ms: number): void { this.latencyMs = Math.max(0, Math.min(999, Math.round(ms))); }
+  setChannelAssignments(assignments: readonly { deviceId: string | null; channel: number }[]): void {
+    this.channelAssignments = assignments.map((entry) => ({ ...entry }));
+  }
+
   /** Convert an AudioContext timestamp to the performance.now() domain that
    *  MIDIOutput.send() expects. */
   private clockAnchor(): { contextSec: number; performanceMs: number } {
@@ -57,8 +68,11 @@ export class MidiSink implements OutputSink {
     for (const output of this.outputs.values()) {
       for (const event of events) {
         if (event.destination !== this.destination) continue;
-        const ch = Math.min(16, Math.max(1, Math.trunc(event.channel))) - 1;
-        const at = toPerf(event.atSec);
+        const internal = Math.min(16, Math.max(1, Math.trunc(event.channel)));
+        const assignment = this.channelAssignments[internal - 1];
+        if (assignment?.deviceId && assignment.deviceId !== output.id) continue;
+        const ch = Math.min(16, Math.max(1, Math.trunc(assignment?.channel ?? internal))) - 1;
+        const at = toPerf(event.atSec) + this.latencyMs;
         if (event.type === "note-on") {
           output.send([0x90 | ch, event.note & 0x7f, event.velocity & 0x7f], at);
         } else if (event.type === "note-off") {
@@ -84,6 +98,33 @@ export class MidiSink implements OutputSink {
     for (const output of this.outputs.values()) this.panicPort(output);
   }
 
+  sendChannelMode(mode: MidiChannelMode, channels: readonly number[] = []): void {
+    const controller = mode === "omni-on" ? 125
+      : mode === "omni-off" ? 124
+        : mode === "local-on" || mode === "local-off" ? 122
+          : mode === "all-notes-off" ? 123 : null;
+    for (const output of this.outputs.values()) {
+      if (mode === "system-reset") {
+        output.send([0xff]);
+        continue;
+      }
+      const selected = channels.length > 0
+        ? channels : Array.from({ length: 16 }, (_, i) => i + 1);
+      for (const channel of selected) {
+        const ch = Math.min(16, Math.max(1, Math.trunc(channel))) - 1;
+        output.send([0xb0 | ch, controller!, mode === "local-on" ? 127 : 0]);
+      }
+    }
+  }
+
+  sendRealtime(status: 0xfa | 0xf8 | 0xfc, atSec?: number): void {
+    const timestamp = atSec === undefined ? undefined : (() => {
+      const anchor = this.clockAnchor();
+      return anchor.performanceMs + (atSec - anchor.contextSec) * 1000 + this.latencyMs;
+    })();
+    for (const output of this.outputs.values()) output.send([status], timestamp);
+  }
+
   private panicPort(output: MIDIOutput): void {
     for (let ch = 0; ch < 16; ch++) {
       output.send([0xb0 | ch, 64, 0]); // Sustain Off
@@ -100,11 +141,16 @@ export class MidiPortRegistry {
   private sink: MidiSink;
   private access: MIDIAccess | null = null;
   private selected = new Set<string>();
+  private selectedInputs = new Set<string>();
+  private connectedInputs = new Map<string, MIDIInput>();
   private listeners = new Set<(outputs: MIDIOutput[]) => void>();
+  private inputListeners = new Set<(inputs: MIDIInput[]) => void>();
+  private onMessage: ((event: MIDIMessageEvent) => void) | null;
   private onStateChange = () => this.reconcile();
 
-  constructor(sink: MidiSink) {
+  constructor(sink: MidiSink, onMessage: ((event: MIDIMessageEvent) => void) | null = null) {
     this.sink = sink;
+    this.onMessage = onMessage;
   }
 
   async enable(request: AccessRequest = requestMidiAccess): Promise<MIDIOutput[]> {
@@ -120,6 +166,10 @@ export class MidiPortRegistry {
     return this.access ? Array.from(this.access.outputs.values()) : [];
   }
 
+  availableInputs(): MIDIInput[] {
+    return this.access?.inputs ? Array.from(this.access.inputs.values()) : [];
+  }
+
   select(ids: readonly string[]): void {
     this.selected = new Set(ids);
     this.reconcile();
@@ -127,6 +177,18 @@ export class MidiPortRegistry {
 
   selectedIds(): string[] {
     return [...this.selected];
+  }
+
+  selectInputs(ids: readonly string[]): void {
+    this.selectedInputs = new Set(ids);
+    this.reconcile();
+  }
+
+  selectedInputIds(): string[] { return [...this.selectedInputs]; }
+
+  subscribeInputs(listener: (inputs: MIDIInput[]) => void): () => void {
+    this.inputListeners.add(listener);
+    return () => this.inputListeners.delete(listener);
   }
 
   subscribe(listener: (outputs: MIDIOutput[]) => void): () => void {
@@ -143,13 +205,29 @@ export class MidiPortRegistry {
       }
     }
     this.sink.setOutputs(connected);
+    for (const [id, input] of this.connectedInputs) {
+      if (this.selectedInputs.has(id) && this.access?.inputs.get(id) === input) continue;
+      input.onmidimessage = null;
+      this.connectedInputs.delete(id);
+    }
+    if (this.access?.inputs) for (const id of this.selectedInputs) {
+      const input = this.access.inputs.get(id);
+      if (!input || input.state === "disconnected") continue;
+      input.onmidimessage = this.onMessage;
+      this.connectedInputs.set(id, input);
+    }
     const outputs = this.available();
     for (const listener of this.listeners) listener(outputs);
+    const inputs = this.availableInputs();
+    for (const listener of this.inputListeners) listener(inputs);
   }
 
   dispose(): void {
     this.access?.removeEventListener("statechange", this.onStateChange);
     this.listeners.clear();
+    for (const input of this.connectedInputs.values()) input.onmidimessage = null;
+    this.connectedInputs.clear();
+    this.inputListeners.clear();
   }
 }
 

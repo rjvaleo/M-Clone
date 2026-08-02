@@ -9,7 +9,7 @@ import { Rng } from "./rng";
 import type { ProjectState } from "./types";
 import type { OutputSink } from "./outputs/types";
 import { SynthSink } from "./outputs/synth";
-import { MidiPortRegistry, MidiSink } from "./outputs/webmidi";
+import { MidiPortRegistry, MidiSink, type MidiChannelMode } from "./outputs/webmidi";
 import { NoteLifecycle, type OutputDestination } from "./events";
 import {
   browserScheduler,
@@ -30,6 +30,8 @@ import {
   normalizeSynthSettings,
   type SynthSettings,
 } from "./synth";
+import { cyclicResetVoices } from "./cyclicreset";
+import { clockPulseInterval, metronomeInterval } from "./clockoutput";
 
 const LOOKAHEAD_SEC = 0.12;
 const TICK_MS = 25;
@@ -57,16 +59,39 @@ export class MRuntime {
   private expectedWakeSec = 0;
   private clock: ClockDriver | null;
   private suspended = false;
+  private onCyclicReset: ((voices: readonly number[]) => void) | null;
+  private onPlannedSteps: ((steps: readonly import("./planner").PlannedStep[]) => void) | null;
+  private onMidiMessage: ((event: MIDIMessageEvent) => void) | null;
+  private getPerformanceSettings: () => {
+    useMetronome: boolean; sendClock: boolean; syncRatio: number; syncRatioDirection: "out" | "in";
+  };
+  private nextClockAt = 0;
+  private nextMetronomeAt = 0;
 
   constructor(
     getState: () => ProjectState,
     onPlannedNotes: ((notes: readonly import("./planner").PlannedNote[]) => void) | null = null,
-    options: { scheduler?: SchedulerDriver; clock?: ClockDriver } = {},
+    options: {
+      scheduler?: SchedulerDriver;
+      clock?: ClockDriver;
+      onCyclicReset?: (voices: readonly number[]) => void;
+      onMidiMessage?: (event: MIDIMessageEvent) => void;
+      onPlannedSteps?: (steps: readonly import("./planner").PlannedStep[]) => void;
+      getPerformanceSettings?: () => {
+        useMetronome: boolean; sendClock: boolean; syncRatio: number; syncRatioDirection: "out" | "in";
+      };
+    } = {},
   ) {
     this.getState = getState;
     this.onPlannedNotes = onPlannedNotes;
     this.scheduler = options.scheduler ?? browserScheduler;
     this.clock = options.clock ?? null;
+    this.onCyclicReset = options.onCyclicReset ?? null;
+    this.onMidiMessage = options.onMidiMessage ?? null;
+    this.onPlannedSteps = options.onPlannedSteps ?? null;
+    this.getPerformanceSettings = options.getPerformanceSettings ?? (() => ({
+      useMetronome: false, sendClock: false, syncRatio: 4, syncRatioDirection: "out",
+    }));
   }
 
   private nowSec(): number {
@@ -143,8 +168,23 @@ export class MRuntime {
 
   midiPorts(): MidiPortRegistry {
     this.ensure();
-    if (!this.midiRegistry) this.midiRegistry = new MidiPortRegistry(this.midi!);
+    if (!this.midiRegistry) this.midiRegistry = new MidiPortRegistry(this.midi!, this.onMidiMessage);
     return this.midiRegistry;
+  }
+
+  sendMidiChannelMode(mode: MidiChannelMode, channels?: readonly number[]): void {
+    this.ensure();
+    this.midi!.sendChannelMode(mode, channels);
+  }
+
+  setMidiLatency(ms: number): void {
+    this.ensure();
+    this.midi!.setLatency(ms);
+  }
+
+  setMidiOutputAssignments(assignments: readonly { deviceId: string | null; channel: number }[]): void {
+    this.ensure();
+    this.midi!.setChannelAssignments(assignments);
   }
 
   setSynthEnabled(on: boolean): void {
@@ -220,6 +260,9 @@ export class MRuntime {
     this.programs = "";
     this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? ctx.currentTime);
     this.pausedAt = null;
+    this.nextClockAt = this.cursors[0]?.nextTimeSec ?? this.nowSec();
+    this.nextMetronomeAt = this.nextClockAt;
+    if (this.getPerformanceSettings().sendClock) this.midi?.sendRealtime(0xfa);
     if (this.timer === null) {
       this.expectedWakeSec = this.nowSec() + TICK_MS / 1000;
       this.timer = this.scheduler.repeat(() => this.tick(), TICK_MS);
@@ -286,6 +329,7 @@ export class MRuntime {
     this.midi?.panic();
     this.lifecycle.reset();
     this.pausedAt = null;
+    if (this.getPerformanceSettings().sendClock) this.midi?.sendRealtime(0xfc);
   }
 
   private tick(): void {
@@ -320,13 +364,41 @@ export class MRuntime {
     this.cursors = rebaseChangedTimelines(this.cursors, this.timing, timing);
     this.timing = timing;
     const windowEnd = now + decision.lookaheadSec;
+    this.scheduleClockOutputs(state.tempo, windowEnd);
     this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? now);
-    const { notes, cursors } = planWindow(state, this.cursors, this.rngs, now, windowEnd);
+    const previousCyclic = this.cursors.map((cursor) => cursor.cyclicPos);
+    const { notes, cursors, steps } = planWindow(state, this.cursors, this.rngs, now, windowEnd);
+    const resets = cyclicResetVoices(
+      previousCyclic,
+      cursors.map((cursor) => cursor.cyclicPos),
+      state.cyclicLengths.rhythm,
+    );
     this.cursors = cursors;
     this.lifecycle.ingest(notes, this.destinations());
     this.submitEvents(windowEnd);
     // UI recording is intentionally after time-critical output submission.
     if (notes.length > 0) this.onPlannedNotes?.(notes);
+    if (steps.length > 0) this.onPlannedSteps?.(steps);
+    if (resets.length > 0) this.onCyclicReset?.(resets);
+  }
+
+  private scheduleClockOutputs(tempo: number, windowEnd: number): void {
+    const settings = this.getPerformanceSettings();
+    if (settings.syncRatioDirection !== "out") return;
+    if (settings.sendClock) {
+      const interval = clockPulseInterval(tempo, settings.syncRatio);
+      while (this.nextClockAt < windowEnd) {
+        if (this.nextClockAt >= this.nowSec()) this.midi?.sendRealtime(0xf8, this.nextClockAt);
+        this.nextClockAt += interval;
+      }
+    } else this.nextClockAt = windowEnd;
+    if (settings.useMetronome) {
+      const interval = metronomeInterval(tempo, settings.syncRatio);
+      while (this.nextMetronomeAt < windowEnd) {
+        if (this.nextMetronomeAt >= this.nowSec()) this.synth?.metronome(this.nextMetronomeAt);
+        this.nextMetronomeAt += interval;
+      }
+    } else this.nextMetronomeAt = windowEnd;
   }
 
   private submitEvents(windowEnd: number): void {

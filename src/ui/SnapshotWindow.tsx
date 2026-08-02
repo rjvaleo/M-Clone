@@ -15,6 +15,7 @@ import { useEffect } from "react";
 import { useM } from "../state/store";
 import { getRuntime } from "./runtime";
 import { QUANTIZE_VALUES, SNAPSHOT_LETTERS, quantizeDelay } from "../engine/snapshot";
+import { runSnapshotGesture } from "./snapshotgesture";
 import {
   IconCamera,
   IconEditSnapshot,
@@ -49,7 +50,6 @@ export function SnapshotWindow() {
   const slideTransport = useM((s) => s.slideshowTransport);
   const tempo = useM((s) => s.project.tempo);
   const storeSnapshot = useM((s) => s.storeSnapshot);
-  const recallSnapshot = useM((s) => s.recallSnapshot);
   const eraseSnapshot = useM((s) => s.eraseSnapshot);
   const restoreFromSnapshot = useM((s) => s.restoreFromSnapshot);
   const setSnapshotQuantize = useM((s) => s.setSnapshotQuantize);
@@ -63,6 +63,17 @@ export function SnapshotWindow() {
   const stopSlideshow = useM((s) => s.stopSlideshow);
   const pauseSlideshow = useM((s) => s.pauseSlideshow);
   const toggleSlideshowLoop = useM((s) => s.toggleSlideshowLoop);
+
+  const executeSnapshot = (index: number, forceSync = false) => {
+    runSnapshotGesture({
+      quantize: useM.getState().snapshotQuantize,
+      tempo: useM.getState().project.tempo,
+      elapsedSec: getRuntime().transportElapsedSec(),
+      recall: () => useM.getState().recallSnapshot(index),
+      forceSync,
+      sync: () => getRuntime().sync(),
+    });
+  };
 
   // "Clicking on a Snapshot location that exists ... or typing the letter of
   // the Snapshot will recall the stored screen control settings."
@@ -99,9 +110,16 @@ export function SnapshotWindow() {
       }
       if (e.altKey) return;
       const index = SNAPSHOT_LETTERS.indexOf(e.key.toUpperCase());
-      if (index >= 0 && useM.getState().snapshots[index]) {
-        e.preventDefault();
-        useM.getState().recallSnapshot(index);
+      if (index >= 0) {
+        const state = useM.getState();
+        if (state.snapshotMode === "holding") {
+          e.preventDefault();
+          state.storeSnapshot(index, !e.shiftKey);
+          if (e.shiftKey) executeSnapshot(index);
+        } else if (state.snapshots[index]) {
+          e.preventDefault();
+          executeSnapshot(index, e.shiftKey);
+        }
       }
     };
     window.addEventListener("keydown", onKey);
@@ -131,7 +149,17 @@ export function SnapshotWindow() {
         }
         aria-label="Hold/Do"
         aria-pressed={snapshotMode !== "idle"}
-        onClick={() => snapshotMode === "idle" ? beginHold() : doHold()}>
+        onClick={(event) => {
+          if (snapshotMode === "idle") beginHold();
+          else if (snapshotMode === "holding" && event.shiftKey) {
+            runSnapshotGesture({
+              quantize,
+              tempo,
+              elapsedSec: getRuntime().transportElapsedSec(),
+              recall: doHold,
+            });
+          } else doHold();
+        }}>
         <IconCamera size={30} />
         <IconSlides size={26} />
       </button>
@@ -186,8 +214,11 @@ export function SnapshotWindow() {
                 }
                 onClick={(e) => {
                   if (e.altKey) eraseSnapshot(i);
-                  else if (snapshotMode !== "idle" || !stored || e.shiftKey) storeSnapshot(i);
-                  else recallSnapshot(i);
+                  else if (snapshotMode !== "idle") {
+                    storeSnapshot(i, !e.shiftKey);
+                    if (e.shiftKey) executeSnapshot(i);
+                  } else if (!stored) storeSnapshot(i);
+                  else executeSnapshot(i, e.shiftKey);
                 }}>
                 {stored && (
                   <span className="usnap__art">

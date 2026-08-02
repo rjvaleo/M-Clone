@@ -7,7 +7,7 @@ The Cyclic Editor visual delta is tracked in
 (Pattern menu), and Chapter 22 (`Don't Scramble Rests`).
 
 **Implementation status:** Complete as of 2026-07-30. All acceptance criteria
-below are implemented and covered by the current 672-test, 100%-coverage suite.
+below are implemented and covered by the current 757-test, 100%-coverage suite.
 
 ## Manual behavior
 
@@ -108,16 +108,15 @@ playback time.
 
 - Snapshots require no change: by design they store control positions, not
   Pattern material.
-- Future JSON save/load must serialize `scrambledSteps` and
-  `scrambleGeneration`.
+- `ProjectDocumentV2` serializes `scrambledSteps` and `scrambleGeneration` and
+  defensively repairs legacy/malformed Pattern material during decode.
 
 ### `Don't Scramble Rests`
 
 The manual’s option preserves the positions of rests whenever a reordering
-operation occurs. It is a related follow-up, not a prerequisite for exposing
-the three commands. The shuffle helper should nevertheless accept a
-`preserveRests` option now so the later toggle does not require another command
-redesign.
+operation occurs. The option, command/store path, persistence, and shuffle
+helper's `preserveRests` behavior are implemented and included in the manual
+conformance inventory.
 
 ## TDD sequence
 

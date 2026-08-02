@@ -5,6 +5,8 @@ import {
   applyActivePositions,
   applyPosition,
   setSlot,
+  transferPosition,
+  transferPositionVoice,
   POSITION_VARS,
   POSITION_COUNT,
 } from "./variables";
@@ -182,5 +184,35 @@ describe("applyActivePositions", () => {
     const before = project.voices[0].density;
     applyActivePositions(project.voices, makePresetPositions());
     expect(project.voices[0].density).toBe(before);
+  });
+});
+
+describe("classic Variable drag transfer", () => {
+  it("swaps Positions by default and copies with Option", () => {
+    const positions = makePresetPositions();
+    const a = positions.transposition.slots[0];
+    const b = positions.transposition.slots[1];
+    const swapped = transferPosition(positions, "transposition", 0, 1, false);
+    expect(swapped.transposition.slots[0]).toEqual(b);
+    expect(swapped.transposition.slots[1]).toEqual(a);
+    const copied = transferPosition(positions, "transposition", 0, 1, true);
+    expect(copied.transposition.slots[0]).toEqual(a);
+    expect(copied.transposition.slots[1]).toEqual(a);
+  });
+
+  it("swaps or copies one Voice inside a Position", () => {
+    const positions = makePresetPositions();
+    const row = positions.velocityRange.slots[0];
+    const swapped = transferPositionVoice(positions, "velocityRange", 0, 0, 1, false);
+    expect(swapped.velocityRange.slots[0][0]).toEqual(row[1]);
+    expect(swapped.velocityRange.slots[0][1]).toEqual(row[0]);
+    const copied = transferPositionVoice(positions, "velocityRange", 0, 0, 1, true);
+    expect(copied.velocityRange.slots[0][1]).toEqual(row[0]);
+  });
+
+  it("treats transfers onto the same Position or Voice as no-ops", () => {
+    const positions = makePresetPositions();
+    expect(transferPosition(positions, "density", 2, 2, false)).toBe(positions);
+    expect(transferPositionVoice(positions, "density", 2, 1, 1, false)).toBe(positions);
   });
 });

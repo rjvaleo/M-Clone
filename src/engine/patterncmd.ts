@@ -19,6 +19,18 @@ const rest = (): StepEvent => ({ pitches: [] });
 const copyStep = (s: StepEvent): StepEvent => ({ pitches: [...s.pitches] });
 const copySteps = (steps: StepEvent[]): StepEvent[] => steps.map(copyStep);
 
+export function copyPattern(pattern: Pattern): Pattern {
+  return {
+    ...structuredClone(pattern),
+    steps: copySteps(pattern.steps),
+    scrambledSteps: copySteps(pattern.scrambledSteps),
+  };
+}
+
+export function pastePattern(target: Pattern, source: Pattern): Pattern {
+  return { ...copyPattern(source), id: target.id };
+}
+
 /** Resolve a region to a half-open slice of the steps, clamped to what exists. */
 function span(steps: StepEvent[], region: Region): [number, number] {
   if (!region) return [0, steps.length];

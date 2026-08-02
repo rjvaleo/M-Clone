@@ -37,6 +37,7 @@ below and `WORKSPACE_SCALING.md` for current geometry.
 | Variables | 220×156 | 10px; annotation 8px | 16px | 9px (6), **11px (36)** |
 | Cyclic Variables | 229×156 | 10px; annotation 8px | 16px | **8px (36)** |
 | Midi | 454×45 | 10px; annotation 8px | 16px | **11px (7)** |
+| Midi Assignment | 560px wide | 10px; annotation 8px | 16px | 8px dense setup controls |
 | Midi View | 454×257 | 10px; annotation 8px | 16px | 9px (5), 10px (2) |
 | Pattern Editor | 319×163 | **7.2px**; annotation 5.76px | **11.5px** | **7.92px (571)** |
 | Cyclic Editor (Classic) | 220×183 | 10px; annotation 8px | 16px | 4px (64), 5px (1), **5.5px (345)**, 6px (10), 7px (14), 10px (2) |
@@ -104,6 +105,8 @@ all fifteen panels open now reports:
 - Every primary body control: 8px effective.
 - Dense Cyclic, Note Order, Time Distortion, Transposition, and Orchestration
   readouts: the shared 7px compact tier.
+- Conducting retains the standard 10px/16px chrome in its current 229×107
+  logical shell; the older 229×113 measurement above remains audit history.
 - No title name wraps or clips.
 
 Scaled panels use compensated declared sizes at their scale boundary, so the
