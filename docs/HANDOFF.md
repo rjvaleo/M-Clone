@@ -53,7 +53,9 @@ The resolved browser stack and the distinction between current dependencies and
 native candidates are canonical in [`TECH_STACK.md`](./TECH_STACK.md).
 The repository also contains a tested `/M-Clone/` Pages build and
 `.github/workflows/pages.yml`; publishing requires pushing the workflow and
-selecting GitHub Actions as the repository's Pages source.
+selecting GitHub Actions as the repository's Pages source. Public repository
+visibility alone does not create the Pages site, and the default workflow token
+cannot auto-enable it without a separately privileged PAT or GitHub App.
 
 Snapshot editing and Slideshows are complete. Manual review also established
 that Phrasing is Legato Cyclic rather than another Variable. Legato now uses

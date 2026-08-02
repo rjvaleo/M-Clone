@@ -8,6 +8,9 @@ coverage, the executable manual audit, and typechecked Pages compilation before
 uploading and deploying the static artifact. Once the workflow is pushed and
 GitHub Pages is set to use Actions, the expected public URL is
 `https://rjvaleo.github.io/M-Clone/`.
+Repository visibility and Pages enablement are separate: the one-time Pages
+source must be set to GitHub Actions before `configure-pages` runs. The workflow
+uses the current Node 24 action majors.
 
 ## 2026-08-01: documentation and Conducting visual reconciliation
 
