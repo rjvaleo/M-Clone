@@ -1,0 +1,197 @@
+import { describe, expect, it } from "vitest";
+import { createNode, moduleRegistry, validateModuleDescriptor } from "./registry";
+import type { ModuleDescriptor } from "../model/graph";
+
+describe("Modular module registry", () => {
+  it("keeps every registered parameter and command visible on the node face", () => {
+    for (const descriptor of moduleRegistry.values()) {
+      expect(validateModuleDescriptor(descriptor), descriptor.type).toEqual([]);
+    }
+  });
+
+  it("creates independent nodes from descriptor defaults", () => {
+    const first = createNode("m.note-editor", "first", { x: 0, y: 0 });
+    const second = createNode("m.note-editor", "second", { x: 10, y: 20 });
+    first.parameters["output-length"] = 32;
+    expect(second.parameters["output-length"]).toBe(16);
+    expect(second.position).toEqual({ x: 10, y: 20 });
+  });
+
+  it("builds eight independent Note Editor pattern positions", () => {
+    const editor = createNode("m.note-editor", "editor", { x: 0, y: 0 });
+    expect(editor.parameters["preset-values"]).toHaveLength(8);
+  });
+
+  it("embeds eight presets in the per-stream density gate", () => {
+    const processor = moduleRegistry.get("m.note-density");
+    expect(moduleRegistry.has("m.density-presets")).toBe(false);
+    expect(processor?.ports.find((port) => port.id === "density-in")?.signal)
+      .toEqual({ kind: "control", value: "number" });
+    expect(processor?.parameters.find((parameter) => parameter.id === "preset-values")?.defaultValue)
+      .toHaveLength(8);
+    expect(processor?.face.flatMap((section) => section.elements))
+      .toContainEqual(expect.objectContaining({ kind: "custom", id: "density-slider" }));
+    expect(processor?.face.flatMap((section) => section.elements))
+      .toContainEqual(expect.objectContaining({ kind: "custom", id: "embedded-number-presets" }));
+  });
+
+  it("uses the same eight-preset contract for one-stream Note Order", () => {
+    const order = createNode("m.note-order", "order", { x: 0, y: 0 });
+    expect(order.parameters["preset-values"]).toHaveLength(8);
+    expect(order.parameters).toMatchObject({ original: 50, cyclic: 4, utterly: 46 });
+    expect(moduleRegistry.get("m.note-order")?.ports.find((port) => port.id === "pattern-in")?.signal)
+      .toEqual({ kind: "pattern-data" });
+  });
+
+  it("assigns variable processors to one uniform compact layout", () => {
+    expect(moduleRegistry.get("m.note-density")?.layout).toBe("compact");
+    expect(moduleRegistry.get("m.note-order")?.layout).toBe("compact");
+  });
+
+  it("registers the clock-domain half of a stream as single-stream nodes", () => {
+    const timeBase = createNode("m.time-base", "tb", { x: 0, y: 0 });
+    const phase = createNode("m.phase", "ph", { x: 0, y: 0 });
+    expect(moduleRegistry.get("m.time-base")?.layout).toBe("compact");
+    expect(moduleRegistry.get("m.phase")?.layout).toBe("compact");
+    expect(timeBase.parameters["preset-values"]).toHaveLength(8);
+    expect(phase.parameters["preset-values"]).toHaveLength(8);
+    expect(timeBase.parameters).toMatchObject({ numerator: 1, denominator: 16 });
+    // Phase is in ticks, because ticks are the only canonical musical time.
+    expect(moduleRegistry.get("m.phase")?.parameters
+      .find((parameter) => parameter.id === "offset-ticks")?.unit).toBe("ticks");
+  });
+
+  it("requires the inputs a clock-domain node cannot run without", () => {
+    const required = (type: string, portId: string) =>
+      moduleRegistry.get(type)?.ports.find((port) => port.id === portId)?.required;
+    expect(required("m.time-base", "transport-in")).toBe(true);
+    expect(required("m.phase", "clock-in")).toBe(true);
+    expect(required("m.note-order", "clock-in")).toBe(true);
+    expect(required("m.note-order", "pattern-in")).toBe(true);
+    expect(required("m.step-to-notes", "steps-in")).toBe(true);
+  });
+
+  it("declares merge policy for every many-input port", () => {
+    for (const descriptor of moduleRegistry.values()) {
+      for (const port of descriptor.ports) {
+        if (port.direction !== "input" || port.cardinality !== "many") continue;
+        expect(port.mergePolicy, `${descriptor.type}:${port.id}`).toBeDefined();
+      }
+    }
+  });
+
+  it("bridges step events to note events with an explicit converter", () => {
+    const converter = moduleRegistry.get("m.step-to-notes");
+    expect(converter?.ports.find((port) => port.id === "steps-in")?.signal)
+      .toEqual({ kind: "step-event" });
+    expect(converter?.ports.find((port) => port.id === "notes-out")?.signal)
+      .toEqual({ kind: "note-event" });
+    // A utility, not a Classic Variable, so it carries no preset strip.
+    expect(converter?.layout).toBe("utility");
+    expect(converter?.parameters.some((parameter) => parameter.id === "preset-values")).toBe(false);
+  });
+
+  it("registers cyclic core modules with the standard clock/control contracts", () => {
+    const accent = moduleRegistry.get("m.cyclic-accent");
+    const legato = moduleRegistry.get("m.cyclic-legato");
+    const rhythm = moduleRegistry.get("m.cyclic-rhythm");
+
+    expect(accent?.ports.find((port) => port.id === "clock-in")?.required).toBe(true);
+    expect(legato?.ports.find((port) => port.id === "clock-in")?.required).toBe(true);
+    expect(rhythm?.ports.find((port) => port.id === "clock-in")?.required).toBe(true);
+
+    expect(accent?.ports.find((port) => port.id === "reset-in")?.cardinality).toBe("many");
+    expect(legato?.ports.find((port) => port.id === "reset-in")?.cardinality).toBe("many");
+    expect(rhythm?.ports.find((port) => port.id === "reset-in")?.cardinality).toBe("many");
+
+    expect(accent?.ports.find((port) => port.id === "accent-out")?.signal)
+      .toEqual({ kind: "control", value: "number" });
+    expect(legato?.ports.find((port) => port.id === "legato-out")?.signal)
+      .toEqual({ kind: "control", value: "number" });
+    expect(rhythm?.ports.find((port) => port.id === "clock-out")?.signal)
+      .toEqual({ kind: "step-clock" });
+  });
+
+  it("registers stage-4 shaping consumers for accent and legato control streams", () => {
+    const velocity = moduleRegistry.get("m.velocity-range");
+    const legato = moduleRegistry.get("m.legato-processor");
+
+    expect(velocity?.ports.find((port) => port.id === "accent-in")?.signal)
+      .toEqual({ kind: "control", value: "number" });
+    expect(velocity?.ports.find((port) => port.id === "notes-in")?.signal)
+      .toEqual({ kind: "note-event" });
+    expect(velocity?.parameters.find((parameter) => parameter.id === "preset-values")?.defaultValue)
+      .toHaveLength(8);
+
+    expect(legato?.ports.find((port) => port.id === "legato-in")?.signal)
+      .toEqual({ kind: "control", value: "number" });
+    expect(legato?.ports.find((port) => port.id === "notes-in")?.signal)
+      .toEqual({ kind: "note-event" });
+    expect(legato?.parameters.find((parameter) => parameter.id === "preset-values")?.defaultValue)
+      .toHaveLength(8);
+  });
+
+  it("registers stage-5 note-path modules", () => {
+    const playEnable = moduleRegistry.get("m.play-enable");
+    const transposition = moduleRegistry.get("m.transposition");
+
+    expect(playEnable?.ports.find((port) => port.id === "play-enabled-in")?.signal)
+      .toEqual({ kind: "control", value: "boolean" });
+    expect(playEnable?.ports.find((port) => port.id === "notes-in")?.signal)
+      .toEqual({ kind: "note-event" });
+    expect(playEnable?.parameters.find((parameter) => parameter.id === "preset-values")?.defaultValue)
+      .toHaveLength(8);
+
+    expect(transposition?.ports.find((port) => port.id === "transposition-in")?.signal)
+      .toEqual({ kind: "control", value: "number" });
+    expect(transposition?.ports.find((port) => port.id === "scale-context-in")?.signal)
+      .toEqual({ kind: "control", value: "index" });
+    expect(transposition?.parameters.find((parameter) => parameter.id === "preset-values")?.defaultValue)
+      .toHaveLength(8);
+  });
+
+  it("registers stage-6 stream compound surface", () => {
+    const stream = moduleRegistry.get("m.stream");
+    expect(stream?.ports.find((port) => port.id === "transport-in")?.required).toBe(true);
+    expect(stream?.ports.find((port) => port.id === "notes-out")?.signal)
+      .toEqual({ kind: "note-event" });
+    expect(stream?.commands.find((command) => command.id === "expand-stream")?.label).toBe("Expand");
+  });
+
+  it("refuses a feedback break that cannot actually break feedback", () => {
+    const base = moduleRegistry.get("m.note-density") as ModuleDescriptor;
+    const withBreak = (feedbackBreak: ModuleDescriptor["feedbackBreak"]): ModuleDescriptor =>
+      ({ ...base, feedbackBreak });
+    // A break that does not advance time is a hang wearing a label.
+    expect(validateModuleDescriptor(withBreak({ minDelayTicks: 0 })))
+      .toContain("Feedback break must delay at least one whole tick");
+    expect(validateModuleDescriptor(withBreak({ minDelayTicks: 0.5 })))
+      .toContain("Feedback break must delay at least one whole tick");
+    // A break that can boost is a runaway waiting for the right patch.
+    expect(validateModuleDescriptor(withBreak({ minDelayTicks: 1, maxGain: 1.2 })))
+      .toContain("Feedback break gain must be bounded to (0, 1]");
+    expect(validateModuleDescriptor(withBreak({ minDelayTicks: 1, maxGain: 0 })))
+      .toContain("Feedback break gain must be bounded to (0, 1]");
+    expect(validateModuleDescriptor(withBreak({ minDelayTicks: 1, maxGain: 0.7 }))).toEqual([]);
+    expect(validateModuleDescriptor(withBreak({ minDelayTicks: 960 }))).toEqual([]);
+  });
+
+  it("enforces merge-policy and telemetry port naming rules", () => {
+    const base = moduleRegistry.get("m.note-density") as ModuleDescriptor;
+    const badManyInput: ModuleDescriptor = {
+      ...base,
+      ports: base.ports.map((port) =>
+        port.id === "notes-in" ? { ...port, mergePolicy: undefined, cardinality: "many" } : port),
+    };
+    expect(validateModuleDescriptor(badManyInput))
+      .toContain("Many-input port missing merge policy: notes-in");
+
+    const badTelemetryName: ModuleDescriptor = {
+      ...base,
+      ports: base.ports.map((port) =>
+        port.signal.kind === "telemetry" ? { ...port, id: "rejected-out" } : port),
+    };
+    expect(validateModuleDescriptor(badTelemetryName))
+      .toContain("Telemetry port id must end with -telemetry: rejected-out");
+  });
+});
