@@ -1,9 +1,9 @@
 # M Modular Development Checkpoint
 
-**Checkpoint date:** 2026-08-02
+**Checkpoint date:** 2026-08-03
 **Branch:** `modular`
 **Branch base:** `master` at `dda067b` (`0.8.0-alpha`)
-**Working-tree state:** implementation is intentionally uncommitted; `src/main.tsx`, `src/modular/`, and the modular documentation contain the current work
+**Foundation checkpoint:** `2e816fc` (`Build modular MIDI foundation`), published to `origin/modular`
 
 ## Product decisions now in force
 
@@ -66,8 +66,10 @@ retrofit than to establish (`src/modular/runtime/`):
   inboxes and write their own outputs; the bus routes, pools, and enforces the
   per-node emission budget so no module author can forget to bound their output.
 - **`processors.ts`** now includes a tick-matched control contract: control values are matched to musical events by tick (never arrival order), including values that arrive in an earlier scheduling window.
-- **`processors.ts`** — Transport, Time Base, Phase, Note Order, Step Notes,
-  Note Density, and MIDI Output as independent single-stream processors.
+- **`processors.ts`** — Transport, Time Base, Phase, Note Order, Cyclic Accent,
+  Cyclic Legato, Cyclic Rhythm, Step Notes, Note Density, Transposition,
+  Velocity Range, Legato Processor, Play Enable, and MIDI Output as independent
+  single-stream processors.
 - **`engine.ts`** — the scheduling loop: measure the wake, recover from a stall,
   derive the window's tick span, apply due parameter edits, run each processor
   once in compiled order, convert to seconds, submit, then report telemetry
@@ -78,11 +80,14 @@ retrofit than to establish (`src/modular/runtime/`):
 The starter chain now executes end to end:
 
 ```text
-Transport -> Time Base -> Phase -> Note Order -> Step Notes -> Note Density -> MIDI Output
+Transport -> Time Base -> Phase -> Cyclic Rhythm -> Note Order -> Step Notes
+-> Note Density -> Transposition -> Velocity Range -> Legato Processor
+-> Play Enable -> MIDI Output
 ```
 
-with the Note Editor supplying pattern material by reference, because pattern
-data is state rather than timed events.
+The Note Editor supplies pattern material by reference. Cyclic Accent and
+Cyclic Legato run beside the note path and feed their tick-matched controls into
+Velocity Range and Legato Processor.
 
 ### Canvas and shell
 
@@ -99,39 +104,43 @@ data is state rather than timed events.
 ### Current registered modules
 
 1. **Transport Clock** — utility face with transport and clock controls.
-1. **Time Base** — compact single-stream clock node turning the shared transport into one stream's step pulses, with eight embedded ratio presets. Denominator zero is Classic's `sa`.
-1. **Phase** — compact single-stream start offset in ticks, with eight embedded presets. Holds a delayed pulse until the window it lands in.
-1. **Step Notes** — utility converter from `step-event` to `note-event`, carrying the velocity, gate, and channel decisions that turn a chosen step into sounding notes. No preset strip: it is a utility, not a Classic Variable.
-2. **Note Editor** — large editor face with all controls visible and eight independent A-H pattern positions. Each instance owns its own piano roll; no shared editor selector exists.
-3. **Note Density** — compact single-stream processor with one live probability slider, deterministic seed, and eight embedded numeric presets.
-4. **Note Order** — compact single-stream processor with the original-style three-region/two-handle Original-Cyclic-Utterly control, shaded regions, and eight embedded mix presets.
-5. **Cyclic Accent** — editor-layout control sequencer emitting per-step accent values from an embedded 16-step grid with eight presets.
-6. **Cyclic Legato** — editor-layout control sequencer emitting per-step legato values from an embedded 16-step grid with eight presets.
-7. **Cyclic Rhythm** — editor-layout clock sequencer that warps outgoing step-clock duration from an embedded 16-step grid with eight presets.
-8. **Velocity Range** — compact single-stream note shaper consuming `accent-in` control values and mapping them onto a configurable low/high velocity range with eight presets.
-9. **Legato Processor** — compact single-stream note shaper consuming `legato-in` control values and applying legato multipliers that can create intentional note overlap, with eight presets.
-10. **Play Enable** — compact per-path note gate that mutes notes without stopping upstream clocks, with eight embedded presets.
-11. **Transposition** — compact note shaper with semitone and scale-degree modes, optional scale-context input, and eight embedded presets.
-12. **Stream** — utility compound surface (`m.stream`) that materializes into ordinary single-stream modules and can be expanded onto the canvas.
-13. **MIDI Output** — utility face with destination/channel/latency/program controls.
+2. **Time Base** — compact single-stream clock node turning the shared transport into one stream's step pulses, with eight embedded ratio presets. Denominator zero is Classic's `sa`.
+3. **Phase** — compact single-stream start offset in ticks, with eight embedded presets. Holds a delayed pulse until the window it lands in.
+4. **Step Notes** — utility converter from `step-event` to `note-event`, carrying the velocity, gate, and channel decisions that turn a chosen step into sounding notes. No preset strip: it is a utility, not a Classic Variable.
+5. **Note Editor** — large editor face with all controls visible and eight independent A-H pattern positions. Each instance owns its own piano roll; no shared editor selector exists.
+6. **Note Density** — compact single-stream processor with one live probability slider, deterministic seed, and eight embedded numeric presets.
+7. **Note Order** — compact single-stream processor with the original-style three-region/two-handle Original-Cyclic-Utterly control, shaded regions, and eight embedded mix presets.
+8. **Cyclic Accent** — editor-layout control sequencer emitting per-step accent values from an embedded 16-step grid with eight presets.
+9. **Cyclic Legato** — editor-layout control sequencer emitting per-step legato values from an embedded 16-step grid with eight presets.
+10. **Cyclic Rhythm** — editor-layout clock sequencer that warps outgoing step-clock duration from an embedded 16-step grid with eight presets.
+11. **Velocity Range** — compact single-stream note shaper consuming `accent-in` control values and mapping them onto a configurable low/high velocity range with eight presets.
+12. **Legato Processor** — compact single-stream note shaper consuming `legato-in` control values and applying legato multipliers that can create intentional note overlap, with eight presets.
+13. **Play Enable** — compact per-path note gate that mutes notes without stopping upstream clocks, with eight embedded presets.
+14. **Transposition** — compact note shaper with semitone and scale-degree modes, optional scale-context input, and eight embedded presets.
+15. **Stream** — utility compound surface (`m.stream`) that materializes into ordinary single-stream modules and can be expanded onto the canvas.
+16. **MIDI Output** — utility face with destination/channel/latency/program controls.
 
 Note Density and Note Order use the same 520 x 330 CSS-pixel compact frame, 28px controls, section spacing, and 50px preset cells. Their clean live measurement showed identical dimensions and no internal overflow.
 
 ## Starter graph currently shown
 
 ```text
-Note Editor audition notes -> Note Density -> MIDI Output
-Note Editor pattern data   -> Note Order
+Transport -> Time Base -> Phase -> Cyclic Rhythm -> Note Order -> Step Notes
+-> Note Density -> Transposition -> Velocity Range -> Legato Processor
+-> Play Enable -> MIDI Output
+
+Note Editor -> Note Order
+Cyclic Accent -> Velocity Range
+Cyclic Legato -> Legato Processor
 ```
 
-The starter graph on the canvas still shows an earlier topology and is not yet
-the canonical full runtime chain. Canvas commands and parameter edits now route
-through `ModularRuntime`; the remaining work is module integration (cyclic
-outputs into note-shaping consumers) and richer runtime telemetry display.
+The canvas starter is now the canonical full runtime topology. Canvas commands
+and parameter edits route through `ModularRuntime`. Live node telemetry and the
+browser MIDI device session remain the next UI-to-runtime work.
 
 ## Verification baseline
 
-- `npm test`: **981 tests passed across 80 files**.
+- `npm test -- --run`: **1,017 tests passed across 82 files**.
 - `npm run typecheck`: passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.
@@ -146,11 +155,16 @@ outputs into note-shaping consumers) and richer runtime telemetry display.
 5. Standard M import exists only as a documented mapping; no importer transaction or fixture conversion exists yet.
 6. Port connection uses click-output/click-input. The planned drag-cable workflow, compatible-port highlighting, keyboard connection flow, and filtered module creation are still pending.
 7. Cable endpoint placement is approximate and should be derived from actual port geometry.
-8. Pan/zoom and theme are not persisted as workspace preferences.
+8. Pan, zoom, hand mode, and theme persist in browser-local workspace preferences; broader scene-level view states are not implemented.
 9. Snapshots, macros, conducting, slideshow, performance view, audio modules, timeline, and visualizer remain planned work.
 10. The development server at `http://127.0.0.1:5173/` belongs to the current local task session and should not be treated as a deployment.
 
-## Ordered next steps
+## Build record and remaining work
+
+The authoritative forward sequence is [MODULAR_NEXT_STEPS.md](MODULAR_NEXT_STEPS.md).
+The sections below retain the completed build record and detail for remaining
+module, canvas, import, and product work; their historical numbering is not the
+current priority order.
 
 ### 1. Stabilize the reusable embedded-preset contract
 
@@ -178,19 +192,15 @@ Not yet implemented, and cheapest to get right before there is a rack to retrofi
 - Voice pooling rather than per-note node construction, and an always-on master limiter.
 - Signal converter modules, so near-miss control types have a bridge instead of a bare rejection.
 
-### 2b. The Stream build — agreed and parked
+### 2b. The Stream build
 
 The module audit, port standard, and the decision to assemble a complete note as
 a **Stream** compound (`m.stream`) are recorded in
 [MODULAR_MODULE_MAP.md](MODULAR_MODULE_MAP.md) and
-[MODULAR_STREAM_PLAN.md](MODULAR_STREAM_PLAN.md). Nothing is implemented yet.
-
-Two items there are time-sensitive and should come before further module work:
-
-1. **The port standard and its migration**, because port ids are serialized into
-   `.mmod` documents and every new module adds migrations.
-2. **The control-tick contract**, because every cyclic module built without it
-   inherits the same intermittent off-by-one-step defect.
+[MODULAR_STREAM_PLAN.md](MODULAR_STREAM_PLAN.md). The port standard, migration,
+control-tick contract, cyclic and shaping processors, Stream materialization,
+canvas expansion, and runtime bridge are implemented. Compact-versus-expanded
+trace equivalence and Stream-scoped snapshots remain open.
 
 Do not reintroduce the word "Voice" for this concept; the compound is a Stream.
 
