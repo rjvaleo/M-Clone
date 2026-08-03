@@ -168,7 +168,14 @@ export class ModularRuntime {
   }
 
   addAdapter(adapter: OutputAdapter): void {
-    this.adapters.push(adapter);
+    if (!this.adapters.includes(adapter)) this.adapters.push(adapter);
+  }
+
+  removeAdapter(adapter: OutputAdapter): void {
+    const index = this.adapters.indexOf(adapter);
+    if (index < 0) return;
+    this.adapters.splice(index, 1);
+    adapter.dispose?.();
   }
 
   diagnostics(): SchedulingDiagnostics {
