@@ -558,6 +558,7 @@ function NodeFace({
   onSelect,
   onPortClick,
   onClose,
+  status,
 }: {
   node: NodeInstance;
   zoom: number;
@@ -569,6 +570,7 @@ function NodeFace({
   onSelect: () => void;
   onPortClick: (port: PortRef) => void;
   onClose: () => void;
+  status: Readonly<Record<string, string>>;
 }) {
   const descriptor = moduleRegistry.get(node.moduleType);
   const [drag, setDrag] = useState({ x: 0, y: 0 });
@@ -668,7 +670,7 @@ function NodeFace({
               key={`${element.kind}-${element.id}`}
               onClick={() => onCommand(node, element.id, element.label)}>{element.label}</button>;
             if (element.kind === "status") return <output className="mm-status"
-              key={`${element.kind}-${element.id}`}><span>{element.label}</span><b>Ready</b></output>;
+              key={`${element.kind}-${element.id}`}><span>{element.label}</span><b>{status[element.id] ?? "Idle"}</b></output>;
             return <CustomFace key={`${element.kind}-${element.id}-${index}`}
               element={element} node={node} setParameter={setParameter}
               setParameters={setParameters} />;
@@ -692,6 +694,7 @@ export function ModularApp() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [pendingConnection, setPendingConnection] = useState<PortRef | null>(null);
+  const [runtimeStatuses, setRuntimeStatuses] = useState<Record<string, Readonly<Record<string, string>>>>({});
   const nextId = useRef(2);
   const nextEdgeId = useRef(2);
   const runtimeRef = useRef<ModularRuntime | null>(null);
@@ -1014,6 +1017,21 @@ export function ModularApp() {
     if (result.diagnostics.length > 0) setMessage(result.diagnostics[0].message);
   }, [graph]);
 
+  useEffect(() => {
+    const update = () => {
+      const runtime = runtimeRef.current;
+      if (!runtime) return;
+      const next = Object.fromEntries(
+        Object.keys(graph.nodes).map((nodeId) => [nodeId, runtime.nodeStatus(nodeId)]),
+      );
+      setRuntimeStatuses((current) =>
+        JSON.stringify(current) === JSON.stringify(next) ? current : next);
+    };
+    update();
+    const timer = window.setInterval(update, 100);
+    return () => window.clearInterval(timer);
+  }, [graph]);
+
   useEffect(() => () => runtimeRef.current?.stop(), []);
   return <main className={`mm-app ${dark ? "mm-app--dark" : ""}`} onClick={() => setMenu(null)}>
     <input
@@ -1106,6 +1124,7 @@ export function ModularApp() {
           onParameterChange={handleParameterChange}
           onSelect={() => { setSelectedNodeId(node.id); setSelectedEdgeId(null); }}
           onPortClick={handlePortClick}
+          status={runtimeStatuses[node.id] ?? {}}
           onClose={() => removeNode(node.id)} />)}
       </div>
       {menu && <div className="mm-module-menu" style={{ left: menu.x, top: menu.y }}

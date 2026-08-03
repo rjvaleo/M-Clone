@@ -60,8 +60,17 @@ developer can determine what is implemented without inspecting source code.
 
 ### 3. Finish the UI-to-runtime vertical slice
 
-- Replace generic node status text with live transport, cursor, density,
-  note-shaping, MIDI connection, and error telemetry.
+**Status:** in progress. Live runtime status plumbing completed 2026-08-03;
+browser MIDI permission and device-session wiring remain.
+
+- Node faces now read lossy status snapshots from processor state without
+  putting UI work on the scheduling path.
+- Transport position, Time Base rate, Phase pending pulses, Note Order and
+  Cyclic cursors, Step Notes activity, Density acceptance/rejection, Legato
+  overlap, and Play Enable mute counts are live.
+
+- Complete the remaining MIDI connection and error telemetry; generic runtime
+  status text has been replaced for the executing musical modules.
 - Wire browser MIDI permission, destination discovery and selection, session
   lifecycle, adapter attachment, and panic behavior into the application.
 - Exercise the canonical starter graph as a visible, audible end-to-end path.

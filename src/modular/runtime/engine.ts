@@ -89,6 +89,7 @@ export type RuntimeOptions = {
 
 type NodeRuntime = {
   nodeId: string;
+  moduleType: string;
   processor: StreamProcessor;
   parameters: ParameterBag;
   /** Step length used to quantize step-locked parameter edits for this node. */
@@ -188,6 +189,18 @@ export class ModularRuntime {
     return this.telemetryRing.drain();
   }
 
+  /** Read-only, lossy values for one node face; never used by scheduling. */
+  nodeStatus(nodeId: string): Readonly<Record<string, string>> {
+    const node = this.nodes.get(nodeId);
+    if (!node) return {};
+    const status: Record<string, string> = { ...(node.processor.status?.() ?? {}) };
+    if (node.moduleType === "m.transport-clock") {
+      const beats = Math.floor(this.windowEndTick / PPQN);
+      status.position = `${this.running ? "Playing" : "Stopped"} · ${Math.floor(beats / 4) + 1}.${beats % 4 + 1}`;
+    }
+    return status;
+  }
+
   /**
    * Instantiate the compiled plan.
    *
@@ -216,7 +229,13 @@ export class ModularRuntime {
       if (!factory) {
         // A node with no executable processor is still a legitimate document
         // node — a Note Editor holds pattern material without running.
-        this.nodes.set(nodeId, { nodeId, processor: inertProcessor(nodeId), parameters, stepTicks: PPQN / 4 });
+        this.nodes.set(nodeId, {
+          nodeId,
+          moduleType: node.moduleType,
+          processor: inertProcessor(nodeId),
+          parameters,
+          stepTicks: PPQN / 4,
+        });
         continue;
       }
       const processor = factory({
@@ -231,6 +250,7 @@ export class ModularRuntime {
       if (processor instanceof TransportProcessor) this.transport = processor;
       this.nodes.set(nodeId, {
         nodeId,
+        moduleType: node.moduleType,
         processor,
         parameters,
         stepTicks: stepTicksFor(parameters, node.moduleType),
