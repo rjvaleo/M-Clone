@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-03
 **Branch:** `modular`
-**Status:** active roadmap; Steps 1-2 completed, Step 3 next
+**Status:** active roadmap; Steps 1-3 completed, Step 4 next
 
 This roadmap records the implementation sequence agreed after reviewing the
 current modular branch. The order favors recoverability, an end-to-end musical
@@ -17,7 +17,7 @@ workflow, and deterministic equivalence before expanding the module catalog.
 - Stream templates support 1, 4, 8, and 16 streams. Stream materialization and
   visible expansion are implemented.
 - Modular document schema v2 is implemented with v1 migration.
-- On 2026-08-03, 1,017 tests across 82 files passed. TypeScript, the production
+- On 2026-08-03, 1,022 tests across 83 files passed. TypeScript, the production
   build, and `git diff --check` also passed.
 - Wheel zoom remains a known interaction defect and is intentionally deferred
   until the graph interaction step below.
@@ -60,23 +60,30 @@ developer can determine what is implemented without inspecting source code.
 
 ### 3. Finish the UI-to-runtime vertical slice
 
-**Status:** in progress. Live runtime status plumbing completed 2026-08-03;
-browser MIDI permission and device-session wiring remain.
+**Status:** implementation completed 2026-08-03. Real-device MIDI timing and
+device-loss behavior still require a manual hardware acceptance pass.
 
 - Node faces now read lossy status snapshots from processor state without
   putting UI work on the scheduling path.
 - Transport position, Time Base rate, Phase pending pulses, Note Order and
   Cyclic cursors, Step Notes activity, Density acceptance/rejection, Legato
   overlap, and Play Enable mute counts are live.
+- The Enable MIDI command requests browser permission; connected outputs appear
+  in a node-local selector, and each MIDI Output owns its selected adapter and
+  latency trim.
+- Port state changes reconcile adapters, removed nodes dispose them, device
+  loss releases sounding notes, and permission/selection/error state appears
+  on the MIDI Output face.
 
-- Complete the remaining MIDI connection and error telemetry; generic runtime
-  status text has been replaced for the executing musical modules.
+- Completed: generic runtime status text has been replaced for the executing
+  musical modules, including MIDI connection and error state.
 - Wire browser MIDI permission, destination discovery and selection, session
   lifecycle, adapter attachment, and panic behavior into the application.
 - Exercise the canonical starter graph as a visible, audible end-to-end path.
 
-**Done when:** the canvas can play through a selected MIDI destination and its
-nodes visibly report meaningful runtime activity and failures.
+**Done when:** the implementation and automated lifecycle coverage are complete.
+A manual acceptance pass with a physical/virtual MIDI destination remains on
+the verification checklist for release readiness.
 
 ### 4. Prove Stream equivalence and add Stream snapshots
 

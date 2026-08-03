@@ -9,6 +9,7 @@ import { clampZoom, zoomScrollPosition } from "./viewport";
 import { TimerSchedulerDriver } from "../runtime/clock";
 import { ModularRuntime } from "../runtime/engine";
 import type { MorphPolicy } from "../runtime/parameters";
+import { PresentationClock } from "../runtime/skew";
 import type {
   GraphDocument,
   JsonValue,
@@ -19,6 +20,11 @@ import type {
 } from "../model/graph";
 import { createNode, moduleRegistry } from "../registry/registry";
 import { executeRuntimeCommand, queueRuntimeParameter } from "./runtimebridge";
+import {
+  BrowserMidiSession,
+  type MidiAccessLike,
+  type MidiDeviceOption,
+} from "./midisession";
 
 const MODULE_COLORS: Record<string, string> = {
   clock: "#ffb703",
@@ -304,6 +310,26 @@ function ParameterControl({
   </label>;
 }
 
+function MidiDeviceControl({ value, devices, onChange }: {
+  value: JsonValue;
+  devices: readonly MidiDeviceOption[];
+  onChange: (value: JsonValue) => void;
+}) {
+  const selected = typeof value === "string" ? value : "";
+  const missing = selected && !devices.some((device) => device.id === selected);
+  return <label className="mm-field">
+    <span>Device</span>
+    <select aria-label="MIDI output device" value={selected}
+      onChange={(event) => onChange(event.currentTarget.value)}>
+      <option value="">Select output…</option>
+      {missing && <option value={selected}>Unavailable · {selected}</option>}
+      {devices.map((device) => <option key={device.id} value={device.id}>
+        {device.connected ? device.label : `Disconnected · ${device.label}`}
+      </option>)}
+    </select>
+  </label>;
+}
+
 function NoteGrid({ node, setParameter }: {
   node: NodeInstance;
   setParameter: (id: string, value: JsonValue) => void;
@@ -559,6 +585,7 @@ function NodeFace({
   onPortClick,
   onClose,
   status,
+  midiDevices,
 }: {
   node: NodeInstance;
   zoom: number;
@@ -571,6 +598,7 @@ function NodeFace({
   onPortClick: (port: PortRef) => void;
   onClose: () => void;
   status: Readonly<Record<string, string>>;
+  midiDevices: readonly MidiDeviceOption[];
 }) {
   const descriptor = moduleRegistry.get(node.moduleType);
   const [drag, setDrag] = useState({ x: 0, y: 0 });
@@ -662,6 +690,11 @@ function NodeFace({
           {section.elements.map((element, index) => {
             if (element.kind === "parameter") {
               const parameter = parameterMap.get(element.parameterId)!;
+              if (node.moduleType === "m.midi-output" && parameter.id === "device-id") {
+                return <MidiDeviceControl key={`${element.kind}-${element.parameterId}`}
+                  value={node.parameters[parameter.id]} devices={midiDevices}
+                  onChange={(value) => setParameter(parameter.id, value)} />;
+              }
               return <ParameterControl key={`${element.kind}-${element.parameterId}`}
                 descriptor={parameter} value={node.parameters[parameter.id]}
                 onChange={(value) => setParameter(parameter.id, value)} />;
@@ -695,9 +728,11 @@ export function ModularApp() {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [pendingConnection, setPendingConnection] = useState<PortRef | null>(null);
   const [runtimeStatuses, setRuntimeStatuses] = useState<Record<string, Readonly<Record<string, string>>>>({});
+  const [midiDevices, setMidiDevices] = useState<MidiDeviceOption[]>([]);
   const nextId = useRef(2);
   const nextEdgeId = useRef(2);
   const runtimeRef = useRef<ModularRuntime | null>(null);
+  const midiSessionRef = useRef<BrowserMidiSession | null>(null);
   const publisherRef = useRef(new PlanPublisher());
   const openInputRef = useRef<HTMLInputElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -809,6 +844,20 @@ export function ModularApp() {
       setSelectedEdgeId(null);
       setPendingConnection(null);
       setMessage(`${node.label}: expanded to stream modules`);
+      return;
+    }
+    if (node.moduleType === "m.midi-output" && _commandId === "enable-midi") {
+      const session = midiSessionRef.current;
+      if (!session) {
+        setMessage(`${node.label}: MIDI session unavailable`);
+        return;
+      }
+      void session.enable().then(() => {
+        setMidiDevices(session.devices());
+        setMessage(`${node.label}: MIDI enabled`);
+      }).catch((error: unknown) => {
+        setMessage(`${node.label}: ${error instanceof Error ? error.message : "MIDI permission denied"}`);
+      });
       return;
     }
     const result = executeRuntimeCommand(runtimeRef.current, node, _commandId, label);
@@ -993,15 +1042,27 @@ export function ModularApp() {
     return () => window.removeEventListener("keydown", keydown);
   });
   useEffect(() => {
+    const timingSource = {
+      get currentTime() { return performance.now() / 1000; },
+      outputLatency: 0,
+    };
+    const presentationClock = new PresentationClock(timingSource);
     const runtime = new ModularRuntime({
       registry: moduleRegistry,
       driver: new TimerSchedulerDriver(),
-      clock: { nowSec: () => performance.now() / 1000 },
+      clock: presentationClock,
       wakeIntervalMs: 25,
     });
+    const requestAccess = typeof navigator.requestMIDIAccess === "function"
+      ? async () => await navigator.requestMIDIAccess({ sysex: false }) as unknown as MidiAccessLike
+      : null;
+    const midiSession = new BrowserMidiSession(runtime, presentationClock, requestAccess);
     runtimeRef.current = runtime;
+    midiSessionRef.current = midiSession;
     return () => {
+      midiSession.dispose();
       runtime.dispose();
+      midiSessionRef.current = null;
       runtimeRef.current = null;
     };
   }, []);
@@ -1012,6 +1073,7 @@ export function ModularApp() {
     const result = publisherRef.current.publish(graph, moduleRegistry, { seed: 7 });
     if (result.ok) {
       runtime.build(graph, result.plan);
+      midiSessionRef.current?.sync(Object.values(graph.nodes));
       return;
     }
     if (result.diagnostics.length > 0) setMessage(result.diagnostics[0].message);
@@ -1022,10 +1084,19 @@ export function ModularApp() {
       const runtime = runtimeRef.current;
       if (!runtime) return;
       const next = Object.fromEntries(
-        Object.keys(graph.nodes).map((nodeId) => [nodeId, runtime.nodeStatus(nodeId)]),
+        Object.values(graph.nodes).map((node) => {
+          const status = { ...runtime.nodeStatus(node.id) };
+          if (node.moduleType === "m.midi-output") {
+            status.connection = midiSessionRef.current?.status(node.id) ?? "MIDI session unavailable";
+          }
+          return [node.id, status];
+        }),
       );
       setRuntimeStatuses((current) =>
         JSON.stringify(current) === JSON.stringify(next) ? current : next);
+      const devices = midiSessionRef.current?.devices() ?? [];
+      setMidiDevices((current) =>
+        JSON.stringify(current) === JSON.stringify(devices) ? current : devices);
     };
     update();
     const timer = window.setInterval(update, 100);
@@ -1125,6 +1196,7 @@ export function ModularApp() {
           onSelect={() => { setSelectedNodeId(node.id); setSelectedEdgeId(null); }}
           onPortClick={handlePortClick}
           status={runtimeStatuses[node.id] ?? {}}
+          midiDevices={midiDevices}
           onClose={() => removeNode(node.id)} />)}
       </div>
       {menu && <div className="mm-module-menu" style={{ left: menu.x, top: menu.y }}
