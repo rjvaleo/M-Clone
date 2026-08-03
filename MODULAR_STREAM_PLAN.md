@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-02
 **Branch:** `modular`
-**Status:** active; Stages 1-5 complete, Stage 6 implementation complete with parity gate open, Stage 7 runtime bridge complete with device/telemetry gate open
+**Status:** active; Stages 1-5 complete, Stage 6 implementation complete with parity gate open, Stage 7 runtime/status bridge complete with Web MIDI device-session gate open
 **Companion:** [MODULAR_MODULE_MAP.md](MODULAR_MODULE_MAP.md) explains the reasoning; this
 document is the ordered work.
 
@@ -359,7 +359,7 @@ work and a genuinely different feature. Do not conflate the two.
 
 ## Stage 7 — Canvas to runtime
 
-Status: runtime bridge completed; live telemetry and browser MIDI device session remain open.
+Status: runtime and live-status bridge completed; browser MIDI device session remains open.
 
 Implemented in code:
 
@@ -371,8 +371,9 @@ Implemented in code:
 `ModularApp` is wired to `ModularRuntime`: Transport commands drive the runtime,
 graph edits publish compiled plans, and parameter edits go through
 `queueParameter` with each parameter's declared morph policy. Node status fields
-still show generic placeholders, and the application does not yet own the full
-Web MIDI permission/device-session lifecycle; those are roadmap Step 3.
+now read live processor status snapshots outside the scheduling path. The
+application does not yet own the full Web MIDI permission/device-session
+lifecycle; that remains roadmap Step 3.
 
 ---
 

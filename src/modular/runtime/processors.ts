@@ -87,6 +87,8 @@ export interface StreamProcessor {
   process(window: ProcessWindow): void;
   /** Return to a known state at a musical position. */
   reset(atTick: Tick): void;
+  /** Lossy, read-only values for node-face status fields. */
+  status?(): Readonly<Record<string, string>>;
 }
 
 /**
@@ -151,6 +153,10 @@ class CyclicSequenceCore {
 
   reset(): void {
     this.position = 0;
+  }
+
+  get cursor(): number {
+    return this.position;
   }
 
   private currentPreset(): { cells: readonly CyclicCell[]; length: number } {
@@ -284,6 +290,14 @@ export class TimeBaseProcessor extends BaseProcessor {
   reset(atTick: Tick): void {
     this.nextPulseTick = atTick;
   }
+
+  status(): Readonly<Record<string, string>> {
+    const denominator = this.parameters.number("denominator", 16);
+    if (denominator <= 0) return { "step-rate": "Step advance" };
+    return {
+      "step-rate": `${stepTicks(this.parameters.number("numerator", 1), denominator)} ticks`,
+    };
+  }
 }
 
 /**
@@ -338,6 +352,10 @@ export class PhaseProcessor extends BaseProcessor {
 
   reset(_atTick: Tick): void {
     this.pending.length = 0;
+  }
+
+  status(): Readonly<Record<string, string>> {
+    return { pending: `${this.pending.length} pulse${this.pending.length === 1 ? "" : "s"}` };
   }
 }
 
@@ -444,6 +462,10 @@ export class NoteOrderProcessor extends BaseProcessor {
     this.position = 0;
     this.lastIndex = -1;
   }
+
+  status(): Readonly<Record<string, string>> {
+    return { cursor: this.lastIndex < 0 ? "Waiting" : `Step ${this.lastIndex + 1}` };
+  }
 }
 
 abstract class CyclicControlProcessor extends BaseProcessor {
@@ -473,6 +495,10 @@ abstract class CyclicControlProcessor extends BaseProcessor {
 
   reset(_atTick: Tick): void {
     this.core.reset();
+  }
+
+  status(): Readonly<Record<string, string>> {
+    return { cursor: `Step ${this.core.cursor + 1}` };
   }
 }
 
@@ -526,6 +552,10 @@ export class CyclicRhythmProcessor extends BaseProcessor {
     this.core.reset();
     this.nextTick = atTick;
   }
+
+  status(): Readonly<Record<string, string>> {
+    return { cursor: `Step ${this.core.cursor + 1}` };
+  }
 }
 
 /**
@@ -538,6 +568,7 @@ export class CyclicRhythmProcessor extends BaseProcessor {
 export class StepToNotesProcessor extends BaseProcessor {
   private readonly velocityMatcher = new TickControlMatcher();
   private readonly gateMatcher = new TickControlMatcher();
+  private lastNotesPerStep = 0;
 
   constructor(build: ProcessorBuild) {
     super(build, "step-notes");
@@ -554,6 +585,7 @@ export class StepToNotesProcessor extends BaseProcessor {
     const steps = inbox(this.bus, this.nodeId, "steps-in");
     for (let i = 0; i < steps.count; i++) {
       const step = steps.items[i];
+      this.lastNotesPerStep = step.pitches.length;
       const velocity = clampInt(this.velocityMatcher.valueAt(step.atTick, baseVelocity), 1, 127);
       const gate = Math.max(1, this.gateMatcher.valueAt(step.atTick, baseGatePercent)) / 100;
       for (const pitch of step.pitches) {
@@ -579,6 +611,11 @@ export class StepToNotesProcessor extends BaseProcessor {
   reset(_atTick: Tick): void {
     this.velocityMatcher.clear();
     this.gateMatcher.clear();
+    this.lastNotesPerStep = 0;
+  }
+
+  status(): Readonly<Record<string, string>> {
+    return { rate: `${this.lastNotesPerStep} note${this.lastNotesPerStep === 1 ? "" : "s"}` };
   }
 }
 
@@ -632,6 +669,10 @@ export class NoteDensityProcessor extends BaseProcessor {
     this.rejectedCount = 0;
     this.densityMatcher.clear();
   }
+
+  status(): Readonly<Record<string, string>> {
+    return { activity: `${this.acceptedCount} accepted · ${this.rejectedCount} rejected` };
+  }
 }
 
 /**
@@ -679,6 +720,7 @@ export class VelocityRangeProcessor extends BaseProcessor {
  */
 export class LegatoProcessor extends BaseProcessor {
   private readonly legatoMatcher = new TickControlMatcher();
+  private overlapCount = 0;
 
   constructor(build: ProcessorBuild) {
     super(build, "legato-processor");
@@ -700,6 +742,7 @@ export class LegatoProcessor extends BaseProcessor {
       copyNote(message, source);
       message.durationTicks = Math.max(1, Math.round(source.durationTicks * factor));
       message.gate = source.gate * factor;
+      if (message.gate > 1) this.overlapCount += 1;
       this.bus.publish("notes-out", message);
     }
 
@@ -708,6 +751,11 @@ export class LegatoProcessor extends BaseProcessor {
 
   reset(_atTick: Tick): void {
     this.legatoMatcher.clear();
+    this.overlapCount = 0;
+  }
+
+  status(): Readonly<Record<string, string>> {
+    return { overlap: `${this.overlapCount} overlapping` };
   }
 }
 
@@ -719,6 +767,7 @@ export class LegatoProcessor extends BaseProcessor {
  */
 export class PlayEnableProcessor extends BaseProcessor {
   private readonly enableMatcher = new TickControlMatcher();
+  private mutedCount = 0;
 
   constructor(build: ProcessorBuild) {
     super(build, "play-enable");
@@ -733,7 +782,10 @@ export class PlayEnableProcessor extends BaseProcessor {
     for (let i = 0; i < notes.count; i++) {
       const source = notes.items[i];
       const enabled = this.enableMatcher.valueAt(source.atTick, fallback) >= 0.5;
-      if (!enabled) continue;
+      if (!enabled) {
+        this.mutedCount += 1;
+        continue;
+      }
       const message = this.bus.acquire();
       if (!message) return;
       copyNote(message, source);
@@ -745,6 +797,11 @@ export class PlayEnableProcessor extends BaseProcessor {
 
   reset(_atTick: Tick): void {
     this.enableMatcher.clear();
+    this.mutedCount = 0;
+  }
+
+  status(): Readonly<Record<string, string>> {
+    return { muted: `${this.mutedCount} muted` };
   }
 }
 

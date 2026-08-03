@@ -305,6 +305,18 @@ describe("Runtime transport control", () => {
     expect(runtime.generation).toBe(0);
   });
 
+  it("exposes lossy node-face status without affecting scheduling", () => {
+    const rig = harness();
+    expect(rig.runtime.nodeStatus("transport").position).toBe("Stopped · 1.1");
+    expect(rig.runtime.nodeStatus("nd").activity).toBe("0 accepted · 0 rejected");
+    rig.runtime.start();
+    run(rig, 0.6);
+    expect(rig.runtime.nodeStatus("transport").position).toMatch(/^Playing · /);
+    expect(rig.runtime.nodeStatus("no").cursor).toMatch(/^Step /);
+    expect(rig.runtime.nodeStatus("nd").activity).toMatch(/^\d+ accepted · \d+ rejected$/);
+    expect(rig.runtime.nodeStatus("missing")).toEqual({});
+  });
+
   it("rescrambles only a Note Order", () => {
     const rig = harness();
     expect(rig.runtime.rescramble("no")).toBe(true);

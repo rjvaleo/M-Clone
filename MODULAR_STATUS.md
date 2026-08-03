@@ -100,6 +100,9 @@ Velocity Range and Legato Processor.
 - Wheel zoom and toolbar zoom control.
 - `.mmod` download/save action.
 - Runtime bridge is wired: graph edits recompile to plans, node-face transport/runtime commands call `ModularRuntime`, and parameter edits are queued with each parameter's declared morph policy.
+- Node-face runtime status polling is wired outside the scheduling path:
+  transport position, step rate, delayed pulses, order/cyclic cursors, note
+  activity, density decisions, legato overlap, and muted-note counts update live.
 
 ### Current registered modules
 
@@ -140,7 +143,7 @@ browser MIDI device session remain the next UI-to-runtime work.
 
 ## Verification baseline
 
-- `npm test -- --run`: **1,017 tests passed across 82 files**.
+- `npm test -- --run`: **1,018 tests passed across 82 files**.
 - `npm run typecheck`: passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.
@@ -149,7 +152,7 @@ browser MIDI device session remain the next UI-to-runtime work.
 ## Known limitations and deferred defects
 
 1. **Zoom remains a known Phase 3 defect.** Wheel zoom is usable enough to continue, but wheel/trackpad behavior, scroll suppression, pointer anchoring, and zoom-limit behavior need a focused redesign and real-browser regression coverage.
-2. The runtime bridge is implemented with a timer-based scheduler in the canvas, but Web MIDI device-session wiring and richer playback telemetry presentation in node UI remain pending.
+2. Live processor/transport status is now presented in node UI, but Web MIDI permission, device discovery/selection, adapter attachment, device-loss presentation, and connection-error telemetry remain pending.
 3. Stream materialization and expand command are implemented, but stream-level scoped snapshots and parity trace assertions between compact and expanded forms are still pending.
 4. Save and Open for `.mmod` are implemented; import, autosave, and recovery UI remain pending.
 5. Standard M import exists only as a documented mapping; no importer transaction or fixture conversion exists yet.
