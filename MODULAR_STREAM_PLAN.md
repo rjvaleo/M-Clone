@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-02
 **Branch:** `modular`
-**Status:** active; Stage 1 through Stage 7 completed, open items moved to later plan tracks
+**Status:** active; Stages 1-5 complete, Stage 6 implementation complete with parity gate open, Stage 7 runtime bridge complete with device/telemetry gate open
 **Companion:** [MODULAR_MODULE_MAP.md](MODULAR_MODULE_MAP.md) explains the reasoning; this
 document is the ordered work.
 
@@ -161,7 +161,7 @@ window-independence test because that test only exercises the note path.
 
 ## Stage 3 — The cyclic core
 
-Status: in progress.
+Status: completed.
 
 Implemented in code:
 
@@ -271,7 +271,7 @@ loudness, right length, right destination.
 
 ## Stage 6 — The Stream compound
 
-Status: completed.
+Status: implementation completed; compact/expanded parity gate remains open.
 
 Implemented in code:
 
@@ -306,8 +306,8 @@ flowchart LR
     CR --> NO["Note Order<br/>a–h"]
     CR --> CA["Cyclic Accent<br/>a–h"]
     CR --> CL["Cyclic Legato<br/>a–h"]
-    NO --> SN["Step Notes"] --> PE["Play Enable"] --> ND["Note Density<br/>a–h"]
-    ND --> TR["Transposition<br/>a–h"] --> VR["Velocity Range<br/>a–h"] --> LG["Legato<br/>a–h"] --> OR["Orchestration<br/>a–h"]
+    NO --> SN["Step Notes"] --> ND["Note Density<br/>a–h"]
+    ND --> TR["Transposition<br/>a–h"] --> VR["Velocity Range<br/>a–h"] --> LG["Legato<br/>a–h"] --> PE["Play Enable<br/>a–h"]
     CA -->|control| VR
     CL -->|control| LG
   end
@@ -346,16 +346,20 @@ work and a genuinely different feature. Do not conflate the two.
 ### Done when
 
 - one Stream plus a Note Editor plus a Transport produces a complete musical
-  line with no other nodes on the canvas;
-- Expand produces a graph that plays identically to the compound it replaced —
-  same seed, same trace, asserted as a test;
-- four Streams produce four independent lines with no shared state.
+  line with no other nodes on the canvas — **implemented**;
+- Expand produces ordinary visible modules and preserves external wiring —
+  **implemented**;
+- expanded and compact forms play identically with the same seed and trace —
+  **open; roadmap Step 4**;
+- four Streams produce four independent lines with no shared state — structural
+  templates exist; runtime parity/independence assertion remains part of the
+  open trace gate.
 
 ---
 
 ## Stage 7 — Canvas to runtime
 
-Status: completed.
+Status: runtime bridge completed; live telemetry and browser MIDI device session remain open.
 
 Implemented in code:
 
@@ -364,24 +368,20 @@ Implemented in code:
 - Parameter edits queue into runtime by descriptor morph policy.
 - Starter graph now demonstrates the full clock-to-note path, including cyclic and Stage 5 shapers.
 
-Wire `ModularApp` to `ModularRuntime`: the Transport face's Play/Pause/Stop/Sync
-drive the real transport, node faces show live telemetry, and parameter edits go
-through `queueParameter` with each parameter's declared morph policy rather than
-straight into the document.
+`ModularApp` is wired to `ModularRuntime`: Transport commands drive the runtime,
+graph edits publish compiled plans, and parameter edits go through
+`queueParameter` with each parameter's declared morph policy. Node status fields
+still show generic placeholders, and the application does not yet own the full
+Web MIDI permission/device-session lifecycle; those are roadmap Step 3.
 
 ---
 
-## Still open
+## Decisions resolved by the implementation
 
-Carried from the module map, to answer when we return:
-
-1. **Does Play Enable belong inside the Stream or outside?** Inside is
-   convenient; outside makes it reusable as a mute for any note source.
-2. **Should Step Notes remain a separate node inside the Stream**, or should
-   Note Order gain a `notes-out` directly? Separate is more honest about the
-   type boundary but adds a node most users never touch.
-3. **Confirm Cyclic Rhythm belongs in the clock domain** — it changes Classic's
-   behaviour subtly by making rhythm multiplication visible as clock warping.
+1. **Play Enable is inside Stream**, at the end of its note-shaping path.
+2. **Step Notes remains a separate node** and preserves the explicit
+   `step-event` to `note-event` type boundary.
+3. **Cyclic Rhythm is in the clock domain** between Phase and Note Order.
 
 ## Not in scope here
 

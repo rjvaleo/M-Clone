@@ -10,25 +10,24 @@ note should be assembled from loose parts or delivered as one compound.
 
 ## 1. Where the module build actually is
 
-Eight of roughly forty catalogued modules are registered. What matters more than
-the count is that they are unevenly distributed across the pipeline: the clock
-and pattern domains are nearly done, the note-shaping domain is almost entirely
-missing, and the control domain does not exist at all.
+Sixteen of roughly forty catalogued module types are registered. Fourteen have
+direct runtime processor factories; Note Editor supplies pattern state by
+reference, and Stream materializes into the ordinary processors it contains.
 
-| Domain | Catalogued | Registered | Executing | Gap |
-| --- | --- | --- | --- | --- |
-| Transport / clock | 8 | 3 | 3 | Step Advance, Tap Tempo, Metronome, MIDI Clock Encoder, Sync Divider |
-| Pattern material | 6 | 2 | 1 | Pattern Recorder, Pattern Command Processor, Play Enable Gate, Note Density is done |
-| Classic Variables | 7 | 2 | 2 | Transposition, Velocity Range, Time Distortion, Orchestration, Sound/Program |
-| Cyclic / phrasing | 5 | 0 | 0 | **all of it** — Accent, Legato, Rhythm, Legato Processor, Reset Trigger |
-| Harmony / routing | 7 | 1 | 1 | Scale Context, Quantizers, Cumulative Transpose, Splitter, Merger, Channel Mapper |
-| Conducting / scene | ~8 | 0 | 0 | all |
-| Instruments / audio | ~20 | 0 | 0 | all |
+| Domain | Registered | Runtime role | Principal remaining gap |
+| --- | ---: | --- | --- |
+| Transport / clock | 4 | Transport Clock, Time Base, Phase, and Cyclic Rhythm execute | Step Advance, Metronome, MIDI Clock Encoder, Sync Divider |
+| Pattern / step | 3 | Note Order and Step Notes execute; Note Editor provides pattern state | Pattern Recorder and Pattern Command Processor |
+| Per-step control | 2 | Cyclic Accent and Cyclic Legato execute | Reset Trigger and general control/macro sources |
+| Note shaping | 5 | Density, Transposition, Velocity Range, Legato Processor, and Play Enable execute | Time Distortion, Orchestration, Sound/Program, Scale Context |
+| Compound / output | 2 | Stream materializes; MIDI Output executes | Merger, Splitter, Channel Mapper, instruments/audio |
+| Conducting / scene | 0 | — | snapshots, macros, conducting, slideshow |
+| Instruments / audio | 0 | — | complete audio workstream |
 
-The shape of that gap is the answer to your question about note-building versus
-note-affecting. Everything registered so far either *creates* the note or
-*passes it along*. Almost nothing that *shapes* it exists yet — and the shapers
-are precisely the ones that need the cyclic step sequencers.
+The complete MIDI note-building spine now exists. The next architectural gap is
+not another isolated processor: it is finishing the visible UI-to-runtime MIDI
+session and telemetry, then proving that compact and expanded Streams are
+behaviorally identical.
 
 ---
 
@@ -48,7 +47,7 @@ flowchart LR
 
   subgraph STEP["STEP DOMAIN — which step"]
     direction TB
-    S1["Note Order"] --> S2["Play Enable"]
+    S1["Note Order"]
   end
 
   subgraph CONTROL["CONTROL DOMAIN — per-step shaping values"]
@@ -91,32 +90,20 @@ Read it as five questions, answered in order:
 5. **Note domain — the note as a thing that will sound.** Consumes `step-event`
    (via the Step Notes converter) plus control values, produces `note-event`.
 
-**A note is complete when it has all five answers.** Today the chain answers 1,
-2, 3, and a hard-coded stub of 5 — velocity and gate are fixed parameters on
-Step Notes. Domain 4 is empty, which is exactly why the notes all come out at
-velocity 100 with a 90% gate.
+**A note is complete when it has all five answers.** The current canonical chain
+answers all five: Cyclic Accent and Cyclic Legato emit tick-matched control,
+Velocity Range and Legato Processor consume it, and Transposition, Density, and
+Play Enable complete the note-shaping path before MIDI Output.
 
 ---
 
-## 3. Port naming — the drift, and the standard to fix it on
+## 3. Port naming — implemented standard
 
-I dumped the live registry rather than trusting the source comments. The
-inconsistencies are real and all of them are cheap to fix now and expensive
-later, because port ids are serialized into `.mmod` documents.
-
-### What is inconsistent today
-
-| Problem | Where | Detail |
-| --- | --- | --- |
-| Step-clock input has two names | Note Editor uses `step-clock-in`; Phase and Note Order use `clock-in` | same signal, same role |
-| Step-clock output never says "step" | Time Base and Phase both emit `clock-out` | asymmetric with `step-clock-in` |
-| Reset cardinality disagrees | Time Base `many`, Phase `many`, **Note Order `one`** | reset is a bus; it must always be `many` |
-| `required` is arbitrary | required on Time Base `transport-in`, Phase `clock-in`, Step Notes `steps-in`; **not** on Note Order `clock-in` or `pattern-in` | a Note Order with no clock silently does nothing |
-| Fan-in with no merge policy | Step Notes, Density, MIDI Output all take `many` on their note input | §5.3 says fan-in requires a declared merge policy; no module declares one |
-| Preset slot has two labels | Note Editor "Pattern position", everything else "Preset position" | same a–h concept |
-| Preset storage has two names | Note Editor `pattern-presets`; everything else `preset-values` | breaks the shared preset contract |
-| Telemetry outputs unmarked | `cursor-out`, `rejected-out`, `monitor-out` | nothing in the name says these are lossy and non-musical |
-| Decorative ports | Step Notes `velocity-in` and `gate-in` exist but the processor ignores them | they read parameters only — the cables do nothing |
+The port standard below is now enforced by registry and graph validation.
+Serialized v1 names migrate on decode to the v2 port and parameter vocabulary.
+Many-input ports declare merge policies, telemetry names are validated, required
+inputs are compiled as requirements, and Step Notes consumes `velocity-in` and
+`gate-in` through the tick-matching control contract.
 
 ### The standard
 
@@ -144,13 +131,12 @@ Three rules that go with it:
   That makes the rule checkable in `validateModuleDescriptor` rather than a
   convention people remember.
 
-Renaming touches serialized documents, so it needs a `moduleVersion` bump and a
-migration per renamed port. That is why it should happen at eight modules and
-not at thirty.
+The completed v1-to-v2 migration rewrites renamed parameter keys and edge port
+references before the graph enters the runtime.
 
 ---
 
-## 4. The thing that must be settled before any cyclic module is built
+## 4. Control-tick contract
 
 A cyclic sequencer emits one shaping value **per step**. A Velocity Range
 downstream must apply *the value belonging to that step* to *the note derived
@@ -166,7 +152,7 @@ flowchart LR
   VR -->|"note-event<br/>velocity from level 3"| OUT["…"]
 ```
 
-The rule, which needs writing into §5.3 of the plan:
+The implemented rule is:
 
 > A `control` message carries the tick it applies to. A consumer matches control
 > values to musical events **by tick**, never by arrival order or by "most
@@ -178,8 +164,8 @@ boundary falls between the control and the note, and the error will be
 intermittent — the worst possible failure mode, and invisible to the
 window-independence test unless the test covers the control path too.
 
-The runtime already carries `atTick` on every message, so this is a contract and
-a test, not a rewrite.
+The runtime carries `atTick` on every message, and deterministic tests cover
+control values crossing scheduling-window boundaries.
 
 ### Cyclic module shape
 
@@ -233,7 +219,7 @@ expanded onto the canvas at any time.
 
 ```mermaid
 flowchart TB
-  subgraph VOICE["m.stream  —  compound node"]
+  subgraph STREAM["m.stream  —  compound node"]
     direction LR
     subgraph CLK["clock"]
       direction TB
@@ -246,7 +232,7 @@ flowchart TB
     end
     subgraph NOTES["note path"]
       direction TB
-      NO["Note Order<br/>a–h"] --> SN["Step Notes"] --> PE["Play Enable"] --> ND["Note Density<br/>a–h"] --> TR["Transposition<br/>a–h"] --> VR["Velocity Range<br/>a–h"] --> LG["Legato Processor"] --> OR["Orchestration<br/>a–h"]
+      NO["Note Order<br/>a–h"] --> SN["Step Notes"] --> ND["Note Density<br/>a–h"] --> TR["Transposition<br/>a–h"] --> VR["Velocity Range<br/>a–h"] --> LG["Legato Processor"] --> PE["Play Enable"]
     end
     CR --> NO
     CR --> CA
@@ -255,12 +241,12 @@ flowchart TB
     CL -->|control| LG
   end
 
-  TRANSPORT["Transport Clock"] -->|transport| VOICE
-  RESET["Reset Trigger"] -->|reset| VOICE
-  EDITOR["Note Editor"] -->|pattern-data| VOICE
-  POS["Position Conductor"] -->|control index| VOICE
-  VOICE -->|note-event| MIDI["MIDI Output"]
-  VOICE -->|note-event| INST["Instrument"]
+  TRANSPORT["Transport Clock"] -->|transport| STREAM
+  RESET["Reset Trigger"] -->|reset| STREAM
+  EDITOR["Note Editor"] -->|pattern-data| STREAM
+  POS["Position Conductor"] -->|control index| STREAM
+  STREAM -->|note-event| MIDI["MIDI Output"]
+  STREAM -->|note-event| INST["Instrument"]
 ```
 
 **Face of the compound:** four inputs (`transport-in`, `reset-in`,
@@ -296,7 +282,7 @@ flowchart LR
 
 The compound's a–h strip is **not** a ninth copy of every nested preset. It is a
 fan-out of `control<index>` to every nested module's `position-in`. Choosing
-"c" on the Voice puts every sub-module on its own stored "c".
+"c" on the Stream puts every sub-module on its own stored "c".
 
 That is not a new mechanism — §7.4 already describes it for Note Editors: *"Their
 a-h Pattern slots may receive the same Pattern Group selection control so they
@@ -310,7 +296,7 @@ two apart in our heads.
 
 ---
 
-## 6. Recommended order
+## 6. Completed Stream build order
 
 1. **Fix the port standard and rename** — 8 modules, migrations are small.
 2. **Write the control-tick matching rule** into §5.3 plus a window-independence
@@ -324,21 +310,20 @@ two apart in our heads.
    unproven modules through one face.
 7. Wire the canvas to `ModularRuntime` so the Transport face actually plays.
 
-Steps 1 and 2 are the ones that get more expensive every week they wait.
+The seven-step foundation is implemented. The remaining Stream gate is a direct runtime
+trace comparison between compact and expanded forms, followed by Stream-scoped
+snapshot behavior. Current priorities are maintained in
+[MODULAR_NEXT_STEPS.md](MODULAR_NEXT_STEPS.md).
 
 ---
 
-## 7. Open questions for you
+## 7. Decisions resolved by the implementation
 
 1. ~~**Compound naming.**~~ **Decided: Stream** (`m.stream`). It matches the term
    the plan already uses for an independently wired path and carries none of
    Classic's fixed-four baggage. The implementation plan is in
    [MODULAR_STREAM_PLAN.md](MODULAR_STREAM_PLAN.md).
-2. **Does Play Enable belong inside the compound or outside?** Inside is
-   convenient; outside makes it usable as a mute for any note source.
-3. **Should Step Notes stay a separate node inside the compound**, or should
-   Note Order gain a `notes-out` directly? Keeping it separate is more honest
-   about the type boundary but adds a node most users will never touch.
-4. **Cyclic Rhythm in the clock domain** — confirm you agree it transforms the
-   clock rather than emitting a control value. It changes Classic's behaviour
-   subtly: rhythm multiplication becomes visible as clock warping.
+2. **Play Enable is inside the compound**, after Legato Processor.
+3. **Step Notes stays separate** to preserve the explicit step-to-note boundary.
+4. **Cyclic Rhythm is in the clock domain** and transforms the clock rather than
+   emitting a note-shaping control value.

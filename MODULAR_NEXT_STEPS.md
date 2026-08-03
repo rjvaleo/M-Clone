@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-03
 **Branch:** `modular`
-**Status:** active roadmap
+**Status:** active roadmap; Steps 1-2 completed, Step 3 next
 
 This roadmap records the implementation sequence agreed after reviewing the
 current modular branch. The order favors recoverability, an end-to-end musical
@@ -26,6 +26,11 @@ workflow, and deterministic equivalence before expanding the module catalog.
 
 ### 1. Protect the current checkpoint
 
+**Status:** completed 2026-08-03.
+
+- Checkpoint commit: `2e816fc` (`Build modular MIDI foundation`).
+- Local branch `modular` tracks `origin/modular` at the same commit.
+
 - Commit the complete passing modular foundation on the `modular` branch.
 - Publish the branch to the remote so the checkpoint does not exist only in one
   working tree.
@@ -36,6 +41,13 @@ workflow, and deterministic equivalence before expanding the module catalog.
 and the checkpoint can be recovered independently of the local workspace.
 
 ### 2. Reconcile the modular documentation
+
+**Status:** completed 2026-08-03.
+
+- Reconciled the module inventory with 16 registered types and 14 direct
+  runtime processor factories.
+- Recorded the canonical starter topology, Stream parity and UI/runtime gates,
+  document schema v2 with v1 migration, and the 1,017-test baseline.
 
 - Bring `MODULAR_STATUS.md`, `MODULAR_MODULE_MAP.md`,
   `MODULAR_STREAM_PLAN.md`, and `MODULAR_IMPLEMENTATION_PLAN.md` into agreement

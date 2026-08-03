@@ -5,6 +5,12 @@
 **Plan date:** 2026-08-02
 **Status:** active implementation; see [`MODULAR_STATUS.md`](./MODULAR_STATUS.md) for the current checkpoint, verified baseline, known limitations, and ordered resume steps
 
+**Current implementation note (2026-08-03):** the graph/compiler/runtime
+foundation, sixteen registered module types, native `.mmod` schema v2 with v1
+migration, Stream materialization/expansion, and the canonical starter topology
+are implemented. The authoritative next sequence is
+[`MODULAR_NEXT_STEPS.md`](./MODULAR_NEXT_STEPS.md).
+
 ## 1. Executive decision
 
 Build M Modular as a new product with its own incompatible native format on a long-lived `modular` branch while leaving `master` as the current M Classic Web application. Reuse proven algorithms, transport concepts, event protocol ideas, MIDI adapters, and synth foundations where they fit, but give the new application its own graph model, state store, document format, UI, snapshots, and runtime contracts. Do not try to turn the existing `Unified.tsx` window canvas or monolithic Zustand store directly into a node graph.
@@ -636,9 +642,10 @@ Recommended pipeline order is clock-domain processing first, then note-domain pr
 
 ```text
 Transport -> Time Base -> Phase -> Cyclic Rhythm -> Time Distortion
-Each Note Editor source + its warped clock -> Note Order -> Play Enable
+Each Note Editor source + its warped clock -> Note Order -> Step Notes
 -> Note Density -> Transposition/Harmony -> Velocity Range <- Cyclic Accent
--> Legato <- Cyclic Legato -> Orchestration -> Sound/Program -> outputs
+-> Legato <- Cyclic Legato -> Play Enable -> Orchestration -> Sound/Program
+-> outputs
 ```
 
 #### Cyclic Variables and Phrasing
@@ -977,16 +984,16 @@ Implement banks as explicit graph compounds, not as a special hidden audio engin
 
 ## 10. Document format and migration
 
-### 10.1 Recommended envelope
+### 10.1 Implemented envelope
 
-Use a new Modular format and start its schema at version 1. A distinct `.mmod` extension makes the incompatibility obvious:
+Modular uses its own schema v2 envelope. The decoder migrates the provisional
+v1 format on read. A distinct `.mmod` extension makes the incompatibility obvious:
 
 ```ts
-type ModularDocumentV1 = {
+type ModularDocumentV2 = {
   format: "m-modular";
-  schemaVersion: 1;
+  schemaVersion: 2;
   product: "modular";
-  capabilities: string[];
   graph: GraphDocument;
   snapshots: ModularSnapshot[];
   macros: MacroDefinition[];
@@ -997,7 +1004,8 @@ type ModularDocumentV1 = {
 
 The modular branch must:
 
-- write and read its own v1 document without depending on Classic runtime state;
+- write and read its own v2 document without depending on Classic runtime state;
+- migrate v1 documents to v2 at decode time;
 - migrate future Modular schema and module versions explicitly;
 - retain unknown nodes as disabled placeholders with their raw state and an actionable message;
 - version each module state independently from the document envelope;
@@ -1056,7 +1064,7 @@ Deliverables:
 
 Gate: selected seeded reference traces remain musically identical where preservation is intentional; new dynamic-instance tests pass with varying module counts.
 
-### Phase 2 — Graph model, registry, compiler, and Modular document v1
+### Phase 2 — Graph model, registry, compiler, and Modular document v2
 
 Deliverables:
 
@@ -1064,7 +1072,7 @@ Deliverables:
 - module registry and state migration;
 - edge/type/cardinality/cycle validation;
 - event/control compilation;
-- `.mmod` v1 encoder/decoder;
+- `.mmod` v2 encoder/decoder with v1 migration;
 - standard-patch builder and importer transaction/report contracts;
 - last-known-good compiled plan behavior.
 
@@ -1256,7 +1264,7 @@ The first code slice after branching should be deliberately small:
 2. Add pure `addNode`, `removeNodes`, `connect`, `disconnect`, and `setParameter` commands with inverses.
 3. Add a registry containing three non-audio modules: Transport Clock, a full-face prototype Note Editor, and MIDI Output.
 4. Add compiler validation and a deterministic event execution plan.
-5. Add `.mmod` v1 graph round-trip serialization.
+5. Add `.mmod` v2 graph round-trip serialization with v1 migration.
 6. Add tests for valid patch, invalid port types, fan-out, cycle rejection, undo, corrupted document, and deterministic output.
 7. Render the three-node graph in the semantic full-color canvas with right-click creation and no inspector dependency.
 8. Only then extract the first production M-inspired processors into independent modules.
