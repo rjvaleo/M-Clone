@@ -3,6 +3,7 @@ import { noteOrderHandleLayout, setNoteOrderBoundary } from "../../engine/transf
 import { createModularDocument, decodeModularDocument } from "../document/document";
 import { decodeModularPack, encodeModularPack, isModularPack } from "../document/pack";
 import { PlanPublisher } from "../compiler/compileGraph";
+import { isPlayerModule } from "../audio/players";
 import { connectionError } from "../model/connections";
 import { executeGraphCommand, type GraphCommand } from "../model/commands";
 import { expandStreamNode } from "../model/stream";
@@ -73,8 +74,14 @@ const MODULE_GROUPS: { family: string; label: string }[] = [
   { family: "audio", label: "Audio" },
 ];
 
-/** Modules whose "voices" status is a live count from the audio engine. */
-const PLAYER_TYPES = new Set(["m.percussion", "m.looper", "m.granular"]);
+/**
+ * Modules whose "voices" status is a live count from the audio engine.
+ *
+ * Asked of the audio layer rather than listed here: a second copy of the list
+ * is a second thing to forget, and forgetting it shows up as an instrument
+ * that plays perfectly and reports "Idle" for ever.
+ */
+const hasVoiceCount = (moduleType: string): boolean => isPlayerModule(moduleType);
 
 const accentVar = (colorToken: string): string =>
   `var(--mm-module-${colorToken}, var(--mm-module-density))`;
@@ -1720,7 +1727,7 @@ export function ModularApp() {
           }
           // Voice counts come from the audio engine, not the event runtime:
           // a sounding drum tail outlives the note that started it.
-          if (audioRef.current && PLAYER_TYPES.has(node.moduleType)) {
+          if (audioRef.current && hasVoiceCount(node.moduleType)) {
             status.voices = audioOn ? String(audioRef.current.playerVoices(node.id)) : "Audio off";
           }
           return [node.id, status];

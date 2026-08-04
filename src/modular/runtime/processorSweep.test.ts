@@ -62,6 +62,20 @@ describe("Every executable module", () => {
     }
   });
 
+  it("covers every module that can be played", () => {
+    // The converse of the check above, and the one that matters: an instrument
+    // with no processor is a module that builds, wires, and stays silent —
+    // because nothing turns its note messages into scheduled events. Both the
+    // sample players and the synth shipped that way once.
+    const instruments = [...moduleRegistry.values()]
+      .filter((descriptor) => descriptor.family === "instrument")
+      .map((descriptor) => descriptor.type);
+    expect(instruments.length).toBeGreaterThan(0);
+    for (const moduleType of instruments) {
+      expect(PROCESSOR_FACTORIES[moduleType], moduleType).toBeDefined();
+    }
+  });
+
   it("runs a window on its own defaults without throwing", () => {
     // The defaults are what a freshly dropped module runs on, so they are the
     // one configuration that must never fail.

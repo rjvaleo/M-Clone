@@ -26,6 +26,7 @@ import type { ModuleDescriptor, ParameterDescriptor, SignalType } from "../model
 import {
   boolParam,
   defineModule,
+  enumParam,
   input,
   numberParam,
   output,
@@ -88,6 +89,19 @@ export const AUDIO_STRUCTURE_PARAMS: Readonly<Record<string, readonly string[]>>
   "m.audio-delay": ["max-delay-seconds"],
   "m.audio-reverb": ["tail-seconds", "decay-rate", "impulse-seed"],
   "m.audio-bitcrusher": ["bit-depth"],
+  "m.audio-blackhole": ["line-count"],
+  "m.audio-dp4-reverb": ["algorithm"],
+  "m.audio-dp4-nonlin": ["variant"],
+  "m.audio-dp4": [
+    "source-config",
+    "ab-routing",
+    "cd-routing",
+    "abcd-routing",
+    "unit-a-algorithm",
+    "unit-b-algorithm",
+    "unit-c-algorithm",
+    "unit-d-algorithm",
+  ],
 };
 
 const AUDIO_OUTPUT = defineModule({
@@ -257,6 +271,280 @@ const AUDIO_BITCRUSHER = defineModule({
   ],
 });
 
+// ---- the two machines --------------------------------------------------------
+//
+// Both descriptors reproduce their manual's parameter *names* and *ranges*
+// rather than inventing tidier ones. That is deliberate: the ranges are the
+// part of a vintage machine that carries its character — a shelf fixed at
+// 350 Hz, a decay that reaches 250 seconds, a pre-delay that stops at 2000 ms —
+// and a normalised 0–1 knob in place of any of them would be a different
+// instrument wearing the name.
+
+/**
+ * Blackhole — the H90's reverb.
+ *
+ * `[DOC]` Ten controls, and the two that are not ordinary are worth naming
+ * here because the face has to explain them:
+ *
+ *   - **Gravity** is bipolar. Right of centre it sweeps forward decay from
+ *     dense to long-and-smooth; left of centre the manual says it enters
+ *     "inverse mode". This build approximates the left half — see the note in
+ *     `blackhole.ts` for what that does and does not deliver.
+ *   - **Feedback** carries two discrete states past its top: Infinite (endless
+ *     tail, input still enters) and Freeze (endless tail, input blocked). The
+ *     top 8% of the knob is divided between them.
+ */
+const AUDIO_BLACKHOLE = defineModule({
+  type: "m.audio-blackhole",
+  label: "Blackhole",
+  family: "audio",
+  colorToken: "audio",
+  ports: [audioIn(), audioOut()],
+  parameters: [
+    numberParam("gravity", "Gravity", 0.5, -1, 1, 0.01),
+    numberParam("size", "Size", 0.5, 0, 1, 0.01),
+    // `[DOC]` "this ranges from 0 ms to 2000 ms".
+    numberParam("pre-delay-seconds", "Pre delay", 0, 0, 2, 0.001, "s"),
+    // `[DOC]` shelving filters with corners at 350 Hz and 2000 Hz.
+    numberParam("low-level-db", "Low level", 0, -24, 12, 0.1, "dB"),
+    numberParam("high-level-db", "High level", 0, -24, 12, 0.1, "dB"),
+    numberParam("mod-depth", "Mod depth", 0.3, 0, 1, 0.01),
+    numberParam("mod-rate", "Mod rate", 0.3, 0, 1, 0.01),
+    numberParam("feedback", "Feedback", 0, 0, 1, 0.01),
+    numberParam("resonance", "Resonance", 0, 0, 1, 0.01),
+    mixParam(0.35),
+    structuralParam("line-count", "Lines", 8, 4, 8),
+    muteParam(),
+  ],
+  face: [
+    section("space", "Space", [
+      param("gravity"),
+      param("size"),
+      param("pre-delay-seconds"),
+      param(AUDIO_MIX_PARAM),
+    ]),
+    section("tone", "Tone", [param("low-level-db"), param("high-level-db"), param("resonance")]),
+    section("motion", "Motion", [param("mod-depth"), param("mod-rate"), param("feedback")]),
+    section("build", "Network", [param("line-count"), param(AUDIO_MUTE_PARAM)]),
+  ],
+});
+
+/**
+ * One DP/4 reverb tank.
+ *
+ * `[DOC]` The decay maximum is per algorithm — 100 s for the small plate and
+ * rooms, 140 s for the large plate, 150 s for the large room, **250 s for the
+ * hall**. The descriptor advertises the widest of them and the core clamps to
+ * whichever algorithm is loaded, because a parameter range that changes shape
+ * when a structural value changes is not something the registry can express.
+ */
+const AUDIO_DP4_REVERB = defineModule({
+  type: "m.audio-dp4-reverb",
+  label: "DP/4 Reverb",
+  family: "audio",
+  colorToken: "audio",
+  ports: [audioIn(), audioOut()],
+  parameters: [
+    numberParam("decay-seconds", "Decay", 2, 0.2, 250, 0.1, "s"),
+    numberParam("pre-delay-seconds", "Pre delay", 0, 0, 0.5, 0.001, "s"),
+    // `[DOC]` bipolar: positive lengthens the low-frequency decay, negative shortens it.
+    numberParam("lf-decay", "LF decay", 0, -1, 1, 0.01),
+    // `[DOC]` Damping is inside the loop; Bandwidth is on the way in. Opposite senses.
+    numberParam("hf-damping", "HF damping", 0.2, 0, 1, 0.01),
+    numberParam("hf-bandwidth", "HF bandwidth", 0.8, 0, 1, 0.01),
+    numberParam("diffusion-1", "Diffusion 1", 0.5, 0, 1, 0.01),
+    numberParam("diffusion-2", "Diffusion 2", 0.5, 0, 1, 0.01),
+    numberParam("decay-definition", "Definition", 0.4, 0, 1, 0.01),
+    numberParam("detune-rate", "Detune rate", 0.3, 0, 1, 0.01),
+    numberParam("detune-depth", "Detune depth", 0.3, 0, 1, 0.01),
+    numberParam("primary-send", "Primary send", 0.8, -1, 1, 0.01),
+    numberParam("ref-1-level", "Ref 1 level", 0.3, 0, 1, 0.01),
+    numberParam("ref-1-send", "Ref 1 send", 0.2, 0, 1, 0.01),
+    numberParam("ref-2-level", "Ref 2 level", 0.25, 0, 1, 0.01),
+    numberParam("ref-2-send", "Ref 2 send", 0.15, 0, 1, 0.01),
+    numberParam("early-refs", "Early refs", 0.3, 0, 1, 0.01),
+    mixParam(0.35),
+    enumParam(
+      "algorithm",
+      "Algorithm",
+      ["small-plate", "large-plate", "small-room", "large-room", "hall"],
+      "large-plate",
+    ),
+    muteParam(),
+  ],
+  face: [
+    section("tank", "Tank", [
+      param("algorithm"),
+      param("decay-seconds"),
+      param("pre-delay-seconds"),
+      param(AUDIO_MIX_PARAM),
+    ]),
+    section("tone", "Tone", [param("lf-decay"), param("hf-damping"), param("hf-bandwidth")]),
+    section("diffusion", "Diffusion", [
+      param("diffusion-1"),
+      param("diffusion-2"),
+      param("decay-definition"),
+      param("detune-rate"),
+      param("detune-depth"),
+    ]),
+    section("reflections", "Reflections", [
+      param("primary-send"),
+      param("ref-1-level"),
+      param("ref-1-send"),
+      param("ref-2-level"),
+      param("ref-2-send"),
+      param("early-refs"),
+      param(AUDIO_MUTE_PARAM),
+    ]),
+  ],
+});
+
+/**
+ * Non Lin — the DP/4's single-pass reverb.
+ *
+ * `[DOC]` "Non Lin 1, 2, and 3 pass the input signal through the reverb
+ * diffusers **only once**." No feedback, so no decay parameter: the nine
+ * Envelope Levels are the decay, drawn by hand. Set them descending for a gate,
+ * ascending for a reverse swell, humped for a bloom.
+ *
+ * `[DOC]` "We recommend the average Envelope Level not to exceed a value of
+ * 45" — hence the modest defaults below.
+ */
+const AUDIO_DP4_NONLIN = defineModule({
+  type: "m.audio-dp4-nonlin",
+  label: "DP/4 Non Lin",
+  family: "audio",
+  colorToken: "audio",
+  ports: [audioIn(), audioOut()],
+  parameters: [
+    numberParam("envelope-1", "Env 1", 0.5, 0, 1, 0.01),
+    numberParam("envelope-2", "Env 2", 0.45, 0, 1, 0.01),
+    numberParam("envelope-3", "Env 3", 0.45, 0, 1, 0.01),
+    numberParam("envelope-4", "Env 4", 0.4, 0, 1, 0.01),
+    numberParam("envelope-5", "Env 5", 0.4, 0, 1, 0.01),
+    numberParam("envelope-6", "Env 6", 0.35, 0, 1, 0.01),
+    numberParam("envelope-7", "Env 7", 0.3, 0, 1, 0.01),
+    // `[DOC]` "Envelope Levels 8 and 9 are positioned at the very end of the
+    // Density; setting these too high can cause excessive ringing."
+    numberParam("envelope-8", "Env 8", 0.2, 0, 1, 0.01),
+    numberParam("envelope-9", "Env 9", 0.15, 0, 1, 0.01),
+    numberParam("hf-damping", "HF damping", 0.2, 0, 1, 0.01),
+    numberParam("hf-bandwidth", "HF bandwidth", 0.8, 0, 1, 0.01),
+    numberParam("diffusion-1", "Diffusion 1", 0.5, 0, 1, 0.01),
+    numberParam("diffusion-2", "Diffusion 2", 0.5, 0, 1, 0.01),
+    numberParam("density-1", "Density 1", 0.6, 0, 1, 0.01),
+    numberParam("density-2", "Density 2", 0.45, 0, 1, 0.01),
+    mixParam(0.4),
+    enumParam("variant", "Variant", ["non-lin-1", "non-lin-2", "non-lin-3"], "non-lin-1"),
+    muteParam(),
+  ],
+  face: [
+    section("envelope", "Envelope", [
+      param("envelope-1"),
+      param("envelope-2"),
+      param("envelope-3"),
+      param("envelope-4"),
+      param("envelope-5"),
+      param("envelope-6"),
+      param("envelope-7"),
+      param("envelope-8"),
+      param("envelope-9"),
+    ]),
+    section("density", "Density", [
+      param("variant"),
+      param("density-1"),
+      param("density-2"),
+      param("diffusion-1"),
+      param("diffusion-2"),
+    ]),
+    section("tone", "Tone", [
+      param("hf-damping"),
+      param("hf-bandwidth"),
+      param(AUDIO_MIX_PARAM),
+      param(AUDIO_MUTE_PARAM),
+    ]),
+  ],
+});
+
+/**
+ * The DP/4+ itself — four units, four ins, four outs.
+ *
+ * The only module in the rack with more than one audio port on a side, which is
+ * why `ManagedAudioNode` grew `inputFor`/`outputFor`. `[DOC]` In a 4-source
+ * Config those four inputs are four independent mono paths; summing them would
+ * delete the machine.
+ *
+ * `[DOC]` The routing matrix is 4 (AB) × 4 (CD) × 2 (AB↔CD) = **32
+ * combinations**, and the two feedback modes differ only in where the dry
+ * signal rejoins — which is why the manual draws 18 of the 32 and says so.
+ *
+ * Every routing choice and every unit's algorithm is structural: each one is a
+ * different graph, so changing one rebuilds the machine behind the adapter's
+ * crossfade rather than trying to ramp a topology.
+ */
+const AUDIO_DP4 = defineModule({
+  type: "m.audio-dp4",
+  label: "DP/4+",
+  family: "audio",
+  colorToken: "audio",
+  // The only module wide enough to need the editor layout: four unit strips
+  // plus a routing matrix does not fit a compact face.
+  layout: "editor",
+  ports: [
+    input("audio-in-1", "In 1", audioSignal(1), { merge: "sum" }),
+    input("audio-in-2", "In 2", audioSignal(1), { merge: "sum" }),
+    input("audio-in-3", "In 3", audioSignal(1), { merge: "sum" }),
+    input("audio-in-4", "In 4", audioSignal(1), { merge: "sum" }),
+    output("audio-out-1", "Out 1", audioSignal(1)),
+    output("audio-out-2", "Out 2", audioSignal(1)),
+    output("audio-out-3", "Out 3", audioSignal(1)),
+    output("audio-out-4", "Out 4", audioSignal(1)),
+  ],
+  parameters: [
+    structuralParam("source-config", "Sources", 1, 1, 4),
+    enumParam("ab-routing", "A→B", ["serial", "parallel", "feedback1", "feedback2"], "serial"),
+    enumParam("cd-routing", "C→D", ["serial", "parallel", "feedback1", "feedback2"], "parallel"),
+    enumParam("abcd-routing", "AB→CD", ["serial", "parallel"], "serial"),
+
+    ...(["a", "b", "c", "d"] as const).flatMap((unit) => [
+      enumParam(
+        `unit-${unit}-algorithm`,
+        `${unit.toUpperCase()} algorithm`,
+        ["small-plate", "large-plate", "small-room", "large-room", "hall"],
+        unit === "a" ? "large-plate" : unit === "b" ? "small-room" : unit === "c" ? "hall" : "small-plate",
+      ),
+      numberParam(`unit-${unit}-mix`, `${unit.toUpperCase()} mix`, 0.4, 0, 1, 0.01),
+      numberParam(`unit-${unit}-volume`, `${unit.toUpperCase()} volume`, 0.8, 0, 1, 0.01),
+      numberParam(`unit-${unit}-decay-seconds`, `${unit.toUpperCase()} decay`, 2, 0.2, 250, 0.1, "s"),
+      numberParam(`unit-${unit}-pre-delay-seconds`, `${unit.toUpperCase()} pre delay`, 0, 0, 0.5, 0.001, "s"),
+      numberParam(`unit-${unit}-hf-damping`, `${unit.toUpperCase()} damping`, 0.2, 0, 1, 0.01),
+      numberParam(`unit-${unit}-hf-bandwidth`, `${unit.toUpperCase()} bandwidth`, 0.8, 0, 1, 0.01),
+    ]),
+
+    muteParam(),
+  ],
+  face: [
+    section("config", "Config", [
+      param("source-config"),
+      param("ab-routing"),
+      param("cd-routing"),
+      param("abcd-routing"),
+    ]),
+    ...(["a", "b", "c", "d"] as const).map((unit) =>
+      section(`unit-${unit}`, `Unit ${unit.toUpperCase()}`, [
+        param(`unit-${unit}-algorithm`),
+        param(`unit-${unit}-mix`),
+        param(`unit-${unit}-volume`),
+        param(`unit-${unit}-decay-seconds`),
+        param(`unit-${unit}-pre-delay-seconds`),
+        param(`unit-${unit}-hf-damping`),
+        param(`unit-${unit}-hf-bandwidth`),
+      ]),
+    ),
+    section("state", "State", [param(AUDIO_MUTE_PARAM)]),
+  ],
+});
+
 export const AUDIO_MODULES: ModuleDescriptor[] = [
   AUDIO_OUTPUT,
   AUDIO_GAIN,
@@ -266,4 +554,8 @@ export const AUDIO_MODULES: ModuleDescriptor[] = [
   AUDIO_COMPRESSOR,
   AUDIO_LIMITER,
   AUDIO_BITCRUSHER,
+  AUDIO_BLACKHOLE,
+  AUDIO_DP4_REVERB,
+  AUDIO_DP4_NONLIN,
+  AUDIO_DP4,
 ];

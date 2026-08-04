@@ -64,6 +64,41 @@ export interface AudioBufferSourceNodeLike extends AudioNodeLike {
   stop(when?: number): void;
 }
 
+/** The wave shapes an oscillator can take without being handed coefficients. */
+export type OscillatorKind = "sine" | "square" | "sawtooth" | "triangle" | "custom";
+
+/** A Fourier series an oscillator can be tuned to; see `pulseWaveCoefficients`. */
+export interface PeriodicWaveLike {
+  readonly real: Float32Array;
+  readonly imag: Float32Array;
+}
+
+/**
+ * A pitch generator.
+ *
+ * `frequency` and `detune` are two inputs to the same pitch — hertz and cents —
+ * and both are `AudioParam`s, which is what lets a scale, an envelope and an LFO
+ * all reach the same note without any of them recomputing the others' work.
+ *
+ * Like a buffer source, an oscillator is single-use: it cannot be restarted, and
+ * stopping one that never started throws.
+ */
+export interface OscillatorNodeLike extends AudioNodeLike {
+  type: OscillatorKind;
+  readonly frequency: AudioParamLike;
+  /** Cents, added to `frequency`. The tuning library speaks this. */
+  readonly detune: AudioParamLike;
+  onended: (() => void) | null;
+  setPeriodicWave(wave: PeriodicWaveLike): void;
+  start(when?: number): void;
+  stop(when?: number): void;
+}
+
+/** Places a signal in the stereo field; −1 is hard left, +1 hard right. */
+export interface StereoPannerNodeLike extends AudioNodeLike {
+  readonly pan: AudioParamLike;
+}
+
 export interface CompressorNodeLike extends AudioNodeLike {
   readonly threshold: AudioParamLike;
   readonly knee: AudioParamLike;
@@ -74,7 +109,27 @@ export interface CompressorNodeLike extends AudioNodeLike {
   readonly reduction?: number;
 }
 
-/** Everything an effect may build. Deliberately short. */
+/**
+ * Everything an effect may build. Deliberately short.
+ *
+ * `createOscillator` was added when the Blackhole and DP/4 tanks arrived, and
+ * it is worth saying why rather than letting it look like scope creep. A
+ * feedback reverb rings: its delay lines are fixed lengths, so a sustained tone
+ * excites the same modes forever and the tail acquires a metallic pitch. Every
+ * serious reverb answers this the same way — modulate the line lengths slightly
+ * so no mode can settle. Both machines document exactly that (`Mod Depth`,
+ * `Detune Rate`/`Detune Depth`), and both describe what happens without it in
+ * the same word: *metallic*.
+ *
+ * Modulating a `DelayNode` means driving its `delayTime` from an audio-rate
+ * signal, and the only source of one is an oscillator. There is no way to do it
+ * from the control side — `rampParam` schedules a value, it does not oscillate.
+ * So the choice was between widening this interface by one method or shipping
+ * reverbs with a known ring, and the ring is not a defensible default.
+ *
+ * The fake context in `testing/fakeContext.ts` already implemented it for the
+ * synth path, so nothing else had to change.
+ */
 export interface EffectContext {
   readonly sampleRate: number;
   readonly currentTime: number;
@@ -85,6 +140,8 @@ export interface EffectContext {
   createWaveShaper(): WaveShaperNodeLike;
   createDynamicsCompressor(): CompressorNodeLike;
   createBuffer(channels: number, frames: number, sampleRate: number): AudioBufferLike;
+  /** An LFO source for modulated delay lines. See the note above. */
+  createOscillator(): OscillatorNodeLike;
 }
 
 /** What playing a sample needs, on top of what building an effect needs. */
@@ -96,4 +153,18 @@ export interface SampleContext extends EffectContext {
    * them first or hand over a copy.
    */
   decodeAudioData(data: ArrayBuffer): Promise<AudioBufferLike>;
+}
+
+/**
+ * What generating a pitch needs, on top of what playing a sample needs.
+ *
+ * Kept as its own step rather than folded into `EffectContext` so the
+ * distinction stays visible: an effect processes a signal it is given, and only
+ * a synth conjures one out of nothing.
+ */
+export interface SynthContext extends SampleContext {
+  // `createOscillator` is inherited from EffectContext, where the reverb tanks
+  // need it as an LFO. A synth wants it as a voice — same node, different job.
+  createStereoPanner(): StereoPannerNodeLike;
+  createPeriodicWave(real: Float32Array, imag: Float32Array): PeriodicWaveLike;
 }

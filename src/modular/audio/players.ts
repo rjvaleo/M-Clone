@@ -31,10 +31,11 @@
 import { rampParam, type AudioParamLike } from "./params";
 import type { AudioNodeLike, ManagedAudioNode } from "./graphAdapter";
 import type { AudioNodeSpec } from "./audioPlan";
-import type { AudioBufferLike, GainNodeLike, SampleContext } from "./nodes";
+import type { AudioBufferLike, GainNodeLike, SampleContext, SynthContext } from "./nodes";
 import { VoiceBank } from "./voices";
 import { GRAIN_WAKE_MS, GrainScheduler, type GrainSettings } from "./grains";
 import type { SmoothingLookup } from "./effects";
+import { SynthPlayer } from "./synthPlayer";
 
 /** Everything a player needs that is not a Web Audio node. */
 export type PlayerRuntime = {
@@ -442,24 +443,33 @@ const intervalSchedule = (intervalMs: number, task: () => void): (() => void) =>
   return () => clearInterval(handle);
 };
 
+/**
+ * What the factory needs of a source: the two interfaces, and nothing about
+ * how it makes its sound. The samplers share `PlayerModule`; the synth does
+ * not, and does not need to.
+ */
 type PlayerConstructor = new (
-  context: SampleContext,
+  context: SynthContext,
   spec: AudioNodeSpec,
   atSec: number,
   runtime: PlayerRuntime,
   smoothing: SmoothingLookup,
-) => PlayerModule;
+) => ManagedAudioNode & NotePlayer;
 
 export const PLAYER_BUILDERS: Readonly<Record<string, PlayerConstructor>> = {
   "m.percussion": PercussionPlayer,
   "m.looper": LooperPlayer,
   "m.granular": GranularPlayer,
+  // The synth is not a `PlayerModule` — it has no sample bank and generates its
+  // own signal — but it presents the same two interfaces, which is all the
+  // factory and the note adapter ever ask for.
+  "m.synth": SynthPlayer,
 };
 
 export const isPlayerModule = (moduleType: string): boolean => moduleType in PLAYER_BUILDERS;
 
 export function createPlayer(
-  context: SampleContext,
+  context: SynthContext,
   spec: AudioNodeSpec,
   atSec: number,
   runtime: PlayerRuntime,
