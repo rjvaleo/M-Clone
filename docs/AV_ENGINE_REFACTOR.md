@@ -180,8 +180,15 @@ Web Audio path behind a flag, so both can run and be compared.
 **Done when:** a patch with one Gain sounds identical through either path, and
 an end-to-end test drives document → compiler → worklet → output.
 
-**Status (2026-08-04): built, not yet wired.** Nothing in the app imports any of
-it, so the Web Audio path is still the only one running.
+**Status (2026-08-04): proven in a browser; not wired into the app.** The seam
+works end to end — the Rust engine makes sound through an AudioWorklet, verified
+by rendering and confirmed audibly by ear. Nothing in the app imports it, so the
+Web Audio path is still the only one users get.
+
+`public/engine-test.html` is the bench: oscillator → `HostInput` → Rust `Gain` →
+`AudioOutput`, with a gain slider for hearing the in-module smoothing. Rendered
+through an `OfflineAudioContext`, gain 1.0 gives peak 1.0000, 0.5 gives 0.5000,
+1000 clamps to 2.0000, and mute gives 0.0000.
 
 | Piece | Where | Proof |
 |---|---|---|
@@ -190,16 +197,40 @@ it, so the Web Audio path is still the only one running.
 | Plan → engine commands | `audio/wasm/engineBridge.ts` | 18 tests, 100% lines/statements/functions |
 | The worklet and its build | `audio/wasm/rackWorklet.ts`, `npm run build:engine` | both artifacts build; 31 KB wasm, 22 KB worklet |
 
-Two findings worth carrying forward. `Engine::add` seeded every parameter to
-zero, so a module's own defaults were unreachable and **a gain of 1 read as
-silence** — the same shape as the missing note processors, and caught only
-because the tests were written first; modules now declare `param_default`. And
+Three findings worth carrying forward.
+
+`Engine::add` seeded every parameter to zero, so a module's own defaults were
+unreachable and **a gain of 1 read as silence** — the same shape as the missing
+note processors, and caught only because the tests were written first. Modules
+declare `param_default` now.
+
 WASM has no unsigned integers, so the `NO_MODULE` sentinel (`u32::MAX`) arrives
 in JavaScript as `-1`; stored unchecked it becomes a plausible-looking module id.
 
-**Remaining:** the main-thread loader (fetch, compile, `addModule`, build the
-node, reach the destination), the flag that lets both paths run, and the A/B
-comparison that is the actual "done when".
+And the one no unit test could have caught: **`set_io` says where samples are
+written, not what is connected.** The host input is a module no document
+mentions, so it appears in no plan, and the rack built, wired, reported a
+correct graph and rendered silence. The host now feeds every audio input the
+patch leaves open — §12.1's Channel source, excluding the Audio Output so an
+idle rack stays quiet. It took a browser to see it; `verify.mjs` passed
+throughout because it patches that cable by hand.
+
+### The in-app A/B is deferred to Stage 3
+
+The plan called for a flag running both paths side by side. That is being held
+back deliberately: the Rust engine has two of the twelve audio modules, so
+switching a real patch to it would render mostly silence, and wiring it in now
+means either double-rendering the output or a body of conditional code that
+Stage 3 deletes. **A comparison is only worth making once both sides can express
+the same patch.**
+
+The bench stays the Rust path's proving ground until then — which is also the
+arrangement that caught the host-input bug, because the bench went in alongside
+the code rather than after it.
+
+**Remaining before Stage 3 can close this out:** the main-thread loader
+(`rackNode.ts` has the tested half — the protocol and the engine choice; the
+fetch/compile/`addModule` glue is not written), and the A/B itself.
 
 ### Stage 2 — The synth, and the LFOs that were never possible
 
