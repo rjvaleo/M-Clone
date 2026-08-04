@@ -108,3 +108,63 @@ describe("The rack node", () => {
     expect(node.disconnected).toBe(1);
   });
 });
+
+describe("Notes", () => {
+  it("posts a note-on with the note and velocity", () => {
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    rack.noteOn(60, 0.8);
+    expect(node.port.sent).toEqual([{ type: "note-on", note: 60, velocity: 0.8 }]);
+  });
+
+  it("posts a note-off with the note", () => {
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    rack.noteOff(60);
+    expect(node.port.sent).toEqual([{ type: "note-off", note: 60 }]);
+  });
+
+  it("posts all-notes-off with no payload", () => {
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    rack.allNotesOff();
+    expect(node.port.sent).toEqual([{ type: "all-notes-off" }]);
+  });
+
+  it("does not deduplicate repeated notes", () => {
+    // update() filters by generation because it is called from an effect that
+    // cannot cheaply know whether the plan moved. A note is not a plan: two
+    // identical noteOn(60, 1) calls are two notes, and swallowing the second
+    // would break a repeated note.
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    rack.noteOn(60, 1);
+    rack.noteOn(60, 1);
+    expect(node.port.sent).toEqual([
+      { type: "note-on", note: 60, velocity: 1 },
+      { type: "note-on", note: 60, velocity: 1 },
+    ]);
+  });
+
+  it("posts a modulation message with the node id and routing unchanged", () => {
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    rack.setModulation("synth-1", 0, 6, 0.6);
+    expect(node.port.sent).toEqual([
+      { type: "modulation", nodeId: "synth-1", source: 0, dest: 6, amount: 0.6 },
+    ]);
+  });
+
+  it("goes quiet for every note method once disposed", () => {
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    rack.dispose();
+
+    rack.noteOn(60, 1);
+    rack.noteOff(60);
+    rack.allNotesOff();
+    rack.setModulation("synth-1", 0, 6, 0.6);
+
+    expect(node.port.sent).toHaveLength(0);
+  });
+});

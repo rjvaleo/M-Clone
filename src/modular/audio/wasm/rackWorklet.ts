@@ -23,9 +23,22 @@ import type { AudioPlan } from "../audioPlan";
 export const RACK_PROCESSOR_NAME = "idmlab-rack";
 
 /** What the main thread sends in. */
+/**
+ * What the main thread sends in.
+ *
+ * Notes are messages rather than plan edits on purpose. A plan describes what
+ * the rack *is*; a note is something that happens. Folding note-on into a plan
+ * update would mean recompiling a graph to press a key, and would lose the
+ * distinction the whole audio layer is built around — structure changes rebuild,
+ * everything else does not.
+ */
 export type RackMessage =
   | { type: "plan"; plan: AudioPlan }
-  | { type: "reset" };
+  | { type: "reset" }
+  | { type: "note-on"; note: number; velocity: number }
+  | { type: "note-off"; note: number }
+  | { type: "all-notes-off" }
+  | { type: "modulation"; nodeId: string; source: number; dest: number; amount: number };
 
 declare const sampleRate: number;
 declare const AudioWorkletProcessor: {
@@ -53,8 +66,26 @@ class RackProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (event: MessageEvent<RackMessage>) => {
       if (this.broken) return;
       const message = event.data;
-      if (message.type === "plan") this.rack.update(message.plan);
-      else if (message.type === "reset") this.rack.reset();
+      switch (message.type) {
+        case "plan":
+          this.rack.update(message.plan);
+          break;
+        case "reset":
+          this.rack.reset();
+          break;
+        case "note-on":
+          this.rack.noteOn(message.note, message.velocity);
+          break;
+        case "note-off":
+          this.rack.noteOff(message.note);
+          break;
+        case "all-notes-off":
+          this.rack.allNotesOff();
+          break;
+        case "modulation":
+          this.rack.setModulation(message.nodeId, message.source, message.dest, message.amount);
+          break;
+      }
     };
   }
 
