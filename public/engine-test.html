@@ -17,22 +17,29 @@
   button:disabled { opacity: .45; cursor: not-allowed; }
   button.on { background: #7dd3a8; border-color: #7dd3a8; color: #10251b; }
   label.row { display: grid; grid-template-columns: 7rem 1fr 4rem; gap: 1rem; align-items: center; margin-top: 1rem; }
+  select.row-select { grid-column: 2 / 3; }
   input[type=range] { width: 100%; accent-color: #7dd3a8; }
+  select { font: inherit; background: #191c22; color: #e6e8ec; border: 1px solid #3a4150; border-radius: 6px; padding: .3rem .4rem; }
   output { font-variant-numeric: tabular-nums; text-align: right; color: #9aa3b0; }
   #log { font: 12.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; background: #0f1115; border: 1px solid #2a2f38; border-radius: 10px; padding: 1rem 1.25rem; max-width: 46rem; max-height: 22rem; overflow: auto; }
   .ok::before { content: "ok   "; color: #7dd3a8; }
   .bad::before { content: "FAIL "; color: #ff8a8a; }
   .bad { color: #ff8a8a; }
   .note { color: #9aa3b0; }
+  h3.section { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: #9aa3b0; margin: 1.5rem 0 .25rem; }
+  h3.section:first-child { margin-top: 0; }
+  .keyboard { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
+  .keyboard button { padding: .5rem .6rem; font-size: .8rem; min-width: 2.6rem; }
+  .keyboard button.black { background: #0f1115; }
+  .routing-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .75rem; align-items: end; margin-top: .5rem; }
+  .routing-row label { display: flex; flex-direction: column; gap: .3rem; font-size: .8rem; color: #9aa3b0; }
 </style>
 
 <h1>Rust engine bench</h1>
 <p class="lede">
-  Loads the real <code>idmlab-engine.wasm</code> into an AudioWorklet and runs a
-  patch through it: an oscillator into the engine's <code>HostInput</code>, through
-  a Rust <code>Gain</code>, out of <code>AudioOutput</code>. Everything you hear
-  has been through the Rust sample loop. Nothing here touches the app — this is
-  the seam on its own.
+  Loads the real <code>idmlab-engine.wasm</code> into an AudioWorklet and runs
+  patches through it. Everything you hear has been through the Rust sample
+  loop. Nothing here touches the app — this is the seam on its own.
 </p>
 
 <fieldset>
@@ -59,13 +66,150 @@
 </fieldset>
 
 <fieldset>
+  <legend>Synth</legend>
+  <p class="note" style="margin:0 0 .5rem">
+    The Rust <code>m.synth</code> module — three oscillators, a per-voice
+    filter, two LFOs and an 8×12 modulation matrix, evaluated every sample.
+    Press Start above first; the routing below defaults to LFO 1 sweeping the
+    filter cutoff, so playing a note should audibly wah.
+  </p>
+
+  <h3 class="section">Keyboard</h3>
+  <div id="keyboard" class="keyboard"></div>
+
+  <h3 class="section">Oscillator 1</h3>
+  <label class="row">
+    <span>Wave</span>
+    <select id="osc1Wave" class="row-select" disabled>
+      <option value="0">Sine</option>
+      <option value="1">Triangle</option>
+      <option value="2" selected>Sawtooth</option>
+      <option value="3">Square</option>
+      <option value="4">Pulse</option>
+    </select>
+    <span></span>
+  </label>
+  <label class="row">
+    <span>Level</span>
+    <input id="osc1Level" type="range" min="0" max="1" step="0.01" value="1" disabled />
+    <output id="osc1LevelOut">1.00</output>
+  </label>
+  <label class="row">
+    <span>Width</span>
+    <input id="osc1Width" type="range" min="0.05" max="0.95" step="0.01" value="0.5" disabled />
+    <output id="osc1WidthOut">0.50</output>
+  </label>
+
+  <h3 class="section">Filter</h3>
+  <label class="row">
+    <span>Cutoff</span>
+    <input id="cutoff" type="range" min="20" max="8000" step="10" value="1500" disabled />
+    <output id="cutoffOut">1500 Hz</output>
+  </label>
+  <label class="row">
+    <span>Resonance</span>
+    <input id="resonance" type="range" min="0" max="1" step="0.01" value="0.3" disabled />
+    <output id="resonanceOut">0.30</output>
+  </label>
+
+  <h3 class="section">Amplitude envelope</h3>
+  <label class="row">
+    <span>Attack</span>
+    <input id="ampAttack" type="range" min="0" max="2" step="0.01" value="0.01" disabled />
+    <output id="ampAttackOut">0.01 s</output>
+  </label>
+  <label class="row">
+    <span>Decay</span>
+    <input id="ampDecay" type="range" min="0" max="2" step="0.01" value="0.1" disabled />
+    <output id="ampDecayOut">0.10 s</output>
+  </label>
+  <label class="row">
+    <span>Sustain</span>
+    <input id="ampSustain" type="range" min="0" max="1" step="0.01" value="0.8" disabled />
+    <output id="ampSustainOut">0.80</output>
+  </label>
+  <label class="row">
+    <span>Release</span>
+    <input id="ampRelease" type="range" min="0" max="3" step="0.01" value="0.2" disabled />
+    <output id="ampReleaseOut">0.20 s</output>
+  </label>
+
+  <h3 class="section">LFO 1</h3>
+  <label class="row">
+    <span>Shape</span>
+    <select id="lfo1Shape" class="row-select" disabled>
+      <option value="0" selected>Sine</option>
+      <option value="1">Triangle</option>
+      <option value="2">Sawtooth</option>
+      <option value="3">Ramp</option>
+      <option value="4">Square</option>
+      <option value="5">Sample &amp; hold</option>
+      <option value="6">Smooth random</option>
+    </select>
+    <span></span>
+  </label>
+  <label class="row">
+    <span>Rate</span>
+    <input id="lfo1Rate" type="range" min="0.01" max="20" step="0.01" value="2" disabled />
+    <output id="lfo1RateOut">2.00 Hz</output>
+  </label>
+  <label class="row">
+    <span>Depth</span>
+    <input id="lfo1Depth" type="range" min="0" max="1" step="0.01" value="1" disabled />
+    <output id="lfo1DepthOut">1.00</output>
+  </label>
+
+  <h3 class="section">Modulation matrix — one routing</h3>
+  <div class="routing-row">
+    <label>
+      Source
+      <select id="modSource" disabled>
+        <option value="0" selected>LFO 1</option>
+        <option value="1">LFO 2</option>
+        <option value="2">Amp env</option>
+        <option value="3">Filter env</option>
+        <option value="4">Velocity</option>
+        <option value="5">Note</option>
+        <option value="6">Mod wheel</option>
+        <option value="7">Random</option>
+      </select>
+    </label>
+    <label>
+      Destination
+      <select id="modDest" disabled>
+        <option value="0">Osc 1 pitch</option>
+        <option value="1">Osc 2 pitch</option>
+        <option value="2">Osc 3 pitch</option>
+        <option value="3">Osc 1 level</option>
+        <option value="4">Osc 2 level</option>
+        <option value="5">Osc 3 level</option>
+        <option value="6" selected>Filter cutoff</option>
+        <option value="7">Filter resonance</option>
+        <option value="8">LFO 1 rate</option>
+        <option value="9">LFO 2 rate</option>
+        <option value="10">Pan</option>
+        <option value="11">Volume</option>
+      </select>
+    </label>
+    <label>
+      Amount
+      <input id="modAmount" type="range" min="-1" max="1" step="0.01" value="0.6" disabled />
+    </label>
+  </div>
+  <p class="note" style="margin-top:.35rem">
+    Amount: <output id="modAmountOut">0.60</output> — bipolar, applied in the
+    destination's own unit (cents for pitch, octaves for cutoff).
+  </p>
+</fieldset>
+
+<fieldset>
   <legend>Checks</legend>
   <div id="log">waiting for a click — audio needs a gesture to start.</div>
 </fieldset>
 
 <script type="module">
   // Mirrors ModuleKind in rust/dsp-core/src/modules.rs.
-  const KIND = { GAIN: 1, AUDIO_OUTPUT: 2 };
+  const KIND = { GAIN: 1, AUDIO_OUTPUT: 2, SYNTH: 3 };
 
   const logEl = document.getElementById("log");
   let failures = 0;
@@ -89,7 +233,44 @@
   const muteOut = document.getElementById("muteOut");
   const stateEl = document.getElementById("state");
 
-  let ctx, rackNode, osc, oscGain, playing = false;
+  // ---- synth controls --------------------------------------------------
+  const osc1WaveEl = document.getElementById("osc1Wave");
+  const osc1LevelEl = document.getElementById("osc1Level");
+  const osc1WidthEl = document.getElementById("osc1Width");
+  const cutoffEl = document.getElementById("cutoff");
+  const resonanceEl = document.getElementById("resonance");
+  const ampAttackEl = document.getElementById("ampAttack");
+  const ampDecayEl = document.getElementById("ampDecay");
+  const ampSustainEl = document.getElementById("ampSustain");
+  const ampReleaseEl = document.getElementById("ampRelease");
+  const lfo1ShapeEl = document.getElementById("lfo1Shape");
+  const lfo1RateEl = document.getElementById("lfo1Rate");
+  const lfo1DepthEl = document.getElementById("lfo1Depth");
+  const modSourceEl = document.getElementById("modSource");
+  const modDestEl = document.getElementById("modDest");
+  const modAmountEl = document.getElementById("modAmount");
+  const keyboardEl = document.getElementById("keyboard");
+
+  const osc1LevelOut = document.getElementById("osc1LevelOut");
+  const osc1WidthOut = document.getElementById("osc1WidthOut");
+  const cutoffOut = document.getElementById("cutoffOut");
+  const resonanceOut = document.getElementById("resonanceOut");
+  const ampAttackOut = document.getElementById("ampAttackOut");
+  const ampDecayOut = document.getElementById("ampDecayOut");
+  const ampSustainOut = document.getElementById("ampSustainOut");
+  const ampReleaseOut = document.getElementById("ampReleaseOut");
+  const lfo1RateOut = document.getElementById("lfo1RateOut");
+  const lfo1DepthOut = document.getElementById("lfo1DepthOut");
+  const modAmountOut = document.getElementById("modAmountOut");
+
+  const synthControls = [
+    osc1WaveEl, osc1LevelEl, osc1WidthEl, cutoffEl, resonanceEl,
+    ampAttackEl, ampDecayEl, ampSustainEl, ampReleaseEl,
+    lfo1ShapeEl, lfo1RateEl, lfo1DepthEl,
+    modSourceEl, modDestEl, modAmountEl,
+  ];
+
+  let ctx, rackNode, osc, oscGain, probe, playing = false;
 
   /**
    * One place that decides what every control says.
@@ -100,6 +281,7 @@
   const render = (engineState) => {
     stateEl.innerHTML = `Engine: <strong>${engineState}</strong>`;
     const live = engineState === "running";
+
     startBtn.textContent = live ? "Audio running" : engineState === "starting" ? "Starting…" : "Start audio";
     startBtn.disabled = engineState === "starting" || live;
     toneBtn.disabled = !live;
@@ -109,10 +291,152 @@
     muteEl.disabled = !live;
     const muted = muteEl.checked;
     muteOut.textContent = muted ? "muted" : "passing";
-    gainOut.textContent = muted
-      ? "—"
-      : Number(gainEl.value).toFixed(2);
+    gainOut.textContent = muted ? "—" : Number(gainEl.value).toFixed(2);
+
+    for (const el of synthControls) el.disabled = !live;
+    for (const key of keyboardEl.querySelectorAll("button")) key.disabled = !live;
+
+    osc1LevelOut.textContent = Number(osc1LevelEl.value).toFixed(2);
+    osc1WidthOut.textContent = Number(osc1WidthEl.value).toFixed(2);
+    cutoffOut.textContent = `${Number(cutoffEl.value).toFixed(0)} Hz`;
+    resonanceOut.textContent = Number(resonanceEl.value).toFixed(2);
+    ampAttackOut.textContent = `${Number(ampAttackEl.value).toFixed(2)} s`;
+    ampDecayOut.textContent = `${Number(ampDecayEl.value).toFixed(2)} s`;
+    ampSustainOut.textContent = Number(ampSustainEl.value).toFixed(2);
+    ampReleaseOut.textContent = `${Number(ampReleaseEl.value).toFixed(2)} s`;
+    lfo1RateOut.textContent = `${Number(lfo1RateEl.value).toFixed(2)} Hz`;
+    lfo1DepthOut.textContent = Number(lfo1DepthEl.value).toFixed(2);
+    modAmountOut.textContent = Number(modAmountEl.value).toFixed(2);
   };
+
+  // ---- keyboard -----------------------------------------------------------
+  // Two octaves. MIDI 60 (C4) through 83 (B5).
+  const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const BLACK = new Set([1, 3, 6, 8, 10]);
+  for (let note = 60; note <= 83; note++) {
+    const key = document.createElement("button");
+    const pitchClass = note % 12;
+    key.textContent = `${NOTE_NAMES[pitchClass]}${Math.floor(note / 12) - 1}`;
+    key.dataset.note = String(note);
+    key.disabled = true;
+    if (BLACK.has(pitchClass)) key.classList.add("black");
+    keyboardEl.append(key);
+  }
+
+  const noteOn = (note) => {
+    rackNode?.port.postMessage({ type: "note-on", note, velocity: 0.8 });
+    keyboardEl.querySelector(`button[data-note="${note}"]`)?.classList.add("on");
+  };
+  const noteOff = (note) => {
+    rackNode?.port.postMessage({ type: "note-off", note });
+    keyboardEl.querySelector(`button[data-note="${note}"]`)?.classList.remove("on");
+  };
+
+  keyboardEl.addEventListener("pointerdown", (event) => {
+    const note = event.target.dataset.note;
+    if (note !== undefined) noteOn(Number(note));
+  });
+  const releaseFromPointer = (event) => {
+    const note = event.target.dataset.note;
+    if (note !== undefined) noteOff(Number(note));
+  };
+  keyboardEl.addEventListener("pointerup", releaseFromPointer);
+  keyboardEl.addEventListener("pointerleave", releaseFromPointer, true);
+  keyboardEl.addEventListener("pointercancel", releaseFromPointer);
+
+  // A note held while the tab loses focus would otherwise sound forever —
+  // there is no pointerup to catch it once the page is backgrounded.
+  window.addEventListener("blur", () => {
+    rackNode?.port.postMessage({ type: "all-notes-off" });
+    for (const key of keyboardEl.querySelectorAll("button.on")) key.classList.remove("on");
+  });
+
+  // ---- synth plan -----------------------------------------------------------
+  const synthParams = () => ({
+    level: 1,
+    "osc1-wave": Number(osc1WaveEl.value),
+    "osc1-level": Number(osc1LevelEl.value),
+    "osc1-width": Number(osc1WidthEl.value),
+    "filter-cutoff": Number(cutoffEl.value),
+    "filter-resonance": Number(resonanceEl.value),
+    "amp-attack": Number(ampAttackEl.value),
+    "amp-decay": Number(ampDecayEl.value),
+    "amp-sustain": Number(ampSustainEl.value),
+    "amp-release": Number(ampReleaseEl.value),
+    "lfo1-shape": Number(lfo1ShapeEl.value),
+    "lfo1-rate": Number(lfo1RateEl.value),
+    "lfo1-depth": Number(lfo1DepthEl.value),
+  });
+
+  const sendSynthPlan = () => {
+    rackNode.port.postMessage({
+      type: "plan",
+      plan: {
+        // A new generation each time, so the node forwards it.
+        generation: Date.now(),
+        nodes: {
+          s: { nodeId: "s", moduleType: "m.synth", structure: {}, parameters: synthParams(), bypass: false, wet: 1 },
+          out: { nodeId: "out", moduleType: "m.audio-output", structure: {}, parameters: {}, bypass: false, wet: 1 },
+        },
+        connections: [{ from: { nodeId: "s", portId: "audio-out" }, to: { nodeId: "out", portId: "audio-in" } }],
+      },
+    });
+  };
+
+  const sendSynthModulation = () => {
+    rackNode.port.postMessage({
+      type: "modulation",
+      nodeId: "s",
+      source: Number(modSourceEl.value),
+      dest: Number(modDestEl.value),
+      amount: Number(modAmountEl.value),
+    });
+  };
+
+  for (const el of [
+    osc1WaveEl, osc1LevelEl, osc1WidthEl, cutoffEl, resonanceEl,
+    ampAttackEl, ampDecayEl, ampSustainEl, ampReleaseEl,
+    lfo1ShapeEl, lfo1RateEl, lfo1DepthEl,
+  ]) {
+    el.addEventListener("input", () => {
+      render("running");
+      sendSynthPlan();
+    });
+  }
+  for (const el of [modSourceEl, modDestEl, modAmountEl]) {
+    el.addEventListener("input", () => {
+      render("running");
+      sendSynthModulation();
+    });
+  }
+
+  // ---- measurement helpers for the automated checks ------------------------
+  const peakOf = (analyser) => {
+    const buf = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(buf);
+    let peak = 0;
+    for (const v of buf) peak = Math.max(peak, Math.abs(v));
+    return peak;
+  };
+
+  /**
+   * A crude spectral centroid — Σ(bin · magnitude) / Σ(magnitude) — used only
+   * to detect that the timbre is *moving*, not to measure it precisely. An
+   * LFO sweeping the filter cutoff should visibly shift this over one cycle.
+   */
+  const centroidOf = (analyser) => {
+    const bins = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(bins);
+    let weighted = 0;
+    let total = 0;
+    for (let i = 0; i < bins.length; i++) {
+      weighted += i * bins[i];
+      total += bins[i];
+    }
+    return total > 0 ? weighted / total : 0;
+  };
+
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   startBtn.addEventListener("click", async () => {
     render("starting");
@@ -139,7 +463,7 @@
       });
       check("constructed the worklet node", !!rackNode);
 
-      // The patch, in the same shape compileAudioPlan emits.
+      // ---- the gain chain, unchanged ----
       rackNode.port.postMessage({
         type: "plan",
         plan: {
@@ -166,20 +490,50 @@
       check("wired oscillator → worklet → speakers", true);
 
       // Prove sound is coming *out of the engine* rather than round the side.
-      const probe = ctx.createAnalyser();
+      // Reused for the synth checks below — one probe on the one rack node.
+      probe = ctx.createAnalyser();
       probe.fftSize = 2048;
       rackNode.connect(probe);
       oscGain.gain.value = 0.25;
       await new Promise((r) => setTimeout(r, 300));
-      const buf = new Float32Array(probe.fftSize);
-      probe.getFloatTimeDomainData(buf);
-      let peak = 0;
-      for (const v of buf) peak = Math.max(peak, Math.abs(v));
-      check(`engine output is audible (peak ${peak.toFixed(3)})`, peak > 0.01);
+      check(`engine output is audible (peak ${peakOf(probe).toFixed(3)})`, peakOf(probe) > 0.01);
       oscGain.gain.value = 0;
 
+      // ---- the synth, over the same worklet node ----
+      // Replaces the gain patch: the rack holds one plan at a time, and a
+      // synth generates rather than processes, so it takes no input feed.
+      sendSynthPlan();
+      sendSynthModulation();
+      check("sent the synth plan (synth → output) and its default routing", true);
+      await wait(80); // let the plan land in the worklet before measuring
+
+      check(`synth is silent before any note (peak ${peakOf(probe).toFixed(3)})`, peakOf(probe) < 0.01);
+
+      rackNode.port.postMessage({ type: "note-on", note: 60, velocity: 1 });
+      await wait(150);
+      const notePeak = peakOf(probe);
+      check(`a note makes sound (peak ${notePeak.toFixed(3)})`, notePeak > 0.01);
+
+      // Sample the timbre across roughly one and a half LFO cycles (LFO 1
+      // defaults to 2 Hz — one cycle is 500 ms) and check it actually moves.
+      const centroids = [];
+      for (let i = 0; i < 6; i++) {
+        centroids.push(centroidOf(probe));
+        await wait(120);
+      }
+      const spread = Math.max(...centroids) - Math.min(...centroids);
+      check(
+        `LFO 1 → filter cutoff audibly sweeps the timbre (centroid spread ${spread.toFixed(1)} bins)`,
+        spread > 2,
+      );
+
+      rackNode.port.postMessage({ type: "note-off", note: 60 });
+      await wait(500);
+      check(`note off eventually silences it (peak ${peakOf(probe).toFixed(3)})`, peakOf(probe) < 0.01);
+      rackNode.port.postMessage({ type: "all-notes-off" });
+
       render(failures === 0 ? "running" : "running with failures");
-      say(failures === 0 ? "\nall checks passed — press Play tone to listen" : `\n${failures} check(s) failed`,
+      say(failures === 0 ? "\nall checks passed — play the keyboard below" : `\n${failures} check(s) failed`,
           failures === 0 ? "ok" : "bad");
     } catch (error) {
       check(`threw: ${error && error.message ? error.message : error}`, false);
