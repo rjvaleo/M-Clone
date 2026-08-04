@@ -54,6 +54,31 @@ export class WasmRackNode {
     this.node.port.postMessage({ type: "reset" });
   }
 
+  /**
+   * Play a note. Unlike `update`, never deduplicated: two identical
+   * `noteOn(60, 1)` calls are two notes, not one plan sent twice.
+   */
+  noteOn(note: number, velocity: number): void {
+    if (this.disposed) return;
+    this.node.port.postMessage({ type: "note-on", note, velocity });
+  }
+
+  noteOff(note: number): void {
+    if (this.disposed) return;
+    this.node.port.postMessage({ type: "note-off", note });
+  }
+
+  allNotesOff(): void {
+    if (this.disposed) return;
+    this.node.port.postMessage({ type: "all-notes-off" });
+  }
+
+  /** Set one cell of a node's modulation matrix. */
+  setModulation(nodeId: string, source: number, dest: number, amount: number): void {
+    if (this.disposed) return;
+    this.node.port.postMessage({ type: "modulation", nodeId, source, dest, amount });
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
