@@ -73,7 +73,13 @@ pub extern "C" fn init(sample_rate: f32) {
 pub extern "C" fn add_module(kind: u32) -> u32 {
     let Some(kind) = ModuleKind::from_u32(kind) else { return NO_MODULE };
     match engine() {
-        Some(engine) => engine.add(kind.build()),
+        // Built at the engine's rate rather than a default one, so a module
+        // holding envelopes or delay lines never has a second initialisation
+        // path to get wrong.
+        Some(engine) => {
+            let rate = engine.sample_rate();
+            engine.add(kind.build_at(rate))
+        }
         None => NO_MODULE,
     }
 }
@@ -106,6 +112,53 @@ pub extern "C" fn set_param(module: u32, index: u32, value: f32) {
     }
     if let Some(engine) = engine() {
         engine.set_param(module, index as usize, value);
+    }
+}
+
+/// Notes reach a module by id rather than down a cable.
+///
+/// An event is not a signal: giving notes a port would mean a second kind of
+/// cable carrying neither audio nor CV, and every module in the rack would have
+/// to know about it. Only instruments implement these; everything else inherits
+/// a no-op from the trait.
+#[no_mangle]
+pub extern "C" fn note_on(module: u32, note: u32, velocity: f32) {
+    if !velocity.is_finite() || note > 127 {
+        return;
+    }
+    if let Some(engine) = engine() {
+        engine.note_on(module, note as u8, velocity);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn note_off(module: u32, note: u32) {
+    if note > 127 {
+        return;
+    }
+    if let Some(engine) = engine() {
+        engine.note_off(module, note as u8);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn all_notes_off(module: u32) {
+    if let Some(engine) = engine() {
+        engine.all_notes_off(module);
+    }
+}
+
+/// Set one cell of a module's modulation matrix.
+///
+/// Not a parameter index: 96 cells would bury the twenty controls a person
+/// actually turns among ninety-six they never touch directly.
+#[no_mangle]
+pub extern "C" fn set_modulation(module: u32, source: u32, dest: u32, amount: f32) {
+    if !amount.is_finite() {
+        return;
+    }
+    if let Some(engine) = engine() {
+        engine.set_modulation(module, source, dest, amount);
     }
 }
 

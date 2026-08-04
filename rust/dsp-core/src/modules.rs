@@ -20,7 +20,14 @@
 //! it, so the ramp is a property of the module rather than of everyone who
 //! remembers to call the right setter.
 
+use crate::bank::{VoiceBank, DEFAULT_POLYPHONY};
 use crate::engine::{Module, Ports, ProcessContext};
+use crate::lfo::{LfoShape, LfoTrigger};
+use crate::modmatrix::{ModDest, ModSource};
+use crate::osc::Wave;
+use crate::voice::{
+    AdsrSettings, LfoSettings, VoiceSettings, MAX_CUTOFF_HZ, MIN_CUTOFF_HZ, OSC_COUNT,
+};
 use crate::{clamp, Smoothed};
 
 /// How long a parameter takes to reach a new value.
@@ -221,6 +228,227 @@ impl Module for AudioOutput {
     }
 }
 
+/// `m.synth` — the three-oscillator polysynth.
+///
+/// Two audio outputs rather than one: this is the first stereo source in the
+/// rack, and folding it to mono here would throw away the pan that §9.7 lists
+/// as a modulation destination.
+///
+/// Parameters are flat indices rather than a struct because that is what the
+/// ABI carries. The matrix is *not* among them — see `Module::set_modulation`.
+pub struct Synth {
+    bank: VoiceBank,
+    level: Tracked,
+    /// Rebuilt from the flat parameters once per sample. Cheap, and it keeps
+    /// the mapping in one readable place instead of scattered across setters.
+    settings: VoiceSettings,
+}
+
+impl Synth {
+    pub const LEVEL: usize = 0;
+    /// Per oscillator: wave, semitones, cents, level, width — five each.
+    pub const OSC_BASE: usize = 1;
+    pub const OSC_STRIDE: usize = 5;
+    pub const OSC_WAVE: usize = 0;
+    pub const OSC_SEMIS: usize = 1;
+    pub const OSC_CENTS: usize = 2;
+    pub const OSC_LEVEL: usize = 3;
+    pub const OSC_WIDTH: usize = 4;
+
+    pub const CUTOFF: usize = 16;
+    pub const RESONANCE: usize = 17;
+    pub const FILTER_ENV_OCTAVES: usize = 18;
+    pub const KEY_FOLLOW: usize = 19;
+
+    pub const AMP_ATTACK: usize = 20;
+    pub const AMP_DECAY: usize = 21;
+    pub const AMP_SUSTAIN: usize = 22;
+    pub const AMP_RELEASE: usize = 23;
+
+    pub const FILTER_ATTACK: usize = 24;
+    pub const FILTER_DECAY: usize = 25;
+    pub const FILTER_SUSTAIN: usize = 26;
+    pub const FILTER_RELEASE: usize = 27;
+
+    /// Per LFO: shape, trigger, rate, depth, phase — five each.
+    pub const LFO_BASE: usize = 28;
+    pub const LFO_STRIDE: usize = 5;
+    pub const LFO_SHAPE: usize = 0;
+    pub const LFO_TRIGGER: usize = 1;
+    pub const LFO_RATE: usize = 2;
+    pub const LFO_DEPTH: usize = 3;
+    pub const LFO_PHASE: usize = 4;
+
+    pub const PAN: usize = 38;
+    pub const VOLUME: usize = 39;
+    pub const MOD_WHEEL: usize = 40;
+
+    pub const PARAM_COUNT: usize = 41;
+
+    pub fn new(sample_rate: f32) -> Self {
+        Self {
+            bank: VoiceBank::new(sample_rate, DEFAULT_POLYPHONY, 0x1D_1AB),
+            level: Tracked::new(0.0),
+            settings: VoiceSettings::default(),
+        }
+    }
+
+    pub fn active_voices(&self) -> usize {
+        self.bank.active_count()
+    }
+
+    /// Read the flat parameter array into the shape a voice wants.
+    fn read(&mut self, ports: &Ports) {
+        for index in 0..OSC_COUNT {
+            let base = Self::OSC_BASE + index * Self::OSC_STRIDE;
+            self.settings.waves[index] =
+                Wave::from_u32(ports.param(base + Self::OSC_WAVE) as u32).unwrap_or(Wave::Sawtooth);
+            self.settings.detune_semis[index] = clamp(ports.param(base + Self::OSC_SEMIS), -48.0, 48.0);
+            self.settings.detune_cents[index] = clamp(ports.param(base + Self::OSC_CENTS), -100.0, 100.0);
+            self.settings.levels[index] = clamp(ports.param(base + Self::OSC_LEVEL), 0.0, 1.0);
+            self.settings.pulse_width[index] = ports.param(base + Self::OSC_WIDTH);
+        }
+
+        self.settings.cutoff_hz = clamp(ports.param(Self::CUTOFF), MIN_CUTOFF_HZ, MAX_CUTOFF_HZ);
+        self.settings.resonance = clamp(ports.param(Self::RESONANCE), 0.0, 1.0);
+        self.settings.filter_env_octaves = clamp(ports.param(Self::FILTER_ENV_OCTAVES), -8.0, 8.0);
+        self.settings.key_follow = clamp(ports.param(Self::KEY_FOLLOW), 0.0, 1.0);
+
+        self.settings.amp = AdsrSettings {
+            attack: ports.param(Self::AMP_ATTACK),
+            decay: ports.param(Self::AMP_DECAY),
+            sustain: clamp(ports.param(Self::AMP_SUSTAIN), 0.0, 1.0),
+            release: ports.param(Self::AMP_RELEASE),
+        };
+        self.settings.filter_env = AdsrSettings {
+            attack: ports.param(Self::FILTER_ATTACK),
+            decay: ports.param(Self::FILTER_DECAY),
+            sustain: clamp(ports.param(Self::FILTER_SUSTAIN), 0.0, 1.0),
+            release: ports.param(Self::FILTER_RELEASE),
+        };
+
+        for index in 0..2 {
+            let base = Self::LFO_BASE + index * Self::LFO_STRIDE;
+            self.settings.lfo[index] = LfoSettings {
+                shape: LfoShape::from_u32(ports.param(base + Self::LFO_SHAPE) as u32)
+                    .unwrap_or(LfoShape::Sine),
+                trigger: LfoTrigger::from_u32(ports.param(base + Self::LFO_TRIGGER) as u32)
+                    .unwrap_or(LfoTrigger::Free),
+                rate_hz: ports.param(base + Self::LFO_RATE),
+                depth: clamp(ports.param(base + Self::LFO_DEPTH), 0.0, 1.0),
+                phase_degrees: ports.param(base + Self::LFO_PHASE),
+            };
+        }
+
+        self.settings.pan = clamp(ports.param(Self::PAN), -1.0, 1.0);
+        self.settings.volume = clamp(ports.param(Self::VOLUME), 0.0, 1.0);
+    }
+}
+
+impl Module for Synth {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        self.read(ports);
+        // The matrix lives on the bank rather than in the parameter array, so
+        // it survives being overwritten here every sample.
+        let matrix = self.bank.settings().matrix.clone();
+        self.settings.matrix = matrix;
+        self.bank.set_settings(self.settings.clone());
+        self.bank.set_mod_wheel(ports.param(Self::MOD_WHEEL));
+
+        let level = self.level.follow(clamp(ports.param(Self::LEVEL), 0.0, 1.0));
+        let sample = self.bank.next();
+        ports.output(0, sample.left * level);
+        ports.output(1, sample.right * level);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.level.set_sample_rate(sample_rate);
+        self.bank.set_sample_rate(sample_rate);
+    }
+
+    fn reset(&mut self) {
+        self.level.reset();
+        self.bank.panic();
+    }
+
+    fn note_on(&mut self, note: u8, velocity: f32) {
+        self.bank.note_on(note, velocity);
+    }
+
+    fn note_off(&mut self, note: u8) {
+        self.bank.note_off(note);
+    }
+
+    fn all_notes_off(&mut self) {
+        self.bank.all_notes_off();
+    }
+
+    fn set_modulation(&mut self, source: u32, dest: u32, amount: f32) {
+        // An unknown source or destination is dropped rather than throwing:
+        // it means the document is newer than this build of the engine.
+        let (Some(source), Some(dest)) = (ModSource::from_u32(source), ModDest::from_u32(dest))
+        else {
+            return;
+        };
+        self.bank.settings_mut().matrix.set(source, dest, amount);
+    }
+
+    fn input_count(&self) -> usize {
+        0
+    }
+    fn output_count(&self) -> usize {
+        2
+    }
+    fn param_count(&self) -> usize {
+        Self::PARAM_COUNT
+    }
+
+    fn param_default(&self, index: usize) -> f32 {
+        let defaults = VoiceSettings::default();
+        for osc in 0..OSC_COUNT {
+            let base = Self::OSC_BASE + osc * Self::OSC_STRIDE;
+            match index.checked_sub(base) {
+                Some(Self::OSC_WAVE) => return defaults.waves[osc] as u32 as f32,
+                Some(Self::OSC_SEMIS) => return defaults.detune_semis[osc],
+                Some(Self::OSC_CENTS) => return defaults.detune_cents[osc],
+                Some(Self::OSC_LEVEL) => return defaults.levels[osc],
+                Some(Self::OSC_WIDTH) => return defaults.pulse_width[osc],
+                _ => {}
+            }
+        }
+        for lfo in 0..2 {
+            let base = Self::LFO_BASE + lfo * Self::LFO_STRIDE;
+            match index.checked_sub(base) {
+                Some(Self::LFO_SHAPE) => return defaults.lfo[lfo].shape as u32 as f32,
+                Some(Self::LFO_TRIGGER) => return defaults.lfo[lfo].trigger as u32 as f32,
+                Some(Self::LFO_RATE) => return defaults.lfo[lfo].rate_hz,
+                Some(Self::LFO_DEPTH) => return defaults.lfo[lfo].depth,
+                Some(Self::LFO_PHASE) => return defaults.lfo[lfo].phase_degrees,
+                _ => {}
+            }
+        }
+        match index {
+            // Built silent, like every other module — the adapter fades it in.
+            Self::LEVEL => 0.0,
+            Self::CUTOFF => defaults.cutoff_hz,
+            Self::RESONANCE => defaults.resonance,
+            Self::FILTER_ENV_OCTAVES => defaults.filter_env_octaves,
+            Self::KEY_FOLLOW => defaults.key_follow,
+            Self::AMP_ATTACK => defaults.amp.attack,
+            Self::AMP_DECAY => defaults.amp.decay,
+            Self::AMP_SUSTAIN => defaults.amp.sustain,
+            Self::AMP_RELEASE => defaults.amp.release,
+            Self::FILTER_ATTACK => defaults.filter_env.attack,
+            Self::FILTER_DECAY => defaults.filter_env.decay,
+            Self::FILTER_SUSTAIN => defaults.filter_env.sustain,
+            Self::FILTER_RELEASE => defaults.filter_env.release,
+            Self::PAN => defaults.pan,
+            Self::VOLUME => defaults.volume,
+            _ => 0.0,
+        }
+    }
+}
+
 /// Every module the host can name, so the shim never matches on strings.
 ///
 /// The discriminants are part of the wire protocol between TypeScript and
@@ -231,6 +459,7 @@ pub enum ModuleKind {
     HostInput = 0,
     Gain = 1,
     AudioOutput = 2,
+    Synth = 3,
 }
 
 impl ModuleKind {
@@ -239,16 +468,29 @@ impl ModuleKind {
             0 => Some(Self::HostInput),
             1 => Some(Self::Gain),
             2 => Some(Self::AudioOutput),
+            3 => Some(Self::Synth),
             _ => None,
         }
     }
 
-    pub fn build(self) -> Box<dyn Module> {
+    /// Build at a sample rate.
+    ///
+    /// Anything holding delay lines or envelopes needs the rate at
+    /// construction; `Engine::add` calls `set_sample_rate` too, but a module
+    /// that had to survive being built at the wrong rate first is a module with
+    /// two initialisation paths.
+    pub fn build_at(self, sample_rate: f32) -> Box<dyn Module> {
         match self {
             Self::HostInput => Box::<HostInput>::default(),
             Self::Gain => Box::<Gain>::default(),
             Self::AudioOutput => Box::<AudioOutput>::default(),
+            Self::Synth => Box::new(Synth::new(sample_rate)),
         }
+    }
+
+    /// Build at the default rate. The engine corrects it on `add`.
+    pub fn build(self) -> Box<dyn Module> {
+        self.build_at(48_000.0)
     }
 }
 
@@ -381,6 +623,7 @@ mod tests {
             (0, ModuleKind::HostInput),
             (1, ModuleKind::Gain),
             (2, ModuleKind::AudioOutput),
+            (3, ModuleKind::Synth),
         ] {
             assert_eq!(ModuleKind::from_u32(value), Some(kind));
             assert_eq!(kind as u32, value);
@@ -390,12 +633,182 @@ mod tests {
 
     #[test]
     fn every_kind_builds_with_the_port_count_the_host_expects() {
-        for value in 0..=2 {
+        for value in 0..=3 {
             let kind = ModuleKind::from_u32(value).expect("kind");
             let module = kind.build();
             assert!(module.output_count() >= 1, "{kind:?} produces nothing");
             assert!(module.input_count() <= 1, "{kind:?} has more inputs than the shim wires");
         }
+    }
+
+    // ---- the synth ---------------------------------------------------------
+
+    /// A synth wired to an output, with the fade handles opened.
+    fn synth_rack() -> (Engine, u32, u32) {
+        let mut engine = Engine::new(RATE);
+        let synth = engine.add(ModuleKind::Synth.build_at(RATE));
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: synth, port: 0 }, PortRef { module: output, port: 0 });
+        engine.set_param(synth, Synth::LEVEL, 1.0);
+        (engine, synth, output)
+    }
+
+    fn play(engine: &mut Engine, output: u32, seconds: f32) -> Vec<f32> {
+        (0..(seconds * RATE) as usize)
+            .map(|_| {
+                engine.process();
+                engine.output_of(output, 0)
+            })
+            .collect()
+    }
+
+    fn loudest(samples: &[f32]) -> f32 {
+        samples.iter().fold(0.0f32, |acc, v| acc.max(v.abs()))
+    }
+
+    #[test]
+    fn a_synth_is_silent_until_a_note_arrives() {
+        let (mut engine, _, output) = synth_rack();
+        assert_eq!(loudest(&play(&mut engine, output, 0.05)), 0.0);
+    }
+
+    #[test]
+    fn a_note_sent_by_id_reaches_the_synth_and_sounds() {
+        // Notes travel by module id rather than down a cable: an event is not a
+        // signal, and giving it a port would mean a second kind of cable.
+        let (mut engine, synth, output) = synth_rack();
+        engine.note_on(synth, 60, 1.0);
+        assert!(loudest(&play(&mut engine, output, 0.1)) > 0.01);
+    }
+
+    #[test]
+    fn releasing_the_note_eventually_silences_it() {
+        let (mut engine, synth, output) = synth_rack();
+        engine.set_param(synth, Synth::AMP_RELEASE, 0.05);
+        engine.note_on(synth, 60, 1.0);
+        play(&mut engine, output, 0.1);
+        engine.note_off(synth, 60);
+        play(&mut engine, output, 0.3);
+        assert_eq!(loudest(&play(&mut engine, output, 0.05)), 0.0);
+    }
+
+    #[test]
+    fn a_note_for_a_module_that_is_not_there_is_ignored() {
+        // A note arriving for a module the host just deleted is a race, not a
+        // bug, and must not take down the audio callback.
+        let (mut engine, _, output) = synth_rack();
+        engine.note_on(9_999, 60, 1.0);
+        engine.note_off(9_999, 60);
+        engine.all_notes_off(9_999);
+        engine.set_modulation(9_999, 0, 0, 1.0);
+        assert!(play(&mut engine, output, 0.02).iter().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn the_synth_is_stereo() {
+        // §9.7 lists pan as a modulation destination, which needs two outputs
+        // to mean anything.
+        let module = ModuleKind::Synth.build();
+        assert_eq!(module.output_count(), 2);
+
+        let (mut engine, synth, _) = synth_rack();
+        engine.set_param(synth, Synth::PAN, -1.0);
+        engine.note_on(synth, 60, 1.0);
+        let mut left = 0.0f32;
+        let mut right = 0.0f32;
+        for _ in 0..(RATE * 0.1) as usize {
+            engine.process();
+            left = left.max(engine.output_of(synth, 0).abs());
+            right = right.max(engine.output_of(synth, 1).abs());
+        }
+        assert!(right < left * 0.05, "hard left leaked right: {left} vs {right}");
+    }
+
+    #[test]
+    fn a_synth_arrives_silent_so_the_adapter_can_fade_it_in() {
+        let mut engine = Engine::new(RATE);
+        let synth = engine.add(ModuleKind::Synth.build_at(RATE));
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: synth, port: 0 }, PortRef { module: output, port: 0 });
+        engine.note_on(synth, 60, 1.0);
+        assert_eq!(loudest(&play(&mut engine, output, 0.05)), 0.0);
+    }
+
+    #[test]
+    fn every_parameter_reads_its_declared_default() {
+        // The defect this prevents is the one param_default was added for: a
+        // cutoff that defaults to zero is an instrument that builds, wires,
+        // takes notes and makes no sound.
+        let synth = Synth::new(RATE);
+        assert_eq!(synth.param_default(Synth::LEVEL), 0.0);
+        assert!(synth.param_default(Synth::CUTOFF) > 1_000.0);
+        assert!(synth.param_default(Synth::VOLUME) > 0.0);
+        assert_eq!(synth.param_default(Synth::OSC_BASE + Synth::OSC_LEVEL), 1.0);
+        // The second and third oscillators are off, so a fresh synth is one
+        // clean voice rather than three stacked at unity.
+        assert_eq!(synth.param_default(Synth::OSC_BASE + Synth::OSC_STRIDE + Synth::OSC_LEVEL), 0.0);
+        assert!(synth.param_default(Synth::LFO_BASE + Synth::LFO_RATE) > 0.0);
+    }
+
+    #[test]
+    fn an_lfo_routed_to_volume_is_audible_through_the_engine() {
+        // The whole point of the stage, asserted at the level the host sees:
+        // a routing set over the ABI moves the sound.
+        let (mut engine, synth, output) = synth_rack();
+        engine.set_param(synth, Synth::LFO_BASE + Synth::LFO_RATE, 8.0);
+        engine.set_modulation(synth, ModSource::Lfo1 as u32, ModDest::Volume as u32, 1.0);
+        engine.note_on(synth, 60, 1.0);
+        let samples = play(&mut engine, output, 0.4);
+
+        let chunk = (RATE / 8.0 / 4.0) as usize;
+        let a = loudest(&samples[chunk..chunk * 2]);
+        let b = loudest(&samples[chunk * 2..chunk * 3]);
+        assert!((a - b).abs() > 0.01, "no tremolo through the engine: {a} and {b}");
+    }
+
+    #[test]
+    fn an_unknown_modulation_route_is_dropped_rather_than_thrown_on() {
+        let (mut engine, synth, output) = synth_rack();
+        engine.set_modulation(synth, 99, 99, 1.0);
+        engine.note_on(synth, 60, 1.0);
+        assert!(play(&mut engine, output, 0.05).iter().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn the_synth_plays_a_chord() {
+        let (mut engine, synth, output) = synth_rack();
+        for note in [60, 64, 67] {
+            engine.note_on(synth, note, 0.8);
+        }
+        let chord = loudest(&play(&mut engine, output, 0.1));
+
+        let (mut single, one, out) = synth_rack();
+        single.note_on(one, 60, 0.8);
+        let alone = loudest(&play(&mut single, out, 0.1));
+        assert!(chord > alone, "three notes were no louder than one");
+    }
+
+    #[test]
+    fn all_notes_off_reaches_the_bank() {
+        let (mut engine, synth, output) = synth_rack();
+        engine.set_param(synth, Synth::AMP_RELEASE, 0.02);
+        for note in [60, 64, 67] {
+            engine.note_on(synth, note, 1.0);
+        }
+        play(&mut engine, output, 0.05);
+        engine.all_notes_off(synth);
+        play(&mut engine, output, 0.2);
+        assert_eq!(loudest(&play(&mut engine, output, 0.05)), 0.0);
+    }
+
+    #[test]
+    fn a_nonsense_wave_index_falls_back_rather_than_going_silent() {
+        // Wave is an enum crossing a float ABI. A document written by a newer
+        // build must not silence the instrument.
+        let (mut engine, synth, output) = synth_rack();
+        engine.set_param(synth, Synth::OSC_BASE + Synth::OSC_WAVE, 99.0);
+        engine.note_on(synth, 60, 1.0);
+        assert!(loudest(&play(&mut engine, output, 0.1)) > 0.01);
     }
 
     #[test]
