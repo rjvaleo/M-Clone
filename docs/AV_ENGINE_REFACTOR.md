@@ -247,6 +247,56 @@ It also removes 9 native nodes constructed and destroyed *per note-on*.
 **Done when:** an LFO visibly and audibly modulates a destination, and the matrix
 face edits routings live.
 
+**Status (2026-08-04): the synth plays, polyphonically, with a live LFO
+routing, in a browser.** Notes cross the full path — keyboard → `WasmRackNode`
+→ worklet message → `WasmRack.noteOn` → `Engine::note_on` → `Synth::note_on` →
+`VoiceBank` — and a modulation routing set from the page reaches the matrix the
+same way. `synthPlayer.ts:208`'s two zeros are no longer the ceiling; the Rust
+LFO runs continuously and the matrix is evaluated every sample.
+
+| Piece | Where | Proof |
+|---|---|---|
+| Oscillator, LFO, envelope, matrix, voice, bank | `dsp-core/src/{osc,lfo,envelope,modmatrix,voice,bank}.rs` | 187 `cargo test` |
+| `Synth` engine module, note verbs on `Module`/`Engine` | `dsp-core/src/modules.rs`, `engine.rs` | included above |
+| Note and modulation verbs on the WASM ABI | `wasm/src/lib.rs` | `wasm/verify.mjs` sends a note and a routing across the real boundary |
+| Plan bridge knows `m.synth`'s 41 parameters | `audio/wasm/engineBridge.ts` | 28 tests |
+| Worklet carries notes and routings, not just plans | `audio/wasm/rackWorklet.ts` | protocol extended: `note-on`, `note-off`, `all-notes-off`, `modulation` |
+| Main thread can send them | `audio/wasm/rackNode.ts` | 15 tests, including that notes are never deduplicated the way plans are |
+| The bench plays it | `public/engine-test.html` | keyboard, filter, envelope, LFO 1 and one live matrix routing, defaulting to LFO 1 → filter cutoff |
+
+Verified by rendering, not by assertion. Through the real worklet in a browser,
+with the default routing (LFO 1 → filter cutoff, depth 0.6, rate 2 Hz):
+
+- silent before any note (peak 0.0000)
+- a note sounds (peak 0.217–0.267 across runs)
+- the timbre visibly tracks the LFO: a normalised-brightness measurement taken
+  in ten 100 ms windows across one note reads `0.050, 0.163, 0.050, 0.163, …` —
+  a clean, repeating swing, not noise
+- note-off silences it once the release finishes, and stays silent
+
+One thing the tests could not catch, because it lives at the message boundary
+rather than in either language: **`OfflineAudioContext`'s timeline does not
+advance until `startRendering()` is called**, so a `postMessage` sent beforehand
+and a `setTimeout` wait beforehand both land at *audio* time zero, not offset
+from each other. A first attempt at verifying this stage sent plan, note-on and
+note-off all before rendering started and measured total silence — not an engine
+bug, a test bug. Fixed by using `ctx.suspend(t)` to act at a specific point in
+the rendered timeline, which is also why `rust/wasm/verify.mjs`'s own pattern
+waits *before* calling `startRendering()`, never after.
+
+**Known limitation, not fixed here:** `AudioOutput` is mono, and the bench's
+`s → out` connection only wires the synth's left output port. Both speaker
+channels hear identical audio; pan is real inside the voice (tested at
+`voice.rs`) but never reaches two ears from this bench. Stereo through the graph
+is its own step — `HostInput`, `Gain` and `AudioOutput` all need to widen, and
+the bridge needs to wire two cables per connection instead of one.
+
+**Remaining:** the modulation-matrix *editor* face — the bench exposes exactly
+one routing; a real UI for all 96 cells is Stage 4 or later. Oscillators 2 and
+3, the filter envelope, and LFO 2 are implemented and tested in Rust but not
+yet exposed on the bench page, since the plan scoped the bench to the minimum
+that makes the point audible.
+
 ### Stage 3 — The effect rack
 
 Port the twelve existing modules onto the proven seam, then add the four that
