@@ -136,6 +136,10 @@ describe("Compiling the audio subgraph", () => {
       const spec = compileAudioPlan(document, moduleRegistry).nodes.n;
       for (const parameter of descriptor.parameters) {
         if (parameter.id === "mix" || parameter.id === "mute") continue;
+        // The preset bank is the face's own state. Recalling a slot writes the
+        // parameters it captured, and *those* reach the audio layer as the
+        // numbers they are — the bank itself never needs to.
+        if (parameter.id === "preset-values" || parameter.id === "active-position") continue;
         const carried = parameter.id in spec.parameters || parameter.id in spec.structure;
         if (!carried) orphaned.push(`${descriptor.type}.${parameter.id}`);
       }

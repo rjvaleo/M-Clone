@@ -65,11 +65,36 @@ describe("Every registered audio module has a topology", () => {
   });
 
   it("gives every effect an output, and the exit point none", () => {
+    // This once asserted *exactly one* output, which was true while every audio
+    // module was one-in-one-out. The DP/4+ broke it on purpose: it is a
+    // four-in-four-out machine and folding its outputs together would delete
+    // the multi-source configurations that are the point of the box. So the
+    // invariant is now the one that actually matters — the exit point emits
+    // nothing, and everything else emits something.
     const outputs = (type: string) => moduleRegistry.get(type)?.ports
       .filter((port) => port.direction === "output" && port.signal.kind === "audio") ?? [];
     for (const type of Object.keys(EFFECT_BUILDERS)) {
-      expect(outputs(type).length, type).toBe(type === "m.audio-output" ? 0 : 1);
+      if (type === "m.audio-output") {
+        expect(outputs(type).length, type).toBe(0);
+        continue;
+      }
+      expect(outputs(type).length, type).toBeGreaterThanOrEqual(1);
     }
+  });
+
+  it("wires multi-port modules per port, and single-port modules as before", () => {
+    // The DP/4+ is the only module with more than one port a side, so it is the
+    // only proof that `inputFor`/`outputFor` are honoured rather than ignored.
+    const multi = build("m.audio-dp4").module;
+    expect(multi.inputFor?.("audio-in-1")).not.toBe(multi.inputFor?.("audio-in-4"));
+    expect(multi.outputFor?.("audio-out-1")).not.toBe(multi.outputFor?.("audio-out-4"));
+
+    // And an ordinary effect must still resolve every port to its one input,
+    // because that is what every existing patch relies on.
+    const single = build("m.audio-reverb").module;
+    expect(single.inputFor?.("audio-in")).toBe(single.input);
+    expect(single.outputFor?.("audio-out")).toBe(single.output);
+    expect(single.inputFor?.("anything-at-all")).toBe(single.input);
   });
 
   it("refuses a module type it does not know, rather than silently making no sound", () => {

@@ -49,7 +49,31 @@ export interface ManagedAudioNode {
   setWet(wet: number, atSec: number): void;
   /** Release every resource. Called only after the fade-out has completed. */
   dispose(): void;
+
+  /**
+   * Per-port wiring, for modules with more than one audio port.
+   *
+   * `AudioConnection` has always carried a `portId` — `connectionKey` includes
+   * it, so the plan can distinguish two wires between the same pair of nodes —
+   * but the adapter had nowhere to send it and collapsed every audio port onto
+   * the single `input`/`output` pair. That was correct while every audio module
+   * was one-in-one-out. The DP/4+ is four-in-four-out, and folding its four
+   * inputs together would silently destroy the two-, three- and four-source
+   * configurations that are the whole point of the machine.
+   *
+   * Both are optional and both fall back to `input`/`output`, so every existing
+   * module is unaffected and no existing test changes.
+   */
+  inputFor?(portId: string): AudioNodeLike;
+  outputFor?(portId: string): AudioNodeLike;
 }
+
+/** Resolve a connection endpoint, honouring per-port wiring when offered. */
+const sourceNode = (node: ManagedAudioNode, portId: string): AudioNodeLike =>
+  node.outputFor?.(portId) ?? node.output;
+
+const destinationNode = (node: ManagedAudioNode, portId: string): AudioNodeLike =>
+  node.inputFor?.(portId) ?? node.input;
 
 export interface AudioModuleFactory {
   create(spec: AudioNodeSpec, atSec: number): ManagedAudioNode;
@@ -148,8 +172,10 @@ export class AudioGraphAdapter {
       const from = this.live.get(connection.from.nodeId);
       const to = this.live.get(connection.to.nodeId);
       if (!from || !to) continue;
+      const src = sourceNode(from, connection.from.portId);
+      const dst = destinationNode(to, connection.to.portId);
       this.scheduler.after(schedule.disposeDelaySec, () => {
-        from.output.disconnect(to.input);
+        src.disconnect(dst);
         this.disconnectCount += 1;
       });
     }
@@ -171,7 +197,7 @@ export class AudioGraphAdapter {
       const from = this.live.get(connection.from.nodeId);
       const to = this.live.get(connection.to.nodeId);
       if (!from || !to) continue;
-      from.output.connect(to.input);
+      sourceNode(from, connection.from.portId).connect(destinationNode(to, connection.to.portId));
       this.connections.set(connectionKey(connection), connection);
       this.connectCount += 1;
     }

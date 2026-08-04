@@ -22,6 +22,10 @@ import type {
   DelayNodeLike,
   EffectContext,
   GainNodeLike,
+  OscillatorKind,
+  OscillatorNodeLike,
+  PeriodicWaveLike,
+  StereoPannerNodeLike,
   WaveShaperNodeLike,
 } from "../nodes";
 import type { EngineContext } from "../audioEngine";
@@ -189,6 +193,58 @@ export class FakeBuffer implements AudioBufferLike {
   }
 }
 
+/**
+ * A pitch generator that records what it was told.
+ *
+ * Single-use in the same way the real one is: `stop` before `start` throws, so
+ * a voice that guards against it is guarding against something real.
+ */
+export class FakeOscillator extends FakeNode implements OscillatorNodeLike {
+  type: OscillatorKind = "sine";
+  readonly frequency = new FakeParam(440);
+  readonly detune = new FakeParam(0);
+  onended: (() => void) | null = null;
+  periodicWave: PeriodicWaveLike | null = null;
+  readonly starts: number[] = [];
+  readonly stops: number[] = [];
+  private started = false;
+
+  constructor() {
+    super("oscillator");
+  }
+
+  setPeriodicWave(wave: PeriodicWaveLike): void {
+    this.periodicWave = wave;
+    this.type = "custom";
+  }
+
+  start(when = 0): void {
+    this.started = true;
+    this.starts.push(when);
+  }
+
+  stop(when = 0): void {
+    if (!this.started) throw new Error("cannot stop an oscillator that has not started");
+    this.stops.push(when);
+  }
+
+  /** Drive the natural-finish path a test cannot wait for. */
+  finish(): void {
+    this.onended?.();
+  }
+}
+
+export class FakeStereoPanner extends FakeNode implements StereoPannerNodeLike {
+  readonly pan = new FakeParam(0);
+  constructor() {
+    super("stereo-panner");
+  }
+}
+
+export class FakePeriodicWave implements PeriodicWaveLike {
+  constructor(readonly real: Float32Array, readonly imag: Float32Array) {}
+}
+
 export class FakeAudioContext implements EffectContext, EngineContext {
   currentTime = 0;
   state: "suspended" | "running" | "closed" = "suspended";
@@ -209,6 +265,20 @@ export class FakeAudioContext implements EffectContext, EngineContext {
 
   createGain(): GainNodeLike {
     return this.track(new FakeGain());
+  }
+
+  createOscillator(): OscillatorNodeLike {
+    return this.track(new FakeOscillator());
+  }
+
+  createStereoPanner(): StereoPannerNodeLike {
+    return this.track(new FakeStereoPanner());
+  }
+
+  createPeriodicWave(real: Float32Array, imag: Float32Array): PeriodicWaveLike {
+    // Copied, because the real one takes ownership of nothing and a caller
+    // reusing its scratch arrays must not retune every wave it already made.
+    return new FakePeriodicWave(Float32Array.from(real), Float32Array.from(imag));
   }
 
   createDelay(maxDelaySeconds: number): DelayNodeLike {

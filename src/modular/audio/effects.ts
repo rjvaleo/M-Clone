@@ -34,6 +34,8 @@ import type { AudioNodeLike, ManagedAudioNode } from "./graphAdapter";
 import { rampParam, type AudioParamLike, type SmoothingPolicy } from "./params";
 import { crushCurve, impulseFrameCount, renderPlateImpulse } from "./dsp";
 import type { BiquadFilterKind, EffectContext, GainNodeLike } from "./nodes";
+import { createBlackholeCore } from "./blackhole";
+import { createDp4Machine, createDp4ReverbCore, createNonLinCore } from "./dp4";
 
 /** Where a parameter's ramp shape comes from — the registry descriptor. */
 export type SmoothingLookup = (parameterId: string) => SmoothingPolicy;
@@ -53,6 +55,29 @@ type EffectCore = {
   parallel: boolean;
   /** Nodes to disconnect on disposal, in no particular order. */
   owned: readonly AudioNodeLike[];
+
+  /**
+   * A hand-written parameter setter, for controls that are not one `AudioParam`.
+   *
+   * Most effects are a knob per node and `params` says everything. The two
+   * reverb machines are not: Blackhole's Gravity moves the decay time *and* the
+   * diffusion *and* the de-rating on the global feedback, and its Feedback knob
+   * has two discrete states past its top that reconfigure the tank. Those are
+   * decisions, not values, and pretending otherwise would mean either exposing
+   * three knobs where the machine has one or writing the coupling into the
+   * shell, where it does not belong.
+   *
+   * Consulted only when `params` has no entry for the id, so an effect can mix
+   * the two: plain parameters stay plain.
+   */
+  setParameter?(parameterId: string, value: number, atSec: number): void;
+
+  /** Extra teardown beyond disconnecting `owned` — stopping oscillators, mostly. */
+  dispose?(): void;
+
+  /** Per-port wiring for multi-port modules. See `ManagedAudioNode`. */
+  inputFor?(portId: string): AudioNodeLike;
+  outputFor?(portId: string): AudioNodeLike;
 };
 
 type CoreBuilder = (context: EffectContext, spec: AudioNodeSpec) => EffectCore;
@@ -128,8 +153,24 @@ class EffectModule implements ManagedAudioNode {
 
   setParameter(parameterId: string, value: number, atSec: number): void {
     const param = this.core.params[parameterId];
-    if (!param) return;
-    rampParam(param, value, atSec, this.smoothing(parameterId));
+    if (param) {
+      rampParam(param, value, atSec, this.smoothing(parameterId));
+      return;
+    }
+    // A core with coupled controls handles its own ramps, because only it knows
+    // which of them move together.
+    this.core.setParameter?.(parameterId, value, atSec);
+  }
+
+  inputFor(portId: string): AudioNodeLike {
+    return this.core.inputFor?.(portId) ?? this.inputGain;
+  }
+
+  outputFor(portId: string): AudioNodeLike {
+    // Multi-port modules bypass the shell's mix bus: a four-output machine has
+    // no single point where a dry/wet balance would be meaningful, and its own
+    // per-unit mixes are the controls that matter.
+    return this.core.outputFor?.(portId) ?? this.outputGain;
   }
 
   /**
@@ -164,6 +205,9 @@ class EffectModule implements ManagedAudioNode {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    // Core teardown first: an oscillator must be stopped before the nodes it
+    // feeds are torn out from under it.
+    this.core.dispose?.();
     this.inputGain.disconnect();
     this.dryGain.disconnect();
     this.wetGain.disconnect();
@@ -371,6 +415,104 @@ function filter(context: EffectContext, kind: BiquadFilterKind) {
   return node;
 }
 
+// ---- the two machines --------------------------------------------------------
+
+/**
+ * Blackhole — the H90's reverb.
+ *
+ * `line-count` is the only structural value: the number of delay lines in the
+ * feedback network decides how many nodes exist, so it cannot be ramped. Every
+ * documented control — Gravity, Size, Pre Delay, the two shelves, Mod Depth and
+ * Rate, Feedback, Resonance — is movable, which is what lets the whole front
+ * panel be automated from the modulation rack.
+ */
+const buildBlackhole: CoreBuilder = (context, spec) => {
+  const core = createBlackholeCore(context, spec, context.currentTime);
+  return {
+    input: core.input,
+    output: core.output,
+    params: {},
+    parallel: true,
+    owned: core.owned,
+    setParameter: core.setParameter,
+    dispose: core.dispose,
+  };
+};
+
+/**
+ * One DP/4 reverb tank — plate, room or hall.
+ *
+ * The algorithm is structural because the manual is explicit that the variants
+ * differ in "the internal values of the components (not user programmable)",
+ * and because the room and hall algorithms have a pre-echo section the plates
+ * do not. Switching between them is a different graph, not a different number.
+ */
+const buildDp4Reverb: CoreBuilder = (context, spec) => {
+  const core = createDp4ReverbCore(context, spec, context.currentTime);
+  return {
+    input: core.input,
+    output: core.output,
+    params: {},
+    parallel: true,
+    owned: core.owned,
+    setParameter: core.setParameter,
+    dispose: core.dispose,
+  };
+};
+
+/**
+ * Non Lin — the DP/4's single-pass reverb.
+ *
+ * The one algorithm in this rack with no feedback anywhere, which is why it can
+ * make a gate or a reverse swell without any envelope machinery: the nine tap
+ * levels *are* the envelope.
+ */
+const buildDp4NonLin: CoreBuilder = (context, spec) => {
+  const core = createNonLinCore(context, spec, context.currentTime);
+  return {
+    input: core.input,
+    output: core.output,
+    params: {},
+    parallel: true,
+    owned: core.owned,
+    setParameter: core.setParameter,
+    dispose: core.dispose,
+  };
+};
+
+/**
+ * The whole DP/4+ — four units, four ins, four outs.
+ *
+ * This is the module that needed `inputFor`/`outputFor`. Its four inputs are
+ * not four copies of one signal: in a 4-source Config they are four independent
+ * mono paths through four independent units, and summing them at a single
+ * input would delete the machine's defining feature.
+ *
+ * `input`/`output` still resolve to inputs[0] and outputs[0], so a patch that
+ * wires it like any other stereo effect gets something sensible rather than
+ * silence.
+ */
+const buildDp4Machine: CoreBuilder = (context, spec) => {
+  const machine = createDp4Machine(context, spec, context.currentTime);
+  const portIndex = (portId: string, prefix: string): number => {
+    const match = new RegExp(`^${prefix}-([1-4])$`).exec(portId);
+    return match ? Number.parseInt(match[1], 10) - 1 : 0;
+  };
+  return {
+    input: machine.inputs[0],
+    output: machine.outputs[0],
+    params: {},
+    // The machine's dry/wet lives per unit, exactly as the hardware's did, so
+    // the shell must not add a second one on top.
+    parallel: false,
+    owned: machine.owned,
+    setParameter: machine.setParameter,
+    dispose: machine.dispose,
+    inputFor: (portId) => machine.inputs[portIndex(portId, "audio-in")] ?? machine.inputs[0],
+    outputFor: (portId) => machine.outputs[portIndex(portId, "audio-out")] ?? machine.outputs[0],
+  };
+};
+
 /**
  * Module type to topology.
  *
@@ -387,6 +529,10 @@ export const EFFECT_BUILDERS: Readonly<Record<string, CoreBuilder>> = {
   "m.audio-compressor": buildCompressor,
   "m.audio-limiter": buildLimiter,
   "m.audio-bitcrusher": buildBitCrusher,
+  "m.audio-blackhole": buildBlackhole,
+  "m.audio-dp4-reverb": buildDp4Reverb,
+  "m.audio-dp4-nonlin": buildDp4NonLin,
+  "m.audio-dp4": buildDp4Machine,
 };
 
 export const isEffectModule = (moduleType: string): boolean => moduleType in EFFECT_BUILDERS;

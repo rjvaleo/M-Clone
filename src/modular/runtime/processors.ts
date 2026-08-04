@@ -1101,4 +1101,5 @@ export const PROCESSOR_FACTORIES: Record<
   "m.percussion": (build) => new MidiOutputProcessor(build, "percussion"),
   "m.looper": (build) => new MidiOutputProcessor(build, "looper"),
   "m.granular": (build) => new MidiOutputProcessor(build, "granular"),
+  "m.synth": (build) => new MidiOutputProcessor(build, "synth"),
 };
