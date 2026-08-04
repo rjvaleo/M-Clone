@@ -28,10 +28,12 @@
 
 pub mod delay;
 pub mod engine;
+pub mod envelope;
 pub mod dynamics;
 pub mod fdn;
 pub mod filter;
 pub mod lfo;
+pub mod modmatrix;
 pub mod modules;
 pub mod reverb;
 
