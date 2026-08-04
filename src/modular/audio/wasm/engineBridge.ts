@@ -40,6 +40,37 @@ export const HOST_INPUT_KIND = 0;
 export const MODULE_KINDS: Readonly<Record<string, number>> = {
   "m.audio-gain": 1,
   "m.audio-output": 2,
+  "m.synth": 3,
+};
+
+/** Per-oscillator and per-LFO parameters are strided; see `Synth` in Rust. */
+const OSC_BASE = 1;
+const OSC_STRIDE = 5;
+const LFO_BASE = 28;
+const LFO_STRIDE = 5;
+
+const oscParams = (index: number): Record<string, number> => {
+  const base = OSC_BASE + index * OSC_STRIDE;
+  const n = index + 1;
+  return {
+    [`osc${n}-wave`]: base + 0,
+    [`osc${n}-semitones`]: base + 1,
+    [`osc${n}-cents`]: base + 2,
+    [`osc${n}-level`]: base + 3,
+    [`osc${n}-width`]: base + 4,
+  };
+};
+
+const lfoParams = (index: number): Record<string, number> => {
+  const base = LFO_BASE + index * LFO_STRIDE;
+  const n = index + 1;
+  return {
+    [`lfo${n}-shape`]: base + 0,
+    [`lfo${n}-trigger`]: base + 1,
+    [`lfo${n}-rate`]: base + 2,
+    [`lfo${n}-depth`]: base + 3,
+    [`lfo${n}-phase`]: base + 4,
+  };
 };
 
 /**
@@ -53,6 +84,29 @@ export const MODULE_KINDS: Readonly<Record<string, number>> = {
 export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, number>>>> = {
   "m.audio-gain": { gain: 0, level: 1, [AUDIO_MUTE_PARAM]: 2 },
   "m.audio-output": { level: 0 },
+  "m.synth": {
+    level: 0,
+    ...oscParams(0),
+    ...oscParams(1),
+    ...oscParams(2),
+    "filter-cutoff": 16,
+    "filter-resonance": 17,
+    "filter-env-octaves": 18,
+    "key-follow": 19,
+    "amp-attack": 20,
+    "amp-decay": 21,
+    "amp-sustain": 22,
+    "amp-release": 23,
+    "filter-attack": 24,
+    "filter-decay": 25,
+    "filter-sustain": 26,
+    "filter-release": 27,
+    ...lfoParams(0),
+    ...lfoParams(1),
+    pan: 38,
+    volume: 39,
+    "mod-wheel": 40,
+  },
 };
 
 /**
@@ -63,7 +117,21 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
 const FADE_HANDLE: Readonly<Record<string, number | undefined>> = {
   "m.audio-gain": PARAM_INDICES["m.audio-gain"].level,
   "m.audio-output": undefined,
+  "m.synth": PARAM_INDICES["m.synth"].level,
 };
+
+/** Modules that take notes. Everything else inherits the trait's no-op. */
+const INSTRUMENTS: ReadonlySet<string> = new Set(["m.synth"]);
+
+/**
+ * Modules with an audio input, and therefore somewhere for the host feed to go.
+ *
+ * A synth generates rather than processes: patching the host into it would be
+ * a cable to a port that is not there, which the engine refuses anyway — but
+ * silently, so the mirror would believe in a cable that does not exist and
+ * disconnect a real one later.
+ */
+const TAKES_AUDIO_INPUT: ReadonlySet<string> = new Set(["m.audio-gain", "m.audio-output"]);
 
 /** Every audio port on these modules is port 0; that changes with the DP/4. */
 const PORT_INDEX = 0;
@@ -76,6 +144,10 @@ export interface EngineExports {
   connect(fromModule: number, fromPort: number, toModule: number, toPort: number): number;
   disconnect(fromModule: number, fromPort: number, toModule: number, toPort: number): number;
   set_param(module: number, index: number, value: number): void;
+  note_on(module: number, note: number, velocity: number): void;
+  note_off(module: number, note: number): void;
+  all_notes_off(module: number): void;
+  set_modulation(module: number, source: number, dest: number, amount: number): void;
   set_bypassed(module: number, bypassed: number): void;
   set_io(inputModule: number, outputModule: number): void;
   reset(): void;
@@ -100,6 +172,7 @@ const structureKey = (spec: AudioNodeSpec): string =>
 
 type Built = {
   moduleId: number;
+  moduleType: string;
   structure: string;
   parameters: Record<string, number>;
   bypass: boolean;
@@ -153,6 +226,10 @@ export class WasmRack {
     return this.built.get(nodeId)?.moduleId;
   }
 
+  moduleTypeOf(nodeId: string): string | undefined {
+    return this.built.get(nodeId)?.moduleType;
+  }
+
   /**
    * Bring the rack in line with `plan`.
    *
@@ -165,6 +242,46 @@ export class WasmRack {
     this.buildAndRamp(plan);
     this.rewire(plan);
     this.pointHostAtOutput(plan);
+  }
+
+  /** Every node in the current plan that takes notes. */
+  get instruments(): string[] {
+    return [...this.built.keys()]
+      .filter((nodeId) => INSTRUMENTS.has(this.moduleTypeOf(nodeId) ?? ""))
+      .sort();
+  }
+
+  /**
+   * Play a note on every instrument in the plan.
+   *
+   * Broadcast rather than addressed, because the plan carries no routing from
+   * a keyboard to an instrument — in the app that job belongs to the runtime's
+   * note adapter, which already resolves an event's target by port. This is
+   * what the bench and a MIDI-thru path need in the meantime.
+   */
+  noteOn(note: number, velocity: number): void {
+    for (const nodeId of this.instruments) {
+      this.engine.note_on(this.moduleIdOf(nodeId)!, note, velocity);
+    }
+  }
+
+  noteOff(note: number): void {
+    for (const nodeId of this.instruments) {
+      this.engine.note_off(this.moduleIdOf(nodeId)!, note);
+    }
+  }
+
+  allNotesOff(): void {
+    for (const nodeId of this.instruments) {
+      this.engine.all_notes_off(this.moduleIdOf(nodeId)!);
+    }
+  }
+
+  /** Set one matrix cell on one node. */
+  setModulation(nodeId: string, source: number, dest: number, amount: number): void {
+    const moduleId = this.moduleIdOf(nodeId);
+    if (moduleId === undefined) return;
+    this.engine.set_modulation(moduleId, source, dest, amount);
   }
 
   /** Advance one render quantum. `input` is read, `output` is written. */
@@ -209,7 +326,13 @@ export class WasmRack {
           this.unsupportedTypes.add(spec.moduleType);
           continue;
         }
-        built = { moduleId, structure: structureKey(spec), parameters: {}, bypass: false };
+        built = {
+          moduleId,
+          moduleType: spec.moduleType,
+          structure: structureKey(spec),
+          parameters: {},
+          bypass: false,
+        };
         this.built.set(spec.nodeId, built);
 
         const fade = FADE_HANDLE[spec.moduleType];
@@ -286,7 +409,10 @@ export class WasmRack {
     const open: number[] = [];
     for (const [nodeId, built] of this.built) {
       if (fed.has(nodeId)) continue;
-      if (plan.nodes[nodeId]?.moduleType === "m.audio-output") continue;
+      // A source has no input to feed, and the Audio Output is the master —
+      // an idle rack is silent, not a wire from the input to the speakers.
+      if (!TAKES_AUDIO_INPUT.has(built.moduleType)) continue;
+      if (built.moduleType === "m.audio-output") continue;
       open.push(built.moduleId);
     }
     return open;

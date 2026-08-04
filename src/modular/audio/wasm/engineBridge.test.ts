@@ -57,6 +57,18 @@ class FakeEngine implements EngineExports {
     this.calls.push(`param:${module}.${index}=${value}`);
     this.params.set(`${module}.${index}`, value);
   }
+  note_on(module: number, note: number, velocity: number): void {
+    this.calls.push(`noteon:${module}.${note}@${velocity}`);
+  }
+  note_off(module: number, note: number): void {
+    this.calls.push(`noteoff:${module}.${note}`);
+  }
+  all_notes_off(module: number): void {
+    this.calls.push(`allnotesoff:${module}`);
+  }
+  set_modulation(module: number, source: number, dest: number, amount: number): void {
+    this.calls.push(`mod:${module}.${source}->${dest}=${amount}`);
+  }
   set_bypassed(module: number, bypassed: number): void {
     this.calls.push(`bypass:${module}=${bypassed}`);
   }
@@ -380,6 +392,74 @@ describe("The plan-to-engine bridge", () => {
     const rack = new WasmRack(engine, 48000);
     expect(rack.input).toHaveLength(128);
     expect(rack.output).toHaveLength(128);
+  });
+
+  it("never feeds the host input into a source", () => {
+    // A synth generates rather than processes. Patching the host into it is a
+    // cable to a port that is not there — the engine refuses it silently, so
+    // the mirror would believe in a cable that does not exist and disconnect a
+    // real one on the next update.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("out", "m.audio-output")], [wire("s", "out")]));
+    expect([...engine.cables]).not.toContain(`${rack.hostInputId}:0→${rack.moduleIdOf("s")}:0`);
+    expect([...engine.cables]).toContain(`${rack.moduleIdOf("s")}:0→${rack.moduleIdOf("out")}:0`);
+  });
+
+  it("knows which nodes take notes", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(
+      plan([node("s", "m.synth"), node("g", "m.audio-gain"), node("out", "m.audio-output")]),
+    );
+    expect(rack.instruments).toEqual(["s"]);
+  });
+
+  it("plays notes on every instrument and nothing else", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("g", "m.audio-gain")]));
+
+    rack.noteOn(60, 0.8);
+    rack.noteOff(60);
+    rack.allNotesOff();
+
+    const synth = rack.moduleIdOf("s");
+    expect(engine.of("noteon")).toEqual([`noteon:${synth}.60@0.8`]);
+    expect(engine.of("noteoff")).toEqual([`noteoff:${synth}.60`]);
+    expect(engine.of("allnotesoff")).toEqual([`allnotesoff:${synth}`]);
+  });
+
+  it("sends a matrix routing to the node that owns it", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.setModulation("s", 0, 11, 1);
+    expect(engine.of("mod")).toEqual([`mod:${rack.moduleIdOf("s")}.0->11=1`]);
+  });
+
+  it("ignores a routing for a node that is not built", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.setModulation("nope", 0, 11, 1);
+    expect(engine.of("mod")).toHaveLength(0);
+  });
+
+  it("opens the synth's fade handle like any other module", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    expect(engine.params.get(`${rack.moduleIdOf("s")}.${PARAM_INDICES["m.synth"].level}`)).toBe(1);
+  });
+
+  it("gives every synth parameter a distinct index", () => {
+    // A duplicated index silently ties two controls together, which reads as a
+    // wiring bug in the DSP rather than a typo in a table.
+    const indices = Object.values(PARAM_INDICES["m.synth"]);
+    expect(new Set(indices).size).toBe(indices.length);
+    // And none of them stray past what the Rust module declares.
+    expect(Math.max(...indices)).toBeLessThan(41);
   });
 
   it("every module kind it claims to support has parameter indices", () => {
