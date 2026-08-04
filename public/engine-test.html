@@ -38,7 +38,7 @@
 <fieldset>
   <legend>Sound</legend>
   <button id="start">Start audio</button>
-  <button id="tone" disabled>Tone: off</button>
+  <button id="tone" disabled>Play tone</button>
   <label class="row">
     <span>Gain</span>
     <input id="gain" type="range" min="0" max="2" step="0.01" value="1" disabled />
@@ -47,8 +47,11 @@
   <label class="row">
     <span>Mute</span>
     <input id="mute" type="checkbox" disabled />
-    <output></output>
+    <output id="muteOut">passing</output>
   </label>
+  <p id="state" class="note" style="margin:1.25rem 0 0">
+    Engine: <strong>not started</strong>
+  </p>
   <p class="note" style="margin:1.25rem 0 0">
     Drag the gain while the tone plays. It is smoothed inside the Rust module,
     so it should sweep cleanly with no zipper or clicks.
@@ -83,11 +86,36 @@
   const gainEl = document.getElementById("gain");
   const gainOut = document.getElementById("gainOut");
   const muteEl = document.getElementById("mute");
+  const muteOut = document.getElementById("muteOut");
+  const stateEl = document.getElementById("state");
 
   let ctx, rackNode, osc, oscGain, playing = false;
 
+  /**
+   * One place that decides what every control says.
+   *
+   * Called after anything changes rather than each handler patching its own
+   * label — that is how a button ends up disabled while still reading "Start".
+   */
+  const render = (engineState) => {
+    stateEl.innerHTML = `Engine: <strong>${engineState}</strong>`;
+    const live = engineState === "running";
+    startBtn.textContent = live ? "Audio running" : engineState === "starting" ? "Starting…" : "Start audio";
+    startBtn.disabled = engineState === "starting" || live;
+    toneBtn.disabled = !live;
+    toneBtn.textContent = playing ? "Stop tone" : "Play tone";
+    toneBtn.classList.toggle("on", playing);
+    gainEl.disabled = !live;
+    muteEl.disabled = !live;
+    const muted = muteEl.checked;
+    muteOut.textContent = muted ? "muted" : "passing";
+    gainOut.textContent = muted
+      ? "—"
+      : Number(gainEl.value).toFixed(2);
+  };
+
   startBtn.addEventListener("click", async () => {
-    startBtn.disabled = true;
+    render("starting");
     logEl.textContent = "";
 
     try {
@@ -150,14 +178,12 @@
       check(`engine output is audible (peak ${peak.toFixed(3)})`, peak > 0.01);
       oscGain.gain.value = 0;
 
-      toneBtn.disabled = false;
-      gainEl.disabled = false;
-      muteEl.disabled = false;
-      say(failures === 0 ? "\nall checks passed — press Tone to listen" : `\n${failures} check(s) failed`,
+      render(failures === 0 ? "running" : "running with failures");
+      say(failures === 0 ? "\nall checks passed — press Play tone to listen" : `\n${failures} check(s) failed`,
           failures === 0 ? "ok" : "bad");
     } catch (error) {
       check(`threw: ${error && error.message ? error.message : error}`, false);
-      startBtn.disabled = false;
+      render("failed to start");
     }
   });
 
@@ -165,11 +191,10 @@
     playing = !playing;
     // Ramped on the source side so toggling is not itself a click.
     oscGain.gain.setTargetAtTime(playing ? 0.25 : 0, ctx.currentTime, 0.01);
-    toneBtn.textContent = `Tone: ${playing ? "on" : "off"}`;
-    toneBtn.classList.toggle("on", playing);
+    render("running");
   });
 
-  const sendParam = (name, value) => {
+  const sendParam = () => {
     rackNode.port.postMessage({
       type: "plan",
       plan: {
@@ -189,8 +214,13 @@
   };
 
   gainEl.addEventListener("input", () => {
-    gainOut.textContent = Number(gainEl.value).toFixed(2);
+    render("running");
     sendParam();
   });
-  muteEl.addEventListener("change", () => sendParam());
+  muteEl.addEventListener("change", () => {
+    render("running");
+    sendParam();
+  });
+
+  render("not started");
 </script>
