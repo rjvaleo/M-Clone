@@ -18,9 +18,13 @@ const WASM = new URL(
 );
 
 /** Matches `ModuleKind` in dsp-core/src/modules.rs — reordering breaks this. */
-const KIND = { HOST_INPUT: 0, GAIN: 1, AUDIO_OUTPUT: 2 };
+const KIND = { HOST_INPUT: 0, GAIN: 1, AUDIO_OUTPUT: 2, SYNTH: 3 };
 /** Matches `Gain::GAIN` / `LEVEL` / `MUTE`. */
 const GAIN_PARAM = { GAIN: 0, LEVEL: 1, MUTE: 2 };
+/** Matches the `Synth` constants in dsp-core/src/modules.rs. */
+const SYNTH_PARAM = { LEVEL: 0, LFO1_RATE: 28 + 2 };
+/** `ModSource` and `ModDest` in dsp-core/src/modmatrix.rs. */
+const MOD = { LFO1: 0, VOLUME: 11 };
 const SAMPLE_RATE = 48000;
 
 let failures = 0;
@@ -113,11 +117,65 @@ check("a NaN input does not poison the graph", near(afterNan, 0.25), `got ${afte
 // Silence in, silence out — catches a shim that leaks the previous block.
 check("silence in, silence out", settle(0) === 0);
 
-// ---- teardown ---------------------------------------------------------------
+// ---- teardown of the effect chain -------------------------------------------
 check("removing a module drops its cables", api.remove_module(gain) === 1 && api.cable_count() === 0);
 check("removing it twice is refused", api.remove_module(gain) === 0);
 api.process_quantum();
 check("a broken patch is silent rather than a crash", outBuf[0] === 0);
+
+// ---- the synth --------------------------------------------------------------
+// A different shape from the effect chain above: no host input, notes instead
+// of a buffer. This is the path nothing in Rust can test, because the note verbs
+// only exist at the ABI.
+{
+  api.init(SAMPLE_RATE);
+  const synth = u32(api.add_module(KIND.SYNTH));
+  const out = u32(api.add_module(KIND.AUDIO_OUTPUT));
+  check("built a synth", synth !== NO_MODULE);
+  check("synth → output", api.connect(synth, 0, out, 0) === 1);
+  api.set_io(NO_MODULE, out);
+  api.set_param(synth, SYNTH_PARAM.LEVEL, 1.0);
+
+  const outBuf2 = new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM);
+  const run = (blocks) => {
+    let loudest = 0;
+    for (let b = 0; b < blocks; b++) {
+      api.process_quantum();
+      for (let i = 0; i < QUANTUM; i++) loudest = Math.max(loudest, Math.abs(outBuf2[i]));
+    }
+    return loudest;
+  };
+
+  check("silent before any note", run(4) === 0);
+
+  api.note_on(synth, 60, 1.0);
+  check("a note over the ABI makes sound", run(16) > 0.01);
+
+  api.note_off(synth, 60);
+  run(200);
+  check("note off eventually silences it", run(8) === 0);
+
+  // The stage's headline, at the boundary the browser actually calls.
+  api.set_param(synth, SYNTH_PARAM.LFO1_RATE, 8);
+  api.set_modulation(synth, MOD.LFO1, MOD.VOLUME, 1.0);
+  api.note_on(synth, 60, 1.0);
+  const windows = [];
+  for (let w = 0; w < 6; w++) windows.push(run(6));
+  const spread = Math.max(...windows) - Math.min(...windows);
+  check(`an LFO routed over the ABI moves the sound (spread ${spread.toFixed(3)})`, spread > 0.01);
+
+  api.all_notes_off(synth);
+  run(400);
+  check("all notes off reaches the bank", run(8) === 0);
+
+  // Nonsense must not take down the callback.
+  api.note_on(synth, 9999, 1.0);
+  api.note_on(synth, 60, Number.NaN);
+  api.set_modulation(synth, 99, 99, 1.0);
+  api.set_modulation(synth, 0, 0, Number.NaN);
+  check("bad note and routing data is refused, not fatal", Number.isFinite(run(4)));
+  api.all_notes_off(synth);
+}
 
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

@@ -176,6 +176,24 @@ pub trait Module: Send {
         0
     }
 
+    /// A note arrived for this module.
+    ///
+    /// Default no-op, because most modules are effects and an effect that had
+    /// to acknowledge notes would be carrying an empty method for the benefit
+    /// of the two instruments that care. Notes reach a module by id rather than
+    /// down a cable: an event is not a signal, and giving it a port would mean
+    /// inventing a second kind of cable that carries neither audio nor CV.
+    fn note_on(&mut self, _note: u8, _velocity: f32) {}
+    fn note_off(&mut self, _note: u8) {}
+    fn all_notes_off(&mut self) {}
+
+    /// Set one cell of this module's modulation matrix, if it has one.
+    ///
+    /// Deliberately not a parameter index: an 8 × 12 matrix is 96 cells, and
+    /// exposing them as parameters would bury the twenty controls a person
+    /// actually turns among ninety-six they never touch directly.
+    fn set_modulation(&mut self, _source: u32, _dest: u32, _amount: f32) {}
+
     /// What a parameter reads before the host has written it.
     ///
     /// Without this every parameter starts at zero, so a module whose resting
@@ -293,6 +311,32 @@ impl Engine {
             if let Some(p) = slot.params.get_mut(index) {
                 *p = value;
             }
+        }
+    }
+
+    /// Send a note to one module. Unknown ids are ignored rather than a panic —
+    /// a note arriving for a module the host just deleted is a race, not a bug.
+    pub fn note_on(&mut self, id: ModuleId, note: u8, velocity: f32) {
+        if let Some(slot) = self.slot_mut(id) {
+            slot.module.note_on(note, velocity);
+        }
+    }
+
+    pub fn note_off(&mut self, id: ModuleId, note: u8) {
+        if let Some(slot) = self.slot_mut(id) {
+            slot.module.note_off(note);
+        }
+    }
+
+    pub fn all_notes_off(&mut self, id: ModuleId) {
+        if let Some(slot) = self.slot_mut(id) {
+            slot.module.all_notes_off();
+        }
+    }
+
+    pub fn set_modulation(&mut self, id: ModuleId, source: u32, dest: u32, amount: f32) {
+        if let Some(slot) = self.slot_mut(id) {
+            slot.module.set_modulation(source, dest, amount);
         }
     }
 
