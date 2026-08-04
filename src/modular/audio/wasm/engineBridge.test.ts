@@ -142,7 +142,7 @@ describe("The plan-to-engine bridge", () => {
 
     expect(rack.moduleIdOf("g")).not.toBeUndefined();
     expect(rack.moduleIdOf("out")).not.toBeUndefined();
-    expect(engine.cable_count()).toBe(1);
+    expect([...engine.cables]).toContain(`${rack.moduleIdOf("g")}:0→${rack.moduleIdOf("out")}:0`);
   });
 
   it("always builds the host input, so a rack is never deaf", () => {
@@ -288,6 +288,51 @@ describe("The plan-to-engine bridge", () => {
     expect(engine.calls.length).toBe(after);
   });
 
+  it("feeds the host's audio into every input the patch left open", () => {
+    // The bug this exists to prevent, found in a browser after every unit test
+    // passed: `set_io` tells the engine where to *write* incoming samples, but
+    // a module only hears them if the host input is actually cabled to it. The
+    // plan has no node for the host input — no document mentions it — so
+    // nothing in a plan-shaped test could notice the missing wire, and the rack
+    // rendered pure silence while reporting a correct graph.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+
+    const hostToGain = `${rack.hostInputId}:0→${rack.moduleIdOf("g")}:0`;
+    expect([...engine.cables]).toContain(hostToGain);
+    // The output is already fed by the gain, so it is left alone.
+    expect([...engine.cables]).not.toContain(`${rack.hostInputId}:0→${rack.moduleIdOf("out")}:0`);
+  });
+
+  it("stops feeding a module once the patch gives it a source", () => {
+    // Patching something into an open input has to take the host feed away, or
+    // the two sum and the module hears both at once.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("a", "m.audio-gain"), node("out", "m.audio-output")], [wire("a", "out")]));
+    expect([...engine.cables]).toContain(`${rack.hostInputId}:0→${rack.moduleIdOf("a")}:0`);
+
+    rack.update(
+      plan(
+        [node("src", "m.audio-gain"), node("a", "m.audio-gain"), node("out", "m.audio-output")],
+        [wire("src", "a"), wire("a", "out")],
+        2,
+      ),
+    );
+    expect([...engine.cables]).not.toContain(`${rack.hostInputId}:0→${rack.moduleIdOf("a")}:0`);
+    expect([...engine.cables]).toContain(`${rack.hostInputId}:0→${rack.moduleIdOf("src")}:0`);
+  });
+
+  it("never feeds the host input into the master output", () => {
+    // An Audio Output with nothing patched in is an idle rack, not a wire from
+    // the microphone straight to the speakers.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("out", "m.audio-output")]));
+    expect(engine.cable_count()).toBe(0);
+  });
+
   it("unpatches a cable the plan dropped, leaving both modules standing", () => {
     // Distinct from removing a node: both endpoints survive, so the mirror has
     // to issue a real disconnect rather than relying on the engine dropping
@@ -295,21 +340,22 @@ describe("The plan-to-engine bridge", () => {
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update(simplePlan());
-    expect(engine.cable_count()).toBe(1);
+    const documentCable = `${rack.moduleIdOf("g")}:0→${rack.moduleIdOf("out")}:0`;
+    expect([...engine.cables]).toContain(documentCable);
 
     rack.update(
       plan([node("g", "m.audio-gain", { gain: 0.5 }), node("out", "m.audio-output", {})], [], 2),
     );
 
     expect(engine.of("disconnect")).toHaveLength(1);
-    expect(engine.cable_count()).toBe(0);
+    expect([...engine.cables]).not.toContain(documentCable);
     expect(rack.moduleIdOf("g")).not.toBeUndefined();
     expect(rack.moduleIdOf("out")).not.toBeUndefined();
 
     // And patching it back is a connect, not a rebuild.
     const addsBefore = engine.of("add").length;
     rack.update(simplePlan());
-    expect(engine.cable_count()).toBe(1);
+    expect([...engine.cables]).toContain(documentCable);
     expect(engine.of("add")).toHaveLength(addsBefore);
   });
 
