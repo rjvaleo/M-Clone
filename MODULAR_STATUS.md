@@ -1,19 +1,30 @@
-# M Modular Development Checkpoint
+# idMLab Development Checkpoint
 
 **Checkpoint date:** 2026-08-03
 **Branch:** `modular`
 **Branch base:** `master` at `dda067b` (`0.8.0-alpha`)
 **Foundation checkpoint:** `2e816fc` (`Build modular MIDI foundation`), published to `origin/modular`
+**Last commit:** `cfc1530` (`Complete modular Web MIDI session`); the audio rack, sound
+pool, sample players, preset pad, and Pattern Editor described below are **working
+tree only** and not yet committed.
+
+The application is named **idMLab**. Internal identifiers — module type ids such as
+`m.pattern-editor`, the `.mmod` extension, `src/modular/`, CSS `mm-` prefixes — keep
+their original spelling on purpose; renaming them would churn every file for a
+cosmetic gain.
 
 ## Product decisions now in force
 
 - Modular is a new application and native document model. It does not need runtime or native-file compatibility with Classic M.
 - Standard M files will be supported through a one-way importer that constructs ordinary Modular nodes and connections.
 - Every independently wired musical processor is a single-stream module. Classic screens that grouped four voices are unfolded into four independent module instances.
-- Every multi-view module owns eight embedded presets, A-H. Classic A-F data maps directly; G-H start from module defaults.
+- Every multi-view module owns sixteen embedded presets, numbered 1-16. Classic A-F maps onto the first six; the rest start from module defaults.
 - Preset strips live inside the processor. There are no separate preset nodes or shared editors.
-- Preset interaction is consistent: click recalls, Shift-click overwrites from live controls, the stored value/summary appears below the letter, and a tooltip explains the stored state and gestures.
-- Single-stream Variable and Cyclic processors use one uniform compact face class. Large always-visible editors, such as Note Editor, use the standardized editor class; utility/I/O nodes use the utility class.
+- Every module draws its presets with one shared control, `PresetPad` — sixteen numbered keys, one row of sixteen where the face is wide enough and two rows of eight where it is not, never anything between. Only *which* parameters a slot captures differs between modules.
+- Preset interaction is consistent: click recalls, Shift-click overwrites from live controls, and a tooltip carries both the slot's contents and the gestures. The pad has no heading.
+- A module merged into a compound keeps its standalone form, and the compound always takes a different name. Note Editor and Pattern Editor are both real modules; so are Time Base, Phase, and the three Cyclics inside the latter.
+- A compound is a **compile-time expansion**, never a second engine: it materializes into exactly the nodes it stands for, wired the way they were always wired.
+- Single-stream Variable and Cyclic processors use one uniform compact face class. Large always-visible editors, such as Note Editor, use the standardized editor class; utility/I/O nodes use the utility class. Faces are sized by their content rather than to a fixed frame.
 - All operational controls remain on node faces. Inspectors, secondary windows, collapsible editors, and instance selectors are not part of the musical workflow.
 - The application uses a restrained full-color visual system rather than grayscale.
 
@@ -97,8 +108,17 @@ Velocity Range and Legato Processor.
 - A close button on every node header, removing that node without selecting it first. Pressing it does not start a drag, and the removal is undoable.
 - Click-to-patch typed ports with actionable incompatibility messages.
 - Hand mode for empty-canvas panning.
-- Wheel zoom and toolbar zoom control.
-- `.mmod` download/save action.
+- A fixed 16000 x 8000 canvas that is always pannable in every direction, whatever
+  the zoom. The stage never shrinks below the scrollport, so there is no "island"
+  of usable space; a new patch is centred on the canvas once, at creation, and the
+  toolbar's **Center** command repeats that on demand rather than on every open.
+- Wheel zoom eased toward a target rather than applied per notch, normalised across
+  wheel/trackpad delta modes. The dot grid is painted inside the zoom transform, so
+  it scales with the modules instead of sliding under them.
+- Right-click menus are placed page-aware — flipped, then clamped — and scroll
+  internally, so no group is ever cut off the bottom of the window.
+- `.mmod` download/save, plus **Save + samples** writing a self-contained
+  `.mmodpack`.
 - Runtime bridge is wired: graph edits recompile to plans, node-face transport/runtime commands call `ModularRuntime`, and parameter edits are queued with each parameter's declared morph policy.
 - Node-face runtime status polling is wired outside the scheduling path:
   transport position, step rate, delayed pulses, order/cyclic cursors, note
@@ -112,23 +132,60 @@ Velocity Range and Legato Processor.
 ### Current registered modules
 
 1. **Transport Clock** — utility face with transport and clock controls.
-2. **Time Base** — compact single-stream clock node turning the shared transport into one stream's step pulses, with eight embedded ratio presets. Denominator zero is Classic's `sa`.
-3. **Phase** — compact single-stream start offset in ticks, with eight embedded presets. Holds a delayed pulse until the window it lands in.
+2. **Time Base** — compact single-stream clock node turning the shared transport into one stream's step pulses, with sixteen embedded ratio presets. Denominator zero is Classic's `sa`.
+3. **Phase** — compact single-stream start offset in ticks, with sixteen embedded presets. Holds a delayed pulse until the window it lands in.
 4. **Step Notes** — utility converter from `step-event` to `note-event`, carrying the velocity, gate, and channel decisions that turn a chosen step into sounding notes. No preset strip: it is a utility, not a Classic Variable.
-5. **Note Editor** — large editor face with all controls visible and eight independent A-H pattern positions. Each instance owns its own piano roll; no shared editor selector exists.
-6. **Note Density** — compact single-stream processor with one live probability slider, deterministic seed, and eight embedded numeric presets.
-7. **Note Order** — compact single-stream processor with the original-style three-region/two-handle Original-Cyclic-Utterly control, shaded regions, and eight embedded mix presets.
-8. **Cyclic Accent** — editor-layout control sequencer emitting per-step accent values from an embedded 16-step grid with eight presets.
-9. **Cyclic Legato** — editor-layout control sequencer emitting per-step legato values from an embedded 16-step grid with eight presets.
-10. **Cyclic Rhythm** — editor-layout clock sequencer that warps outgoing step-clock duration from an embedded 16-step grid with eight presets.
-11. **Velocity Range** — compact single-stream note shaper consuming `accent-in` control values and mapping them onto a configurable low/high velocity range with eight presets.
-12. **Legato Processor** — compact single-stream note shaper consuming `legato-in` control values and applying legato multipliers that can create intentional note overlap, with eight presets.
-13. **Play Enable** — compact per-path note gate that mutes notes without stopping upstream clocks, with eight embedded presets.
-14. **Transposition** — compact note shaper with semitone and scale-degree modes, optional scale-context input, and eight embedded presets.
+5. **Note Editor** — large editor face with all controls visible and sixteen independent pattern positions. Each instance owns its own piano roll; no shared editor selector exists.
+6. **Note Density** — compact single-stream processor with one live probability slider, deterministic seed, and sixteen embedded numeric presets.
+7. **Note Order** — compact single-stream processor with the original-style three-region/two-handle Original-Cyclic-Utterly control, shaded regions, and sixteen embedded mix presets.
+8. **Cyclic Accent** — control sequencer emitting per-step accent values from an embedded 16-step sequence with sixteen presets.
+9. **Cyclic Legato** — control sequencer emitting per-step legato values from an embedded 16-step sequence with sixteen presets.
+10. **Cyclic Rhythm** — clock sequencer that warps outgoing step-clock duration from an embedded 16-step sequence with sixteen presets.
+11. **Velocity Range** — compact single-stream note shaper consuming `accent-in` control values and mapping them onto a configurable low/high velocity range with sixteen presets.
+12. **Legato Processor** — compact single-stream note shaper consuming `legato-in` control values and applying legato multipliers that can create intentional note overlap, with sixteen presets.
+13. **Play Enable** — compact per-path note gate that mutes notes without stopping upstream clocks, with sixteen embedded presets.
+14. **Transposition** — compact note shaper with semitone and scale-degree modes, optional scale-context input, and sixteen embedded presets.
 15. **Stream** — utility compound surface (`m.stream`) that materializes into ordinary single-stream modules and can be expanded onto the canvas.
-16. **MIDI Output** — utility face with destination/channel/latency/program controls.
+16. **Pattern Editor** — the compound described below: a clock in, fully formed notes out.
+17. **MIDI Output** — utility face with destination/channel/latency/program controls.
 
-Note Density and Note Order use the same 520 x 330 CSS-pixel compact frame, 28px controls, section spacing, and 50px preset cells. Their clean live measurement showed identical dimensions and no internal overflow.
+Eight **audio effect** modules — Filter, Delay, Reverb, Chorus, Phaser,
+Distortion, Bit Crush, and Ring Modulator — each a `input → dry/wet → output`
+shell around one builder, with the mix as an equal-power crossfade.
+
+Three **sample players** — Percussion, Looper, and Granular — driven by note
+events through the shared voice bank.
+
+#### Cyclic faces
+
+A Cyclic sequence draws as sixteen vertical bars of five segments rather than a
+5 x 16 cell grid: the same information at a quarter of the height, which is what
+makes three of them fit inside one compound. Press a segment to set the step,
+drag vertically for a random range (drawn hatched, never solid), drag sideways to
+paint. Clear / Flat / All random are a right-click menu. Clicking a step number
+on the ruler sets the sequence length; steps past the end stay visible and dimmed
+rather than disappearing.
+
+#### The Pattern Editor compound
+
+`m.pattern-editor` merges Time Base, Phase, the three Cyclics, Note Editor, Note
+Order, Step→Notes, Velocity Range, and Legato Processor into one face: a clock
+goes in, whole notes come out, with the accent already in their velocity and the
+legato already in their length. Each embedded sequence carries its own length
+(`accent-length`, `legato-length`, `rhythm-length`) and none of them carry their
+own preset pad — the compound has one bank, and a slot in it stores the entire
+idea: the pattern, all three sequences, their lengths, the step rate, and the
+phase.
+
+Its note editor is a **windowed roll**: every one of the 128 pitches and every
+step is rendered inside a short scrolling viewport, with an overview strip above
+that draws the whole pattern at once and a marker showing where the window sits.
+Dragging the overview moves the window. It opens centred on the notes that exist
+rather than at the top of the range. `src/modular/ui/noteRoll.ts` holds the
+arithmetic; the component is in `ModularApp.tsx`.
+
+Faces are sized by content (`width: fit-content` with per-layout bounds); the old
+fixed 520 x 330 compact frame no longer applies.
 
 ## Starter graph currently shown
 
@@ -146,26 +203,58 @@ The canvas starter is now the canonical full runtime topology. Canvas commands
 and parameter edits route through `ModularRuntime`; live node telemetry and the
 browser MIDI device session are connected to the node faces.
 
+## Audio (ported from Modular AV Performance)
+
+Stages C, D, E, and G of [MODULAR_AV_SALVAGE_PLAN.md](MODULAR_AV_SALVAGE_PLAN.md)
+are implemented in `src/modular/audio/`.
+
+- **The safety contract.** `compileAudioPlan` sorts every parameter into
+  `structure` (rebuild) or `parameters` (ramp), so a knob turn can never touch
+  topology. New nodes are built, crossfaded over 10-20 ms **on the audio clock**,
+  and only then disconnected and disposed. Direct `AudioParam.value =` assignment
+  is banned and a test enforces the ban by scanning the sources.
+- **Effects.** One `EffectModule` shell — `input → dry/wet → outputGain(level)` —
+  and eight builders. The mix is equal-power (`sin`/`cos` of the angle), and
+  bypass belongs to the adapter, not the effect.
+- **The sound pool.** Content-addressed asset ids (a 64-bit double FNV-1a over the
+  bytes, hashed *before* the decoder detaches them), a library that tracks loaded
+  versus missing assets, waveform peaks for thumbnails, drag-and-drop, audition
+  through the master limiter, and a deterministic synthetic starter kit
+  (`kit:kick` and friends) so a fresh install makes sound with no files at all.
+- **`.mmodpack`.** A self-contained container: magic, `uint32` version, `uint32`
+  manifest length, a JSON manifest, then the raw blobs, each verified against its
+  own checksum on open. Chosen over inlining base64 in the `.mmod` JSON so a patch
+  file stays diffable and a pack stays streamable.
+- **Players.** Percussion, Looper, and Granular, over a shared `VoiceBank` with
+  choke groups scheduled on the audio clock and a 0.2 s lookahead grain scheduler.
+  `AudioClockBridge` maps runtime seconds onto `AudioContext.currentTime` with EMA
+  smoothing and a hard snap across suspend/resume.
+
 ## Verification baseline
 
-- `npm test -- --run`: **1,022 tests passed across 83 files**.
+- `npm test -- --run`: **1,391 tests passed across 106 files**.
 - `npm run typecheck`: passed.
 - `npm run build`: passed.
-- `git diff --check`: passed.
-- Clean browser reload: equal compact module dimensions, eight Density presets, eight Note Order presets, two Note Order boundary handles, and no new browser errors.
+- Browser verification on every UI change in this session, which is how most of
+  the real defects were found — the unit tests passed throughout.
 
 ## Known limitations and deferred defects
 
-1. **Zoom remains a known Phase 3 defect.** Wheel zoom is usable enough to continue, but wheel/trackpad behavior, scroll suppression, pointer anchoring, and zoom-limit behavior need a focused redesign and real-browser regression coverage.
-2. Web MIDI session wiring and automated lifecycle coverage are complete. A manual acceptance pass with a physical or virtual MIDI output is still required to validate the host browser's permission UI, hardware timing, hot-unplug, and reconnect behavior.
-3. Stream materialization and expand command are implemented, but stream-level scoped snapshots and parity trace assertions between compact and expanded forms are still pending.
-4. Save and Open for `.mmod` are implemented; import, autosave, and recovery UI remain pending.
-5. Standard M import exists only as a documented mapping; no importer transaction or fixture conversion exists yet.
-6. Port connection uses click-output/click-input. The planned drag-cable workflow, compatible-port highlighting, keyboard connection flow, and filtered module creation are still pending.
-7. Cable endpoint placement is approximate and should be derived from actual port geometry.
-8. Pan, zoom, hand mode, and theme persist in browser-local workspace preferences; broader scene-level view states are not implemented.
-9. Snapshots, macros, conducting, slideshow, performance view, audio modules, timeline, and visualizer remain planned work.
-10. The development server at `http://127.0.0.1:5173/` belongs to the current local task session and should not be treated as a deployment.
+1. **Players have not been confirmed audible end to end.** The voice counter
+   increments and every layer tests clean, but nobody has yet reported hearing
+   the drums. This is the first thing to check.
+2. **The MIDI engine wants a rethink**, from a hodgepodge of constructors toward a
+   UMP-shaped event layer with MIDI 1.0 as one output encoding. Agreed in
+   principle, not started.
+3. Web MIDI session wiring and automated lifecycle coverage are complete. A manual acceptance pass with a physical or virtual MIDI output is still required to validate the host browser's permission UI, hardware timing, hot-unplug, and reconnect behavior.
+4. Stream materialization and expand command are implemented, but stream-level scoped snapshots and parity trace assertions between compact and expanded forms are still pending. The Pattern Editor has no expand command at all — it is materialized at compile time only.
+5. Save and Open for `.mmod` and `.mmodpack` are implemented; import, autosave, and recovery UI remain pending.
+6. Standard M import exists only as a documented mapping; no importer transaction or fixture conversion exists yet.
+7. Port connection uses click-output/click-input. The planned drag-cable workflow, compatible-port highlighting, keyboard connection flow, and filtered module creation are still pending.
+8. Two clicks on a Cyclic ruler within one tick clobber each other, because the second reads a stale node. Separated by a re-render they behave correctly.
+9. Pan, zoom, hand mode, and theme persist in browser-local workspace preferences; broader scene-level view states are not implemented.
+10. Snapshots, macros, conducting, slideshow, performance view, timeline, and visualizer remain planned work. Stage F of the salvage plan — the built-in synth and its 8 x 12 modulation matrix — has not been started.
+11. The development server at `http://127.0.0.1:5173/` belongs to the current local task session and should not be treated as a deployment.
 
 ## Build record and remaining work
 
@@ -176,9 +265,13 @@ current priority order.
 
 ### 1. Stabilize the reusable embedded-preset contract
 
-- Extract shared preset normalization, recall, Shift-store, tooltip-summary, active-state, and atomic-command helpers from the first two implementations.
-- Add browser regression tests for click recall and Shift-click overwrite.
-- Add migration helpers for provisional six-position documents and Classic A-F data into A-H storage.
+Status: completed. Every module draws `PresetPad`; capture, recall, storage shape,
+tooltip, and active state live in one file (`src/modular/ui/PresetPad.tsx`), and a
+guard test asserts that each descriptor's `captures` names parameters that exist —
+which caught five modules capturing ids that had been renamed underneath them.
+
+- Remaining: migration helpers for provisional six-position documents and Classic
+  A-F data into the sixteen numbered slots.
 
 ### 2. Clock-to-note vertical slice and control-tick contract
 
@@ -192,13 +285,18 @@ Status: completed for the current module set.
 
 ### 2a. Audio adapter rules to establish with the first audio module
 
-Not yet implemented, and cheapest to get right before there is a rack to retrofit:
+Status: established before the rack existed, which was the point.
 
-- Plan diffing that reconnects only changed subgraphs; a parameter change must never touch topology.
-- Crossfade protocol: build new nodes, ramp over 10-20 ms on the audio clock, then disconnect and dispose. Node-leak disposal test.
-- No direct `AudioParam.value` assignment anywhere. Every write is a scheduled ramp honoring the descriptor's `smoothing`, enforced like the existing complete-face rule.
-- Voice pooling rather than per-note node construction, and an always-on master limiter.
-- Signal converter modules, so near-miss control types have a bridge instead of a bare rejection.
+- Completed: plan diffing that reconnects only changed subgraphs; a parameter change never touches topology.
+- Completed: crossfade protocol — build new nodes, ramp over 10-20 ms on the audio clock, then disconnect and dispose.
+- Completed: no direct `AudioParam.value` assignment anywhere. Every write is a scheduled ramp honoring the descriptor's `smoothing`, enforced by a source-scanning test.
+- Completed: voice pooling rather than per-note node construction, and an always-on master limiter.
+- Remaining: signal converter modules, so near-miss control types have a bridge instead of a bare rejection.
+
+One defect worth remembering: `compileAudioPlan` originally carried only numbers
+and booleans, so `slots` and `asset-id` were dropped silently and every player was
+built with no samples. The fix is a guard test asserting that **every** audio
+parameter survives compilation — the class of bug, not the instance.
 
 ### 2b. The Stream build
 
@@ -223,7 +321,7 @@ musically audible through dedicated consumers.
 
 ### 4. Continue the single-stream compact module family
 
-Implement each with the same 520 x 330 frame and embedded A-H presets:
+Implement each with a content-sized face and the shared preset pad:
 
 1. Time Distortion, using a larger standardized editor class only if the always-visible map cannot fit the compact face.
 2. Orchestration.
@@ -234,8 +332,9 @@ Do not reintroduce the removed four-lane rack prototype.
 
 ### 5. Finish Phase 3 canvas behavior
 
-- Redesign and fix zoom before the Phase 3 gate.
-- Add cable dragging, compatible target highlighting, escape cancellation, cable-to-module creation, keyboard patching, grouping, marquee selection, menu clamping, focus restoration, and narrow-layout tests.
+- Completed: zoom redesign — eased toward a target, delta-mode normalised, grid inside the transform, and a fixed 16000 x 8000 always-pannable canvas.
+- Completed: menu clamping and internal menu scrolling.
+- Remaining: cable dragging, compatible target highlighting, escape cancellation, cable-to-module creation, keyboard patching, grouping, marquee selection, focus restoration, and narrow-layout tests.
 - Completed: persist pan, zoom, and theme preferences.
 - Remaining: persist broader workspace preferences and scene-level view states.
 
@@ -245,16 +344,16 @@ Do not reintroduce the removed four-lane rack prototype.
 - Completed: starter templates for one, four, eight, and sixteen streams in the canvas toolbar.
 - Remaining: robust corrupted-document recovery UX.
 - Implement the Standard M importer as one undoable transaction with topology/parameter/snapshot warnings.
-- Map Classic A-F to Modular A-F and initialize G-H from defaults.
+- Map Classic A-F onto the first six numbered slots and initialize the rest from defaults.
 - Save/reopen imported graphs without consulting the source file.
 
 ### 7. Scenes and later product layers
 
 - Generic snapshots and morphing.
 - Macros, conducting, Pattern Group, and slideshow sequencing using stable parameter IDs.
-- MIDI input/monitor, internal synths, audio graph, instruments/effects/mixer.
+- MIDI input/monitor and the built-in synth (salvage plan Stage F). The audio graph, effects, and sample players are built.
 - Performance capture, Timeline, Visualizer, and AV render path in the later planned phases.
 
 ## Resume rule
 
-Before adding another module, confirm that it is one independently wired stream, uses the shared layout class, exposes every live control, owns eight embedded presets where applicable, supports click recall and Shift-click overwrite, and does not require another window or inspector.
+Before adding another module, confirm that it is one independently wired stream, uses the shared layout class, exposes every live control, owns sixteen embedded presets where applicable, supports click recall and Shift-click overwrite, and does not require another window or inspector.

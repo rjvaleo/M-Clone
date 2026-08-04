@@ -225,7 +225,7 @@ Slideshow 1.
 
 The product family is now explicitly defined: free four-Voice **M Classic Web**,
 paid eight-Voice **M Studio** for native desktop/plug-in production, and later
-premium **M Modular**. Studio is planned with seven original instruments,
+premium **idMLab**. Studio is planned with seven original instruments,
 *September*-derived source material, signature granular glitch, Smooth Crusher,
 Spatial Enhancer, Tempo Delay, and multi-output audio. These are roadmap items,
 not current shipped features. Authoritative specifications:
@@ -360,7 +360,7 @@ behavior, project I/O, live MIDI, and Movie export are done.
 | **P6 Modern theme + instruments** | Modern layouts, deeper instruments, pattern-manipulation upgrades | 🟡 (Modern Cyclic Editor + color themes ✅; broader Modern layout ⬜) |
 | **M Classic Web** | faithful four-Voice browser MIDI product + four lightweight engines | 🟡 |
 | **M Studio Desktop** | paid eight-Voice standalone + plug-in, seven instruments, signature FX, multi-output | ⬜ |
-| **M Modular** | premium node-based generative MIDI/audio environment | ⬜ |
+| **idMLab** | premium node-based generative MIDI/audio environment | ⬜ |
 | **Later — Mobile** | paid iOS/iPadOS and Android family after desktop | ⬜ |
 
 ## The generative engine (the soul) — ✅ complete

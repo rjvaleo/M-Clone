@@ -1,4 +1,4 @@
-# M Modular — Stream Build Plan
+# idMLab — Stream Build Plan
 
 **Date:** 2026-08-02
 **Branch:** `modular`
@@ -180,7 +180,7 @@ Implemented in code:
 | Inputs | `clock-in` (step-clock, **required**), `reset-in` (reset, many), `position-in` (control index) |
 | Outputs | `<name>-out` (control number, many), `grid-telemetry` |
 | State | 16-step grid of levels 0–4, each a fixed level or a range; position advances one per pulse |
-| Presets | eight embedded a–h, each a complete 16-step grid |
+| Presets | sixteen embedded slots, each a complete 16-step grid |
 | Layout | `editor` — the complete grid is always visible, no Cyclic Editor window |
 | Reset | position returns to 0 |
 | Pause | position **holds** — pausing is not a reset |

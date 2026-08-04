@@ -1,4 +1,4 @@
-# M Modular Implementation Plan
+# idMLab Implementation Plan
 
 **Planning baseline:** `master` at `dda067b` (`0.8.0-alpha`)
 **Target branch:** `modular`, created from the clean `master` checkpoint
@@ -13,7 +13,7 @@ are implemented. The authoritative next sequence is
 
 ## 1. Executive decision
 
-Build M Modular as a new product with its own incompatible native format on a long-lived `modular` branch while leaving `master` as the current M Classic Web application. Reuse proven algorithms, transport concepts, event protocol ideas, MIDI adapters, and synth foundations where they fit, but give the new application its own graph model, state store, document format, UI, snapshots, and runtime contracts. Do not try to turn the existing `Unified.tsx` window canvas or monolithic Zustand store directly into a node graph.
+Build idMLab as a new product with its own incompatible native format on a long-lived `modular` branch while leaving `master` as the current M Classic Web application. Reuse proven algorithms, transport concepts, event protocol ideas, MIDI adapters, and synth foundations where they fit, but give the new application its own graph model, state store, document format, UI, snapshots, and runtime contracts. Do not try to turn the existing `Unified.tsx` window canvas or monolithic Zustand store directly into a node graph.
 
 The modular application should extract useful musical behaviors from the existing engine into independent processors from the beginning. Pattern generation, Note Order, Density, Transposition, Velocity, Time Distortion, Cyclic behavior, Orchestration, Conducting, MIDI I/O, and synthesis become separately instantiable modules. There is no fixed Voice count: a patch may contain zero, one, four, sixteen, or any practical number of module instances allowed by runtime resources.
 
@@ -67,7 +67,7 @@ The current checkout has a deterministic 960-PPQN musical timeline, transport co
 
 The MVP is complete when it supports:
 
-- the `modular` branch and a distinct M Modular application identity;
+- the `modular` branch and a distinct idMLab application identity;
 - an infinite pan/zoom canvas inside a stable application shell;
 - right-click module creation from a searchable categorized menu;
 - node selection, movement, deletion, duplication, grouping, and undo/redo;
@@ -568,19 +568,19 @@ Classic M's current planner combines pattern traversal, probability, pitch, velo
 | `midi` | raw or normalized MIDI messages with device/channel metadata | MIDI Input, event encoder | filters, Input Control, MIDI Output, monitor |
 | `control<number>` | scalar value plus range, polarity, timestamp | conductor, macro, MIDI CC, cyclic module | any compatible parameter input |
 | `control<boolean>` | gate/toggle state | UI, MIDI mapping, logic | play enable, bypass, record arm |
-| `control<index>` | discrete slot or selection index | Position Conductor, Pattern Group, Snapshot trigger | eight-position modules, Note Editor / Pattern Source |
+| `control<index>` | discrete slot or selection index | Position Conductor, Pattern Group, Snapshot trigger | sixteen-position modules, Note Editor / Pattern Source |
 | `scene` | snapshot recall/store/hold/sequence command | Scene Trigger, Slideshow | snapshot service |
 | `audio<1|2>` | mono/stereo audio bus | instruments, effects, inputs | effects, mixer, recorder, output |
 | `telemetry<T>` | lossy bounded display/diagnostic data | every runtime processor | monitors, scopes, editor playheads |
 
 Editor commands, document mutation, node selection, and file operations are not cable types. They use the typed document-command API.
 
-### 7.3 Reusable single-stream, eight-position preset contract
+### 7.3 Reusable single-stream, sixteen-position preset contract
 
-Every independently wired musical processor is a **single-stream node**. Classic screens that grouped four voices are unfolded into four module instances. Each multi-view instance owns eight embedded Positions, a-h, along the bottom of its permanent face.
+Every independently wired musical processor is a **single-stream node**. Classic screens that grouped four voices are unfolded into four module instances. Each multi-view instance owns sixteen embedded Positions, a-h, along the bottom of its permanent face.
 
 - A processor has one musical input path and one corresponding output path. Multiple streams use multiple module instances; no face contains unused fixed lanes.
-- A multi-view processor owns eight Position slots containing that one module's complete value or editor state.
+- A multi-view processor owns sixteen Position slots containing that one module's complete value or editor state.
 - The compact preset strip shows a-h with a value or miniature beneath each letter.
 - Clicking recalls a Position. Shift-clicking overwrites that Position from the current live controls. A tooltip states the stored value/summary and both gestures.
 - One optional slot-index input activates a-h so Pattern Group, conducting, snapshots, and automation can coordinate otherwise independent nodes.
@@ -617,10 +617,10 @@ interface EmbeddedPresetModule<T> {
 | --- | --- | --- | --- |
 | **Note Editor / Pattern Source** | optional `step-clock` for playhead display; active-pattern `control<index>`; visible record/edit controls | `pattern-data`, edit/playhead telemetry | one independently placed note-entry node whose face permanently contains the complete piano roll, keyboards, tools, range/counter, a-h Pattern slots, size/output length, record modes, and Pattern/Edit commands |
 | **Pattern Recorder** | `midi` or `note-event`, `transport`, record arm, edit range/counter | pattern write commands | Single/Chord/Build plus Insert/Replace/Overdub/Drum Machine recording |
-| **Note Order** | `pattern-data`, `step-clock`, `reset`, optional preset index; visible Original/Cyclic/Utterly mix | `step-event`, cursor telemetry | one stream's traversal processor with eight embedded mix presets |
+| **Note Order** | `pattern-data`, `step-clock`, `reset`, optional preset index; visible Original/Cyclic/Utterly mix | `step-event`, cursor telemetry | one stream's traversal processor with sixteen embedded mix presets |
 | **Pattern Command Processor** | `pattern-data`, region/command document action | updated `pattern-data` | scramble, swap Original/Scrambled, reverse, rotate, copy/paste, region commands; offline/document-time only |
 | **Play Enable Gate** | `step-event` or `note-event`; enable control | same stream or silence | per-path Play Enable without stopping upstream clocks |
-| **Note Density** | `note-event`, optional density `control<number>` and preset index; visible probability slider and seed | accepted `note-event`, rejected telemetry | one independently placeable deterministic probability gate with eight embedded density presets |
+| **Note Density** | `note-event`, optional density `control<number>` and preset index; visible probability slider and seed | accepted `note-event`, rejected telemetry | one independently placeable deterministic probability gate with sixteen embedded density presets |
 
 Every place where notes are entered is its own **Note Editor / Pattern Source** module instance. Its complete editor is the node face; there is no compact proxy, expandable editor, or selector for other Pattern Sources. Adding another melodic/percussion lane means adding another Note Editor instance. A Standard M import creates four instances, one for each original note-entry path. Their a-h Pattern slots may receive the same Pattern Group selection control so they change together without sharing an editor.
 
@@ -631,12 +631,12 @@ Every row below is a single-stream node implementing `EmbeddedPresetModule<T>`. 
 | Module | Position value | Inputs | Outputs | Notes |
 | --- | --- | --- | --- | --- |
 | **Note Order** | one `{original, cyclic, utterly}` value per preset | `pattern-data`, `step-clock`, `reset`, preset index | `step-event`, order telemetry | complete mix editor plus eight compact stored mix summaries |
-| **Transposition** | one semitone/scale-degree value per preset | `note-event`, optional scale context/control, preset index | transposed `note-event` | one pitch editor plus eight embedded presets |
-| **Note Density** | one probability per preset | `note-event`, optional density control and preset index | accepted `note-event`, rejected telemetry | one slider plus eight embedded presets on the same node |
-| **Velocity Range** | one `{low, high}` range per preset | `note-event`, Accent control, preset index | velocity-shaped `note-event` | one range editor plus eight embedded presets |
-| **Time Distortion** | one time map per preset | `step-clock`, `transport`, `reset`, preset index | warped `step-clock`, map telemetry | one complete map editor plus eight embedded map miniatures |
-| **Orchestration** | one destination/channel set per preset | `note-event`, preset index | routed `note-event` | one 16-destination editor plus eight embedded presets |
-| **Sound / Program Choice** | one instrument/program choice per preset | `note-event`, preset index | tagged `note-event`, MIDI program events | one sound editor plus eight embedded presets |
+| **Transposition** | one semitone/scale-degree value per preset | `note-event`, optional scale context/control, preset index | transposed `note-event` | one pitch editor plus sixteen embedded presets |
+| **Note Density** | one probability per preset | `note-event`, optional density control and preset index | accepted `note-event`, rejected telemetry | one slider plus sixteen embedded presets on the same node |
+| **Velocity Range** | one `{low, high}` range per preset | `note-event`, Accent control, preset index | velocity-shaped `note-event` | one range editor plus sixteen embedded presets |
+| **Time Distortion** | one time map per preset | `step-clock`, `transport`, `reset`, preset index | warped `step-clock`, map telemetry | one complete map editor plus sixteen embedded map miniatures |
+| **Orchestration** | one destination/channel set per preset | `note-event`, preset index | routed `note-event` | one 16-destination editor plus sixteen embedded presets |
+| **Sound / Program Choice** | one instrument/program choice per preset | `note-event`, preset index | tagged `note-event`, MIDI program events | one sound editor plus sixteen embedded presets |
 
 Recommended pipeline order is clock-domain processing first, then note-domain processing:
 
@@ -650,13 +650,13 @@ Each Note Editor source + its warped clock -> Note Order -> Step Notes
 
 #### Cyclic Variables and Phrasing
 
-All three registered types share one `CyclicSequenceCore` and the single-stream/eight-position face contract. There is no separate Cyclic Editor window.
+All three registered types share one `CyclicSequenceCore` and the single-stream/sixteen-position face contract. There is no separate Cyclic Editor window.
 
 | Module | Position value | Inputs | Outputs | Classic responsibility |
 | --- | --- | --- | --- | --- |
-| **Cyclic Accent** | one 16-step grid of fixed/ranged levels 0-4 per preset | `step-clock`, `reset`, preset index | Accent `control<number>`, telemetry | complete grid editor plus eight embedded grid miniatures |
+| **Cyclic Accent** | one 16-step grid of fixed/ranged levels 0-4 per preset | `step-clock`, `reset`, preset index | Accent `control<number>`, telemetry | complete grid editor plus sixteen embedded grid miniatures |
 | **Cyclic Legato** | one 16-step grid of fixed/ranged levels 0-4 per preset | `step-clock`, `reset`, preset index | Legato/gate multiplier, telemetry | M Phrasing for one stream; may exceed 100% and overlap notes |
-| **Cyclic Rhythm** | one 16-step grid of fixed/ranged levels 0-4 per preset | `step-clock`, `reset`, preset index | duration multiplier/transformed clock | step timing multiplication with complete editor plus eight presets |
+| **Cyclic Rhythm** | one 16-step grid of fixed/ranged levels 0-4 per preset | `step-clock`, `reset`, preset index | duration multiplier/transformed clock | step timing multiplication with complete editor plus sixteen presets |
 | **Legato Processor** | base legato multiplier | `note-event`, next-onset timing, Cyclic Legato control | duration-adjusted `note-event` | separates cyclic control generation from event duration application |
 | **Cyclic Reset Trigger** | UI/MIDI/transport reset controls | `reset` | named reset command shared by selected cyclic modules |
 
@@ -737,7 +737,7 @@ There are no secondary editor windows in Modular. The importer replaces every Cl
 | **Patterns** | four Note Editor / Pattern Source nodes plus Time Base, Phase, Play Enable, Source Channel, Input Use, Echo, Mouse/Step Advance, and Pattern Recorder nodes | note grids, keyboards, Pattern a-h cells, play enable, source/use/echo, mouse advance, chord/insert/drum modes, record state, output length, size, time base, phase, selection and edit counter |
 | **Pattern Editor / Note Edit** | one complete Note Editor node per note-entry location | all drawing tools, region, eraser, plunger, scissors, audition, range, counter, resize, Original/Scrambled commands, copy/paste and Pattern/Edit commands; no selector for another editor |
 | **Variables** | independent Note Order, Transposition, Density, Velocity Range, Time Distortion, Orchestration, and Sound Choice nodes per stream | one live editor and all a-h preset summaries on every instance, plus conducting/mark controls formerly shared by the four-lane window |
-| **Cyclic Variables + Cyclic Editor** | independent Accent, Legato, and Rhythm nodes per stream | one complete 16-step grid, fixed/ranged levels, five-level value bank, length, all eight Positions, reset, conducting, and transfer operations on each instance |
+| **Cyclic Variables + Cyclic Editor** | independent Accent, Legato, and Rhythm nodes per stream | one complete 16-step grid, fixed/ranged levels, five-level value bank, length, all sixteen Positions, reset, conducting, and transfer operations on each instance |
 | **Conducting** | Transport Clock, Conducting XY Surface, Robot Conductor, Position Conductors, Continuous Mappers, Tempo Conductor, Sync Divider, Metronome/MIDI Clock, and Movie Recorder nodes arranged together | Start/Stop/Pause/Sync, Baton/Grid, tempo/range, robot ranges/time base, arrows/directions, continuous Velocity/Legato, sync ratio, Movie and clock/metronome states |
 | **Midi** | Orchestration Rack, Sound/Program Rack, MIDI Input, Source/Use/Echo routers, MIDI Output, and MIDI Event Monitor nodes | 4 x 16 routing, programs, device/port/channel assignment, latency, program base, controller assignments, Echo Map, output state and event history |
 | **MIDI Assignment** | controls live directly on each MIDI Input/Output node | device selector, physical/logical channels, connection state, latency and controller configuration; no assignment pop-up |
@@ -750,15 +750,15 @@ The imported Standard M patch is therefore the original workflow spatially unfol
 
 ### 7.10 Standard M reference topology
 
-The importer creates four Note Editor lanes and unfolds every Classic Variable/Cyclic family into four corresponding single-stream processor nodes with embedded eight-position preset strips. More lanes create more ordinary processor instances.
+The importer creates four Note Editor lanes and unfolds every Classic Variable/Cyclic family into four corresponding single-stream processor nodes with embedded sixteen-position preset strips. More lanes create more ordinary processor instances.
 
 ```mermaid
 flowchart LR
   T["Transport Clock"] --> TM["Time Base + Phase x4"]
-  TM --> CR["Cyclic Rhythm x4 · eight presets each"]
-  CR --> TD["Time Distortion x4 · eight presets each"]
+  TM --> CR["Cyclic Rhythm x4 · sixteen presets each"]
+  CR --> TD["Time Distortion x4 · sixteen presets each"]
 
-  N1["Note Editor 1"] --> NO["Note Order x4 · eight presets each"]
+  N1["Note Editor 1"] --> NO["Note Order x4 · sixteen presets each"]
   N2["Note Editor 2"] --> NO
   N3["Note Editor 3"] --> NO
   N4["Note Editor 4"] --> NO
@@ -766,13 +766,13 @@ flowchart LR
 
   NO --> PE["Play Enable x4"]
   PE --> DP["Note Density processors x4"]
-  DP --> TR["Transposition x4 · eight presets each"]
-  TR --> V["Velocity Range x4 · eight presets each"]
-  CA["Cyclic Accent x4 · eight presets each"] --> V
+  DP --> TR["Transposition x4 · sixteen presets each"]
+  TR --> V["Velocity Range x4 · sixteen presets each"]
+  CA["Cyclic Accent x4 · sixteen presets each"] --> V
   V --> L["Legato Processors x4"]
-  CL["Cyclic Legato x4 · eight presets each"] --> L
-  L --> O["Orchestration x4 · eight presets each"]
-  O --> PC["Sound / Program x4 · eight presets each"]
+  CL["Cyclic Legato x4 · sixteen presets each"] --> L
+  L --> O["Orchestration x4 · sixteen presets each"]
+  O --> PC["Sound / Program x4 · sixteen presets each"]
   PC --> MO["MIDI Output nodes"]
   PC --> SI["Instrument nodes"]
 
@@ -834,11 +834,11 @@ Recommended mapping for each imported standard M project:
 | Global tempo and transport | one Transport Clock module |
 | Each Pattern/Voice path | an independent Pattern pipeline with stable node IDs |
 | Pattern material and output length | one dedicated Note Editor / Pattern Source instance per imported path |
-| Note Order | four independent Note Order nodes, each with eight embedded Positions and a full editor face |
-| Transposition | four independent Transposition nodes, each with eight embedded Positions |
-| Note Density | four independent Note Density slider processors, each with eight embedded density presets |
-| Velocity/Accent | independent Velocity Range and Cyclic Accent nodes per stream, each with eight embedded Positions |
-| Time Distortion | independent Time Distortion nodes per stream, each with eight embedded maps |
+| Note Order | four independent Note Order nodes, each with sixteen embedded Positions and a full editor face |
+| Transposition | four independent Transposition nodes, each with sixteen embedded Positions |
+| Note Density | four independent Note Density slider processors, each with sixteen embedded density presets |
+| Velocity/Accent | independent Velocity Range and Cyclic Accent nodes per stream, each with sixteen embedded Positions |
+| Time Distortion | independent Time Distortion nodes per stream, each with sixteen embedded maps |
 | Rhythm and Legato | independent Cyclic Rhythm and Cyclic Legato nodes plus Legato processors per stream |
 | Orchestration/output channels | independent Orchestration nodes per stream plus MIDI Output nodes |
 | Conducting Grid/Robot | Conductor control generator wired to translated targets |
@@ -1127,7 +1127,7 @@ Known interaction follow-up (recorded 2026-08-02): wheel zoom is usable enough t
 
 Deliverables:
 
-- complete Note Editor instances; single-stream/eight-position Note Order, Transposition, Density, Velocity, Time Distortion, Cyclic, Orchestration, and Sound/Program nodes; Conducting, Snapshot/Slideshow, MIDI I/O/Monitor, Merge/Split, and Synth nodes;
+- complete Note Editor instances; single-stream/sixteen-position Note Order, Transposition, Density, Velocity, Time Distortion, Cyclic, Orchestration, and Sound/Program nodes; Conducting, Snapshot/Slideshow, MIDI I/O/Monitor, Merge/Split, and Synth nodes;
 - connection activity telemetry;
 - deterministic execution and panic/stop behavior;
 - starter templates built from ordinary independent nodes;
@@ -1304,4 +1304,4 @@ This slice proves the architectural spine without entangling the first milestone
 
 ## 17. Definition of success
 
-M Modular succeeds when the best generative ideas in M have become independent, freely repeatable building blocks rather than a fixed four-Voice application. A user can create any practical number and arrangement of Pattern, transform, control, MIDI, instrument, effect, mixer, analyzer, snapshot, and automation modules—or import a standard M file and receive the complete familiar workflow spatially unfolded into those modules. Every original operational control is visible on the responsible node face; there are no editor windows or inspectors to open and no shared selectors that switch one editor between instances. The resulting patch can then grow beyond the source setup, store and morph complete performance states, and save as a deterministic Modular project. Classic remains stable on `master`, while `modular` is free to become a fundamentally different application.
+idMLab succeeds when the best generative ideas in M have become independent, freely repeatable building blocks rather than a fixed four-Voice application. A user can create any practical number and arrangement of Pattern, transform, control, MIDI, instrument, effect, mixer, analyzer, snapshot, and automation modules—or import a standard M file and receive the complete familiar workflow spatially unfolded into those modules. Every original operational control is visible on the responsible node face; there are no editor windows or inspectors to open and no shared selectors that switch one editor between instances. The resulting patch can then grow beyond the source setup, store and morph complete performance states, and save as a deterministic Modular project. Classic remains stable on `master`, while `modular` is free to become a fundamentally different application.
