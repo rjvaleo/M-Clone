@@ -1,0 +1,196 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>idMLab — Rust engine bench</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 2.5rem clamp(1rem, 5vw, 4rem);
+    font: 15px/1.6 ui-sans-serif, system-ui, sans-serif;
+    background: #14161a; color: #e6e8ec;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+  p.lede { margin: 0 0 2rem; color: #9aa3b0; max-width: 60ch; }
+  fieldset { border: 1px solid #2a2f38; border-radius: 10px; padding: 1.25rem 1.5rem 1.5rem; margin: 0 0 1.25rem; max-width: 46rem; }
+  legend { padding: 0 .5rem; color: #7dd3a8; font-weight: 600; font-size: .85rem; text-transform: uppercase; letter-spacing: .06em; }
+  button { font: inherit; font-weight: 600; padding: .55rem 1.1rem; border-radius: 7px; border: 1px solid #3a4150; background: #222731; color: #e6e8ec; cursor: pointer; }
+  button:hover:not(:disabled) { background: #2b323e; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.on { background: #7dd3a8; border-color: #7dd3a8; color: #10251b; }
+  label.row { display: grid; grid-template-columns: 7rem 1fr 4rem; gap: 1rem; align-items: center; margin-top: 1rem; }
+  input[type=range] { width: 100%; accent-color: #7dd3a8; }
+  output { font-variant-numeric: tabular-nums; text-align: right; color: #9aa3b0; }
+  #log { font: 12.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; background: #0f1115; border: 1px solid #2a2f38; border-radius: 10px; padding: 1rem 1.25rem; max-width: 46rem; max-height: 22rem; overflow: auto; }
+  .ok::before { content: "ok   "; color: #7dd3a8; }
+  .bad::before { content: "FAIL "; color: #ff8a8a; }
+  .bad { color: #ff8a8a; }
+  .note { color: #9aa3b0; }
+</style>
+
+<h1>Rust engine bench</h1>
+<p class="lede">
+  Loads the real <code>idmlab-engine.wasm</code> into an AudioWorklet and runs a
+  patch through it: an oscillator into the engine's <code>HostInput</code>, through
+  a Rust <code>Gain</code>, out of <code>AudioOutput</code>. Everything you hear
+  has been through the Rust sample loop. Nothing here touches the app — this is
+  the seam on its own.
+</p>
+
+<fieldset>
+  <legend>Sound</legend>
+  <button id="start">Start audio</button>
+  <button id="tone" disabled>Tone: off</button>
+  <label class="row">
+    <span>Gain</span>
+    <input id="gain" type="range" min="0" max="2" step="0.01" value="1" disabled />
+    <output id="gainOut">1.00</output>
+  </label>
+  <label class="row">
+    <span>Mute</span>
+    <input id="mute" type="checkbox" disabled />
+    <output></output>
+  </label>
+  <p class="note" style="margin:1.25rem 0 0">
+    Drag the gain while the tone plays. It is smoothed inside the Rust module,
+    so it should sweep cleanly with no zipper or clicks.
+  </p>
+</fieldset>
+
+<fieldset>
+  <legend>Checks</legend>
+  <div id="log">waiting for a click — audio needs a gesture to start.</div>
+</fieldset>
+
+<script type="module">
+  // Mirrors ModuleKind in rust/dsp-core/src/modules.rs.
+  const KIND = { GAIN: 1, AUDIO_OUTPUT: 2 };
+
+  const logEl = document.getElementById("log");
+  let failures = 0;
+  const say = (text, cls = "note") => {
+    const line = document.createElement("div");
+    line.className = cls;
+    line.textContent = text;
+    logEl.append(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+  const check = (label, ok) => {
+    if (!ok) failures += 1;
+    say(label, ok ? "ok" : "bad");
+  };
+
+  const startBtn = document.getElementById("start");
+  const toneBtn = document.getElementById("tone");
+  const gainEl = document.getElementById("gain");
+  const gainOut = document.getElementById("gainOut");
+  const muteEl = document.getElementById("mute");
+
+  let ctx, rackNode, osc, oscGain, playing = false;
+
+  startBtn.addEventListener("click", async () => {
+    startBtn.disabled = true;
+    logEl.textContent = "";
+
+    try {
+      ctx = new AudioContext();
+      await ctx.resume();
+      say(`AudioContext at ${ctx.sampleRate} Hz, state "${ctx.state}"`);
+
+      const response = await fetch("./idmlab-engine.wasm");
+      check(`fetched idmlab-engine.wasm (${response.headers.get("content-length") ?? "?"} bytes)`, response.ok);
+      const wasmModule = await WebAssembly.compile(await response.arrayBuffer());
+      check("compiled the WASM module", !!wasmModule);
+
+      await ctx.audioWorklet.addModule("./idmlab-rack.js");
+      check("registered the idmlab-rack processor", true);
+
+      rackNode = new AudioWorkletNode(ctx, "idmlab-rack", {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [2],
+        processorOptions: { module: wasmModule },
+      });
+      check("constructed the worklet node", !!rackNode);
+
+      // The patch, in the same shape compileAudioPlan emits.
+      rackNode.port.postMessage({
+        type: "plan",
+        plan: {
+          generation: 1,
+          nodes: {
+            g: { nodeId: "g", moduleType: "m.audio-gain", structure: {}, parameters: { gain: 1 }, bypass: false, wet: 1 },
+            out: { nodeId: "out", moduleType: "m.audio-output", structure: {}, parameters: {}, bypass: false, wet: 1 },
+          },
+          connections: [{ from: { nodeId: "g", portId: "audio-out" }, to: { nodeId: "out", portId: "audio-in" } }],
+        },
+      });
+      check("sent the plan (gain → output)", true);
+
+      // A source to feed the engine's HostInput, and a soft level so a mistake
+      // here is quiet rather than painful.
+      osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = 220;
+      oscGain = ctx.createGain();
+      oscGain.gain.value = 0;
+      osc.connect(oscGain).connect(rackNode);
+      rackNode.connect(ctx.destination);
+      osc.start();
+      check("wired oscillator → worklet → speakers", true);
+
+      // Prove sound is coming *out of the engine* rather than round the side.
+      const probe = ctx.createAnalyser();
+      probe.fftSize = 2048;
+      rackNode.connect(probe);
+      oscGain.gain.value = 0.25;
+      await new Promise((r) => setTimeout(r, 300));
+      const buf = new Float32Array(probe.fftSize);
+      probe.getFloatTimeDomainData(buf);
+      let peak = 0;
+      for (const v of buf) peak = Math.max(peak, Math.abs(v));
+      check(`engine output is audible (peak ${peak.toFixed(3)})`, peak > 0.01);
+      oscGain.gain.value = 0;
+
+      toneBtn.disabled = false;
+      gainEl.disabled = false;
+      muteEl.disabled = false;
+      say(failures === 0 ? "\nall checks passed — press Tone to listen" : `\n${failures} check(s) failed`,
+          failures === 0 ? "ok" : "bad");
+    } catch (error) {
+      check(`threw: ${error && error.message ? error.message : error}`, false);
+      startBtn.disabled = false;
+    }
+  });
+
+  toneBtn.addEventListener("click", () => {
+    playing = !playing;
+    // Ramped on the source side so toggling is not itself a click.
+    oscGain.gain.setTargetAtTime(playing ? 0.25 : 0, ctx.currentTime, 0.01);
+    toneBtn.textContent = `Tone: ${playing ? "on" : "off"}`;
+    toneBtn.classList.toggle("on", playing);
+  });
+
+  const sendParam = (name, value) => {
+    rackNode.port.postMessage({
+      type: "plan",
+      plan: {
+        // A new generation each time, so the node forwards it.
+        generation: Date.now(),
+        nodes: {
+          g: {
+            nodeId: "g", moduleType: "m.audio-gain", structure: {},
+            parameters: { gain: Number(gainEl.value), mute: muteEl.checked ? 1 : 0 },
+            bypass: false, wet: 1,
+          },
+          out: { nodeId: "out", moduleType: "m.audio-output", structure: {}, parameters: {}, bypass: false, wet: 1 },
+        },
+        connections: [{ from: { nodeId: "g", portId: "audio-out" }, to: { nodeId: "out", portId: "audio-in" } }],
+      },
+    });
+  };
+
+  gainEl.addEventListener("input", () => {
+    gainOut.textContent = Number(gainEl.value).toFixed(2);
+    sendParam();
+  });
+  muteEl.addEventListener("change", () => sendParam());
+</script>

@@ -23,7 +23,7 @@
 //     rather than thrown on, so the half of the rack that has been ported keeps
 //     working.
 
-import type { AudioConnection, AudioNodeSpec, AudioPlan } from "../audioPlan";
+import type { AudioNodeSpec, AudioPlan } from "../audioPlan";
 import { AUDIO_MUTE_PARAM } from "../../registry/audioModules";
 
 /** `u32::MAX`, as it appears once JavaScript has read it back as an `i32`. */
@@ -94,9 +94,6 @@ const asModuleId = (raw: number): number | undefined => {
   return id === NO_MODULE ? undefined : id;
 };
 
-const connectionKey = (connection: AudioConnection): string =>
-  `${connection.from.nodeId}:${connection.from.portId}→${connection.to.nodeId}:${connection.to.portId}`;
-
 /** What a module was built from. Changing any of it means rebuilding. */
 const structureKey = (spec: AudioNodeSpec): string =>
   `${spec.moduleType}|${JSON.stringify(spec.structure)}`;
@@ -121,7 +118,14 @@ export class WasmRack {
   readonly output: Float32Array;
 
   private readonly built = new Map<string, Built>();
-  private readonly cables = new Set<string>();
+  /**
+   * The cables actually patched, keyed by engine module id rather than node id.
+   *
+   * Module ids because not every cable has a document behind it: the host feed
+   * comes from a module no plan mentions, so a node-keyed mirror could not
+   * represent it.
+   */
+  private readonly cables = new Map<string, { from: number; to: number }>();
   private readonly unsupportedTypes = new Set<string>();
   private outputModuleId: number | undefined;
 
@@ -182,8 +186,8 @@ export class WasmRack {
       this.built.delete(nodeId);
       // The engine drops a removed module's cables itself; the mirror has to
       // agree or the next update will think they are still patched.
-      for (const key of [...this.cables]) {
-        if (key.startsWith(`${nodeId}:`) || key.includes(`→${nodeId}:`)) this.cables.delete(key);
+      for (const [key, cable] of this.cables) {
+        if (cable.from === built.moduleId || cable.to === built.moduleId) this.cables.delete(key);
       }
     }
   }
@@ -234,33 +238,58 @@ export class WasmRack {
   }
 
   private rewire(plan: AudioPlan): void {
-    const wanted = new Map<string, AudioConnection>();
+    const wanted = new Map<string, { from: number; to: number }>();
+    const want = (from: number, to: number): void => {
+      wanted.set(`${from}:${PORT_INDEX}→${to}:${PORT_INDEX}`, { from, to });
+    };
+
     for (const connection of plan.connections) {
       // A cable to a module that was never built is dropped rather than
       // half-patched — during the migration this is the common case.
-      if (!this.built.has(connection.from.nodeId)) continue;
-      if (!this.built.has(connection.to.nodeId)) continue;
-      wanted.set(connectionKey(connection), connection);
+      const from = this.moduleIdOf(connection.from.nodeId);
+      const to = this.moduleIdOf(connection.to.nodeId);
+      if (from === undefined || to === undefined) continue;
+      want(from, to);
     }
 
-    for (const key of [...this.cables]) {
+    for (const moduleId of this.openInputs(plan)) want(this.hostInputId, moduleId);
+
+    for (const [key, cable] of this.cables) {
       if (wanted.has(key)) continue;
-      const [from, to] = key.split("→");
-      const fromId = this.moduleIdOf(from.split(":")[0]);
-      const toId = this.moduleIdOf(to.split(":")[0]);
-      if (fromId !== undefined && toId !== undefined) {
-        this.engine.disconnect(fromId, PORT_INDEX, toId, PORT_INDEX);
-      }
+      this.engine.disconnect(cable.from, PORT_INDEX, cable.to, PORT_INDEX);
       this.cables.delete(key);
     }
 
-    for (const [key, connection] of wanted) {
+    for (const [key, cable] of wanted) {
       if (this.cables.has(key)) continue;
-      const fromId = this.moduleIdOf(connection.from.nodeId)!;
-      const toId = this.moduleIdOf(connection.to.nodeId)!;
-      this.engine.connect(fromId, PORT_INDEX, toId, PORT_INDEX);
-      this.cables.add(key);
+      this.engine.connect(cable.from, PORT_INDEX, cable.to, PORT_INDEX);
+      this.cables.set(key, cable);
     }
+  }
+
+  /**
+   * Modules the patch left with nothing patched into them.
+   *
+   * These hear the host, which is what an effects rack with a live input does
+   * and what §12.1 of the functional spec calls a Channel source. Without it a
+   * rack builds, wires and reports a correct graph while rendering silence —
+   * `set_io` says where samples are *written*, not what is *connected*, and no
+   * plan-shaped test can see the difference because no document mentions the
+   * host input at all.
+   *
+   * The Audio Output is excluded: an idle rack is silent, not a wire from the
+   * input straight to the speakers.
+   */
+  private openInputs(plan: AudioPlan): number[] {
+    if (this.hostInputId === NO_MODULE) return [];
+    const fed = new Set(plan.connections.map((connection) => connection.to.nodeId));
+    const open: number[] = [];
+    for (const [nodeId, built] of this.built) {
+      if (fed.has(nodeId)) continue;
+      if (plan.nodes[nodeId]?.moduleType === "m.audio-output") continue;
+      open.push(built.moduleId);
+    }
+    return open;
   }
 
   private pointHostAtOutput(plan: AudioPlan): void {
