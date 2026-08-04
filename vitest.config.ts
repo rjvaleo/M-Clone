@@ -37,6 +37,12 @@ export default defineConfig({
         "src/engine/runtime.ts",
         "src/engine/outputs/synth.ts",
         "src/engine/outputs/webmidi.ts",
+        // Runs inside an AudioWorkletGlobalScope, which Node cannot construct.
+        // Kept deliberately thin for exactly that reason — every decision it
+        // would otherwise make lives in `wasm/engineBridge.ts`, which is
+        // covered, and the WASM below it is covered by `cargo test` plus
+        // `rust/wasm/verify.mjs`.
+        "src/modular/audio/wasm/rackWorklet.ts",
       ],
       thresholds: {
         /*
