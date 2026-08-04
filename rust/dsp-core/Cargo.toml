@@ -1,0 +1,17 @@
+[package]
+name = "dsp-core"
+version = "0.1.0"
+edition = "2021"
+description = "Portable DSP core for the idMLab modular rack. No platform dependencies."
+
+# Deliberately dependency-free.
+#
+# Every crate considered (fundsp, dasp, biquad) brings either an opinionated
+# graph model or a trait hierarchy that would have to be threaded through the
+# whole engine. The primitives here are a few hundred lines and the formulas are
+# published; taking a dependency to avoid writing them would cost more in
+# adaptation than it saves in typing, and would put a third party between this
+# code and a real-time guarantee it has to make.
+[dependencies]
+
+[dev-dependencies]

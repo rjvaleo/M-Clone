@@ -7,6 +7,9 @@ dist-pages/
 dist-single/
 *.local
 
+# rust build output (24 MB after one debug + release + wasm build)
+rust/target/
+
 # release packaging (produced by .github/workflows/release.yml)
 release/
 release-notes.md
