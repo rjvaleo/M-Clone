@@ -21,13 +21,13 @@ describe("Modular document v2", () => {
 
   it("rejects Classic and malformed documents", () => {
     expect(decodeModularDocument({ version: 2, project: {} })).toEqual({
-      ok: false, error: "Not an M Modular document",
+      ok: false, error: "Not an idMLab document",
     });
     expect(decodeModularDocument({
       format: "m-modular", schemaVersion: 2, product: "modular",
       graph: { nodes: { bad: { id: "different" } }, edges: {} },
       snapshots: [], macros: [], assets: [],
-    })).toEqual({ ok: false, error: "Invalid Modular graph" });
+    })).toEqual({ ok: false, error: "Invalid idMLab graph" });
   });
 
   it("migrates v1 port and parameter names and preserves edge wiring", () => {

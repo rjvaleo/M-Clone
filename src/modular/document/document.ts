@@ -1,4 +1,5 @@
 import type { Edge, GraphDocument, JsonValue, NodeInstance } from "../model/graph";
+import { isAssetRecord, type AssetRecord } from "../audio/assets";
 
 export const MODULAR_DOCUMENT_VERSION = 2;
 
@@ -10,7 +11,15 @@ export type ModularDocument = {
   snapshots: JsonValue[];
   macros: JsonValue[];
   performance?: JsonValue;
-  assets: JsonValue[];
+  /**
+   * Identity and metadata for every sample the patch refers to — never the
+   * audio itself. A document is a patch, not a sample library: embedding the
+   * bytes would make saving slow, sharing worse, and a `.idmlab` a thing you
+   * cannot read. An asset whose bytes are absent from the session opens as
+   * `missing`, and re-dropping the file re-attaches it silently because the id
+   * is derived from its contents rather than from where it lives.
+   */
+  assets: AssetRecord[];
 };
 
 export type ModularDecodeResult =
@@ -91,14 +100,17 @@ const readGraph = (value: unknown): GraphDocument | null => {
   return { nodes, edges };
 };
 
-export const createModularDocument = (graph: GraphDocument): ModularDocument => ({
+export const createModularDocument = (
+  graph: GraphDocument,
+  assets: readonly AssetRecord[] = [],
+): ModularDocument => ({
   format: "m-modular",
   schemaVersion: MODULAR_DOCUMENT_VERSION,
   product: "modular",
   graph: structuredClone(graph),
   snapshots: [],
   macros: [],
-  assets: [],
+  assets: structuredClone(assets) as AssetRecord[],
 });
 
 export const encodeModularDocument = (document: ModularDocument): ModularDocument =>
@@ -162,24 +174,32 @@ const migrateGraphV1ToV2 = (graph: GraphDocument): { graph: GraphDocument; warni
 };
 
 export function decodeModularDocument(value: unknown): ModularDecodeResult {
-  if (!isBag(value)) return { ok: false, error: "Modular document must be an object" };
-  if (value.format !== "m-modular") return { ok: false, error: "Not an M Modular document" };
+  if (!isBag(value)) return { ok: false, error: "idMLab document must be an object" };
+  if (value.format !== "m-modular") return { ok: false, error: "Not an idMLab document" };
   if (value.schemaVersion !== 1 && value.schemaVersion !== MODULAR_DOCUMENT_VERSION) {
-    return { ok: false, error: `Unsupported Modular document version: ${String(value.schemaVersion)}` };
+    return { ok: false, error: `Unsupported idMLab document version: ${String(value.schemaVersion)}` };
   }
-  if (value.product !== "modular") return { ok: false, error: "Invalid Modular product marker" };
+  if (value.product !== "modular") return { ok: false, error: "Invalid idMLab product marker" };
   const decodedGraph = readGraph(value.graph);
-  if (!decodedGraph) return { ok: false, error: "Invalid Modular graph" };
+  if (!decodedGraph) return { ok: false, error: "Invalid idMLab graph" };
   const migrated = value.schemaVersion === 1 ? migrateGraphV1ToV2(decodedGraph) : { graph: decodedGraph, warnings: [] };
   const snapshots = Array.isArray(value.snapshots) && value.snapshots.every(isJsonValue)
     ? structuredClone(value.snapshots) : null;
   const macros = Array.isArray(value.macros) && value.macros.every(isJsonValue)
     ? structuredClone(value.macros) : null;
-  const assets = Array.isArray(value.assets) && value.assets.every(isJsonValue)
+  const rawAssets = Array.isArray(value.assets) && value.assets.every(isJsonValue)
     ? structuredClone(value.assets) : null;
-  if (!snapshots || !macros || !assets) return { ok: false, error: "Invalid Modular document collections" };
+  if (!snapshots || !macros || !rawAssets) {
+    return { ok: false, error: "Invalid idMLab document collections" };
+  }
+  // A malformed asset entry costs a thumbnail, not the patch: dropping it with
+  // a warning is a better outcome than refusing to open the document.
+  const assets = rawAssets.filter(isAssetRecord);
+  const assetWarnings = assets.length === rawAssets.length
+    ? []
+    : [`Ignored ${rawAssets.length - assets.length} unreadable asset entries`];
   if (value.performance !== undefined && !isJsonValue(value.performance)) {
-    return { ok: false, error: "Invalid Modular performance data" };
+    return { ok: false, error: "Invalid idMLab performance data" };
   }
   return {
     ok: true,
@@ -194,6 +214,6 @@ export function decodeModularDocument(value: unknown): ModularDecodeResult {
         ? {} : { performance: structuredClone(value.performance) as JsonValue }),
       assets,
     },
-    warnings: migrated.warnings,
+    warnings: [...migrated.warnings, ...assetWarnings],
   };
 }

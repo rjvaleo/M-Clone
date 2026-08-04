@@ -7,6 +7,10 @@ import type {
   NodeInstance,
   ParameterDescriptor,
 } from "../model/graph";
+import { CLASSIC_MODULES } from "./classicModules";
+import { AUDIO_MODULES } from "./audioModules";
+import { PLAYER_MODULES } from "./playerModules";
+import { PRESET_SLOTS } from "./descriptorKit";
 
 const numberParameter = (
   id: string,
@@ -29,6 +33,17 @@ const numberParameter = (
   morph: "linear",
   automation: "record",
 });
+
+/**
+ * The pattern a Note Editor opens with: one note every fourth step.
+ *
+ * Shared with the Pattern Editor compound so the two cannot drift into showing
+ * different starting material for the same thing.
+ */
+const NOTE_PATTERN_DEFAULT = Array.from({ length: 8 }, (_, position) =>
+  position === 0
+    ? Array.from({ length: 16 }, (_, step) => (step % 4 === 0 ? [60 + (step / 4) * 2] : []))
+    : Array.from({ length: 16 }, () => []));
 
 const TRANSPORT: ModuleDescriptor = {
   type: "m.transport-clock",
@@ -116,7 +131,7 @@ const TIME_BASE: ModuleDescriptor = {
         { numerator: 1, denominator: 16 },
       ],
       smoothing: "none", morph: "step-end", automation: "record" },
-    numberParameter("active-position", "Active preset", 0, 0, 7, 1),
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
   ],
   commands: [{ id: "reset-clock", label: "Reset clock" }],
   face: [
@@ -127,8 +142,9 @@ const TIME_BASE: ModuleDescriptor = {
       { kind: "status", id: "step-rate", label: "Steps per bar" },
     ] },
     { id: "presets", label: "Presets", elements: [
-      { kind: "custom", id: "embedded-time-base-presets", label: "Time Base presets a–h",
-        parameterIds: ["preset-values", "active-position"] },
+      { kind: "custom", id: "embedded-time-base-presets", label: "Time Base presets",
+        parameterIds: ["preset-values", "active-position"],
+        captures: ["numerator", "denominator"], placement: "bottom" },
     ] },
   ],
 };
@@ -160,7 +176,7 @@ const PHASE: ModuleDescriptor = {
     { id: "preset-values", label: "Phase presets", kind: "json",
       defaultValue: [0, 120, 240, 360, 480, 600, 720, 840],
       smoothing: "none", morph: "step-end", automation: "record" },
-    numberParameter("active-position", "Active preset", 0, 0, 7, 1),
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
   ],
   commands: [{ id: "clear-offset", label: "Clear offset" }],
   face: [
@@ -170,8 +186,9 @@ const PHASE: ModuleDescriptor = {
       { kind: "status", id: "pending", label: "Pending pulses" },
     ] },
     { id: "presets", label: "Presets", elements: [
-      { kind: "custom", id: "embedded-phase-presets", label: "Phase presets a–h",
-        parameterIds: ["preset-values", "active-position"] },
+      { kind: "custom", id: "embedded-phase-presets", label: "Phase presets",
+        parameterIds: ["preset-values", "active-position"],
+        captures: ["offset-ticks"], placement: "bottom" },
     ] },
   ],
 };
@@ -226,10 +243,7 @@ const NOTE_EDITOR: ModuleDescriptor = {
   ],
   parameters: [
     { id: "preset-values", label: "Pattern presets", kind: "json",
-      defaultValue: Array.from({ length: 8 }, (_, position) =>
-        position === 0
-          ? Array.from({ length: 16 }, (_, step) => step % 4 === 0 ? [60 + (step / 4) * 2] : [])
-          : Array.from({ length: 16 }, () => [])),
+      defaultValue: NOTE_PATTERN_DEFAULT,
       smoothing: "none", morph: "immediate", automation: "none" },
     numberParameter("active-position", "Active position", 0, 0, 7, 1),
     numberParameter("output-length", "Output length", 16, 0, 999, 1, "steps"),
@@ -258,8 +272,10 @@ const NOTE_EDITOR: ModuleDescriptor = {
   ],
   face: [
     { id: "positions", label: "Pattern positions", elements: [
-      { kind: "custom", id: "position-cells", label: "Positions a-h",
-        parameterIds: ["active-position"] },
+      { kind: "custom", id: "position-cells", label: "Pattern position",
+        parameterIds: ["preset-values", "active-position"],
+        // The patterns *are* the presets, so a slot selects rather than stores.
+        captures: [], placement: "top" },
     ] },
     { id: "editor", label: "Notes", elements: [
       { kind: "custom", id: "piano-roll", label: "Piano roll", parameterIds: ["preset-values"] },
@@ -318,7 +334,7 @@ const NOTE_DENSITY: ModuleDescriptor = {
     { id: "preset-values", label: "Density presets", kind: "json",
       defaultValue: [57, 55, 30, 45, 100, 35, 100, 100],
       smoothing: "none", morph: "step-end", automation: "record" },
-    numberParameter("active-position", "Active preset", 0, 0, 7, 1),
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
   ],
   commands: [
     { id: "reseed", label: "New deterministic seed" },
@@ -331,8 +347,9 @@ const NOTE_DENSITY: ModuleDescriptor = {
       { kind: "status", id: "activity", label: "Accepted / rejected" },
     ] },
     { id: "presets", label: "Presets", elements: [
-      { kind: "custom", id: "embedded-number-presets", label: "Density presets a–h",
-        parameterIds: ["preset-values", "active-position"] },
+      { kind: "custom", id: "embedded-number-presets", label: "Density presets",
+        parameterIds: ["preset-values", "active-position"],
+        captures: ["density"], placement: "bottom" },
     ] },
   ],
 };
@@ -392,8 +409,9 @@ const NOTE_ORDER: ModuleDescriptor = {
       { kind: "status", id: "cursor", label: "Current source / step" },
     ] },
     { id: "presets", label: "Presets", elements: [
-      { kind: "custom", id: "embedded-note-order-presets", label: "Note Order presets a–h",
-        parameterIds: ["preset-values", "active-position"] },
+      { kind: "custom", id: "embedded-note-order-presets", label: "Note Order presets",
+        parameterIds: ["preset-values", "active-position"],
+        captures: ["original", "cyclic", "utterly"], placement: "bottom" },
     ] },
   ],
 };
@@ -424,6 +442,7 @@ const CYCLIC_ACCENT: ModuleDescriptor = {
     { id: "grid-telemetry", label: "Grid telemetry", direction: "output", signal: { kind: "telemetry", schema: "cyclic-grid-v1" }, cardinality: "many" },
   ],
   parameters: [
+    numberParameter("sequence-length", "Length", 16, 1, 16, 1, "steps"),
     {
       id: "preset-values",
       label: "Accent presets",
@@ -433,7 +452,7 @@ const CYCLIC_ACCENT: ModuleDescriptor = {
       morph: "step-end",
       automation: "record",
     },
-    numberParameter("active-position", "Active preset", 0, 0, 7, 1),
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
   ],
   commands: [],
   face: [
@@ -442,6 +461,7 @@ const CYCLIC_ACCENT: ModuleDescriptor = {
       label: "Accent grid",
       elements: [
         { kind: "custom", id: "cyclic-grid", label: "16-step accent grid", parameterIds: ["preset-values", "active-position"] },
+        { kind: "parameter", parameterId: "sequence-length" },
         { kind: "status", id: "cursor", label: "Current step" },
       ],
     },
@@ -470,6 +490,7 @@ const CYCLIC_LEGATO: ModuleDescriptor = {
     { id: "grid-telemetry", label: "Grid telemetry", direction: "output", signal: { kind: "telemetry", schema: "cyclic-grid-v1" }, cardinality: "many" },
   ],
   parameters: [
+    numberParameter("sequence-length", "Length", 16, 1, 16, 1, "steps"),
     {
       id: "preset-values",
       label: "Legato presets",
@@ -479,7 +500,7 @@ const CYCLIC_LEGATO: ModuleDescriptor = {
       morph: "step-end",
       automation: "record",
     },
-    numberParameter("active-position", "Active preset", 0, 0, 7, 1),
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
   ],
   commands: [],
   face: [
@@ -488,6 +509,7 @@ const CYCLIC_LEGATO: ModuleDescriptor = {
       label: "Legato grid",
       elements: [
         { kind: "custom", id: "cyclic-grid", label: "16-step legato grid", parameterIds: ["preset-values", "active-position"] },
+        { kind: "parameter", parameterId: "sequence-length" },
         { kind: "status", id: "cursor", label: "Current step" },
       ],
     },
@@ -516,6 +538,7 @@ const CYCLIC_RHYTHM: ModuleDescriptor = {
     { id: "grid-telemetry", label: "Grid telemetry", direction: "output", signal: { kind: "telemetry", schema: "cyclic-grid-v1" }, cardinality: "many" },
   ],
   parameters: [
+    numberParameter("sequence-length", "Length", 16, 1, 16, 1, "steps"),
     {
       id: "preset-values",
       label: "Rhythm presets",
@@ -525,7 +548,7 @@ const CYCLIC_RHYTHM: ModuleDescriptor = {
       morph: "step-end",
       automation: "record",
     },
-    numberParameter("active-position", "Active preset", 0, 0, 7, 1),
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
   ],
   commands: [],
   face: [
@@ -534,6 +557,7 @@ const CYCLIC_RHYTHM: ModuleDescriptor = {
       label: "Rhythm grid",
       elements: [
         { kind: "custom", id: "cyclic-grid", label: "16-step rhythm grid", parameterIds: ["preset-values", "active-position"] },
+        { kind: "parameter", parameterId: "sequence-length" },
         { kind: "status", id: "cursor", label: "Current step" },
       ],
     },
@@ -575,7 +599,7 @@ const VELOCITY_RANGE: ModuleDescriptor = {
       morph: "step-end",
       automation: "record",
     },
-    numberParameter("active-position", "Active preset", 0, 0, 7, 1),
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
   ],
   commands: [],
   face: [
@@ -592,12 +616,9 @@ const VELOCITY_RANGE: ModuleDescriptor = {
       id: "presets",
       label: "Presets",
       elements: [
-        {
-          kind: "custom",
-          id: "embedded-velocity-presets",
-          label: "Velocity presets a-h",
-          parameterIds: ["preset-values", "active-position"],
-        },
+        { kind: "custom", id: "embedded-velocity-presets", label: "Velocity presets",
+        parameterIds: ["preset-values", "active-position"],
+        captures: ["low", "high", "accent-level"], placement: "bottom" },
       ],
     },
   ],
@@ -637,7 +658,7 @@ const LEGATO_PROCESSOR: ModuleDescriptor = {
       morph: "step-end",
       automation: "record",
     },
-    numberParameter("active-position", "Active preset", 0, 0, 7, 1),
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
   ],
   commands: [],
   face: [
@@ -654,12 +675,9 @@ const LEGATO_PROCESSOR: ModuleDescriptor = {
       id: "presets",
       label: "Presets",
       elements: [
-        {
-          kind: "custom",
-          id: "embedded-legato-presets",
-          label: "Legato presets a-h",
-          parameterIds: ["preset-values", "active-position"],
-        },
+        { kind: "custom", id: "embedded-legato-presets", label: "Legato presets",
+        parameterIds: ["preset-values", "active-position"],
+        captures: ["base-multiplier", "legato-level"], placement: "bottom" },
       ],
     },
   ],
@@ -689,7 +707,7 @@ const PLAY_ENABLE: ModuleDescriptor = {
       morph: "step-end",
       automation: "record",
     },
-    numberParameter("active-position", "Active preset", 0, 0, 7, 1),
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
   ],
   commands: [],
   face: [
@@ -705,12 +723,9 @@ const PLAY_ENABLE: ModuleDescriptor = {
       id: "presets",
       label: "Presets",
       elements: [
-        {
-          kind: "custom",
-          id: "embedded-play-enable-presets",
-          label: "Play Enable presets a-h",
-          parameterIds: ["preset-values", "active-position"],
-        },
+        { kind: "custom", id: "embedded-play-enable-presets", label: "Play Enable presets",
+        parameterIds: ["preset-values", "active-position"],
+        captures: ["play-enabled"], placement: "bottom" },
       ],
     },
   ],
@@ -754,7 +769,7 @@ const TRANSPOSITION: ModuleDescriptor = {
       morph: "step-end",
       automation: "record",
     },
-    numberParameter("active-position", "Active preset", 0, 0, 7, 1),
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
   ],
   commands: [],
   face: [
@@ -773,12 +788,9 @@ const TRANSPOSITION: ModuleDescriptor = {
       id: "presets",
       label: "Presets",
       elements: [
-        {
-          kind: "custom",
-          id: "embedded-transposition-presets",
-          label: "Transposition presets a-h",
-          parameterIds: ["preset-values", "active-position"],
-        },
+        { kind: "custom", id: "embedded-transposition-presets", label: "Transposition presets",
+        parameterIds: ["preset-values", "active-position"],
+        captures: ["mode", "semitones", "degrees", "scale-root", "scale-mode"], placement: "bottom" },
       ],
     },
   ],
@@ -800,7 +812,7 @@ const STREAM: ModuleDescriptor = {
     { id: "stream-telemetry", label: "Stream telemetry", direction: "output", signal: { kind: "telemetry", schema: "stream-v1" }, cardinality: "many" },
   ],
   parameters: [
-    numberParameter("active-position", "Active preset", 0, 0, 7, 1),
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
   ],
   commands: [
     { id: "expand-stream", label: "Expand" },
@@ -867,10 +879,99 @@ const MIDI_OUTPUT: ModuleDescriptor = {
   ],
 };
 
+/**
+ * The Pattern Editor: Time Base, Phase, the three Cyclic editors and the Note
+ * Editor as one module.
+ *
+ * A compound, not a new engine — it expands at compile time into exactly the
+ * nodes it stands for, wired the only way they are ever wired. Every one of
+ * those modules is still available on its own; this is the shorthand for the
+ * arrangement people always build.
+ *
+ * The one behavioural difference is the presets. Separately each part had its
+ * own bank, so a stream carried five of them and no way to move between whole
+ * musical ideas. Here there is a single bank, and a slot holds the pattern, all
+ * three grids and their lengths, the step rate and the phase together.
+ */
+const PATTERN_EDITOR: ModuleDescriptor = {
+  type: "m.pattern-editor",
+  version: 1,
+  label: "Pattern Editor",
+  family: "source",
+  layout: "editor",
+  colorToken: "pattern",
+  ports: [
+    { id: "transport-in", label: "Transport", direction: "input", signal: { kind: "transport", resolution: 960 }, cardinality: "one", required: true },
+    { id: "reset-in", label: "Reset", direction: "input", signal: { kind: "reset" }, cardinality: "many", mergePolicy: "first-wins" },
+    { id: "position-in", label: "Preset position", direction: "input", signal: { kind: "control", value: "index" }, cardinality: "one" },
+    { id: "record-in", label: "Record notes", direction: "input", signal: { kind: "note-event" }, cardinality: "one" },
+    { id: "notes-out", label: "Notes", direction: "output", signal: { kind: "note-event" }, cardinality: "many" },
+    { id: "clock-out", label: "Step clock", direction: "output", signal: { kind: "step-clock" }, cardinality: "many" },
+    { id: "audition-out", label: "Audition", direction: "output", signal: { kind: "note-event" }, cardinality: "many" },
+  ],
+  parameters: [
+    numberParameter("numerator", "Numerator", 1, 1, 64, 1),
+    numberParameter("denominator", "Denominator", 16, 0, 64, 1),
+    numberParameter("offset-ticks", "Phase", 0, 0, 15360, 1, "ticks"),
+    { id: "accent-grid", label: "Accent grid", kind: "json", defaultValue: CYCLIC_PRESETS_DEFAULT, smoothing: "none", morph: "step-end", automation: "record" },
+    numberParameter("accent-length", "Accent length", 16, 1, 16, 1, "steps"),
+    { id: "legato-grid", label: "Legato grid", kind: "json", defaultValue: CYCLIC_PRESETS_DEFAULT, smoothing: "none", morph: "step-end", automation: "record" },
+    numberParameter("legato-length", "Legato length", 16, 1, 16, 1, "steps"),
+    { id: "rhythm-grid", label: "Rhythm grid", kind: "json", defaultValue: CYCLIC_PRESETS_DEFAULT, smoothing: "none", morph: "step-end", automation: "record" },
+    numberParameter("rhythm-length", "Rhythm length", 16, 1, 16, 1, "steps"),
+    { id: "preset-values", label: "Pattern presets", kind: "json", defaultValue: NOTE_PATTERN_DEFAULT, smoothing: "none", morph: "step-end", automation: "record" },
+    numberParameter("active-position", "Active preset", 0, 0, PRESET_SLOTS - 1, 1),
+    numberParameter("output-length", "Output length", 16, 1, 64, 1, "steps"),
+    numberParameter("maximum-size", "Maximum size", 64, 1, 256, 1, "steps"),
+    numberParameter("velocity", "Velocity", 100, 1, 127, 1),
+    numberParameter("gate", "Gate", 90, 1, 200, 1, "%"),
+    numberParameter("channel", "Channel", 1, 1, 16, 1),
+  ],
+  commands: [],
+  // Six sections, no headings. Every one of them is already named by the
+  // controls inside it — "Accent" above a field labelled *Accent length* — and
+  // on the tallest face in the app six redundant rows are worth reclaiming.
+  face: [
+    { id: "presets", label: "Presets", showHeading: false, elements: [
+      { kind: "custom", id: "pattern-editor-presets", label: "Pattern presets",
+        parameterIds: ["preset-values", "active-position"],
+        captures: [], placement: "top" },
+    ] },
+    { id: "clock", label: "Clock", showHeading: false, elements: [
+      { kind: "parameter", parameterId: "numerator" },
+      { kind: "parameter", parameterId: "denominator" },
+      { kind: "parameter", parameterId: "offset-ticks" },
+    ] },
+    { id: "notes", label: "Notes", showHeading: false, elements: [
+      { kind: "custom", id: "note-roll", label: "Piano roll", parameterIds: ["preset-values"] },
+      { kind: "parameter", parameterId: "output-length" },
+      { kind: "parameter", parameterId: "maximum-size" },
+      { kind: "parameter", parameterId: "velocity" },
+      { kind: "parameter", parameterId: "gate" },
+      { kind: "parameter", parameterId: "channel" },
+    ] },
+    { id: "accent", label: "Accent", showHeading: false, elements: [
+      { kind: "parameter", parameterId: "accent-length" },
+      { kind: "custom", id: "embedded-accent-grid", label: "Accent grid", parameterIds: ["accent-grid", "active-position"] },
+    ] },
+    { id: "legato", label: "Legato", showHeading: false, elements: [
+      { kind: "parameter", parameterId: "legato-length" },
+      { kind: "custom", id: "embedded-legato-grid", label: "Legato grid", parameterIds: ["legato-grid", "active-position"] },
+    ] },
+    { id: "rhythm", label: "Rhythm", showHeading: false, elements: [
+      { kind: "parameter", parameterId: "rhythm-length" },
+      { kind: "custom", id: "embedded-rhythm-grid", label: "Rhythm grid", parameterIds: ["rhythm-grid", "active-position"] },
+    ] },
+  ],
+};
+
 export type ModuleRegistry = ReadonlyMap<ModuleTypeId, ModuleDescriptor>;
 
 export const moduleRegistry: ModuleRegistry = new Map(
-  [
+  [...CLASSIC_MODULES,
+    ...AUDIO_MODULES,
+    ...PLAYER_MODULES,
+    PATTERN_EDITOR,
     TRANSPORT,
     TIME_BASE,
     PHASE,
@@ -968,6 +1069,14 @@ export function createNode(
       structuredClone(values[parameter.id] ?? parameter.defaultValue),
     ]),
   );
+  // The pad has sixteen slots and modules declare the handful they ship with,
+  // so the store is padded here rather than in sixteen descriptors. Empty slots
+  // are `null` and stay that way until one is shift-clicked.
+  const stored = parameters["preset-values"];
+  if (Array.isArray(stored) && stored.length < PRESET_SLOTS) {
+    parameters["preset-values"] = Array.from({ length: PRESET_SLOTS },
+      (_, index) => stored[index] ?? null) as JsonValue;
+  }
   return {
     id,
     moduleType,

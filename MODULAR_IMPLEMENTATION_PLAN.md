@@ -1012,6 +1012,36 @@ The modular branch must:
 - use stable asset IDs rather than filesystem paths;
 - distinguish per-machine workspace preferences from portable project state.
 
+### 10.2 Implemented asset model and the `.mmodpack` bundle
+
+An asset ID is the **64-bit hash of the sample's bytes**, which satisfies the
+stable-ID rule by construction: nothing has to be updated when a file moves,
+a renamed file is the same sample, an edited one is a different sample, and
+re-dropping a file after reopening a project re-attaches it with no matching up
+by hand. `assets: AssetRecord[]` carries identity, duration, channel count and a
+128-bucket waveform thumbnail — never the audio.
+
+A `.mmod` therefore describes its samples without containing them, which is
+right for a working file and wrong for handing a project to somebody else. The
+second format is the same document with the audio appended:
+
+```
+magic "MMODPACK" · uint32 version · uint32 manifestLength
+manifest JSON { document, blobs: [{ id, offset, length }] }
+blobs — raw bytes, concatenated
+```
+
+Raw rather than base64 inside the JSON: a bundle costs exactly what its audio
+costs, and the manifest is parsed without the samples passing through
+`JSON.parse`. Each blob is verified against the ID claiming it on read — the ID
+*is* the hash, so the check is free — and a failure produces a named warning and
+one missing sample rather than a decoder throwing on garbage. This is integrity,
+not authentication; the hash is not cryptographic.
+
+Records may carry a `generator` instead (`kit:kick`), and generated audio is
+recomputed on open rather than stored, so a bundle never contains anything the
+code can derive.
+
 The Standard M importer is a boundary adapter, not native document compatibility. It may reuse the current defensive decoder in read-only mode, but its only output is a newly validated Modular graph. Modular export back to the standard M format is not supported because arbitrary graphs cannot be represented faithfully. Other interchange happens through neutral exports such as MIDI and audio.
 
 ## 11. Command, undo, and validation model

@@ -20,6 +20,7 @@
 
 import type { EdgeId, GraphDocument, NodeId, SignalType } from "../model/graph";
 import { materializeStreamCompounds } from "../model/stream";
+import { materializePatternEditors } from "../model/patternEditor";
 import type { ModuleRegistry } from "../registry/registry";
 import { streamKey } from "../runtime/rng";
 import { DEFAULT_SCHEDULING_CONFIG } from "../runtime/scheduling";
@@ -66,7 +67,9 @@ export function compileGraph(
   registry: ModuleRegistry,
   options: CompileOptions = {},
 ): CompileResult {
-  const runtimeGraph = materializeStreamCompounds(graph);
+  // Compounds expand before anything else looks at the graph, so every check
+  // below — order, cycles, required inputs — runs against the real nodes.
+  const runtimeGraph = materializePatternEditors(materializeStreamCompounds(graph));
   const diagnostics: GraphDiagnostic[] = [...validateGraph(runtimeGraph, registry)];
   const warnings: GraphDiagnostic[] = [];
 

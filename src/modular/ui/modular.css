@@ -1,7 +1,25 @@
+/*
+ * Modular's stylesheet speaks the theme token vocabulary directly.
+ *
+ * Nothing here hard-codes a colour. Every surface, text step, border and accent
+ * reads a custom property that `applyTheme` writes onto the root, which is what
+ * lets fifty themes re-skin the app without touching a component.
+ *
+ * The `--mm-*` names below are aliases, not a second palette: they give the
+ * app's own vocabulary ("canvas", "cable") a home while the values come from
+ * the shared ladder. Rules reach past the aliases to a specific rung — `--tx-700`
+ * for a heading, `--bd-100` for an inner hairline — wherever the distinction
+ * carries meaning, because that is what makes a theme read as designed rather
+ * than as three greys.
+ *
+ * Tokens holding a "R G B" triplet are alpha-ready and interpolate through
+ * `rgb(var(--token))`; the rest are plain colours.
+ */
+
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #15202b;
-  background: #e9eef5;
+  color: var(--tx-800, #15202b);
+  background: rgb(var(--s-body, 237 243 249));
 }
 
 * { box-sizing: border-box; }
@@ -10,157 +28,718 @@ button, input, select { font: inherit; }
 button { cursor: pointer; }
 
 .mm-app {
-  --mm-canvas: #edf3f9;
-  --mm-grid: rgba(20, 55, 85, .10);
-  --mm-surface: #ffffff;
-  --mm-surface-2: #f2f6fa;
-  --mm-border: #b8c5d2;
-  --mm-text: #15202b;
-  --mm-muted: #5b6b7a;
-  --mm-cable: #9b5de5;
+  --mm-canvas: rgb(var(--s-body));
+  --mm-grid: var(--bd-hairline);
+  --mm-surface: var(--s-card);
+  --mm-surface-2: rgb(var(--s-raised));
+  --mm-border: var(--bd-200);
+  --mm-text: var(--tx-800);
+  --mm-muted: var(--tx-500);
+  --mm-cable: var(--ac-on);
   display: grid;
   grid-template-rows: 50px 1fr 28px;
   width: 100%; height: 100%; color: var(--mm-text); background: var(--mm-canvas);
 }
 
-.mm-app--dark {
-  --mm-canvas: #101822;
-  --mm-grid: rgba(128, 200, 255, .09);
-  --mm-surface: #1c2733;
-  --mm-surface-2: #263442;
-  --mm-border: #405366;
-  --mm-text: #f2f7fb;
-  --mm-muted: #a9bac9;
-  --mm-cable: #c77dff;
-}
-
 .mm-project-bar, .mm-status-bar {
   position: relative; z-index: 20; display: flex; align-items: center; justify-content: space-between;
-  gap: 18px; padding: 0 14px; background: color-mix(in srgb, var(--mm-surface) 94%, #ffb703 6%);
-  border-bottom: 1px solid var(--mm-border);
+  gap: 18px; padding: 0 14px; background: rgb(var(--s-page)); border-bottom: 1px solid var(--bd-100);
 }
 .mm-project-bar > div { display: flex; align-items: baseline; gap: 12px; }
-.mm-project-bar strong { letter-spacing: .11em; color: #f45b69; }
-.mm-project-bar span, .mm-status-bar { color: var(--mm-muted); font-size: 12px; }
+.mm-project-bar strong { letter-spacing: .11em; color: var(--ac-tx-700); }
+.mm-project-bar span, .mm-status-bar { color: var(--tx-500); font-size: 12px; }
 .mm-project-bar nav { display: flex; align-items: center; gap: 8px; }
 .mm-project-bar button, .mm-project-bar label {
-  border: 1px solid var(--mm-border); border-radius: 5px; background: var(--mm-surface-2);
-  color: var(--mm-text); padding: 5px 9px; font-size: 12px;
+  border: 1px solid var(--bd-200); border-radius: 5px; background: var(--s-card);
+  color: var(--tx-700); padding: 5px 9px; font-size: 12px;
 }
+.mm-project-bar button:hover { background: var(--hv-100); color: var(--tx-800); border-color: var(--bd-300); }
 .mm-project-bar label { display: flex; align-items: center; gap: 6px; }
-.mm-project-bar input[type="range"] { width: 90px; }
-.mm-project-bar button.is-active { color: #071018; border-color: #00d4a6; background: #00d4a6; box-shadow: 0 0 12px rgba(0, 212, 166, .32); }
+.mm-project-bar input[type="range"] { width: 90px; accent-color: var(--ac-on); }
+.mm-project-bar button.is-active {
+  color: var(--mm-on-accent); border-color: var(--ac-on); background: var(--ac-on);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ac-on) 32%, transparent);
+}
 
 .mm-canvas-viewport { position: relative; overflow: auto; background-color: var(--mm-canvas); }
 .mm-canvas-viewport.is-hand { cursor: grab; touch-action: none; }
 .mm-canvas-viewport.is-panning { cursor: grabbing; user-select: none; }
 .mm-canvas-viewport.is-panning * { cursor: grabbing !important; }
-.mm-canvas-viewport::before {
-  content: ""; position: absolute; inset: 0; width: 2900px; height: 1200px;
+/*
+ * The stage is the canvas's layout box; the canvas itself is only transformed.
+ * A CSS transform does not change layout size, so the stage carries the pixel
+ * dimensions and gives the scrollport something honest to measure.
+ *
+ * It never gets smaller than the window.
+ *
+ * Its size is the canvas scaled by zoom, so zooming out used to shrink it into
+ * a small island in the middle of the scrollport: the island had the dot grid
+ * and took the scrollbars, and everything around it was dead space that looked
+ * like canvas and behaved like nothing. Flooring the stage at `100%` — done
+ * inline with `max()`, since the other term is a zoom-dependent pixel value —
+ * means the working surface is always at least everything you can see.
+ *
+ * No centring and no `margin: auto`. Auto margins on an item larger than its
+ * scrollport push half the overflow off the start side where the scrollbar
+ * cannot reach it, which is a different way to lose part of the canvas.
+ */
+.mm-canvas-stage { position: relative; }
+.mm-canvas { position: relative; transform-origin: 0 0; }
+/*
+ * The grid belongs to the canvas, not to the stage.
+ *
+ * The stage is not transformed; `.mm-canvas` is the element `scale(zoom)`
+ * applies to. Painting the dots on the stage put them in screen space while the
+ * modules sat in canvas space, so the two were never connected: the patch grew
+ * and shrank and the dots just drifted at a constant size. Painting them here
+ * puts the spacing in canvas units, so the transform scales the grid by exactly
+ * what it scales the modules by, and a dot stays over the same point of the
+ * patch at every zoom.
+ *
+ * The dot radius scales with it, so far enough out the grid fades away rather
+ * than collapsing into moiré.
+ */
+.mm-canvas::before {
+  content: ""; position: absolute; inset: 0; z-index: 0;
   background-image: radial-gradient(circle, var(--mm-grid) 1px, transparent 1px);
   background-size: 20px 20px; pointer-events: none;
 }
-.mm-canvas { position: relative; width: 2900px; height: 1200px; transform-origin: 0 0; }
 .mm-cables { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
-.mm-cables path { fill: none; stroke: var(--mm-cable); stroke-width: 5; opacity: .85; pointer-events: stroke; cursor: pointer; filter: drop-shadow(0 0 5px color-mix(in srgb, var(--mm-cable) 70%, transparent)); }
-.mm-cables path.is-selected { stroke: #ffcf33; stroke-width: 8; opacity: 1; }
+.mm-cables path {
+  fill: none; stroke: var(--mm-cable); stroke-width: 5; opacity: .85;
+  pointer-events: stroke; cursor: pointer;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--mm-cable) 70%, transparent));
+}
+.mm-cables path.is-selected { stroke: var(--sel); stroke-width: 8; opacity: 1; }
+/* The cable in flight is dashed, so it never reads as an existing connection. */
+.mm-cables path.mm-cable-dragging {
+  stroke: var(--sel); stroke-width: 4; stroke-dasharray: 7 5; opacity: .95; pointer-events: none;
+}
+
+/*
+ * Below the interaction floor the controls are smaller than a pointer can aim
+ * at, so the canvas stops taking clicks rather than letting a mis-hit nudge a
+ * musical parameter. Panning and zooming still work.
+ */
+.mm-canvas.is-too-small .mm-node__face,
+.mm-canvas.is-too-small .mm-node__ports { pointer-events: none; }
 
 .mm-node {
-  --mm-accent: #00d4a6;
-  position: absolute; z-index: 2; background: var(--mm-surface); border: 1px solid var(--mm-border);
+  /* Overridden per node with that module family's identity token. */
+  --mm-accent: var(--mm-module-density);
+  /* z-index is set per node so a touched module comes to the front. */
+  position: absolute; background: var(--s-card); border: 1px solid var(--bd-200);
   border-top: 5px solid var(--mm-accent); border-radius: 9px; box-shadow: 0 12px 30px rgba(0, 0, 0, .24);
+  /* The whole face is a drag handle; controls on it opt back out below. */
+  cursor: grab;
 }
-.mm-node.is-selected { outline: 3px solid var(--mm-accent); outline-offset: 3px; box-shadow: 0 16px 42px rgba(0, 0, 0, .34), 0 0 22px color-mix(in srgb, var(--mm-accent) 38%, transparent); }
+.mm-node:active { cursor: grabbing; }
+.mm-node button, .mm-node input, .mm-node select, .mm-node textarea, .mm-node label { cursor: auto; }
+.mm-node button { cursor: pointer; }
+.mm-node input[type="range"] { cursor: ew-resize; }
+.mm-node.is-selected {
+  outline: 3px solid var(--mm-accent); outline-offset: 3px;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .34), 0 0 22px color-mix(in srgb, var(--mm-accent) 38%, transparent);
+}
 .mm-node__header {
   display: flex; align-items: center; justify-content: space-between; height: 38px; padding: 0 12px;
-  background: color-mix(in srgb, var(--mm-accent) 18%, var(--mm-surface)); cursor: grab; user-select: none;
+  background: color-mix(in srgb, var(--mm-accent) 18%, var(--s-card)); cursor: grab; user-select: none;
 }
+.mm-node__header { cursor: grab; }
 .mm-node__header:active { cursor: grabbing; }
-.mm-node__header span { font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
-/* The module type takes the slack so the close button stays hard right. */
-.mm-node__header small { color: var(--mm-muted); margin-left: auto; }
+.mm-node__header span { font-weight: 750; letter-spacing: .04em; text-transform: uppercase; color: var(--tx-800); }
+/* The header is the module's name and its close button, and nothing else. */
+.mm-node__header span { margin-right: auto; }
 .mm-node__close {
   flex: none; width: 22px; height: 22px; margin-left: 10px; padding: 0;
   display: grid; place-items: center;
-  font-size: 15px; line-height: 1; color: var(--mm-muted);
+  font-size: 15px; line-height: 1; color: var(--tx-400);
   background: transparent; border: 1px solid transparent; border-radius: 5px;
   cursor: pointer;
 }
 .mm-node__close:hover, .mm-node__close:focus-visible {
-  color: var(--mm-text); background: var(--mm-surface); border-color: var(--mm-border);
+  color: var(--tx-800); background: var(--hv-100); border-color: var(--bd-200);
 }
 .mm-node__close:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 1px; }
 .mm-node__face { padding: 12px; display: grid; gap: 10px; }
 .mm-node--layout-compact .mm-node__face { padding: 9px; gap: 7px; }
-.mm-node-section { border: 1px solid var(--mm-border); border-radius: 6px; overflow: hidden; background: var(--mm-surface-2); }
-.mm-node-section h2 { margin: 0; padding: 5px 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--mm-muted); border-bottom: 1px solid var(--mm-border); }
-.mm-node-section__content { display: flex; align-items: flex-end; gap: 7px; flex-wrap: wrap; padding: 8px; }
+
+/*
+ * Modules are as wide as their contents, within a range per layout class.
+ *
+ * A fixed width padded every module out to the widest thing its class might
+ * hold: a Play Enable is a checkbox and a preset strip, and it was given the
+ * same 520px as a module with a full panel of controls. The minimum keeps a
+ * one-control module from shrinking to a sliver its header cannot sit in; the
+ * maximum stops a long status line from stretching one out across the canvas.
+ */
+.mm-node { width: fit-content; }
+.mm-node--layout-compact { min-width: 260px; max-width: 520px; }
+.mm-node--layout-utility { min-width: 240px; max-width: 380px; }
+.mm-node--layout-editor { min-width: 520px; max-width: 940px; }
+.mm-node-section {
+  border: 1px solid var(--bd-100); border-radius: 6px; overflow: hidden; background: rgb(var(--s-raised));
+}
+.mm-node-section h2 {
+  margin: 0; padding: 5px 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--tx-400); border-bottom: 1px solid var(--bd-100);
+}
+/*
+ * Controls sit in a wrapping row: label above its field, fields side by side.
+ *
+ * Stacking one per row was tried and made every module a long column — the
+ * fields here are short and closely related, and reading "Time base numerator"
+ * beside "Time base denominator" is the whole point of them being adjacent.
+ */
+.mm-node-section__content {
+  display: flex; align-items: flex-end; flex-wrap: wrap; gap: 7px; padding: 8px;
+}
 .mm-node--layout-compact .mm-node-section__content { gap: 6px; padding: 7px; }
 
-.mm-node__ports { position: absolute; top: 48px; display: grid; gap: 7px; font-size: 10px; color: var(--mm-muted); }
-.mm-node__ports--input { left: -7px; justify-items: start; }
-.mm-node__ports--output { right: -7px; justify-items: end; }
-.mm-port { display: flex; align-items: center; gap: 4px; color: var(--mm-muted); background: var(--mm-surface); padding: 2px 6px; border-radius: 10px; border: 1px solid var(--mm-border); }
-.mm-port:hover, .mm-port.is-patching { color: var(--mm-text); border-color: var(--mm-accent); box-shadow: 0 0 10px color-mix(in srgb, var(--mm-accent) 58%, transparent); }
-.mm-node__ports--input .mm-port::before, .mm-node__ports--output .mm-port::after { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--mm-accent); box-shadow: 0 0 6px var(--mm-accent); }
+/*
+ * A port is a dot on the node's edge; its name is a tooltip that appears on
+ * hover and grows *away* from the module.
+ *
+ * Both halves of that matter. The names used to be always-on pills laid out
+ * inward, so on any node with more than two ports they sat on top of the face —
+ * a Transport Clock's "Tempo" landed across its own section heading. And a
+ * label that grows inward has nowhere to go on a wide name, while the canvas
+ * outside the node is empty by definition.
+ */
+.mm-node__ports { position: absolute; top: 48px; display: grid; gap: 11px; }
+.mm-node__ports--input { left: -6px; justify-items: start; }
+.mm-node__ports--output { right: -6px; justify-items: end; }
+.mm-port {
+  position: relative; width: 12px; height: 12px; padding: 0;
+  border-radius: 50%; border: 1px solid color-mix(in srgb, var(--mm-accent) 60%, var(--s-900));
+  background: var(--mm-accent); box-shadow: 0 0 6px var(--mm-accent);
+  cursor: crosshair;
+}
+/* The dot is small to keep the edge clean; the hit area is not. */
+.mm-port::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
+.mm-port:hover, .mm-port.is-patching {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mm-accent) 30%, transparent), 0 0 12px var(--mm-accent);
+}
+/* Where the cable in flight would land — the strongest signal on the canvas. */
+.mm-port.is-drop-target {
+  background: var(--sel); border-color: var(--sel);
+  box-shadow: 0 0 0 4px var(--sel-soft), 0 0 16px var(--sel-edge);
+}
 
-.mm-field { display: grid; gap: 3px; min-width: 105px; font-size: 11px; color: var(--mm-muted); }
-.mm-field input, .mm-field select { width: 100%; min-height: 28px; color: var(--mm-text); background: var(--mm-surface); border: 1px solid var(--mm-border); border-radius: 4px; padding: 3px 6px; }
-.mm-field--check { display: flex; align-items: center; justify-content: space-between; align-self: center; }
+.mm-port__label {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  z-index: 5; padding: 2px 7px; border-radius: 9px;
+  font-size: 10px; line-height: 1.5; white-space: nowrap;
+  color: var(--tx-700); background: var(--s-card); border: 1px solid var(--bd-200);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .3);
+  opacity: 0; pointer-events: none; transition: opacity .1s ease-out;
+}
+/* Outward in both directions: left of an input, right of an output. */
+.mm-node__ports--input .mm-port__label { right: calc(100% + 7px); }
+.mm-node__ports--output .mm-port__label { left: calc(100% + 7px); }
+.mm-port:hover .mm-port__label,
+.mm-port:focus-visible .mm-port__label,
+.mm-port.is-patching .mm-port__label,
+.mm-port.is-drop-target .mm-port__label { opacity: 1; }
+.mm-port.is-patching .mm-port__label, .mm-port.is-drop-target .mm-port__label {
+  color: var(--tx-800); border-color: var(--mm-accent);
+}
+/*
+ * A label points outward, which on a busy canvas means over the module next
+ * door. Each node sets its own `z-index`, and that creates a stacking context
+ * the label cannot escape — so the node being pointed at comes forward for as
+ * long as the pointer is on one of its ports. `!important` is needed because
+ * the competing `z-index` is inline.
+ */
+.mm-node:has(.mm-port:hover), .mm-node:has(.mm-port.is-patching) { z-index: 900 !important; }
+
+.mm-field { display: grid; gap: 3px; min-width: 105px; font-size: 11px; color: var(--tx-500); }
+.mm-node-section__content > .mm-field { min-width: 0; }
+
+/* Actions sit shoulder to shoulder and take only the width they need. */
+.mm-node-section__commands { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Narrow modules: a long name truncates rather than pushing the close button off. */
+.mm-node__header span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-field input, .mm-field select {
+  width: 100%; min-height: 28px; color: var(--tx-800); background: var(--s-card);
+  border: 1px solid var(--bd-200); border-radius: 4px; padding: 3px 6px;
+}
+.mm-field input:focus-visible, .mm-field select:focus-visible {
+  outline: 2px solid var(--ac-bd-500); outline-offset: 0; border-color: var(--ac-bd-500);
+}
+.mm-field input::placeholder { color: var(--placeholder); }
+.mm-field--check { display: flex; align-items: center; gap: 7px; align-self: center; min-width: 0; }
 .mm-field--check input { width: 17px; min-height: 17px; accent-color: var(--mm-accent); }
 .mm-number { display: flex; align-items: center; gap: 4px; }
-.mm-number small { color: var(--mm-muted); }
-.mm-command { height: 28px; min-height: 28px; padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--mm-accent) 55%, var(--mm-border)); border-radius: 4px; color: var(--mm-text); background: color-mix(in srgb, var(--mm-accent) 16%, var(--mm-surface)); font-size: 11px; }
-.mm-command:hover { background: color-mix(in srgb, var(--mm-accent) 28%, var(--mm-surface)); }
-.mm-status { display: grid; gap: 2px; min-width: 95px; font-size: 10px; color: var(--mm-muted); }
-.mm-status b { color: #00c896; }
+.mm-number small { color: var(--tx-400); }
+.mm-command {
+  height: 28px; min-height: 28px; padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--mm-accent) 55%, var(--bd-200)); border-radius: 4px;
+  color: var(--tx-800); background: color-mix(in srgb, var(--mm-accent) 16%, var(--s-card)); font-size: 11px;
+}
+.mm-command:hover { background: color-mix(in srgb, var(--mm-accent) 28%, var(--s-card)); }
+.mm-status { display: grid; gap: 2px; min-width: 95px; font-size: 10px; color: var(--tx-500); }
+.mm-status b { color: var(--status-done-text); }
 
 .mm-positions { display: grid; grid-template-columns: repeat(8, 38px); gap: 5px; }
-.mm-positions button { height: 30px; border-radius: 4px; border: 1px solid var(--mm-border); color: var(--mm-text); background: var(--mm-surface); text-transform: uppercase; }
-.mm-positions button.is-active { border-color: var(--mm-accent); background: var(--mm-accent); color: #071018; box-shadow: 0 0 12px color-mix(in srgb, var(--mm-accent) 65%, transparent); }
-.mm-piano-roll { width: 100%; border: 1px solid var(--mm-border); background: color-mix(in srgb, var(--mm-surface) 80%, #03111e 20%); }
+.mm-positions button {
+  height: 30px; border-radius: 4px; border: 1px solid var(--bd-200);
+  color: var(--tx-700); background: var(--s-card); text-transform: uppercase;
+}
+.mm-positions button:hover { background: var(--hv-100); }
+.mm-positions button.is-active {
+  border-color: var(--mm-accent); background: var(--mm-accent); color: var(--mm-on-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--mm-accent) 65%, transparent);
+}
+.mm-piano-roll { width: 100%; border: 1px solid var(--bd-200); background: color-mix(in srgb, var(--s-card) 80%, var(--s-900) 20%); }
 .mm-piano-row { display: grid; grid-template-columns: 34px repeat(16, 1fr); min-height: 20px; }
-.mm-piano-row + .mm-piano-row { border-top: 1px solid color-mix(in srgb, var(--mm-border) 65%, transparent); }
-.mm-piano-key { display: grid; place-items: center; font: 10px ui-monospace, monospace; color: var(--mm-muted); border-right: 1px solid var(--mm-border); }
-.mm-piano-row button { min-width: 0; border: 0; border-left: 1px dotted color-mix(in srgb, var(--mm-border) 70%, transparent); background: transparent; }
+.mm-piano-row + .mm-piano-row { border-top: 1px solid var(--bd-50); }
+.mm-piano-key {
+  display: grid; place-items: center; font: 10px ui-monospace, monospace;
+  color: var(--tx-400); border-right: 1px solid var(--bd-100);
+}
+.mm-piano-row button { min-width: 0; border: 0; border-left: 1px dotted var(--bd-100); background: transparent; }
 .mm-piano-row button:hover { background: color-mix(in srgb, var(--mm-accent) 25%, transparent); }
-.mm-piano-row button.is-note { background: var(--mm-accent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--mm-accent) 55%, #fff 45%); }
+.mm-piano-row button.is-note {
+  background: var(--mm-accent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--mm-accent) 55%, var(--tx-max) 45%);
+}
 
-.mm-density-slider { width: 100%; display: grid; grid-template-columns: 90px 1fr 54px; align-items: center; gap: 12px; padding: 10px; color: var(--mm-muted); font-size: 12px; }
+/*
+ * The windowed note roll: an overview strip over a small scrolling grid.
+ *
+ * The whole 0–127 range is rendered, so the height is the one thing that has to
+ * be held down — 168px is eight rows, enough to work in without turning the
+ * Pattern Editor back into a tower. The pitch column stays put while the steps
+ * scroll sideways, because a grid of unlabelled cells is unreadable.
+ */
+.mm-note-roll { width: 100%; display: grid; gap: 4px; }
+.mm-note-roll__overview {
+  width: 100%; height: 34px; display: block; cursor: crosshair; touch-action: none;
+  border: 1px solid var(--bd-200);
+  background: color-mix(in srgb, var(--s-card) 70%, var(--s-900) 30%);
+}
+.mm-note-roll__overview rect { fill: var(--mm-accent); }
+.mm-note-roll__overview rect.mm-note-roll__window {
+  fill: color-mix(in srgb, var(--tx-max) 10%, transparent);
+  stroke: var(--tx-300); stroke-width: 1;
+}
+.mm-note-roll__view {
+  max-height: 168px; overflow: auto; overscroll-behavior: contain;
+  border: 1px solid var(--bd-200);
+}
+.mm-note-roll__view .mm-piano-roll { border: 0; }
+.mm-note-roll__view .mm-piano-key {
+  position: sticky; left: 0; z-index: 1;
+  background: color-mix(in srgb, var(--s-card) 92%, var(--s-900) 8%);
+}
+
+.mm-density-slider {
+  width: 100%; display: grid; grid-template-columns: 90px 1fr 54px; align-items: center;
+  gap: 12px; padding: 10px; color: var(--tx-500); font-size: 12px;
+}
 .mm-density-slider input { width: 100%; accent-color: var(--mm-accent); cursor: ew-resize; }
-.mm-density-slider output { display: grid; place-items: center; min-height: 34px; border: 1px solid var(--mm-accent); border-radius: 5px; color: var(--mm-text); background: var(--mm-surface); font: 700 14px ui-monospace, monospace; }
+.mm-density-slider output {
+  display: grid; place-items: center; min-height: 34px; border: 1px solid var(--mm-accent);
+  border-radius: 5px; color: var(--tx-800); background: var(--s-card); font: 700 14px ui-monospace, monospace;
+}
 
 .mm-embedded-presets { width: 100%; display: grid; grid-template-columns: repeat(8, minmax(42px, 1fr)); gap: 5px; }
-.mm-embedded-presets > div { display: grid; grid-template-rows: 28px 20px; height: 50px; overflow: hidden; border: 1px solid var(--mm-border); border-radius: 5px; background: var(--mm-surface); }
-.mm-embedded-presets > div.is-active { border-color: var(--mm-accent); box-shadow: 0 0 9px color-mix(in srgb, var(--mm-accent) 32%, transparent); }
-.mm-embedded-presets button { border: 0; color: var(--mm-text); background: var(--mm-surface-2); text-transform: uppercase; }
-.mm-embedded-presets > div.is-active button { color: #071018; background: var(--mm-accent); }
-.mm-embedded-presets output { display: grid; place-items: center; color: var(--mm-muted); font: 9px ui-monospace, monospace; }
+.mm-embedded-presets > div {
+  display: grid; grid-template-rows: 28px 20px; height: 50px; overflow: hidden;
+  border: 1px solid var(--bd-200); border-radius: 5px; background: var(--s-card);
+}
+.mm-embedded-presets > div.is-active {
+  border-color: var(--mm-accent); box-shadow: 0 0 9px color-mix(in srgb, var(--mm-accent) 32%, transparent);
+}
+.mm-embedded-presets button { border: 0; color: var(--tx-700); background: rgb(var(--s-raised)); text-transform: uppercase; }
+.mm-embedded-presets button:hover { background: var(--hv-200); }
+.mm-embedded-presets > div.is-active button { color: var(--mm-on-accent); background: var(--mm-accent); }
+.mm-embedded-presets output { display: grid; place-items: center; color: var(--tx-400); font: 9px ui-monospace, monospace; }
 .mm-embedded-presets--order { grid-template-columns: repeat(8, minmax(54px, 1fr)); }
 .mm-embedded-presets--order output { padding: 2px; font-size: 8px; white-space: nowrap; }
 
 .mm-order-mix { width: 100%; display: grid; gap: 8px; padding: 6px 4px 2px; }
-.mm-order-mix__bar { position: relative; display: flex; width: 100%; height: 38px; overflow: visible; border: 1px solid color-mix(in srgb, var(--mm-accent) 70%, var(--mm-border)); border-radius: 6px; background: var(--mm-surface); box-shadow: inset 0 2px 8px rgba(0, 0, 0, .32), 0 0 14px color-mix(in srgb, var(--mm-accent) 16%, transparent); }
+.mm-order-mix__bar {
+  position: relative; display: flex; width: 100%; height: 38px; overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--mm-accent) 70%, var(--bd-200)); border-radius: 6px;
+  background: var(--s-card);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, .32), 0 0 14px color-mix(in srgb, var(--mm-accent) 16%, transparent);
+}
 .mm-order-mix__bar > span { height: 100%; }
-.mm-order-mix__original { border-radius: 5px 0 0 5px; background: linear-gradient(180deg, color-mix(in srgb, var(--mm-accent) 92%, #fff 8%), color-mix(in srgb, var(--mm-accent) 62%, #101018 38%)); }
-.mm-order-mix__cyclic { background-color: color-mix(in srgb, var(--mm-accent) 48%, var(--mm-surface)); background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.34) 0 2px, transparent 2px 6px); }
-.mm-order-mix__utterly { border-radius: 0 5px 5px 0; background-color: color-mix(in srgb, var(--mm-accent) 14%, var(--mm-surface)); background-image: radial-gradient(color-mix(in srgb, var(--mm-accent) 72%, var(--mm-text)) 1px, transparent 1.4px); background-size: 7px 7px; }
-.mm-order-mix__handle { position: absolute; z-index: 3; top: -5px; width: 16px; height: 48px; padding: 0; border: 2px solid color-mix(in srgb, var(--mm-accent) 72%, #fff 28%); border-radius: 5px; background: linear-gradient(90deg, var(--mm-surface-2), var(--mm-surface), var(--mm-surface-2)); box-shadow: 0 3px 9px rgba(0,0,0,.45), inset 0 0 0 1px color-mix(in srgb, var(--mm-accent) 30%, transparent); cursor: ew-resize; touch-action: none; }
-.mm-order-mix__handle::after { content: ""; position: absolute; inset: 8px 5px; border-left: 1px solid var(--mm-muted); border-right: 1px solid var(--mm-muted); }
+.mm-order-mix__original {
+  border-radius: 5px 0 0 5px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--mm-accent) 92%, var(--tx-max) 8%),
+    color-mix(in srgb, var(--mm-accent) 62%, var(--s-900) 38%));
+}
+.mm-order-mix__cyclic {
+  background-color: color-mix(in srgb, var(--mm-accent) 48%, var(--s-card));
+  background-image: repeating-linear-gradient(135deg,
+    color-mix(in srgb, var(--tx-max) 34%, transparent) 0 2px, transparent 2px 6px);
+}
+.mm-order-mix__utterly {
+  border-radius: 0 5px 5px 0;
+  background-color: color-mix(in srgb, var(--mm-accent) 14%, var(--s-card));
+  background-image: radial-gradient(color-mix(in srgb, var(--mm-accent) 72%, var(--tx-800)) 1px, transparent 1.4px);
+  background-size: 7px 7px;
+}
+.mm-order-mix__handle {
+  position: absolute; z-index: 3; top: -5px; width: 16px; height: 48px; padding: 0;
+  border: 2px solid color-mix(in srgb, var(--mm-accent) 72%, var(--tx-max) 28%); border-radius: 5px;
+  background: linear-gradient(90deg, rgb(var(--s-raised)), var(--s-card), rgb(var(--s-raised)));
+  box-shadow: 0 3px 9px rgba(0, 0, 0, .45), inset 0 0 0 1px color-mix(in srgb, var(--mm-accent) 30%, transparent);
+  cursor: ew-resize; touch-action: none;
+}
+.mm-order-mix__handle::after {
+  content: ""; position: absolute; inset: 8px 5px;
+  border-left: 1px solid var(--tx-400); border-right: 1px solid var(--tx-400);
+}
 .mm-order-mix__handle--first { transform: translateX(-100%); }
 .mm-order-mix__handle--second { transform: translateX(0); }
-.mm-order-mix__handle:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.mm-order-mix__handle:focus-visible { outline: 3px solid var(--sel); outline-offset: 2px; }
 .mm-order-mix__values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.mm-order-mix__values output { display: flex; justify-content: space-between; gap: 6px; color: var(--mm-muted); font-size: 10px; }
-.mm-order-mix__values b { color: var(--mm-text); font: 700 10px ui-monospace, monospace; }
+.mm-order-mix__values output { display: flex; justify-content: space-between; gap: 6px; color: var(--tx-500); font-size: 10px; }
+.mm-order-mix__values b { color: var(--tx-800); font: 700 10px ui-monospace, monospace; }
 
-.mm-module-menu { position: absolute; z-index: 50; display: grid; min-width: 190px; padding: 7px; border: 1px solid var(--mm-border); border-radius: 7px; background: var(--mm-surface); box-shadow: 0 16px 45px rgba(0,0,0,.35); }
-.mm-module-menu b { padding: 6px 8px; font-size: 11px; text-transform: uppercase; color: var(--mm-muted); }
-.mm-module-menu button { text-align: left; color: var(--mm-text); background: transparent; border: 0; border-radius: 4px; padding: 8px; }
-.mm-module-menu button:hover { background: var(--mm-surface-2); }
-.mm-status-bar { border-top: 1px solid var(--mm-border); border-bottom: 0; }
+/* --- cyclic 16-step grid --------------------------------------------------
+ * Accent, Legato and Rhythm share this editor. A column is one step; a filled
+ * run of cells is that step's span. A span taller than one cell is a random
+ * range, hatched so it is distinguishable from a tall fixed value at a glance.
+ */
+.mm-cyclic { display: grid; gap: 5px; }
+
+/*
+ * A step is one vertical bar of five segments, not a column in a five-row grid.
+ *
+ * The information is identical and it costs a quarter of the height, which is
+ * what makes three of these fit inside the Pattern Editor. The level legend and
+ * the editing note are tooltips for the same reason: a line of prose per grid
+ * is three lines of prose.
+ */
+.mm-cyclic__bars {
+  position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  gap: 2px; height: 44px;
+}
+.mm-cyclic__bar {
+  display: grid; grid-auto-rows: 1fr; gap: 1px;
+  border-radius: 2px; background: rgb(var(--s-page));
+}
+/* Past the length the steps stay visible: shortening must not look destructive. */
+.mm-cyclic__bar.is-beyond { opacity: .32; }
+.mm-cyclic__bar.is-playing { outline: 1px solid var(--mm-accent); outline-offset: 1px; }
+.mm-cyclic__bar.is-column-hover { background: var(--hv-100); }
+.mm-cyclic__seg {
+  padding: 0; border: 0; border-radius: 1px; background: var(--bd-100); cursor: ns-resize;
+}
+.mm-cyclic__seg.is-on { background: var(--mm-accent); }
+/* A random range reads as hatched rather than solid, so the two are never confused. */
+.mm-cyclic__seg.is-ranged {
+  background: repeating-linear-gradient(45deg,
+    var(--mm-accent) 0 2px, color-mix(in srgb, var(--mm-accent) 45%, transparent) 2px 4px);
+}
+.mm-cyclic__seg.is-cap { box-shadow: inset 0 1px 0 var(--tx-max); }
+
+.mm-cyclic__ruler { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; }
+.mm-cyclic__ruler button {
+  padding: 1px 0; font-size: 8px; font-variant-numeric: tabular-nums; text-align: center;
+  color: var(--tx-400); background: transparent; border: 0; border-top: 1px solid transparent;
+  border-radius: 0; cursor: pointer;
+}
+.mm-cyclic__ruler button:hover { color: var(--tx-max); background: var(--hv-100); }
+.mm-cyclic__ruler button.is-beyond { color: var(--tx-300); }
+/* The last step in the sequence carries the marker: clicking a number is
+   saying "wrap here", which is the only thing a step number is good for. */
+.mm-cyclic__ruler button.is-length { color: var(--ac-tx-900); border-top-color: var(--mm-accent); }
+.mm-cyclic__ruler button.is-playing { color: var(--tx-max); }
+
+.mm-cyclic__menu {
+  position: absolute; z-index: 40; display: grid; gap: 1px; padding: 4px; min-width: 110px;
+  border: 1px solid var(--bd-200); border-radius: 6px; background: var(--s-card);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .38);
+}
+.mm-cyclic__menu button {
+  text-align: left; padding: 5px 8px; font-size: 11px; color: var(--tx-700);
+  background: transparent; border: 0; border-radius: 4px;
+}
+.mm-cyclic__menu button:hover { background: var(--hv-100); color: var(--tx-800); }
+
+/* A range plays a different level each pass, so it must not look like a value. */
+.mm-cyclic__cell.is-ranged {
+  background-image: repeating-linear-gradient(135deg,
+    color-mix(in srgb, var(--tx-max) 28%, transparent) 0 2px, transparent 2px 5px);
+}
+.mm-cyclic__cell.is-cap { box-shadow: inset 0 2px 0 color-mix(in srgb, var(--tx-max) 55%, transparent); }
+.mm-cyclic__cell.is-playing { outline: 2px solid var(--sel); outline-offset: -1px; }
+.mm-cyclic__ruler {
+  display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; margin-top: 2px;
+  font: 9px ui-monospace, monospace; color: var(--tx-400); text-align: center;
+}
+.mm-cyclic__ruler .is-playing { color: var(--sel); font-weight: 700; }
+
+.mm-cyclic__footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mm-cyclic__footer small { color: var(--tx-400); font-size: 10px; }
+.mm-cyclic__actions { display: flex; gap: 5px; }
+.mm-cyclic__actions button {
+  padding: 3px 8px; font-size: 10px; border-radius: 4px;
+  color: var(--tx-700); background: var(--s-card); border: 1px solid var(--bd-200);
+}
+.mm-cyclic__actions button:hover { background: var(--hv-100); color: var(--tx-800); }
+.mm-cyclic__count { display: none; }
+
+.mm-module-menu {
+  position: absolute; z-index: 50; display: grid; min-width: 190px; padding: 7px;
+  border: 1px solid var(--bd-200); border-radius: 7px; background: var(--s-card);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, .35);
+}
+/*
+ * Fifty-plus modules do not fit on a laptop screen, so the list scrolls.
+ *
+ * The cap is set inline from the measured viewport rather than in `vh` here:
+ * the scrollport is the window minus the toolbar and the status bar, so a
+ * vh-based maximum overhangs both and hides the last groups — which are the
+ * Instruments and Audio families, the two most likely to be wanted.
+ */
+.mm-module-menu { max-height: 70vh; overflow-y: auto; overscroll-behavior: contain; gap: 1px; }
+.mm-module-menu b { padding: 5px 7px; font-size: 10px; text-transform: uppercase; color: var(--tx-400); }
+.mm-module-menu > b { position: sticky; top: -7px; z-index: 1; background: var(--s-card); }
+.mm-module-menu__group { display: grid; }
+.mm-module-menu__group b {
+  margin-top: 3px; font-size: 8px; letter-spacing: .1em; color: var(--tx-300);
+  border-top: 1px solid var(--bd-100); padding-top: 5px;
+}
+.mm-module-menu button {
+  text-align: left; color: var(--tx-700); background: transparent; border: 0;
+  border-radius: 4px; padding: 4px 8px; font-size: 11px; line-height: 1.35;
+}
+.mm-module-menu button:hover { background: var(--hv-100); color: var(--tx-800); }
+.mm-status-bar { border-top: 1px solid var(--bd-100); border-bottom: 0; }
+
+/* --- theme picker ---------------------------------------------------------
+ * The swatch is the content and the name is the caption: with fifty themes a
+ * label distinguishes almost nothing and a strip of colours distinguishes
+ * everything.
+ */
+.mm-theme { position: relative; }
+/*
+ * Theme names run to "Turquoise amber autumn", which is long enough to push the
+ * whole toolbar onto a second row. The swatch never shrinks; the name is what
+ * gives way, because the swatch is the part that identifies the theme anyway.
+ */
+.mm-theme > button {
+  display: flex; align-items: center; gap: 8px; max-width: 190px;
+  white-space: nowrap; overflow: hidden;
+}
+.mm-theme > button span { overflow: hidden; text-overflow: ellipsis; }
+.mm-theme-swatch { display: inline-flex; overflow: hidden; border-radius: 3px; border: 1px solid var(--bd-300); }
+.mm-theme-swatch i { display: block; width: 9px; height: 14px; }
+.mm-theme-menu {
+  position: absolute; z-index: 60; top: calc(100% + 7px); right: 0; width: 320px;
+  display: grid; gap: 6px; padding: 8px;
+  border: 1px solid var(--bd-200); border-radius: 8px; background: var(--s-card);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .38);
+}
+.mm-theme-menu__tools { display: flex; gap: 6px; }
+.mm-theme-menu__tools input {
+  flex: 1; min-width: 0; min-height: 28px; padding: 3px 8px;
+  color: var(--tx-800); background: rgb(var(--s-raised));
+  border: 1px solid var(--bd-200); border-radius: 5px;
+}
+.mm-theme-menu__tools input::placeholder { color: var(--placeholder); }
+.mm-theme-menu__tools button {
+  flex: none; padding: 3px 9px; font-size: 12px; border-radius: 5px;
+  color: var(--ac-tx-700); background: rgb(var(--ac-50)); border: 1px solid var(--ac-bd-300);
+}
+.mm-theme-menu__tools button:hover { background: var(--hv-ac-100); }
+.mm-theme-menu__list { max-height: 60vh; overflow-y: auto; display: grid; gap: 4px; }
+.mm-theme-menu__list b {
+  display: block; padding: 8px 6px 3px; font-size: 10px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--tx-400);
+}
+.mm-theme-menu__list button {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto;
+  align-items: center; gap: 1px 9px; width: 100%; padding: 6px; text-align: left;
+  border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--tx-700);
+}
+.mm-theme-menu__list button .mm-theme-swatch { grid-row: span 2; }
+.mm-theme-menu__list button small { grid-column: 2; font-size: 10px; color: var(--tx-400); }
+.mm-theme-menu__list button:hover { background: var(--hv-100); color: var(--tx-800); }
+.mm-theme-menu__list button.is-active { border-color: var(--ac-bd-500); background: rgb(var(--ac-50)); color: var(--ac-tx-900); }
+.mm-theme-menu__empty { margin: 0; padding: 12px 6px; font-size: 12px; color: var(--tx-400); }
+
+.mm-theme-studio {
+  position: fixed; z-index: 70; inset: 5vh 5vw; display: grid; grid-template-rows: auto 1fr;
+  border: 1px solid var(--bd-200); border-radius: 10px; background: var(--s-card);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .5);
+}
+.mm-theme-studio > header {
+  display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
+  border-bottom: 1px solid var(--bd-100); background: rgb(var(--s-page));
+}
+.mm-theme-studio > header strong { letter-spacing: .08em; text-transform: uppercase; font-size: 12px; color: var(--tx-700); }
+.mm-theme-studio > header button {
+  width: 26px; height: 26px; display: grid; place-items: center; padding: 0; font-size: 16px;
+  color: var(--tx-500); background: transparent; border: 1px solid transparent; border-radius: 5px;
+}
+.mm-theme-studio > header button:hover { color: var(--tx-800); background: var(--hv-100); border-color: var(--bd-200); }
+.mm-theme-studio__body { overflow: auto; padding: 12px; }
+
+/* Scrollbars follow the theme rather than the platform default. */
+.mm-canvas-viewport { scrollbar-color: var(--scroll) transparent; }
+.mm-canvas-viewport::-webkit-scrollbar { width: 12px; height: 12px; }
+.mm-canvas-viewport::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 7px; border: 3px solid transparent; background-clip: content-box; }
+.mm-canvas-viewport::-webkit-scrollbar-thumb:hover { background: var(--scroll-hover); background-clip: content-box; }
+.mm-canvas-viewport::-webkit-scrollbar-track { background: transparent; }
 
 @media (max-width: 760px) {
   .mm-project-bar > div span { display: none; }
   .mm-project-bar nav { overflow-x: auto; }
 }
+
+/* ---- Sound pool ---------------------------------------------------------- */
+/* A right-hand drawer rather than a floating window: it is a shelf you pull
+   samples off, so it stays put while the canvas is worked on behind it. */
+.mm-pool {
+  position: fixed; z-index: 60; top: 46px; right: 0; bottom: 26px; width: 320px;
+  display: grid; grid-template-rows: auto auto 1fr auto;
+  border-left: 1px solid var(--bd-200); background: var(--s-card);
+  box-shadow: -18px 0 48px rgba(0, 0, 0, .32);
+}
+.mm-pool.is-dropping { outline: 2px dashed var(--ac-bd-500); outline-offset: -6px; }
+.mm-pool__header {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-bottom: 1px solid var(--bd-100); background: rgb(var(--s-page));
+}
+.mm-pool__header strong { flex: 1; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--tx-700); }
+.mm-pool__header span { font-size: 11px; color: var(--tx-400); }
+.mm-pool__close {
+  width: 24px; height: 24px; display: grid; place-items: center; padding: 0; font-size: 15px;
+  color: var(--tx-500); background: transparent; border: 1px solid transparent; border-radius: 5px;
+}
+.mm-pool__close:hover { color: var(--tx-800); background: var(--hv-100); border-color: var(--bd-200); }
+.mm-pool__notice {
+  display: grid; gap: 8px; padding: 12px; border-bottom: 1px solid var(--bd-100);
+  font-size: 12px; color: var(--tx-500);
+}
+.mm-pool__notice p { margin: 0; }
+.mm-pool__list { overflow: auto; padding: 8px; display: grid; gap: 6px; align-content: start; }
+.mm-pool__empty { margin: 0; padding: 24px 8px; text-align: center; font-size: 12px; color: var(--tx-400); }
+.mm-pool__item {
+  display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto;
+  align-items: center; gap: 2px 8px; padding: 7px; cursor: grab;
+  border: 1px solid var(--bd-100); border-radius: 7px; background: var(--s-raised);
+}
+.mm-pool__item:hover { border-color: var(--bd-300); }
+.mm-pool__item.is-playing { border-color: var(--ac-bd-500); background: rgb(var(--ac-50)); }
+.mm-pool__item.is-missing { cursor: default; opacity: .55; }
+.mm-pool__play, .mm-pool__remove {
+  grid-row: span 2; width: 26px; height: 26px; display: grid; place-items: center; padding: 0;
+  font-size: 11px; color: var(--tx-500); background: transparent;
+  border: 1px solid var(--bd-200); border-radius: 5px;
+}
+.mm-pool__play:hover:not(:disabled), .mm-pool__remove:hover { color: var(--tx-max); background: var(--hv-100); }
+.mm-pool__play:disabled { opacity: .4; }
+.mm-pool__item.is-playing .mm-pool__play { color: var(--ac-tx-900); border-color: var(--ac-bd-500); }
+/* The waveform is the row's primary content: a name tells you almost nothing
+   about a sample, and its shape tells you most of what you need. */
+.mm-pool__wave { grid-column: 2; width: 100%; height: 34px; display: block; }
+.mm-pool__wave line { stroke: var(--bd-200); stroke-width: 1; }
+.mm-pool__wave path { fill: var(--mm-module-audio, var(--mm-accent)); fill-opacity: .85; }
+.mm-pool__item.is-missing .mm-pool__wave path { fill: var(--tx-300); }
+.mm-pool__meta { grid-column: 2; display: grid; gap: 1px; min-width: 0; }
+.mm-pool__name {
+  font-size: 11px; color: var(--tx-800); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mm-pool__detail { font-size: 10px; color: var(--tx-400); }
+.mm-pool__footer { padding: 10px 12px; border-top: 1px solid var(--bd-100); background: rgb(var(--s-page)); }
+.mm-pool__footer button { width: 100%; }
+
+@media (max-width: 760px) {
+  .mm-pool { width: 100%; }
+}
+
+/* ---- player faces -------------------------------------------------------- */
+/* A sample assignment is a drop target first and a control second: the gesture
+   that fills it is dragging a row out of the sound pool. */
+.mm-asset-slot {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px;
+  padding: 6px 8px; border: 1px dashed var(--bd-300); border-radius: 6px;
+  background: var(--s-raised); font-size: 11px; color: var(--tx-700);
+}
+.mm-asset-slot.is-drop-target { border-style: solid; border-color: var(--ac-bd-500); background: rgb(var(--ac-50)); }
+.mm-asset-slot.is-missing { color: var(--tx-400); }
+.mm-asset-slot span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-asset-slot button {
+  width: 22px; height: 22px; display: grid; place-items: center; padding: 0; font-size: 10px;
+  color: var(--tx-500); background: transparent; border: 1px solid var(--bd-200); border-radius: 4px;
+}
+.mm-asset-slot button:hover:not(:disabled) { color: var(--tx-max); background: var(--hv-100); }
+.mm-asset-slot button:disabled { opacity: .4; }
+
+.mm-slots { display: grid; gap: 3px; }
+.mm-slots__head, .mm-slots__row {
+  display: grid; grid-template-columns: 56px 1fr 52px 56px 24px; gap: 6px; align-items: center;
+}
+.mm-slots__head { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--tx-300); padding: 0 2px; }
+.mm-slots__row {
+  padding: 4px; border: 1px solid transparent; border-radius: 6px; background: var(--s-raised);
+}
+.mm-slots__row.is-drop-target { border-color: var(--ac-bd-500); background: rgb(var(--ac-50)); }
+.mm-slots__row.is-missing .mm-slots__sample em { color: var(--tx-300); }
+.mm-slots__sample {
+  display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline;
+  text-align: left; padding: 5px 7px; border: 1px solid var(--bd-200); border-radius: 5px;
+  background: transparent; color: var(--tx-700); overflow: hidden;
+}
+.mm-slots__sample:hover:not(:disabled) { background: var(--hv-100); }
+.mm-slots__sample span { font-size: 10px; color: var(--tx-400); }
+.mm-slots__sample em {
+  font-style: normal; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mm-slots__clear {
+  width: 22px; height: 22px; display: grid; place-items: center; padding: 0;
+  color: var(--tx-500); background: transparent; border: 1px solid var(--bd-200); border-radius: 4px;
+}
+.mm-slots__clear:disabled { opacity: .35; }
+.mm-slots__hint { margin: 4px 2px 0; font-size: 10px; color: var(--tx-400); }
+
+/* ---- preset pad ---------------------------------------------------------- */
+/*
+ * Sixteen slots in two rows of eight — never one row of sixteen.
+ *
+ * The shape is the point. A bank two deep is read by position the way a numeric
+ * keypad is: you learn where 11 sits and go straight to it. Sixteen in a line is
+ * read by counting, and counting is what the letters a–h made people do.
+ *
+ * The count is fixed in both directions, so the pad is the same control however
+ * it is placed: eight across and two down when it sits on the top or bottom
+ * edge, two across and eight down when it sits on the left or right.
+ */
+/* Right-aligned: the pad is a bank you reach for, not the start of a line. */
+.mm-preset-pad { display: grid; gap: 3px; justify-content: end; margin-left: auto; }
+/* Columns are set inline: one row of sixteen when the module is wide enough,
+   two of eight when it is not. Never eleven and five. */
+.mm-preset-pad--horizontal { grid-auto-flow: row; }
+.mm-preset-pad--vertical { grid-template-columns: repeat(2, auto); grid-auto-flow: row; }
+
+/*
+ * Square, and the numeral is knocked out of the fill rather than drawn on it —
+ * so an armed slot reads as a filled key with the number punched through, and
+ * the whole bank scans as one object instead of sixteen labels.
+ */
+.mm-preset-pad__slot {
+  width: 22px; height: 22px; padding: 0;
+  display: grid; place-items: center;
+  font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--tx-500); background: transparent;
+  border: 1px solid var(--bd-200); border-radius: 4px;
+}
+.mm-preset-pad__slot:hover { color: var(--tx-max); border-color: var(--bd-300); background: var(--hv-100); }
+/* An empty slot is visibly empty: there is nothing to recall from it yet. */
+.mm-preset-pad__slot.is-empty { color: var(--tx-300); border-style: dashed; }
+.mm-preset-pad__slot.is-active {
+  color: var(--mm-on-accent); background: var(--mm-accent); border-color: var(--mm-accent);
+}
+.mm-preset-pad__slot:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 1px; }
+

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createNode, moduleRegistry, validateModuleDescriptor } from "./registry";
 import type { ModuleDescriptor } from "../model/graph";
+import { MODULE_ACCENT_SLOTS } from "../theme/moduleAccents";
+import { PRESET_SLOTS } from "./descriptorKit";
 
 describe("Modular module registry", () => {
   it("keeps every registered parameter and command visible on the node face", () => {
@@ -17,9 +19,30 @@ describe("Modular module registry", () => {
     expect(second.position).toEqual({ x: 10, y: 20 });
   });
 
-  it("builds eight independent Note Editor pattern positions", () => {
+  it("gives every module the same sixteen-slot preset store", () => {
+    // One pad, two rows of eight, on every module that has presets — so the
+    // store is the pad's size everywhere rather than each module's own.
     const editor = createNode("m.note-editor", "editor", { x: 0, y: 0 });
-    expect(editor.parameters["preset-values"]).toHaveLength(8);
+    expect(editor.parameters["preset-values"]).toHaveLength(PRESET_SLOTS);
+    for (const descriptor of moduleRegistry.values()) {
+      if (!descriptor.parameters.some((parameter) => parameter.id === "preset-values")) continue;
+      const node = createNode(descriptor.type, "n", { x: 0, y: 0 });
+      expect(node.parameters["preset-values"], descriptor.type).toHaveLength(PRESET_SLOTS);
+    }
+  });
+
+  it("declares what a preset captures wherever a pad is shown", () => {
+    // The pad is identical everywhere; the captured parameters are the only
+    // thing that varies, so an undeclared list is a pad that recalls nothing.
+    for (const descriptor of moduleRegistry.values()) {
+      for (const element of descriptor.face.flatMap((section) => section.elements)) {
+        if (element.kind !== "custom" || !element.captures) continue;
+        for (const id of element.captures) {
+          expect(descriptor.parameters.map((parameter) => parameter.id), `${descriptor.type}.${id}`)
+            .toContain(id);
+        }
+      }
+    }
   });
 
   it("embeds eight presets in the per-stream density gate", () => {
@@ -35,9 +58,9 @@ describe("Modular module registry", () => {
       .toContainEqual(expect.objectContaining({ kind: "custom", id: "embedded-number-presets" }));
   });
 
-  it("uses the same eight-preset contract for one-stream Note Order", () => {
+  it("uses the same preset contract for one-stream Note Order", () => {
     const order = createNode("m.note-order", "order", { x: 0, y: 0 });
-    expect(order.parameters["preset-values"]).toHaveLength(8);
+    expect(order.parameters["preset-values"]).toHaveLength(PRESET_SLOTS);
     expect(order.parameters).toMatchObject({ original: 50, cyclic: 4, utterly: 46 });
     expect(moduleRegistry.get("m.note-order")?.ports.find((port) => port.id === "pattern-in")?.signal)
       .toEqual({ kind: "pattern-data" });
@@ -53,8 +76,8 @@ describe("Modular module registry", () => {
     const phase = createNode("m.phase", "ph", { x: 0, y: 0 });
     expect(moduleRegistry.get("m.time-base")?.layout).toBe("compact");
     expect(moduleRegistry.get("m.phase")?.layout).toBe("compact");
-    expect(timeBase.parameters["preset-values"]).toHaveLength(8);
-    expect(phase.parameters["preset-values"]).toHaveLength(8);
+    expect(timeBase.parameters["preset-values"]).toHaveLength(PRESET_SLOTS);
+    expect(phase.parameters["preset-values"]).toHaveLength(PRESET_SLOTS);
     expect(timeBase.parameters).toMatchObject({ numerator: 1, denominator: 16 });
     // Phase is in ticks, because ticks are the only canonical musical time.
     expect(moduleRegistry.get("m.phase")?.parameters
@@ -156,6 +179,43 @@ describe("Modular module registry", () => {
     expect(stream?.ports.find((port) => port.id === "notes-out")?.signal)
       .toEqual({ kind: "note-event" });
     expect(stream?.commands.find((command) => command.id === "expand-stream")?.label).toBe("Expand");
+  });
+
+  it("gives every module an identity colour the theme actually defines", () => {
+    // Only the derived identity tokens exist per theme; a module using anything
+    // else falls back to the Density colour and quietly loses its identity.
+    const themed = new Set<string>(MODULE_ACCENT_SLOTS);
+    for (const descriptor of moduleRegistry.values()) {
+      expect(themed.has(descriptor.colorToken), `${descriptor.type} uses ${descriptor.colorToken}`)
+        .toBe(true);
+    }
+  });
+
+  it("gives every module a unique type and a distinct label", () => {
+    const types = [...moduleRegistry.values()].map((descriptor) => descriptor.type);
+    const labels = [...moduleRegistry.values()].map((descriptor) => descriptor.label);
+    expect(new Set(types).size).toBe(types.length);
+    expect(new Set(labels).size).toBe(labels.length);
+    for (const type of types) expect(type.startsWith("m.")).toBe(true);
+  });
+
+  it("declares a merge policy on every input that accepts more than one cable", () => {
+    // Fan-in without a stated policy is how a graph becomes order-dependent.
+    for (const descriptor of moduleRegistry.values()) {
+      for (const port of descriptor.ports) {
+        if (port.direction !== "input" || port.cardinality !== "many") continue;
+        expect(port.mergePolicy, `${descriptor.type}.${port.id}`).toBeDefined();
+      }
+    }
+  });
+
+  it("names every telemetry port as telemetry and nothing else", () => {
+    for (const descriptor of moduleRegistry.values()) {
+      for (const port of descriptor.ports) {
+        const isTelemetry = port.signal.kind === "telemetry";
+        expect(port.id.endsWith("-telemetry"), `${descriptor.type}.${port.id}`).toBe(isTelemetry);
+      }
+    }
   });
 
   it("refuses a feedback break that cannot actually break feedback", () => {

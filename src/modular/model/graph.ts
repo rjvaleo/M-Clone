@@ -54,12 +54,36 @@ export type NodeFaceElement =
   | { kind: "parameter"; parameterId: ParameterId }
   | { kind: "command"; id: string; label: string }
   | { kind: "status"; id: string; label: string }
-  | { kind: "custom"; id: string; label: string; parameterIds?: readonly ParameterId[] };
+  | {
+    kind: "custom";
+    id: string;
+    label: string;
+    parameterIds?: readonly ParameterId[];
+    /**
+     * The parameters a preset slot captures and restores.
+     *
+     * Storage (`parameterIds`) is where the presets live; this is what a preset
+     * *is*. One shared pad can serve every module because the only thing that
+     * differs between them is this list.
+     */
+    captures?: readonly ParameterId[];
+    /** Which edge of the face the element sits on. */
+    placement?: "top" | "bottom" | "left" | "right";
+  };
 
 export type NodeFaceSection = {
   id: string;
   label: string;
   elements: readonly NodeFaceElement[];
+  /**
+   * False on a face whose sections need no headings.
+   *
+   * A compound stacks six sections, and six headings is six rows of chrome
+   * saying what the controls under them already say — "Accent" above a field
+   * labelled *Accent length*. The label is kept either way: it still names the
+   * group for a screen reader, it is just not painted.
+   */
+  showHeading?: boolean;
 };
 
 export type ModuleDescriptor = {
