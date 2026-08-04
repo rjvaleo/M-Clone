@@ -55,7 +55,7 @@ build for your own hosting), with `SHA256SUMS.txt`.
 ![Rust candidate](https://img.shields.io/badge/Rust-native_adapter_candidate-000000?logo=rust&logoColor=white)
 ![WAM exploratory](https://img.shields.io/badge/Web_Audio_Modules-hosting_exploratory-5C2D91)
 ![Platforms planned](https://img.shields.io/badge/targets-macOS_%7C_Windows_%7C_iOS_%7C_Android-607D8B)
-![Editions](https://img.shields.io/badge/editions-Classic_%7C_Studio_%7C_Modular-7B1FA2)
+![Editions](https://img.shields.io/badge/editions-Classic_%7C_Studio_%7C_idMLab-7B1FA2)
 
 These badges describe product targets and implementation candidates, not the
 current shipped stack. The exact resolved versions, architecture boundaries,
@@ -123,7 +123,7 @@ but it represents the complete musical project—not merely a graph. Legacy
 - [`docs/M-Clone_Build_Plan.md`](docs/M-Clone_Build_Plan.md) — product vision,
   architecture, technology choices, phased build plan, and native direction.
 - [`docs/PRODUCT_RELEASE_ROADMAP.md`](docs/PRODUCT_RELEASE_ROADMAP.md) —
-  authoritative Classic/Studio/Modular editions, browser/desktop/mobile stages,
+  authoritative Classic/Studio/idMLab editions, browser/desktop/mobile stages,
   free/invite/paid progression, monetization principles, and release gates.
 
 ### Audio products and native integration

@@ -1,4 +1,4 @@
-# Salvage Plan — Modular AV Performance → M Modular
+# Salvage Plan — Modular AV Performance → idMLab
 
 **Date:** 2026-08-03
 **Source:** `~/Documents/GitHub/Modular AV Perforamnce` (3,490 lines JS, 11 tests, all passing)
@@ -10,8 +10,8 @@
 ## Verdict
 
 There is real value here, and it sits almost entirely in **DSP designs and canvas
-interaction** — the two areas M Modular has deferred longest. There is also a
-whole architectural layer that must **not** come across, because M Modular
+interaction** — the two areas idMLab has deferred longest. There is also a
+whole architectural layer that must **not** come across, because idMLab
 already has a strictly better version of it.
 
 The split is unusually clean:
@@ -21,12 +21,12 @@ The split is unusually clean:
 | Audio DSP (players, effects, synthetic buffers) | **Take the designs** | Maps 1:1 onto plan §9.1/§9.2, which are unimplemented |
 | Canvas interaction (cable geometry, drag-patch, zoom) | **Take the technique** | Fixes three named open defects |
 | Sound pool (drop, decode, audition) | **Take the shape** | Nothing equivalent exists |
-| Transport / scheduler | **Leave** | M Modular's runtime is significantly better |
+| Transport / scheduler | **Leave** | idMLab's runtime is significantly better |
 | Snapshot manager | **Leave** | Reads state out of the DOM |
 | Window manager, app shell, globals | **Leave** | Contradicts the document-command architecture |
 
 Nothing can be copied verbatim. It is untyped JS, built on a fixed
-column/rack model with `window.*` singletons, whereas M Modular is strict
+column/rack model with `window.*` singletons, whereas idMLab is strict
 TypeScript over a node graph with injected seams. What ports is the *content* —
 signal topologies, envelope shapes, coefficient choices, geometry maths — not
 the files.
@@ -92,7 +92,7 @@ derived from actual port geometry."*
 two properties worth keeping: it can be started from **either** end (the temp
 bezier flips its control points when dragging backwards from an input), and it
 checks direction before connecting. This is `MODULAR_NEXT_STEPS.md` step 6,
-which M Modular has pending.
+which idMLab has pending.
 
 ### 6. Pointer-anchored zoom — same file
 
@@ -109,7 +109,7 @@ so knobs cannot be nudged when they are too small to aim at.
 ### 7. Sound pool — `src/ui/SoundPoolManager.js` (230 lines)
 
 Drag-and-drop, `decodeAudioData`, audition preview with stop, delete, and a
-waveform thumbnail. M Modular has no asset handling at all, and plan §10
+waveform thumbnail. idMLab has no asset handling at all, and plan §10
 requires "stable asset IDs rather than filesystem paths" — this is the shape of
 the UI that sits on top of that.
 
@@ -125,7 +125,7 @@ the player engines must be re-hosted on `ModularRuntime` instead.
 
 **`SnapshotManager.js`.** It captures state with
 `document.querySelectorAll('.fader-slider')` and recalls by writing values back
-into DOM inputs and firing synthetic events. M Modular's whole architecture is
+into DOM inputs and firing synthetic events. idMLab's whole architecture is
 that state lives in the document and the UI is a projection of it. The morph
 *concept* is already specified in plan §8.2; nothing here improves on it.
 
@@ -141,7 +141,7 @@ has to be cut on the way in — the engines must receive their context.
 2. `chokeActiveVoices` schedules the actual stop with `setTimeout(…, 30)` —
    main-thread timing on an audio event. Becomes `src.stop(time + 0.02)`.
 3. A fresh `OscillatorNode` + `GainNode` graph per note, per grain, per hit. Fine
-   at prototype density; needs voice pooling before it meets M Modular's
+   at prototype density; needs voice pooling before it meets idMLab's
    allocation budget.
 
 ---
@@ -163,7 +163,14 @@ flowchart TB
 
 ### Stage A — Canvas interaction (no audio, immediate value)
 
-The only stage that needs nothing else first, and it closes three open defects.
+**Status: two of three complete (2026-08-03).** Cable endpoints are measured from
+real port geometry (`ui/portGeometry.ts`, with a `ResizeObserver` on node faces),
+and wheel zoom has been redesigned — eased toward a target, delta-mode normalised,
+with the dot grid painted inside the transform so it scales with the modules.
+Drag-to-patch is still not implemented; click-to-patch remains the only way to
+connect.
+
+The only stage that needed nothing else first, and it closes three open defects.
 
 1. Replace the approximate cable endpoints in `ModularApp` with measured port
    geometry, using a `ResizeObserver` on node faces so a resized node re-routes
@@ -268,11 +275,30 @@ arriving with holes in it.
 
 ### Stage E — Players
 
-Percussion first — choke groups are the most distinctive piece and the easiest
-to verify. Then Looper, then Granular. Each is a single-stream module with a
-complete face and eight embedded presets where the workflow warrants them.
+**Status: complete (2026-08-03).**
+
+| Piece | Where | Note |
+| --- | --- | --- |
+| Runtime → audio clock | `clockBridge.ts` | Runtime seconds mapped onto `AudioContext.currentTime`, EMA-smoothed, snapped hard across suspend/resume |
+| Voices and choke groups | `voices.ts` | A choke is scheduled on the audio clock, not fired on arrival, so a closed hi-hat cuts the open one at the right instant |
+| Grains | `grains.ts` | 0.2 s lookahead, 40 ms wake — the same shape as the note scheduler, for the same reason |
+| The three players | `players.ts` | Percussion, Looper, Granular over one `PlayerModule` base |
+| Note routing | `noteAdapter.ts` | `PlayerNoteAdapter` samples both clocks once per batch rather than per note |
+| The slot face | `ui/PercussionSlots.tsx` | Drag a sample from the sound pool onto a slot |
+
+Two defects are worth remembering. Players had **no runtime processor at all** —
+nothing converted note messages into scheduled events — which no unit test could
+have caught, because every unit was correct. And `compileAudioPlan` carried only
+numbers and booleans, so `slots` and `asset-id` were dropped silently and every
+player was built with no samples; the guard test now asserts that every audio
+parameter survives compilation.
+
+**Not yet confirmed:** that the drums are audible end to end. The voice counter
+increments; nobody has reported hearing them.
 
 ### Stage F — Synth and modulation matrix
+
+**Status: not started.**
 
 Last, because it is the largest and because the 8 × 12 matrix wants the
 parameter and preset contracts already settled. The matrix is also a natural
@@ -286,14 +312,14 @@ consumer of the control-tick rule from the Stream plan.
 
 ## Relationship to the other plans
 
-This does not reorder anything already agreed. `MODULAR_STREAM_PLAN.md` covers
-the event domain and remains the priority; this covers the audio domain, which
-is Phase 6+ in the implementation plan and still gated behind the Stream work
-and the Stage 6 parity proof.
+This did not reorder anything already agreed. `MODULAR_STREAM_PLAN.md` covers the
+event domain; this covers the audio domain, which is Phase 6+ in the
+implementation plan.
 
-**Stage A is the exception** — it is pure canvas interaction, touches no audio
-and no scheduling, and closes three defects that are already listed as open. It
-can be done at any time, including before the Stream work resumes.
+In the event, Stages B, C, D, E and G were all built ahead of the Stream parity
+proof, because the safety contract is much cheaper to establish before there is a
+rack to retrofit than after — which was the argument for writing this plan in the
+first place.
 
 ## Open question
 

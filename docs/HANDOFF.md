@@ -26,7 +26,7 @@ and its verification matrix in the same change.
 
 The approved commercial direction is free four-Voice M Classic Web →
 invite-only macOS/Windows beta → paid eight-Voice M Studio standalone/plug-in →
-paid mobile family → later M Modular. Do not infer edition scope from older WAM
+paid mobile family → later idMLab. Do not infer edition scope from older WAM
 or “all-in-one” brainstorming. Use:
 
 - [`PRODUCT_RELEASE_ROADMAP.md`](./PRODUCT_RELEASE_ROADMAP.md) for editions,

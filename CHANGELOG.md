@@ -6,6 +6,31 @@ All notable changes to M-Clone are recorded here. The format follows
 alpha: the interface, the audio rack, and the `.mclone` document may still
 change between minor versions.
 
+## [Unreleased] — idMLab, branch `modular`
+
+idMLab is a separate application on the `modular` branch: a node graph with its
+own document format (`.mmod`, plus the self-contained `.mmodpack`), not a mode of
+M Classic Web. It shares this repository and nothing else. Its state is recorded
+in [`MODULAR_STATUS.md`](MODULAR_STATUS.md).
+
+### Added
+
+- **Node graph runtime.** Integer ticks at 960 PPQN, counter-based deterministic
+  randomness, an AudioWorklet scheduling wake, tick-matched control values, and a
+  compiled plan with cycle rejection and per-node event budgets.
+- **Seventeen event modules**, including the Stream and Pattern Editor compounds,
+  which materialize into ordinary nodes at compile time rather than adding
+  runtime machinery.
+- **Audio rack.** Eight effects over one shell, a safety contract that forbids
+  topology changes on parameter edits and direct `AudioParam.value` writes, and
+  an always-on master limiter.
+- **Sound pool.** Content-addressed assets, waveform thumbnails, drag-and-drop,
+  audition, and a deterministic synthetic starter kit.
+- **Sample players.** Percussion, Looper, and Granular over a shared voice bank
+  with audio-clock choke groups and a lookahead grain scheduler.
+- **`.mmodpack`** — patch plus audio in one checksummed container.
+- **Shared preset pad.** Sixteen numbered slots, one component, every module.
+
 ## [0.8.0-alpha] — 2026-08-02
 
 First public alpha build. M Classic Web is feature-complete against the M 2.7

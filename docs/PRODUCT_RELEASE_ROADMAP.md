@@ -17,7 +17,7 @@ Current dependencies and native-technology candidates are separated in
 
 Do not conflate these axes:
 
-1. **Product capability:** M Classic → M Studio → M Modular.
+1. **Product capability:** M Classic → M Studio → idMLab.
 2. **Platform maturity:** browser → native desktop → hosted plug-in → mobile.
 3. **Commercial access:** free public → invite-only beta → paid release.
 
@@ -31,7 +31,7 @@ remains free.
 | --- | --- | ---: | --- | --- |
 | **M Classic Web** | Faithful browser recreation and MIDI generator | 4 | Four lightweight playback engines, basic stereo effects | Free public web app |
 | **M Studio** | Complete RJ Vallejo generative production instrument | 8 | Seven full instruments, signature effects, multi-output | Paid desktop standalone and plug-in |
-| **M Modular** | Node-based generative MIDI/audio environment | Configurable | Modular generators, processors, instruments, effects | Later premium product |
+| **idMLab** | Node-based generative MIDI/audio environment | Configurable | Modular generators, processors, instruments, effects | Later premium product |
 
 The core engine should support a configurable 1–16 Voices even though Classic
 exposes four and Studio exposes eight. Product caps belong in capability
@@ -213,9 +213,9 @@ Closed mobile beta
 Paid app-store family
 ```
 
-## 7. M Modular — future premium platform
+## 7. idMLab — future premium platform
 
-M Modular is a graph-based generative MIDI/audio environment, not merely Studio
+idMLab is a graph-based generative MIDI/audio environment, not merely Studio
 with more Voices. Typed nodes generate and transform event/audio streams.
 
 Node families may include:

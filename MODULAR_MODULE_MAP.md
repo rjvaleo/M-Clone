@@ -1,4 +1,4 @@
-# M Modular — Module Map, Port Standard, and the Stream Compound
+# idMLab — Module Map, Port Standard, and the Stream Compound
 
 **Date:** 2026-08-02
 **Branch:** `modular`
@@ -176,7 +176,7 @@ All three (Accent, Legato, Rhythm) share one core and one face contract:
 | Inputs | `clock-in` (step-clock, required), `reset-in` (reset, many), `position-in` (control index) |
 | Outputs | `<name>-out` (control number, many), `grid-telemetry` |
 | State | 16-step grid of levels 0–4, each fixed or a range; position advances one per pulse |
-| Presets | eight embedded a–h, each a complete 16-step grid |
+| Presets | sixteen embedded slots, each a complete 16-step grid |
 | Reset | position returns to 0 |
 | Pause | position **holds**; it is not a reset |
 
@@ -184,6 +184,14 @@ Cyclic Rhythm is the exception in one respect: it does not emit a control value,
 it transforms the clock itself (`clock-in` → `clock-out`), because it changes
 *when* the next step happens rather than how a note sounds. It belongs in the
 clock domain, before Note Order.
+
+**The face draws that state as sixteen vertical bars of five segments**, not as a
+5 × 16 cell grid — the same information at a quarter of the height, which is what
+lets the Pattern Editor stack three of them. Press a segment to set a step, drag
+vertically for a random range (drawn hatched, so it is never mistaken for a fixed
+level), drag sideways to paint. Clear / Flat / All random are a right-click menu
+rather than a row of buttons, and clicking a number on the step ruler sets the
+sequence length; steps past the end stay visible and dimmed.
 
 ---
 
@@ -257,13 +265,36 @@ just another node to everything around it.
 **Why this gets you what you asked for without the cost:**
 
 - one drop builds the whole note package, cyclics included;
-- every sub-module keeps its own eight embedded presets, exactly as specified;
+- every sub-module keeps its own sixteen embedded presets, exactly as specified;
 - "Expand" drops the nested graph onto the canvas as ordinary nodes, so nothing
   is trapped inside;
 - you can instantiate it any number of times — there is no fixed four anywhere;
 - a Standard M import creates one per imported stream, which makes the importer
   dramatically simpler than wiring eleven nodes per voice;
 - and anyone who wants Density before Transposition just expands it and rewires.
+
+### The Pattern Editor: a second compound, deliberately unlike the first
+
+`m.pattern-editor` merges Time Base, Phase, the three Cyclics, Note Editor, Note
+Order, Step→Notes, Velocity Range, and Legato Processor. A clock goes in and
+fully formed notes come out, with the accent already in their velocity and the
+legato already in their length.
+
+Two rules apply to every compound and are worth stating once:
+
+1. **A module merged into a compound keeps its standalone form.** Note Editor
+   still exists; so do Time Base, Phase, and all three Cyclics. Merging adds a
+   way to work, it never removes one.
+2. **A compound always takes a different name from its parts** — which is why the
+   merged Note Editor is called the Pattern Editor rather than a bigger Note
+   Editor.
+
+Where it differs from the Stream: the Pattern Editor's embedded sequences have
+**no preset pads of their own**. Individually they had a bank each, which meant a
+stream carried five independent banks and no way to move between musical ideas as
+a whole. Here one slot on the compound stores the entire idea — the pattern, all
+three sequences, their separate lengths, the step rate, and the phase. It also has
+no `Expand` command; it materializes at compile time only.
 
 ### Presets at two levels
 

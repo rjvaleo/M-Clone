@@ -1,8 +1,11 @@
-# M Modular — Agreed Next Steps
+# idMLab — Agreed Next Steps
 
 **Date:** 2026-08-03
 **Branch:** `modular`
-**Status:** active roadmap; Steps 1-3 completed, Step 4 next
+**Status:** active roadmap; Steps 1-3 completed. Steps 4 and 5 were overtaken by
+the audio port ([MODULAR_AV_SALVAGE_PLAN.md](MODULAR_AV_SALVAGE_PLAN.md) Stages
+A-E and G) and the UI work that followed it. The two live items are the MIDI
+engine rethink and confirming the players are audible.
 
 This roadmap records the implementation sequence agreed after reviewing the
 current modular branch. The order favors recoverability, an end-to-end musical
@@ -10,17 +13,20 @@ workflow, and deterministic equivalence before expanding the module catalog.
 
 ## Current verified checkpoint
 
-- Sixteen module types are registered, including the full clock-to-note path,
-  cyclic control modules, the Stream compound, and MIDI Output.
+- Seventeen event module types are registered, including the full clock-to-note
+  path, cyclic control modules, the Stream and Pattern Editor compounds, and MIDI
+  Output — plus eight audio effects and three sample players.
 - The starter graph contains the canonical chain from Transport through MIDI
   Output, with Cyclic Accent and Cyclic Legato connected to their consumers.
 - Stream templates support 1, 4, 8, and 16 streams. Stream materialization and
-  visible expansion are implemented.
-- Modular document schema v2 is implemented with v1 migration.
-- On 2026-08-03, 1,022 tests across 83 files passed. TypeScript, the production
-  build, and `git diff --check` also passed.
-- Wheel zoom remains a known interaction defect and is intentionally deferred
-  until the graph interaction step below.
+  visible expansion are implemented; the Pattern Editor materializes at compile
+  time and has no expand command.
+- Modular document schema v2 is implemented with v1 migration, alongside the
+  `.mmodpack` self-contained container.
+- On 2026-08-03, **1,391 tests across 106 files** passed, with TypeScript and the
+  production build clean.
+- Wheel zoom is fixed: eased toward a target, delta-mode normalised, on a fixed
+  16000 x 8000 canvas that is pannable in every direction at any zoom.
 
 ## Implementation order
 
@@ -98,22 +104,19 @@ and Stream snapshots round-trip deterministically.
 
 ### 5. Stabilize the reusable embedded-preset contract
 
-- Extract shared A-H preset normalization, recall, Shift-click store, tooltip
-  summaries, active state, and atomic command behavior.
-- Apply it consistently to Classic-style multi-value modules.
-- Migrate provisional six-position and Classic A-F data into eight-position
-  storage without changing the source file.
+**Status:** completed. `ui/PresetPad.tsx` is the one pad every module draws, and a
+guard test asserts each descriptor's `captures` names parameters that exist.
 
-**Done when:** preset behavior is shared rather than duplicated and browser
-tests cover recall, overwrite, tooltips, active state, and migration.
+- Remaining: migrate provisional six-position and Classic A-F data into the
+  sixteen numbered slots without changing the source file.
 
 ### 6. Complete graph interaction
 
-- Redesign wheel and trackpad zoom so it zooms without scrolling, anchors to the
-  pointer, respects limits, and has real-browser regression coverage.
-- Add drag-to-patch cables, compatible-port highlighting, cancellation,
+- Completed: wheel and trackpad zoom, eased toward a target and normalised across
+  delta modes, on an always-pannable fixed canvas.
+- Completed: cable endpoints derived from measured port geometry.
+- Remaining: drag-to-patch cables, compatible-port highlighting, cancellation,
   keyboard patching, and filtered module creation from a pending connection.
-- Derive cable endpoints from measured port geometry.
 
 **Done when:** pan, zoom, patch, cancel, select, and keyboard flows are reliable
 in a real browser and cables terminate at their visible ports.
@@ -138,20 +141,28 @@ Implement and verify in this order:
 4. Scale Context and quantization
 5. Conducting, macros, and project snapshots
 6. Standard M importer with an explicit conversion report
-7. Audio modules and upgraded instruments
+
+Audio effects and sample players are already built; the built-in synth
+(salvage plan Stage F) is the remaining instrument work.
 
 Each Classic-derived module remains single-stream, exposes its complete working
-face, and embeds eight presets where the original workflow used preset views.
+face, and embeds sixteen presets where the original workflow used preset views.
 
 ### 9. Establish audio safety before expanding the audio rack
 
-- Define and test graph diffing so parameter changes do not rebuild topology.
-- Require scheduled parameter smoothing and click-free graph crossfades.
-- Establish voice pooling, deterministic disposal, explicit converters, bounded
-  feedback, and an always-on master limiter.
+**Status:** completed, and it did its job — the contract was written before the
+rack existed, so nothing had to be retrofitted.
 
-**Done when:** the first audio module demonstrates the lifecycle and safety
-contract, including leak, bypass, smoothing, and transition tests.
+- Completed: graph diffing so parameter changes never rebuild topology.
+- Completed: scheduled parameter smoothing and click-free crossfades.
+- Completed: voice pooling, deterministic disposal, and an always-on limiter.
+- Remaining: explicit signal converters and bounded feedback paths.
+
+### 10. Rethink the MIDI engine
+
+Agreed in principle, not started. Move from the current hodgepodge of
+constructors to a UMP-shaped event layer, with MIDI 1.0 as one output encoding
+rather than the native representation.
 
 ## Verification required at every milestone
 
@@ -159,6 +170,8 @@ contract, including leak, bypass, smoothing, and transition tests.
 - `npm run typecheck`
 - `npm run build`
 - `git diff --check`
+- Browser verification of anything the user can see. Most defects found in this
+  work were invisible to the unit tests and obvious in the browser.
 - Focused browser checks for any changed canvas or node-face behavior
 - Migration or deterministic trace fixtures whenever serialized or scheduled
   behavior changes
