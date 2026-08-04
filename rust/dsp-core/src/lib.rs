@@ -35,6 +35,7 @@ pub mod filter;
 pub mod lfo;
 pub mod modmatrix;
 pub mod modules;
+pub mod osc;
 pub mod reverb;
 
 /// Below this, a value is flushed to zero.
