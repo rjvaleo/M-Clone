@@ -83,6 +83,7 @@ export class VoiceBank {
   private readonly maxVoices: number;
   private voices: Voice[] = [];
   private started = 0;
+  private disposed = false;
 
   constructor(context: SampleContext, destination: AudioNodeLike, maxVoices = DEFAULT_MAX_VOICES) {
     this.context = context;
@@ -107,6 +108,11 @@ export class VoiceBank {
    * sample from a silent one.
    */
   play(buffer: AudioBufferLike | undefined, options: VoiceOptions): boolean {
+    // A note can arrive after the node it belongs to has been retired: the
+    // crossfade is over, the graph is rebuilt, and one more event was already
+    // in flight. Starting a voice on a disconnected chain would leak a source
+    // that nothing will ever stop.
+    if (this.disposed) return false;
     if (!buffer || buffer.length === 0) return false;
     const at = Math.max(0, options.atSec);
     const chokeGroup = Math.trunc(options.chokeGroup ?? 0);
@@ -167,6 +173,7 @@ export class VoiceBank {
   }
 
   dispose(): void {
+    this.disposed = true;
     for (const voice of this.voices) {
       voice.source.onended = null;
       stopSource(voice.source, 0);
@@ -254,6 +261,7 @@ function startSource(
     if (durationSec !== undefined) source.start(atSec, Math.max(0, offsetSec ?? 0), durationSec);
     else if (offsetSec !== undefined) source.start(atSec, Math.max(0, offsetSec));
     else source.start(atSec);
+    /* v8 ignore next 4 — only a real browser throws here */
   } catch {
     // A source can only be started once, and an offset past the end of a buffer
     // throws. Neither is worth taking the whole scheduling pass down for.
@@ -263,6 +271,7 @@ function startSource(
 function stopSource(source: AudioBufferSourceNodeLike, atSec: number): void {
   try {
     source.stop(Math.max(0, atSec));
+    /* v8 ignore next 3 — only a real browser throws here */
   } catch {
     // Already stopped, or never started. Both are the outcome we wanted.
   }

@@ -253,5 +253,74 @@ describe("Modular module registry", () => {
     };
     expect(validateModuleDescriptor(badTelemetryName))
       .toContain("Telemetry port id must end with -telemetry: rejected-out");
+
+    const singleInputWithPolicy: ModuleDescriptor = {
+      ...base,
+      ports: base.ports.map((port) =>
+        port.id === "notes-in" ? { ...port, cardinality: "one", mergePolicy: "sum" } : port),
+    };
+    expect(validateModuleDescriptor(singleInputWithPolicy))
+      .toContain("Only many-cardinality ports may declare merge policy: notes-in");
+
+    const musicalPortNamedTelemetry: ModuleDescriptor = {
+      ...base,
+      ports: base.ports.map((port) =>
+        port.id === "notes-out" ? { ...port, id: "notes-telemetry" } : port),
+    };
+    expect(validateModuleDescriptor(musicalPortNamedTelemetry))
+      .toContain("Only telemetry ports may use -telemetry suffix: notes-telemetry");
+  });
+
+  it("refuses a face that names something the module does not have", () => {
+    // The complete-face rule runs both ways: every control must be on the face,
+    // and the face may only name controls that exist.
+    const base = moduleRegistry.get("m.note-density") as ModuleDescriptor;
+    const section = (elements: ModuleDescriptor["face"][number]["elements"]) =>
+      ({ ...base, face: [{ id: "s", label: "S", elements }] });
+
+    expect(validateModuleDescriptor(section([{ kind: "parameter", parameterId: "invented" }])))
+      .toContain("Unknown face parameter: invented");
+    expect(validateModuleDescriptor(section([{ kind: "command", id: "invented", label: "Invented" }])))
+      .toContain("Unknown face command: invented");
+    expect(validateModuleDescriptor(section([
+      { kind: "custom", id: "c", label: "C", parameterIds: ["invented"] },
+    ]))).toContain("Unknown custom-face parameter: invented");
+    // A custom element that names nothing is legal — it is a drawing, not a control.
+    expect(validateModuleDescriptor(section([{ kind: "custom", id: "c", label: "C" }])))
+      .not.toContain("Unknown custom-face parameter: undefined");
+  });
+
+  it("refuses a control or command that no face shows", () => {
+    const base = moduleRegistry.get("m.note-density") as ModuleDescriptor;
+    expect(validateModuleDescriptor({ ...base, face: [] }).join(" "))
+      .toContain("Parameter is hidden from node face");
+
+    const withCommand: ModuleDescriptor = {
+      ...base,
+      commands: [{ id: "poke", label: "Poke" }],
+    };
+    expect(validateModuleDescriptor(withCommand))
+      .toContain("Command is hidden from node face: poke");
+  });
+
+  it("refuses a descriptor that says the same thing twice", () => {
+    const base = moduleRegistry.get("m.note-density") as ModuleDescriptor;
+    expect(validateModuleDescriptor({ ...base, ports: [...base.ports, base.ports[0]] }))
+      .toContain("Duplicate port id");
+    expect(validateModuleDescriptor({ ...base, parameters: [...base.parameters, base.parameters[0]] }))
+      .toContain("Duplicate parameter id");
+    expect(validateModuleDescriptor({
+      ...base,
+      commands: [{ id: "poke", label: "Poke" }, { id: "poke", label: "Poke again" }],
+      face: [...base.face, {
+        id: "cmds", label: "Commands",
+        elements: [{ kind: "command", id: "poke", label: "Poke" }],
+      }],
+    })).toContain("Duplicate command id");
+  });
+
+  it("refuses to build a node from a module type it does not have", () => {
+    expect(() => createNode("m.imaginary", "n", { x: 0, y: 0 }))
+      .toThrow("Unknown module type: m.imaginary");
   });
 });

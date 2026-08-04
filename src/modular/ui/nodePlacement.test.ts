@@ -224,4 +224,13 @@ describe("Keeping a pop-up menu on screen", () => {
   it("never places the menu off the near edge", () => {
     expect(menuPlacement({ x: 0, y: 0 }, menu, window)).toEqual({ x: 8, y: 8 });
   });
+
+  it("pulls a menu back when even the flipped side overhangs", () => {
+    // Right-clicking inside the margin itself: flipping leaves the far edge
+    // still past the window, so it has to be clamped as well as flipped.
+    const wide = { width: 900, height: 100 };
+    const placed = menuPlacement({ x: 995, y: 100 }, wide, window);
+    expect(placed.x).toBe(window.left + window.width - 8 - 900);
+    expect(placed.x + 900).toBeLessThanOrEqual(window.left + window.width - 8);
+  });
 });

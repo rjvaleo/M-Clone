@@ -73,4 +73,46 @@ describe("runtime bridge", () => {
     executeRuntimeCommand(runtime, midi, "panic", "Panic");
     expect(runtime.panic).toHaveBeenCalledTimes(1);
   });
+
+  it("says so rather than throwing when there is no runtime yet", () => {
+    // Pressing Play before audio has started is ordinary, not an error.
+    const result = executeRuntimeCommand(null, node("t", "m.transport-clock"), "play", "Play");
+    expect(result.message).toBe("t: runtime unavailable");
+    expect(result.updates).toBeUndefined();
+  });
+
+  it("does nothing at all with no runtime to queue into", () => {
+    expect(() => queueRuntimeParameter(null, "n1", "density", 80, "step-end")).not.toThrow();
+  });
+
+  it("reports a command it has no wiring for, under the caller's own label", () => {
+    const runtime = runtimeStub();
+    expect(executeRuntimeCommand(runtime, node("n", "m.phase"), "unheard-of", "Did nothing").message)
+      .toBe("n: Did nothing");
+    // Transport commands belong to the transport: the same id elsewhere is not
+    // a transport command.
+    expect(executeRuntimeCommand(runtime, node("n", "m.phase"), "play", "Fell through").message)
+      .toBe("n: Fell through");
+    expect(runtime.start).not.toHaveBeenCalled();
+    // And reseed belongs to Density.
+    expect(executeRuntimeCommand(runtime, node("n", "m.phase"), "reseed", "Fell through").message)
+      .toBe("n: Fell through");
+  });
+
+  it("seeds from real randomness when the caller supplies none", () => {
+    const runtime = runtimeStub();
+    const result = executeRuntimeCommand(runtime, node("d", "m.note-density"), "reseed", "Reseed");
+    const seed = result.updates?.[0].value as number;
+    expect(Number.isInteger(seed)).toBe(true);
+    expect(seed).toBeGreaterThanOrEqual(1);
+  });
+
+  it("never hands out a seed of zero", () => {
+    // Zero would be a legal number and a broken seed.
+    const runtime = runtimeStub();
+    const result = executeRuntimeCommand(
+      runtime, node("d", "m.note-density"), "reseed", "Reseed", () => 0,
+    );
+    expect(result.updates?.[0].value).toBe(1);
+  });
 });

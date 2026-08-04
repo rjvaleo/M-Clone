@@ -111,6 +111,10 @@ export function compileGraph(
   // Only event-domain edges constrain processor order. An audio edge is a
   // topology fact for the audio adapter, not an evaluation dependency.
   const orderingEdges = activeEdges.filter((edge) => {
+    // Both endpoints are known to exist: `activeEdges` kept only edges whose
+    // ends are active nodes. The optional chain is the type system's, not a
+    // case that can happen.
+    /* v8 ignore next */
     const fromDescriptor = registry.get(runtimeGraph.nodes[edge.from.nodeId]?.moduleType ?? "");
     const port = fromDescriptor?.ports.find((candidate) => candidate.id === edge.from.portId);
     return port !== undefined && isEventSignal(port.signal);
@@ -121,6 +125,7 @@ export function compileGraph(
     // An edge arriving at a module that breaks feedback does not constrain
     // order: the breaker delivers what it received in an earlier window, so it
     // can be evaluated before its own upstream.
+    /* v8 ignore next */
     const descriptor = registry.get(runtimeGraph.nodes[edge.to.nodeId]?.moduleType ?? "");
     if (!descriptor?.feedbackBreak) return true;
     feedbackEdges.push({ edgeId: edge.id, breakerNodeId: edge.to.nodeId });
@@ -178,6 +183,8 @@ function topologicalOrder(
     outgoing.set(id, []);
   }
   for (const edge of edges) {
+    // Defensive: every caller passes edges whose ends are in `nodeIds`.
+    /* v8 ignore next */
     if (!incoming.has(edge.to) || !outgoing.has(edge.from)) continue;
     // Parallel edges between the same pair are one dependency, not two.
     const targets = outgoing.get(edge.from) as NodeId[];
@@ -222,6 +229,7 @@ function findCycle(
     visited.add(id);
     onPath.add(id);
     path.push(id);
+    /* v8 ignore next */
     for (const next of (outgoing.get(id) ?? []).filter((target) => remaining.has(target))) {
       const found = walk(next);
       if (found) return found;
@@ -231,11 +239,15 @@ function findCycle(
     return null;
   };
 
-  for (const id of [...remaining].sort()) {
-    const found = walk(id);
-    if (found) return found;
-  }
-  return [...remaining].sort();
+  // Every stuck node in turn, stopping at the first loop found — `??` is what
+  // stops it walking the rest once there is an answer.
+  const roots = [...remaining].sort();
+  const found = roots.reduce<NodeId[] | null>((hit, id) => hit ?? walk(id), null);
+  // Naming every stuck node is the fallback, and it is unreachable: a node is
+  // only stuck because something upstream never resolved, so the stuck set
+  // always contains a loop.
+  /* v8 ignore next */
+  return found ?? roots;
 }
 
 /**

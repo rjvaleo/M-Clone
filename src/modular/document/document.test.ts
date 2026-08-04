@@ -8,6 +8,12 @@ import {
   encodeModularDocument,
 } from "./document";
 
+/** The failure message, or a sentence saying it did not fail. */
+const errorOf = (value: unknown): string => {
+  const result = decodeModularDocument(value);
+  return result.ok ? "decoded without complaint" : result.error;
+};
+
 describe("Modular document v2", () => {
   it("round-trips an independent Modular graph", () => {
     const graph = executeGraphCommand(emptyGraph(), {
@@ -145,5 +151,100 @@ describe("Modular document v2", () => {
     expect(decoded.document.graph.edges.e2.to.portId).toBe("monitor-telemetry");
     expect(decoded.document.graph.edges.e3.from.portId).toBe("rejected-telemetry");
     expect(decoded.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("renames a v1 port at whichever end of the cable it is on", () => {
+    // The same rename has to work in both directions, because which end a
+    // legacy document happened to record is not something we control.
+    const node = (id: string, moduleType: string) => ({
+      id, moduleType, moduleVersion: 1, label: id,
+      position: { x: 0, y: 0 }, parameters: {}, enabled: true,
+    });
+    const decoded = decodeModularDocument({
+      format: "m-modular", schemaVersion: 1, product: "modular",
+      graph: {
+        nodes: {
+          order: node("order", "m.note-order"),
+          density: node("density", "m.note-density"),
+          out: node("out", "m.midi-output"),
+        },
+        edges: {
+          intoOrder: {
+            id: "intoOrder", enabled: true,
+            from: { nodeId: "out", portId: "monitor-out" },
+            to: { nodeId: "order", portId: "cursor-out" },
+          },
+          intoDensity: {
+            id: "intoDensity", enabled: true,
+            from: { nodeId: "out", portId: "monitor-out" },
+            to: { nodeId: "density", portId: "rejected-out" },
+          },
+        },
+      },
+      snapshots: [], macros: [], assets: [],
+    });
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) return;
+    expect(decoded.document.graph.edges.intoOrder.to.portId).toBe("cursor-telemetry");
+    expect(decoded.document.graph.edges.intoOrder.from.portId).toBe("monitor-telemetry");
+    expect(decoded.document.graph.edges.intoDensity.to.portId).toBe("rejected-telemetry");
+  });
+
+  it("refuses a document it cannot vouch for", () => {
+    const base = {
+      format: "m-modular", schemaVersion: 2, product: "modular",
+      graph: { nodes: {}, edges: {} }, snapshots: [], macros: [], assets: [],
+    };
+    expect(errorOf("not an object")).toBe("idMLab document must be an object");
+    expect(errorOf({ ...base, schemaVersion: 99 }))
+      .toContain("Unsupported idMLab document version");
+    expect(errorOf({ ...base, product: "classic" })).toBe("Invalid idMLab product marker");
+    expect(errorOf({ ...base, snapshots: "no" })).toBe("Invalid idMLab document collections");
+    expect(errorOf({ ...base, macros: 7 })).toBe("Invalid idMLab document collections");
+    expect(errorOf({ ...base, assets: null })).toBe("Invalid idMLab document collections");
+    expect(errorOf({ ...base, performance: () => 1 })).toBe("Invalid idMLab performance data");
+  });
+
+  it("keeps performance data when there is some", () => {
+    const decoded = decodeModularDocument({
+      format: "m-modular", schemaVersion: 2, product: "modular",
+      graph: { nodes: {}, edges: {} }, snapshots: [], macros: [], assets: [],
+      performance: { take: 3 },
+    });
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) return;
+    expect(decoded.document.performance).toEqual({ take: 3 });
+  });
+
+  it("rejects a graph whose nodes or edges are not what they claim", () => {
+    const withGraph = (graph: unknown) => errorOf({
+      format: "m-modular", schemaVersion: 2, product: "modular",
+      graph, snapshots: [], macros: [], assets: [],
+    });
+    expect(withGraph("nope")).toBe("Invalid idMLab graph");
+    expect(withGraph({ nodes: {}, edges: [] })).toBe("Invalid idMLab graph");
+    // An edge filed under a key that is not its own id: the document disagrees
+    // with itself, and picking one of the two would be a guess.
+    expect(withGraph({
+      nodes: {},
+      edges: { a: { id: "b", from: { nodeId: "x", portId: "y" }, to: { nodeId: "x", portId: "y" }, enabled: true } },
+    })).toBe("Invalid idMLab graph");
+    expect(withGraph({ nodes: {}, edges: { a: "not an edge" } })).toBe("Invalid idMLab graph");
+  });
+
+  it("rejects a node whose enabled flag is not a flag", () => {
+    expect(errorOf({
+      format: "m-modular", schemaVersion: 2, product: "modular",
+      graph: {
+        nodes: {
+          n: {
+            id: "n", moduleType: "m.phase", moduleVersion: 2, label: "Phase",
+            position: { x: 0, y: 0 }, parameters: {}, enabled: "yes",
+          },
+        },
+        edges: {},
+      },
+      snapshots: [], macros: [], assets: [],
+    })).toBe("Invalid idMLab graph");
   });
 });

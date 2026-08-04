@@ -259,6 +259,7 @@ export class FakeAudioContext implements EffectContext, EngineContext {
     // buffer in a test; emptying the caller's view is what a real decode does.
     try {
       structuredClone(data, { transfer: [data] });
+      /* v8 ignore next 3 — Node supports transfer, so this never runs here */
     } catch {
       // Environments without transferable support still exercise everything else.
     }

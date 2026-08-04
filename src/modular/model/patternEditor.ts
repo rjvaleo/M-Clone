@@ -77,6 +77,10 @@ export const PART_PARAMETERS: Record<PartKey, Record<string, string>> = {
 
 /** Whether a part declares a port, so the expansion never wires a missing one. */
 function hasPort(node: NodeInstance, portId: string): boolean {
+  // The `?? false` is unreachable: this is only ever asked about parts the
+  // expansion just built from `PATTERN_PARTS`, which are registry types by
+  // construction. It stays because the registry lookup is typed as optional.
+  /* v8 ignore next */
   return moduleRegistry.get(node.moduleType)?.ports.some((port) => port.id === portId) ?? false;
 }
 

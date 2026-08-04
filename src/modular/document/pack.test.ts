@@ -30,6 +30,31 @@ const graphWithNode = (): GraphDocument => {
   return graph;
 };
 
+/**
+ * A pack with a manifest we chose, rather than one the encoder would write.
+ *
+ * Corrupting a real pack in place is unreliable — patching text inside a binary
+ * changes its length — so the header is written here directly. This is the only
+ * way to exercise what happens when a file arrives with a manifest the encoder
+ * would never have produced, which is exactly the case the decoder exists for.
+ */
+const packWithManifest = (manifestText: string, ...blobs: Uint8Array[]): Uint8Array => {
+  const manifest = new TextEncoder().encode(manifestText);
+  const payload = blobs.reduce((total, blob) => total + blob.length, 0);
+  const out = new Uint8Array(16 + manifest.length + payload);
+  const view = new DataView(out.buffer);
+  for (let i = 0; i < PACK_MAGIC.length; i++) out[i] = PACK_MAGIC.charCodeAt(i);
+  view.setUint32(8, PACK_VERSION, true);
+  view.setUint32(12, manifest.length, true);
+  out.set(manifest, 16);
+  let at = 16 + manifest.length;
+  for (const blob of blobs) {
+    out.set(blob, at);
+    at += blob.length;
+  }
+  return out;
+};
+
 const pack = () => {
   const first = audio(3);
   const second = audio(7, 300);
@@ -140,33 +165,58 @@ describe("Damage", () => {
   });
 
   it("rejects a manifest that is not readable", () => {
-    const document = createModularDocument(emptyGraph());
-    const bytes = encodeModularPack(document, []);
-    const broken = bytes.slice();
-    broken[20] = 0x7b; // a stray brace inside the JSON
-    const decoded = decodeModularPack(broken);
-    expect(decoded.ok).toBe(false);
-    if (decoded.ok) return;
-    expect(decoded.error).toMatch(/manifest|idMLab/);
+    const decoded = decodeModularPack(packWithManifest("{not json at all"));
+    expect(decoded).toEqual({ ok: false, error: "Pack manifest is not valid JSON" });
+  });
+
+  it("rejects a manifest that parses but is not a manifest", () => {
+    expect(decodeModularPack(packWithManifest('"a string"')))
+      .toEqual({ ok: false, error: "Pack manifest is malformed" });
+    expect(decodeModularPack(packWithManifest("null")))
+      .toEqual({ ok: false, error: "Pack manifest is malformed" });
+    expect(decodeModularPack(packWithManifest('{"document":{},"blobs":"lots"}')))
+      .toEqual({ ok: false, error: "Pack manifest is malformed" });
+  });
+
+  it("passes on the reason the document inside will not open", () => {
+    expect(decodeModularPack(packWithManifest('{"document":{},"blobs":[]}')))
+      .toEqual({ ok: false, error: "Not an idMLab document" });
+  });
+
+  it("falls back to the raw id when the document does not name the sample", () => {
+    // A blob the document knows nothing about: there is no filename to use, so
+    // the warning has to say the id rather than say nothing.
+    const decoded = decodeModularPack(packWithManifest(JSON.stringify({
+      document: createModularDocument(emptyGraph()),
+      blobs: [{ id: "0123456789abcdef", offset: 0, length: 64 }],
+    })));
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) return;
+    expect(decoded.warnings.join(" ")).toContain("0123456789abcdef is truncated");
   });
 
   it("ignores a malformed entry without losing the good ones", () => {
-    const good = audio(5);
+    // One entry with a negative offset and one with a length that is not a
+    // whole number, either side of a good one.
+    const good = audio(5, 16);
     const document = createModularDocument(emptyGraph(), [record(good, "Good.wav")]);
-    const bytes = encodeModularPack(document, [{ id: assetIdForBytes(good), bytes: good }]);
-    // Reach into the manifest and corrupt one entry's offset.
-    const text = new TextDecoder().decode(bytes);
-    const patched = text.replace('"offset":0', '"offset":-1');
-    const rebuilt = new Uint8Array(bytes.length);
-    rebuilt.set(bytes);
-    if (patched.length === text.length) {
-      new TextEncoder().encodeInto(patched, rebuilt);
-      const decoded = decodeModularPack(rebuilt);
-      expect(decoded.ok).toBe(true);
-      if (!decoded.ok) return;
-      expect(decoded.pack.blobs).toHaveLength(0);
-      expect(decoded.warnings.join(" ")).toContain("malformed");
-    }
+    const id = assetIdForBytes(good);
+    const bytes = packWithManifest(JSON.stringify({
+      document,
+      blobs: [
+        { id: 17, offset: 0, length: 16 },
+        { id, offset: -1, length: 16 },
+        { id, offset: 0, length: 1.5 },
+        { id, offset: 0, length: 16 },
+      ],
+    }), good);
+
+    const decoded = decodeModularPack(bytes);
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) return;
+    expect(decoded.pack.blobs).toHaveLength(1);
+    expect(decoded.pack.blobs[0].bytes).toEqual(good);
+    expect(decoded.warnings.filter((line) => line.includes("malformed"))).toHaveLength(3);
   });
 });
 

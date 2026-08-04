@@ -93,6 +93,14 @@ describe("Reading stored presets", () => {
     expect(readPresets([null, 5, {}])[0]).toEqual(defaultPreset());
     expect(readPresets([["x", true]])[0][0]).toBe(2);
   });
+
+  it("reads a range whose ends are not numbers as the bottom of the scale", () => {
+    // A hand-edited document, or one written by a build that stored strings.
+    // Zero is the honest reading of "no level here", and a range with both ends
+    // at zero collapses to a plain level.
+    expect(readPresets([[["x", "y"]]])[0][0]).toBe(0);
+    expect(readPresets([[[null, 3]]])[0][0]).toEqual([0, 3]);
+  });
 });
 
 describe("Editing one cell", () => {
@@ -179,6 +187,20 @@ describe("Fill actions", () => {
 
   it("clamps the level it fills with", () => {
     expect(fillPreset(presets(flat(2)), 0, 99)[0][0]).toBe(4);
+  });
+});
+
+describe("What one cell means", () => {
+  it("reads a cell that is neither a level nor a range as the middle", () => {
+    // Two is the default level, so a cell that survived a bad document still
+    // sounds like something rather than dropping to silence.
+    expect(cellSpan("junk" as never)).toEqual({ low: 2, high: 2 });
+    // A one-element array is not a range either, so it reads the same way.
+    expect(cellSpan([7] as never)).toEqual({ low: 2, high: 2 });
+  });
+
+  it("clamps a range to the scale and orders it", () => {
+    expect(cellSpan([9, -3])).toEqual({ low: 0, high: 4 });
   });
 });
 

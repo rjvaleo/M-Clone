@@ -4,9 +4,8 @@
 **Branch:** `modular`
 **Branch base:** `master` at `dda067b` (`0.8.0-alpha`)
 **Foundation checkpoint:** `2e816fc` (`Build modular MIDI foundation`), published to `origin/modular`
-**Last commit:** `cfc1530` (`Complete modular Web MIDI session`); the audio rack, sound
-pool, sample players, preset pad, and Pattern Editor described below are **working
-tree only** and not yet committed.
+**Last commit:** `61974e3` (`Rename Modular docs to idMLab`), published to
+`origin/modular`. Everything described below is committed.
 
 The application is named **idMLab**. Internal identifiers — module type ids such as
 `m.pattern-editor`, the `.mmod` extension, `src/modular/`, CSS `mm-` prefixes — keep
@@ -27,6 +26,9 @@ cosmetic gain.
 - Single-stream Variable and Cyclic processors use one uniform compact face class. Large always-visible editors, such as Note Editor, use the standardized editor class; utility/I/O nodes use the utility class. Faces are sized by their content rather than to a fixed frame.
 - All operational controls remain on node faces. Inspectors, secondary windows, collapsible editors, and instance selectors are not part of the musical workflow.
 - The application uses a restrained full-color visual system rather than grayscale.
+- Work is **test-first** from 2026-08-03. The previous practice — build the
+  modules, then write every test in one pass at the end — is what let a player
+  ship with no runtime processor at all and let two tests assert nothing.
 
 ## Implemented foundation
 
@@ -230,9 +232,58 @@ are implemented in `src/modular/audio/`.
   `AudioClockBridge` maps runtime seconds onto `AudioContext.currentTime` with EMA
   smoothing and a hard snap across suspend/resume.
 
+## Tuning (ported from the scale sequencer)
+
+`src/modular/tuning/` — 81 scales in **true cents** across 7 categories, from
+`rjvaleo/scale-sequencer`, with the pure maths that turns a degree into a
+frequency: `centsToRatio`, `centsToHz`, `hzToCents`, `degreeCents`, `degreeHz`,
+`nearestDegree`, `mapKeyboard`, `rootHzForMidi`.
+
+The point of it is that a scale is a list of cent offsets rather than semitones:
+a Pythagorean third is 408 cents and a maqam's neutral second is 150, and
+neither survives being rounded to the nearest piano key. `mapKeyboard` lays a
+scale across the keys so a twelve-note keyboard can play a 31-tone temperament —
+each key keeps its position and sounds the degree nearest to it, at that
+degree's true pitch.
+
+Three changes on the way in:
+
+- **Scales carry stable ids.** The source selected by array index, so inserting
+  a scale silently retuned every saved preset. A document names `"dorian"`.
+- **Raga Marwa was wrong** — a stray trailing `0` made its last degree sound the
+  root again, and made it the one scale in the library that did not ascend. A
+  guard test now checks all 81.
+- **Degrees below the root worked.** `degree % length` keeps JavaScript's sign,
+  so degree −1 read as −1 rather than as the seventh below.
+
+Nothing consumes it yet. It is the intended pitch source for the synth
+([MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md)) and for the `scale-context-in`
+port Transposition has always declared with nothing to feed it.
+
+## Coverage
+
+`npm run coverage` measures Classic's engine and store **and all of
+`src/modular`**, and fails the build below its thresholds. Until this session it
+measured only `src/engine` and `src/state`, so the 100% it reported was 100% of
+about a third of the code and none of idMLab.
+
+- **100%** of statements, lines and functions.
+- **99.3%** of branches, gated at 98.5. The shortfall is `catch` blocks for
+  browser behaviour Node cannot provoke — a source that refuses to stop, a
+  limiter that reports nothing — each marked and explained where it sits.
+- The React faces (`*.tsx`) are the one deliberate exclusion: testing them needs
+  a DOM, which this project does not install. Their logic is kept in plain
+  modules beside them — `noteRoll.ts`, `viewport.ts`, `cyclicSequence.ts`,
+  `nodePlacement.ts`, `portGeometry.ts` — and those are covered.
+
+Writing those tests found four real defects: `build()` crashed on a plan naming
+a node the document no longer had, voices started after dispose, and two tests
+asserted nothing at all.
+
 ## Verification baseline
 
-- `npm test -- --run`: **1,391 tests passed across 106 files**.
+- `npm test -- --run`: **1,624 tests passed across 118 files**.
+- `npm run coverage`: passed its thresholds.
 - `npm run typecheck`: passed.
 - `npm run build`: passed.
 - Browser verification on every UI change in this session, which is how most of
@@ -246,15 +297,16 @@ are implemented in `src/modular/audio/`.
 2. **The MIDI engine wants a rethink**, from a hodgepodge of constructors toward a
    UMP-shaped event layer with MIDI 1.0 as one output encoding. Agreed in
    principle, not started.
-3. Web MIDI session wiring and automated lifecycle coverage are complete. A manual acceptance pass with a physical or virtual MIDI output is still required to validate the host browser's permission UI, hardware timing, hot-unplug, and reconnect behavior.
-4. Stream materialization and expand command are implemented, but stream-level scoped snapshots and parity trace assertions between compact and expanded forms are still pending. The Pattern Editor has no expand command at all — it is materialized at compile time only.
-5. Save and Open for `.mmod` and `.mmodpack` are implemented; import, autosave, and recovery UI remain pending.
-6. Standard M import exists only as a documented mapping; no importer transaction or fixture conversion exists yet.
-7. Port connection uses click-output/click-input. The planned drag-cable workflow, compatible-port highlighting, keyboard connection flow, and filtered module creation are still pending.
-8. Two clicks on a Cyclic ruler within one tick clobber each other, because the second reads a stale node. Separated by a re-render they behave correctly.
-9. Pan, zoom, hand mode, and theme persist in browser-local workspace preferences; broader scene-level view states are not implemented.
-10. Snapshots, macros, conducting, slideshow, performance view, timeline, and visualizer remain planned work. Stage F of the salvage plan — the built-in synth and its 8 x 12 modulation matrix — has not been started.
-11. The development server at `http://127.0.0.1:5173/` belongs to the current local task session and should not be treated as a deployment.
+3. The React faces have no automated coverage: it needs a DOM (`jsdom` plus a React testing library), which the project does not install. Their logic is deliberately kept in plain modules beside them, and those are fully covered.
+4. Web MIDI session wiring and automated lifecycle coverage are complete. A manual acceptance pass with a physical or virtual MIDI output is still required to validate the host browser's permission UI, hardware timing, hot-unplug, and reconnect behavior.
+5. Stream materialization and expand command are implemented, but stream-level scoped snapshots and parity trace assertions between compact and expanded forms are still pending. The Pattern Editor has no expand command at all — it is materialized at compile time only.
+6. Save and Open for `.mmod` and `.mmodpack` are implemented; import, autosave, and recovery UI remain pending.
+7. Standard M import exists only as a documented mapping; no importer transaction or fixture conversion exists yet.
+8. Port connection uses click-output/click-input. The planned drag-cable workflow, compatible-port highlighting, keyboard connection flow, and filtered module creation are still pending.
+9. Two clicks on a Cyclic ruler within one tick clobber each other, because the second reads a stale node. Separated by a re-render they behave correctly.
+10. Pan, zoom, hand mode, and theme persist in browser-local workspace preferences; broader scene-level view states are not implemented.
+11. Snapshots, macros, conducting, slideshow, performance view, timeline, and visualizer remain planned work. **idMLab still cannot generate a pitch** — there is no oscillator in `src/modular`, only sample players. Stage F, the synth and its 8 x 12 modulation matrix, is planned in [MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md) with the PWM generator built.
+12. The development server at `http://127.0.0.1:5173/` belongs to the current local task session and should not be treated as a deployment.
 
 ## Build record and remaining work
 

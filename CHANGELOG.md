@@ -30,6 +30,20 @@ in [`MODULAR_STATUS.md`](MODULAR_STATUS.md).
   with audio-clock choke groups and a lookahead grain scheduler.
 - **`.mmodpack`** — patch plus audio in one checksummed container.
 - **Shared preset pad.** Sixteen numbered slots, one component, every module.
+- **Tuning library.** 81 scales in true cents with stable ids, and the pure maths
+  that turns a scale degree into a frequency — ported from
+  `rjvaleo/scale-sequencer`, with its Raga Marwa data bug and its broken
+  below-the-root degrees fixed on the way in.
+- **PWM generator.** Fourier coefficients for a pulse of any duty cycle, the
+  first piece of the synth ([`MODULAR_SYNTH_PLAN.md`](MODULAR_SYNTH_PLAN.md)).
+
+### Testing
+
+- Coverage measurement extended from Classic's engine and store to **all of
+  `src/modular`**, gated in `vitest.config.ts`: 100% of statements, lines and
+  functions, branches at 98.5. Writing those tests found four real defects,
+  including a runtime crash on a stale plan and voices started after dispose.
+- Work is test-first from 2026-08-03.
 
 ## [0.8.0-alpha] — 2026-08-02
 

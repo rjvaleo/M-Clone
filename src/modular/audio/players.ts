@@ -94,7 +94,6 @@ abstract class PlayerModule implements ManagedAudioNode, NotePlayer {
   protected readonly structure: Readonly<Record<string, unknown>>;
   private readonly inputGain: GainNodeLike;
   private readonly outputGain: GainNodeLike;
-  private readonly smoothing: SmoothingLookup;
   private disposed = false;
 
   constructor(
@@ -102,12 +101,14 @@ abstract class PlayerModule implements ManagedAudioNode, NotePlayer {
     spec: AudioNodeSpec,
     atSec: number,
     runtime: PlayerRuntime,
-    smoothing: SmoothingLookup,
+    // Accepted so every module is built the same way, and unused: a player's
+    // own ramps are all fixed-shape envelopes on the audio clock rather than
+    // parameter smoothing.
+    _smoothing: SmoothingLookup,
   ) {
     this.nodeId = spec.nodeId;
     this.context = context;
     this.runtime = runtime;
-    this.smoothing = smoothing;
     this.structure = spec.structure;
     this.parameters = { ...spec.parameters };
 
@@ -170,11 +171,6 @@ abstract class PlayerModule implements ManagedAudioNode, NotePlayer {
 
   protected param(id: string, fallback: number): number {
     return numberOr(this.parameters[id], fallback);
-  }
-
-  /** Ramp a real `AudioParam` per the registry's declared policy. */
-  protected ramp(target: AudioParamLike, id: string, value: number, atSec: number): void {
-    rampParam(target, value, atSec, this.smoothing(id));
   }
 
   protected onParameter(_id: string, _value: number, _atSec: number): void {}

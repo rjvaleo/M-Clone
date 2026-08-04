@@ -106,3 +106,56 @@ function clampBits(bits: number): number {
   if (!Number.isFinite(bits)) return MAX_CRUSH_BITS;
   return Math.min(MAX_CRUSH_BITS, Math.max(MIN_CRUSH_BITS, Math.round(bits)));
 }
+
+/**
+ * Harmonics in a generated pulse wave.
+ *
+ * Enough that the edge reads as an edge rather than as a rounded hump. The
+ * series is truncated rather than band-limited per note, which is the same
+ * trade the scale sequencer made: at 256 partials the aliasing above the
+ * fundamental is inaudible for anything played as a musical pitch.
+ */
+export const PULSE_HARMONICS = 256;
+
+/**
+ * Duty cycles a pulse is allowed to take.
+ *
+ * Zero and one are both silence — a pulse that is never high, or never low —
+ * so a knob sweeping the full range would pass through nothing at each end.
+ */
+export const MIN_PULSE_WIDTH = 0.1;
+export const MAX_PULSE_WIDTH = 0.9;
+
+/**
+ * Fourier coefficients for a pulse of a given duty cycle.
+ *
+ * The reason this exists rather than `oscillator.type = "square"`: a square is
+ * one pulse width out of all of them, and sweeping the width is what PWM *is*.
+ * A rectangular wave of width `w` has harmonic amplitudes
+ * `2/(nπ)·sin(nπw)`, which collapses to the familiar odd-harmonics-only square
+ * at `w = 0.5` — the even terms vanish because `sin(nπ/2)` is zero for even
+ * `n`. The DC term is the mean of the wave, `2w − 1`.
+ *
+ * All the energy is in the cosine terms, so the sine array is left at zero:
+ * every note then starts at the same point in the cycle, which keeps repeated
+ * notes sounding identical instead of phasing against each other.
+ */
+export function pulseWaveCoefficients(
+  width: number,
+  harmonics = PULSE_HARMONICS,
+): { real: Float32Array; imag: Float32Array } {
+  const w = clampPulseWidth(width);
+  const count = Math.max(2, Math.round(harmonics));
+  const real = new Float32Array(count);
+  const imag = new Float32Array(count);
+  real[0] = 2 * w - 1;
+  for (let n = 1; n < count; n++) {
+    real[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * w);
+  }
+  return { real, imag };
+}
+
+export function clampPulseWidth(width: number): number {
+  if (!Number.isFinite(width)) return 0.5;
+  return Math.min(MAX_PULSE_WIDTH, Math.max(MIN_PULSE_WIDTH, width));
+}
