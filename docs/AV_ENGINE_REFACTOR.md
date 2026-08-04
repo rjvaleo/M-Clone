@@ -180,6 +180,27 @@ Web Audio path behind a flag, so both can run and be compared.
 **Done when:** a patch with one Gain sounds identical through either path, and
 an end-to-end test drives document → compiler → worklet → output.
 
+**Status (2026-08-04): built, not yet wired.** Nothing in the app imports any of
+it, so the Web Audio path is still the only one running.
+
+| Piece | Where | Proof |
+|---|---|---|
+| First production modules — `HostInput`, `Gain`, `AudioOutput` | `dsp-core/src/modules.rs` | 69 `cargo test` |
+| The WASM shim | `wasm/src/lib.rs` | 34 checks in `wasm/verify.mjs`, against the real `.wasm` |
+| Plan → engine commands | `audio/wasm/engineBridge.ts` | 18 tests, 100% lines/statements/functions |
+| The worklet and its build | `audio/wasm/rackWorklet.ts`, `npm run build:engine` | both artifacts build; 31 KB wasm, 22 KB worklet |
+
+Two findings worth carrying forward. `Engine::add` seeded every parameter to
+zero, so a module's own defaults were unreachable and **a gain of 1 read as
+silence** — the same shape as the missing note processors, and caught only
+because the tests were written first; modules now declare `param_default`. And
+WASM has no unsigned integers, so the `NO_MODULE` sentinel (`u32::MAX`) arrives
+in JavaScript as `-1`; stored unchecked it becomes a plausible-looking module id.
+
+**Remaining:** the main-thread loader (fetch, compile, `addModule`, build the
+node, reach the destination), the flag that lets both paths run, and the A/B
+comparison that is the actual "done when".
+
 ### Stage 2 — The synth, and the LFOs that were never possible
 
 Port `SynthVoice` and the modulation matrix. This is first because it is the
