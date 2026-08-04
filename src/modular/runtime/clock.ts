@@ -255,11 +255,15 @@ export class AudioWorkletSchedulerDriver implements SchedulerDriver {
       silence.gain.value = 0;
       node.connect(silence);
       silence.connect(context.destination);
-      return new AudioWorkletSchedulerDriver(node, silence);
+      const driver = new AudioWorkletSchedulerDriver(node, silence);
+      URL.revokeObjectURL(url);
+      return driver;
     } catch {
-      return null;
-    } finally {
+      // Released on both paths rather than in a `finally`, so that each one is
+      // a branch a test can stand on. `url` is null only when creating it was
+      // itself what failed.
       if (url) URL.revokeObjectURL(url);
+      return null;
     }
   }
 

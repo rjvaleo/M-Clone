@@ -3,7 +3,11 @@ import {
   crushCurve,
   crushCurveLength,
   impulseFrameCount,
+  MAX_PULSE_WIDTH,
   MAX_TAIL_SECONDS,
+  MIN_PULSE_WIDTH,
+  PULSE_HARMONICS,
+  pulseWaveCoefficients,
   renderPlateImpulse,
 } from "./dsp";
 
@@ -96,5 +100,62 @@ describe("Bit-crush transfer curve", () => {
     expect(crushCurve(0).length).toBe(crushCurve(1).length);
     expect(crushCurve(64).length).toBe(crushCurve(16).length);
     expect(crushCurve(Number.NaN).length).toBe(crushCurve(16).length);
+  });
+});
+
+describe("The pulse wave", () => {
+  it("is a square when the duty cycle is half", () => {
+    // A 50% pulse has no even harmonics — that absence is what a square sounds
+    // like, and it is the first thing to go wrong if the series is mis-indexed.
+    const { real } = pulseWaveCoefficients(0.5);
+    expect(real[0]).toBeCloseTo(0, 12);
+    for (let n = 2; n < 16; n += 2) expect(Math.abs(real[n]), `harmonic ${n}`).toBeLessThan(1e-9);
+    for (let n = 1; n < 16; n += 2) expect(Math.abs(real[n]), `harmonic ${n}`).toBeGreaterThan(0);
+  });
+
+  it("carries a DC offset that follows the duty cycle", () => {
+    // The mean of a pulse is what tells the ear the width changed.
+    expect(pulseWaveCoefficients(0.5).real[0]).toBeCloseTo(0, 12);
+    expect(pulseWaveCoefficients(0.25).real[0]).toBeCloseTo(-0.5, 12);
+    expect(pulseWaveCoefficients(0.75).real[0]).toBeCloseTo(0.5, 12);
+  });
+
+  it("brings the even harmonics back as the pulse narrows", () => {
+    // Sweeping the width is the whole point of PWM: the timbre has to change.
+    const square = pulseWaveCoefficients(0.5);
+    const narrow = pulseWaveCoefficients(0.2);
+    expect(Math.abs(narrow.real[2])).toBeGreaterThan(Math.abs(square.real[2]) + 0.05);
+  });
+
+  it("mirrors a pulse about the half-open one", () => {
+    // A 70% pulse is a 30% pulse turned upside down and shifted: since
+    // sin(nπ(1−w)) = −(−1)^n·sin(nπw), the odd harmonics come out identical
+    // and only the even ones invert. That is why a PWM sweep past 50% keeps
+    // its square-wave core and changes only the asymmetry.
+    const thin = pulseWaveCoefficients(0.3);
+    const fat = pulseWaveCoefficients(0.7);
+    for (let n = 1; n < 12; n += 2) expect(fat.real[n], `odd ${n}`).toBeCloseTo(thin.real[n], 9);
+    for (let n = 2; n < 12; n += 2) expect(fat.real[n], `even ${n}`).toBeCloseTo(-thin.real[n], 9);
+    // And the two means are opposite, which is the shift.
+    expect(fat.real[0]).toBeCloseTo(-thin.real[0], 9);
+  });
+
+  it("has no phase content, so every note starts the same way", () => {
+    const { imag } = pulseWaveCoefficients(0.35);
+    expect(imag.every((value) => value === 0)).toBe(true);
+  });
+
+  it("holds the width inside a range that still makes a sound", () => {
+    // 0% and 100% are silence, and a knob must not be able to reach them.
+    expect(pulseWaveCoefficients(0).real[1]).toBeCloseTo(pulseWaveCoefficients(MIN_PULSE_WIDTH).real[1], 12);
+    expect(pulseWaveCoefficients(1).real[1]).toBeCloseTo(pulseWaveCoefficients(MAX_PULSE_WIDTH).real[1], 12);
+    expect(pulseWaveCoefficients(Number.NaN).real[0]).toBeCloseTo(0, 12);
+  });
+
+  it("uses enough harmonics to sound like an edge, and the same number every time", () => {
+    const { real, imag } = pulseWaveCoefficients(0.5);
+    expect(real).toHaveLength(PULSE_HARMONICS);
+    expect(imag).toHaveLength(PULSE_HARMONICS);
+    expect(PULSE_HARMONICS).toBeGreaterThanOrEqual(256);
   });
 });

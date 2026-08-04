@@ -4,8 +4,16 @@
 **Branch:** `modular`
 **Status:** active roadmap; Steps 1-3 completed. Steps 4 and 5 were overtaken by
 the audio port ([MODULAR_AV_SALVAGE_PLAN.md](MODULAR_AV_SALVAGE_PLAN.md) Stages
-A-E and G) and the UI work that followed it. The two live items are the MIDI
-engine rethink and confirming the players are audible.
+A-E and G) and the UI work that followed it.
+
+The live items are:
+
+1. **Stage F — the synth**, planned in
+   [MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md). idMLab still cannot generate
+   a pitch; this is the next build.
+2. The MIDI engine rethink.
+3. Confirming the sample players are audible end to end.
+4. A DOM test harness, so the React faces can be covered too.
 
 This roadmap records the implementation sequence agreed after reviewing the
 current modular branch. The order favors recoverability, an end-to-end musical
@@ -23,8 +31,13 @@ workflow, and deterministic equivalence before expanding the module catalog.
   time and has no expand command.
 - Modular document schema v2 is implemented with v1 migration, alongside the
   `.mmodpack` self-contained container.
-- On 2026-08-03, **1,391 tests across 106 files** passed, with TypeScript and the
-  production build clean.
+- On 2026-08-03, **1,624 tests across 118 files** passed, with TypeScript, the
+  production build and the coverage gate clean.
+- Coverage now measures all of `src/modular` as well as Classic's engine and
+  store: 100% statements, lines and functions, branches gated at 98.5. The React
+  faces are the one deliberate exclusion — see `vitest.config.ts`.
+- The tuning library (`src/modular/tuning/`) is in: 81 scales in true cents with
+  the pure degree-to-frequency maths. Nothing consumes it yet.
 - Wheel zoom is fixed: eased toward a target, delta-mode normalised, on a fixed
   16000 x 8000 canvas that is pannable in every direction at any zoom.
 
@@ -142,8 +155,8 @@ Implement and verify in this order:
 5. Conducting, macros, and project snapshots
 6. Standard M importer with an explicit conversion report
 
-Audio effects and sample players are already built; the built-in synth
-(salvage plan Stage F) is the remaining instrument work.
+Audio effects and sample players are already built; the synth is the remaining
+instrument work, planned in [MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md).
 
 Each Classic-derived module remains single-stream, exposes its complete working
 face, and embeds sixteen presets where the original workflow used preset views.

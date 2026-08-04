@@ -85,6 +85,10 @@ const clamp = (value: number, low: number, high: number): number =>
  */
 function separate(hues: number[]): number[] {
   const count = hues.length;
+  // Both guards are unreachable from the one caller, which always asks for
+  // exactly `MODULE_ACCENT_SLOTS.length` hues. They stay because this is a
+  // general spread over a ring and the next caller may not be so tidy.
+  /* v8 ignore next */
   if (count < 2) return [...hues];
 
   // Sorting by hue but remembering where each came from is what lets the
@@ -95,6 +99,7 @@ function separate(hues: number[]): number[] {
 
   // Five slots at 26° need 104° of the wheel, so an even spread is always
   // available as a fallback and never has to crowd anything.
+  /* v8 ignore next */
   if (count * MIN_SEPARATION > 360) return hues.map((_, i) => (hues[0] + (360 / count) * i) % 360);
 
   const anchor = ring[0].hue;

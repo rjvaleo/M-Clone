@@ -360,13 +360,29 @@ describe("Stall recovery", () => {
   });
 
   it("drops a stale attack rather than firing it late", () => {
-    const rig = harness();
+    // A note that missed its moment by more than the grace window is noise: it
+    // would land in a bunch with whatever is due now. Releases are kept even
+    // when late, because a stale release still repairs a stuck note.
+    // A fast time base, so the stalled span certainly contains attacks.
+    const rig = harness({ ...DETERMINISTIC, tb: { numerator: 1, denominator: 64 } });
     rig.runtime.start();
     run(rig, 0.5);
-    // A stall too short to trigger recovery still leaves events behind now.
-    rig.clock.seconds += 0.3;
+    const before = noteOns(rig.recorder).length;
+
+    // Stall long enough that the events already scheduled are well past due,
+    // but not so long that the monitor calls it a stall and re-anchors.
+    rig.clock.seconds += 0.39;
     rig.driver.fire();
-    expect(rig.runtime.diagnostics().droppedEvents).toBeGreaterThanOrEqual(0);
+
+    expect(rig.runtime.diagnostics().droppedEvents).toBeGreaterThan(0);
+    // What did get through is current: nothing arrived more than the grace
+    // window behind the clock.
+    for (const attack of noteOns(rig.recorder).slice(before)) {
+      expect(attack.atSec).toBeGreaterThanOrEqual(rig.clock.seconds - 0.02);
+    }
+    // And the releases for notes already sounding were kept, late or not: a
+    // stale release still repairs a device.
+    expect(rig.recorder.events.some((event) => event.type === "note-off")).toBe(true);
   });
 });
 

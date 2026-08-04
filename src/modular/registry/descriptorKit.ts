@@ -29,7 +29,6 @@ export const noteSignal = (): SignalType => ({ kind: "note-event" });
 export const midiSignal = (): SignalType => ({ kind: "midi", protocol: "midi1" });
 export const numberSignal = (): SignalType => ({ kind: "control", value: "number" });
 export const indexSignal = (): SignalType => ({ kind: "control", value: "index" });
-export const booleanSignal = (): SignalType => ({ kind: "control", value: "boolean" });
 export const telemetrySignal = (schema: string): SignalType => ({ kind: "telemetry", schema });
 
 // ---- ports -----------------------------------------------------------------

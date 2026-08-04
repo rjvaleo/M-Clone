@@ -64,4 +64,94 @@ describe("Modular graph commands", () => {
     expect(restored.nodes.density.parameters.density).toBe(57);
     expect(restored.nodes.density.parameters["active-position"]).toBe(0);
   });
+
+  it("rejects an unknown parameter in a multi-parameter edit, writing none of it", () => {
+    // An atomic command that half-applied would leave a preset in a state no
+    // slot describes.
+    const density = createNode("m.note-density", "density", { x: 0, y: 0 });
+    const graph = executeGraphCommand(emptyGraph(), { type: "add-node", node: density }).graph;
+    expect(() => executeGraphCommand(graph, {
+      type: "set-parameters", nodeId: "density", values: { density: 42, invented: 1 },
+    })).toThrow("Unknown parameter");
+    expect(graph.nodes.density.parameters.density).toBe(57);
+  });
+
+  it("takes the cables on both sides of a removed node", () => {
+    // Removing the node a cable *arrives* at must take that cable too, or the
+    // graph keeps an edge pointing at nothing.
+    const editor = createNode("m.note-editor", "editor", { x: 0, y: 0 });
+    const output = createNode("m.midi-output", "output", { x: 400, y: 0 });
+    let graph = executeGraphCommand(emptyGraph(), { type: "add-node", node: editor }).graph;
+    graph = executeGraphCommand(graph, { type: "add-node", node: output }).graph;
+    graph = executeGraphCommand(graph, {
+      type: "add-edge",
+      edge: {
+        id: "into-output",
+        from: { nodeId: "editor", portId: "audition-out" },
+        to: { nodeId: "output", portId: "notes-in" },
+        enabled: true,
+      },
+    }).graph;
+
+    const removed = executeGraphCommand(graph, { type: "remove-nodes", nodeIds: ["output"] });
+    expect(removed.graph.edges["into-output"]).toBeUndefined();
+    expect(executeGraphCommand(removed.graph, removed.inverse).graph.edges["into-output"])
+      .toBeDefined();
+  });
+
+  it("refuses to restore a node that is already back", () => {
+    const clock = createNode("m.transport-clock", "clock", { x: 0, y: 0 });
+    const graph = executeGraphCommand(emptyGraph(), { type: "add-node", node: clock }).graph;
+    expect(() => executeGraphCommand(graph, {
+      type: "restore-subgraph", nodes: [clock], edges: [],
+    })).toThrow("Duplicate node");
+  });
+
+  it("removes a cable and puts it back exactly", () => {
+    const editor = createNode("m.note-editor", "editor", { x: 0, y: 0 });
+    const output = createNode("m.midi-output", "output", { x: 400, y: 0 });
+    const edge: Edge = {
+      id: "e",
+      from: { nodeId: "editor", portId: "audition-out" },
+      to: { nodeId: "output", portId: "notes-in" },
+      enabled: true,
+    };
+    let graph = executeGraphCommand(emptyGraph(), { type: "add-node", node: editor }).graph;
+    graph = executeGraphCommand(graph, { type: "add-node", node: output }).graph;
+    graph = executeGraphCommand(graph, { type: "add-edge", edge }).graph;
+
+    const removed = executeGraphCommand(graph, { type: "remove-edge", edgeId: "e" });
+    expect(removed.graph.edges.e).toBeUndefined();
+    expect(executeGraphCommand(removed.graph, removed.inverse).graph.edges.e).toEqual(edge);
+  });
+
+  it("refuses commands that name something that is not there", () => {
+    const clock = createNode("m.transport-clock", "clock", { x: 0, y: 0 });
+    const graph = executeGraphCommand(emptyGraph(), { type: "add-node", node: clock }).graph;
+
+    expect(() => executeGraphCommand(graph, { type: "add-node", node: clock }))
+      .toThrow("Duplicate node");
+    expect(() => executeGraphCommand(graph, { type: "remove-edge", edgeId: "ghost" }))
+      .toThrow("Unknown edge");
+    expect(() => executeGraphCommand(graph, {
+      type: "set-parameter", nodeId: "ghost", parameterId: "tempo", value: 1,
+    })).toThrow("Unknown node");
+    expect(() => executeGraphCommand(graph, { type: "remove-nodes", nodeIds: ["ghost"] }))
+      .toThrow("Unknown node");
+
+    const edge: Edge = {
+      id: "e",
+      from: { nodeId: "clock", portId: "transport-out" },
+      to: { nodeId: "ghost", portId: "transport-in" },
+      enabled: true,
+    };
+    expect(() => executeGraphCommand(graph, { type: "add-edge", edge })).toThrow("Unknown node");
+    const withEdge = executeGraphCommand(graph, {
+      type: "add-edge",
+      edge: { ...edge, to: { nodeId: "clock", portId: "reset-in" } },
+    }).graph;
+    expect(() => executeGraphCommand(withEdge, {
+      type: "add-edge", edge: { ...edge, to: { nodeId: "clock", portId: "reset-in" } },
+    })).toThrow("Duplicate edge");
+  });
 });

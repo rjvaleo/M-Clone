@@ -3,7 +3,8 @@
 **Date:** 2026-08-03
 **Source:** `~/Documents/GitHub/Modular AV Perforamnce` (3,490 lines JS, 11 tests, all passing)
 **Target branch:** `modular`
-**Status:** analysis complete, nothing ported yet
+**Status:** Stages A (part), B, C, D, E and G ported; F planned in
+[MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md)
 
 ---
 
@@ -298,11 +299,21 @@ increments; nobody has reported hearing them.
 
 ### Stage F — Synth and modulation matrix
 
-**Status: not started.**
+**Status: planned in detail, one piece built.** The plan is
+[MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md); the PWM generator is in
+`dsp.ts` and the tuning library that will feed the oscillators is in
+`src/modular/tuning/`.
 
 Last, because it is the largest and because the 8 × 12 matrix wants the
 parameter and preset contracts already settled. The matrix is also a natural
 consumer of the control-tick rule from the Stream plan.
+
+A second source joined it: the scale sequencer (`rjvaleo/scale-sequencer`)
+contributes the voice — five wave types with true variable-width PWM, an
+amplitude ADSR, a filter with its own ADSR and key follow. Its one-filter-for-
+the-whole-instrument design does not come across, and the reason is instructive:
+that shared filter is what makes its cutoff knob cancel the envelopes of notes
+already scheduled.
 
 ### Stage G — Remaining effects
 

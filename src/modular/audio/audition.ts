@@ -85,6 +85,7 @@ export class AuditionPlayer {
     try {
       // Stopping after the ramp is what makes this a fade rather than a cut.
       voice.source.stop(now + AUDITION_FADE_SEC);
+      /* v8 ignore next 3 — only a real browser throws here */
     } catch {
       // A source that already ended throws; that is the outcome we wanted.
     }

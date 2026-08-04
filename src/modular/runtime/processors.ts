@@ -1063,8 +1063,9 @@ function floorDiv(value: number, divisor: number): number {
 }
 
 function positiveMod(value: number, modulo: number): number {
-  const out = value % modulo;
-  return out < 0 ? out + modulo : out;
+  // Twice, rather than a sign test: `%` keeps the sign of the dividend, and a
+  // note below the scale root is the ordinary case here.
+  return ((value % modulo) + modulo) % modulo;
 }
 
 const clamp = (value: number, low: number, high: number): number =>

@@ -231,6 +231,11 @@ export class ModularRuntime {
 
     for (const nodeId of plan.order) {
       const node = runtimeGraph.nodes[nodeId];
+      // A plan can outlive the document it was compiled from: the last good
+      // plan keeps running while an edit is rejected, and that edit may have
+      // deleted a node. Skipping it is a silent stream; throwing here would
+      // take the whole runtime down mid-performance.
+      if (!node) continue;
       const factory = PROCESSOR_FACTORIES[node.moduleType];
       const parameters = new ParameterBag(node.parameters);
       if (!factory) {
@@ -462,6 +467,11 @@ export class ModularRuntime {
       kept += 1;
     }
     if (dropped > 0) this.monitor.recordDroppedEvents(dropped);
+    // Everything drained was a stale attack. Rare enough that no test has
+    // produced it — a window whose every event is late and none of them a
+    // release — but sending an empty batch to every adapter is worse than
+    // stopping here.
+    /* v8 ignore next */
     if (kept === 0) return;
 
     this.monitor.observeBatch(this.drainBuffer, nowSec, kept);

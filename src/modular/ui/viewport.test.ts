@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CANVAS_MARGIN, CANVAS_SIZE, WHEEL_LINE_PX, WHEEL_MAX_STEP_PX, ZOOM_MAX_FRAME_PX, canvasExtent, clampFramePixels, centeringOffset, clampZoom, stageSize, wheelDeltaPixels, zoomByWheel, zoomScrollPosition, easeZoom } from "./viewport";
+import { CANVAS_MARGIN, CANVAS_SIZE, WHEEL_LINE_PX, WHEEL_MAX_STEP_PX, ZOOM_MAX_FRAME_PX, canvasExtent, clampFramePixels, centeringOffset, clampZoom, scrollToCenter, stageSize, wheelDeltaPixels, zoomByWheel, zoomScrollPosition, easeZoom } from "./viewport";
 
 describe("modular canvas viewport", () => {
   it("clamps zoom to the documented canvas range", () => {
@@ -124,6 +124,55 @@ describe("Centring a patch in the canvas", () => {
     expect(centeringOffset([], canvas)).toEqual({ dx: 0, dy: 0 });
     expect(centeringOffset([{ x: Number.NaN, y: 0, width: 1, height: 1 }], canvas))
       .toEqual({ dx: 0, dy: 0 });
+  });
+});
+
+describe("Opening the viewport on the patch", () => {
+  const view = { width: 800, height: 600 };
+
+  it("scrolls so the patch's centre is the middle of the window", () => {
+    const { left, top } = scrollToCenter(
+      [{ x: 8000, y: 4000, width: 200, height: 100 }], view, 1,
+    );
+    // Centre of the box is (8100, 4050); half the window is (400, 300).
+    expect(left).toBe(7700);
+    expect(top).toBe(3750);
+  });
+
+  it("measures the whole patch rather than one module", () => {
+    const boxes = [
+      { x: 8000, y: 4000, width: 100, height: 100 },
+      { x: 8400, y: 4200, width: 100, height: 100 },
+    ];
+    const { left, top } = scrollToCenter(boxes, view, 1);
+    expect(left).toBe(8250 - 400);
+    expect(top).toBe(4150 - 300);
+  });
+
+  it("scales the target by the zoom, because scroll is in painted pixels", () => {
+    const box = [{ x: 1000, y: 1000, width: 0, height: 0 }];
+    expect(scrollToCenter(box, view, 0.5).left).toBe(500 - 400);
+    expect(scrollToCenter(box, view, 2).left).toBe(2000 - 400);
+  });
+
+  it("treats a nonsense zoom as 1 rather than scrolling to nowhere", () => {
+    const box = [{ x: 1000, y: 1000, width: 0, height: 0 }];
+    expect(scrollToCenter(box, view, 0).left).toBe(600);
+    expect(scrollToCenter(box, view, Number.NaN).left).toBe(600);
+  });
+
+  it("never scrolls to a negative offset", () => {
+    // A patch smaller than the window would otherwise want a negative scroll.
+    expect(scrollToCenter([{ x: 0, y: 0, width: 10, height: 10 }], view, 1))
+      .toEqual({ left: 0, top: 0 });
+  });
+
+  it("ignores a module with no size and skips a malformed graph", () => {
+    expect(scrollToCenter([{ x: 900, y: 700, width: Number.NaN, height: Number.NaN }], view, 1))
+      .toEqual({ left: 500, top: 400 });
+    expect(scrollToCenter([], view, 1)).toEqual({ left: 0, top: 0 });
+    expect(scrollToCenter([{ x: Number.NaN, y: 0, width: 1, height: 1 }], view, 1))
+      .toEqual({ left: 0, top: 0 });
   });
 });
 

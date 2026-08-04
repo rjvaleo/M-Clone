@@ -107,6 +107,24 @@ describe("Graph compilation", () => {
     expect(cycle?.message).toContain("at least one tick");
   });
 
+  it("names the loop even when the search starts on a node outside it", () => {
+    // Everything downstream of a cycle is stuck too, so the search can begin on
+    // a node that leads nowhere. It has to keep looking rather than give up on
+    // the first dead end.
+    const graph = build(
+      [node("a", "transform"), node("m", "transform"), node("z", "transform")],
+      // m -> z -> m is the loop; "a" is downstream of it and sorts first, and
+      // is reached again from inside the loop, so the search also has to
+      // recognise a node it has already ruled out.
+      [edge("mz", "m", "z"), edge("za", "z", "a"), edge("zm", "z", "m")],
+    );
+    const result = compileGraph(graph, registry);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const cycle = result.diagnostics.find((item) => item.code === "unbroken-cycle");
+    expect(cycle?.message).toContain("m -> z -> m");
+  });
+
   it("accepts a cycle that passes through a delay module", () => {
     const graph = build(
       [node("a", "transform"), node("b", "transform"), node("d", "delay")],
