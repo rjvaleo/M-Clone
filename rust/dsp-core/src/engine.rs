@@ -175,6 +175,17 @@ pub trait Module: Send {
     fn param_count(&self) -> usize {
         0
     }
+
+    /// What a parameter reads before the host has written it.
+    ///
+    /// Without this every parameter starts at zero, so a module whose resting
+    /// value is anything else — a gain of 1, a filter wide open — is silent or
+    /// wrong until someone remembers to write it. That is the same class of
+    /// defect as an instrument with no processor: correct everywhere, audible
+    /// nowhere. The module owns its own defaults instead.
+    fn param_default(&self, _index: usize) -> f32 {
+        0.0
+    }
 }
 
 struct Slot {
@@ -224,7 +235,7 @@ impl Engine {
         let inputs = vec![Frame::default(); module.input_count()];
         let outputs = vec![Frame::default(); module.output_count()];
         let previous = outputs.clone();
-        let params = vec![0.0; module.param_count()];
+        let params: Vec<f32> = (0..module.param_count()).map(|i| module.param_default(i)).collect();
         let slot = Slot { module, inputs, outputs, previous, params, bypassed: false };
 
         if let Some(index) = self.slots.iter().position(|s| s.is_none()) {

@@ -5,3 +5,10 @@ version = 4
 [[package]]
 name = "dsp-core"
 version = "0.1.0"
+
+[[package]]
+name = "idmlab-engine"
+version = "0.1.0"
+dependencies = [
+ "dsp-core",
+]
