@@ -169,9 +169,15 @@ class CyclicSequenceCore {
     if (!Array.isArray(preset) || preset.length === 0) {
       return { cells: Array.from({ length: 16 }, () => 2), length: 16 };
     }
+    // A sequence may be shorter than its grid: `sequence-length` is how many of
+    // the sixteen steps are used before it wraps, which is what lets an accent
+    // of five run against a pattern of sixteen and drift the way Classic's
+    // cyclic editors do.
+    const declared = Math.round(this.parameters.number("sequence-length", preset.length));
+    const length = clampInt(declared, 1, preset.length);
     return {
       cells: preset as CyclicCell[],
-      length: Math.max(1, preset.length),
+      length,
     };
   }
 }
@@ -863,17 +869,19 @@ export class TranspositionProcessor extends BaseProcessor {
 /**
  * The sink: note events become scheduled note-on/note-off pairs.
  *
- * This is the only processor that talks to the scheduling queue, and the last
- * point at which anything is expressed in ticks — the runtime converts to
- * seconds once, on submission.
+ * This is the last point at which anything is expressed in ticks — the runtime
+ * converts to seconds once, on submission. Anything that *ends* a note's
+ * journey through the graph is one of these, whether it goes out as MIDI bytes
+ * or into a sample player, because the scheduling is identical and only the
+ * adapter on the far side differs.
  */
 export class MidiOutputProcessor extends BaseProcessor {
   private readonly sink: ScheduledEventSink | null;
   private noteId = 0;
   private sequence = 0;
 
-  constructor(build: ProcessorBuild) {
-    super(build, "midi-output");
+  constructor(build: ProcessorBuild, kind = "midi-output") {
+    super(build, kind);
     this.sink = build.sink ?? null;
   }
 
@@ -1084,4 +1092,12 @@ export const PROCESSOR_FACTORIES: Record<
   "m.play-enable": (build) => new PlayEnableProcessor(build),
   "m.transposition": (build) => new TranspositionProcessor(build),
   "m.midi-output": (build) => new MidiOutputProcessor(build),
+  // The players schedule exactly as a MIDI Output does — the difference is
+  // entirely on the other side of the scheduler, where one adapter writes bytes
+  // to a port and the other starts a buffer on the audio clock. Giving them a
+  // separate processor would be duplicating the one piece of code that must not
+  // drift: the conversion from note messages to scheduled events.
+  "m.percussion": (build) => new MidiOutputProcessor(build, "percussion"),
+  "m.looper": (build) => new MidiOutputProcessor(build, "looper"),
+  "m.granular": (build) => new MidiOutputProcessor(build, "granular"),
 };
