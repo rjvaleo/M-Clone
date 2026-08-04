@@ -384,19 +384,7 @@ mod tests {
         samples.iter().map(|s| s.left + s.right).collect()
     }
 
-    /// How bright a rendering is, independent of how loud it is.
-    ///
-    /// RMS of the first difference over RMS of the signal — a crude spectral
-    /// centroid, and crucially *normalised*. Raw total variation was the first
-    /// thing tried here and it conflates the two: closing a filter lowers the
-    /// level as well as the top, so a plainly-working filter measured as barely
-    /// working. Against this, 18 kHz reads 0.14 and 200 Hz reads 0.02.
-    fn brightness(samples: &[f32]) -> f32 {
-        let energy = samples.iter().map(|v| v * v).sum::<f32>().sqrt();
-        let variation =
-            samples.windows(2).map(|p| (p[1] - p[0]).powi(2)).sum::<f32>().sqrt();
-        variation / energy.max(1e-9)
-    }
+    use crate::testutil::brightness;
 
     #[test]
     fn a_voice_is_silent_until_a_note_starts() {

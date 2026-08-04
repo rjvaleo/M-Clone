@@ -26,6 +26,27 @@
 
 #![forbid(unsafe_code)]
 
+/// Measurements the tests share.
+///
+/// Here rather than duplicated per file because the first one was got wrong
+/// twice: brightness measured as raw total variation conflates timbre with
+/// loudness, so closing a filter — which lowers the level as well as the top —
+/// reads as the filter barely working. One correct copy is harder to get wrong
+/// than a convention everyone reimplements.
+#[cfg(test)]
+pub(crate) mod testutil {
+    /// Spectral brightness, independent of level.
+    ///
+    /// RMS of the first difference over RMS of the signal. Against a sawtooth
+    /// voice, an 18 kHz cutoff reads about 0.14 and a 200 Hz cutoff about 0.02.
+    pub fn brightness(samples: &[f32]) -> f32 {
+        let energy = samples.iter().map(|v| v * v).sum::<f32>().sqrt();
+        let variation = samples.windows(2).map(|p| (p[1] - p[0]).powi(2)).sum::<f32>().sqrt();
+        variation / energy.max(1e-9)
+    }
+}
+
+pub mod bank;
 pub mod delay;
 pub mod engine;
 pub mod envelope;
