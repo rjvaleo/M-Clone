@@ -31,6 +31,7 @@ pub mod engine;
 pub mod dynamics;
 pub mod fdn;
 pub mod filter;
+pub mod modules;
 pub mod reverb;
 
 /// Below this, a value is flushed to zero.

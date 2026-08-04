@@ -1,0 +1,275 @@
+// The join between a compiled `AudioPlan` and the Rust engine.
+//
+// `compileAudioPlan` already turns a document into a plan, and that stays
+// exactly as it is — the plan is platform-independent and was always the right
+// place to cut. What changes is what consumes it: instead of building Web Audio
+// nodes, this walks the plan and issues engine commands over the WASM ABI.
+//
+// The structure/parameter split that `audioPlan.ts` exists to enforce survives
+// intact and gets *cheaper* here. A parameter change is one `set_param` call
+// into a module that smooths it internally; there is no `AudioParam`, no ramp
+// scheduling, and no crossfade protocol, because swapping a value in a running
+// Rust graph is atomic in a way a node graph never was.
+//
+// Two things about the ABI are worth knowing before reading further:
+//
+//   - **WASM has no unsigned integers.** A `u32` return arrives in JavaScript
+//     already reinterpreted as a signed `i32`, so the engine's `NO_MODULE`
+//     sentinel (`u32::MAX`) shows up as `-1`. Every id crosses back through
+//     `asModuleId`, or a refusal becomes a plausible-looking id and every later
+//     parameter goes somewhere harmless-looking and wrong.
+//   - **Most modules are still Web Audio.** During the migration a plan will
+//     name types this engine has never heard of. Those are skipped and recorded
+//     rather than thrown on, so the half of the rack that has been ported keeps
+//     working.
+
+import type { AudioConnection, AudioNodeSpec, AudioPlan } from "../audioPlan";
+import { AUDIO_MUTE_PARAM } from "../../registry/audioModules";
+
+/** `u32::MAX`, as it appears once JavaScript has read it back as an `i32`. */
+export const NO_MODULE = 0xffffffff;
+
+/**
+ * `ModuleKind` in `rust/dsp-core/src/modules.rs`.
+ *
+ * These numbers are the wire protocol. Appending is safe; reordering silently
+ * turns every existing patch into a different one.
+ */
+export const HOST_INPUT_KIND = 0;
+
+export const MODULE_KINDS: Readonly<Record<string, number>> = {
+  "m.audio-gain": 1,
+  "m.audio-output": 2,
+};
+
+/**
+ * Where each document parameter lands in a module's parameter array.
+ *
+ * Indices rather than names because the ABI carries numbers, and a table rather
+ * than a convention because the two vocabularies genuinely differ: the document
+ * says `mute`, the module says index 2, and nothing should be inferring one
+ * from the other.
+ */
+export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, number>>>> = {
+  "m.audio-gain": { gain: 0, level: 1, [AUDIO_MUTE_PARAM]: 2 },
+  "m.audio-output": { level: 0 },
+};
+
+/**
+ * The module's fade handle — the one parameter the rack owns rather than the
+ * document. Audio Output has none: it is the master, and a master that arrived
+ * silent and waited to be faded up would never be heard at all.
+ */
+const FADE_HANDLE: Readonly<Record<string, number | undefined>> = {
+  "m.audio-gain": PARAM_INDICES["m.audio-gain"].level,
+  "m.audio-output": undefined,
+};
+
+/** Every audio port on these modules is port 0; that changes with the DP/4. */
+const PORT_INDEX = 0;
+
+/** The `.wasm` exports, exactly as `rust/wasm/src/lib.rs` declares them. */
+export interface EngineExports {
+  init(sampleRate: number): void;
+  add_module(kind: number): number;
+  remove_module(id: number): number;
+  connect(fromModule: number, fromPort: number, toModule: number, toPort: number): number;
+  disconnect(fromModule: number, fromPort: number, toModule: number, toPort: number): number;
+  set_param(module: number, index: number, value: number): void;
+  set_bypassed(module: number, bypassed: number): void;
+  set_io(inputModule: number, outputModule: number): void;
+  reset(): void;
+  input_ptr(): number;
+  output_ptr(): number;
+  quantum_size(): number;
+  module_count(): number;
+  cable_count(): number;
+  process_quantum(): void;
+  readonly memory: { readonly buffer: ArrayBuffer };
+}
+
+/** Reinterpret an ABI return as a module id, or `undefined` if it was refused. */
+const asModuleId = (raw: number): number | undefined => {
+  const id = raw >>> 0;
+  return id === NO_MODULE ? undefined : id;
+};
+
+const connectionKey = (connection: AudioConnection): string =>
+  `${connection.from.nodeId}:${connection.from.portId}→${connection.to.nodeId}:${connection.to.portId}`;
+
+/** What a module was built from. Changing any of it means rebuilding. */
+const structureKey = (spec: AudioNodeSpec): string =>
+  `${spec.moduleType}|${JSON.stringify(spec.structure)}`;
+
+type Built = {
+  moduleId: number;
+  structure: string;
+  parameters: Record<string, number>;
+  bypass: boolean;
+};
+
+/**
+ * One Rust rack, kept in step with a plan.
+ *
+ * Owns no audio itself — the worklet drives `process`, and the buffers are
+ * views straight into WASM linear memory, so a quantum crosses the boundary
+ * without being copied.
+ */
+export class WasmRack {
+  readonly hostInputId: number;
+  readonly input: Float32Array;
+  readonly output: Float32Array;
+
+  private readonly built = new Map<string, Built>();
+  private readonly cables = new Set<string>();
+  private readonly unsupportedTypes = new Set<string>();
+  private outputModuleId: number | undefined;
+
+  constructor(
+    private readonly engine: EngineExports,
+    sampleRate: number,
+  ) {
+    engine.init(sampleRate);
+    // The one module no document mentions and every rack needs: without it the
+    // graph has no way to hear the host, and a patch that compiles and wires
+    // correctly renders silence.
+    this.hostInputId = asModuleId(engine.add_module(HOST_INPUT_KIND)) ?? NO_MODULE;
+
+    const quantum = engine.quantum_size();
+    this.input = new Float32Array(engine.memory.buffer, engine.input_ptr(), quantum);
+    this.output = new Float32Array(engine.memory.buffer, engine.output_ptr(), quantum);
+  }
+
+  /** Module types the plan asked for that this engine does not have yet. */
+  get unsupported(): string[] {
+    return [...this.unsupportedTypes].sort();
+  }
+
+  moduleIdOf(nodeId: string): number | undefined {
+    return this.built.get(nodeId)?.moduleId;
+  }
+
+  /**
+   * Bring the rack in line with `plan`.
+   *
+   * Safe to call on every document change: applying the same plan twice issues
+   * no commands at all, which is what makes it usable straight from an effect
+   * that cannot easily know whether anything moved.
+   */
+  update(plan: AudioPlan): void {
+    this.removeDeparted(plan);
+    this.buildAndRamp(plan);
+    this.rewire(plan);
+    this.pointHostAtOutput(plan);
+  }
+
+  /** Advance one render quantum. `input` is read, `output` is written. */
+  process(): void {
+    this.engine.process_quantum();
+  }
+
+  reset(): void {
+    this.engine.reset();
+  }
+
+  private removeDeparted(plan: AudioPlan): void {
+    for (const [nodeId, built] of [...this.built]) {
+      const spec = plan.nodes[nodeId];
+      // A rebuilt node is removed here and added below, which is the whole
+      // difference between a structure change and a parameter change.
+      if (spec && structureKey(spec) === built.structure) continue;
+      this.engine.remove_module(built.moduleId);
+      this.built.delete(nodeId);
+      // The engine drops a removed module's cables itself; the mirror has to
+      // agree or the next update will think they are still patched.
+      for (const key of [...this.cables]) {
+        if (key.startsWith(`${nodeId}:`) || key.includes(`→${nodeId}:`)) this.cables.delete(key);
+      }
+    }
+  }
+
+  private buildAndRamp(plan: AudioPlan): void {
+    for (const spec of Object.values(plan.nodes)) {
+      const kind = MODULE_KINDS[spec.moduleType];
+      if (kind === undefined) {
+        this.unsupportedTypes.add(spec.moduleType);
+        continue;
+      }
+
+      let built = this.built.get(spec.nodeId);
+      if (!built) {
+        const moduleId = asModuleId(this.engine.add_module(kind));
+        // A refused id means this build of the engine does not have the kind
+        // after all — a version skew between the JS and the `.wasm`.
+        if (moduleId === undefined) {
+          this.unsupportedTypes.add(spec.moduleType);
+          continue;
+        }
+        built = { moduleId, structure: structureKey(spec), parameters: {}, bypass: false };
+        this.built.set(spec.nodeId, built);
+
+        const fade = FADE_HANDLE[spec.moduleType];
+        if (fade !== undefined) this.engine.set_param(moduleId, fade, 1);
+      }
+
+      this.applyParameters(spec, built);
+      if (spec.bypass !== built.bypass) {
+        this.engine.set_bypassed(built.moduleId, spec.bypass ? 1 : 0);
+        built.bypass = spec.bypass;
+      }
+    }
+  }
+
+  private applyParameters(spec: AudioNodeSpec, built: Built): void {
+    const indices = PARAM_INDICES[spec.moduleType] ?? {};
+    for (const [name, value] of Object.entries(spec.parameters)) {
+      const index = indices[name];
+      // A parameter the module does not have is not an error: the document may
+      // be newer than the engine, or the control may be Web-Audio-only still.
+      if (index === undefined) continue;
+      if (built.parameters[name] === value) continue;
+      this.engine.set_param(built.moduleId, index, value);
+      built.parameters[name] = value;
+    }
+  }
+
+  private rewire(plan: AudioPlan): void {
+    const wanted = new Map<string, AudioConnection>();
+    for (const connection of plan.connections) {
+      // A cable to a module that was never built is dropped rather than
+      // half-patched — during the migration this is the common case.
+      if (!this.built.has(connection.from.nodeId)) continue;
+      if (!this.built.has(connection.to.nodeId)) continue;
+      wanted.set(connectionKey(connection), connection);
+    }
+
+    for (const key of [...this.cables]) {
+      if (wanted.has(key)) continue;
+      const [from, to] = key.split("→");
+      const fromId = this.moduleIdOf(from.split(":")[0]);
+      const toId = this.moduleIdOf(to.split(":")[0]);
+      if (fromId !== undefined && toId !== undefined) {
+        this.engine.disconnect(fromId, PORT_INDEX, toId, PORT_INDEX);
+      }
+      this.cables.delete(key);
+    }
+
+    for (const [key, connection] of wanted) {
+      if (this.cables.has(key)) continue;
+      const fromId = this.moduleIdOf(connection.from.nodeId)!;
+      const toId = this.moduleIdOf(connection.to.nodeId)!;
+      this.engine.connect(fromId, PORT_INDEX, toId, PORT_INDEX);
+      this.cables.add(key);
+    }
+  }
+
+  private pointHostAtOutput(plan: AudioPlan): void {
+    const outputNode = Object.values(plan.nodes).find(
+      (spec) => spec.moduleType === "m.audio-output",
+    );
+    const outputId = outputNode ? this.moduleIdOf(outputNode.nodeId) : undefined;
+    if (outputId === this.outputModuleId) return;
+    this.outputModuleId = outputId;
+    this.engine.set_io(this.hostInputId, outputId ?? NO_MODULE);
+  }
+}
