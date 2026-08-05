@@ -11,7 +11,7 @@
 // from putting message traffic on the audio path.
 
 import type { AudioPlan } from "../audioPlan";
-import type { RackMessage, ScheduledEvent } from "./rackProtocol";
+import type { RackMessage, RackReport, ScheduledEvent } from "./rackProtocol";
 import type { SampleSource } from "./sampleTransfer";
 
 /** Which audio backend a session runs on. */
@@ -34,6 +34,7 @@ export const preferredEngine = (search: string): RackEngineChoice => {
 export interface RackNodeLike {
   readonly port: {
     postMessage(message: RackMessage, transfer?: Transferable[]): void;
+    onmessage?: ((event: { data: RackReport }) => void) | null;
   };
   disconnect(): void;
 }
@@ -42,7 +43,27 @@ export class WasmRackNode {
   private lastGeneration: number | null = null;
   private disposed = false;
 
-  constructor(private readonly node: RackNodeLike) {}
+  /**
+   * The last thing the audio thread said about itself, or `null` before it has
+   * said anything.
+   *
+   * Held as a value the UI polls rather than delivered as an event, because
+   * reports arrive about six times a second and every consumer of them —
+   * meters, counts — is already redrawing on its own schedule. Turning each
+   * one into a React update would be six renders a second to move a number.
+   */
+  get report(): RackReport | null {
+    return this.lastReport;
+  }
+  private lastReport: RackReport | null = null;
+
+  constructor(private readonly node: RackNodeLike) {
+    // Assigning `onmessage` also starts the port, which is why there is no
+    // separate `start()` here.
+    node.port.onmessage = (event) => {
+      if (event.data?.type === "report") this.lastReport = event.data;
+    };
+  }
 
   /** Hand the worklet a new plan, if it is actually new. */
   update(plan: AudioPlan): void {

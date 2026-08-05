@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { WasmRackNode, preferredEngine, type RackNodeLike } from "./rackNode";
 import type { RackMessage } from "./rackWorklet";
+import type { RackReport } from "./rackProtocol";
 import type { AudioPlan } from "../audioPlan";
 
 /**
@@ -16,6 +17,7 @@ import type { AudioPlan } from "../audioPlan";
 class FakePort {
   readonly sent: RackMessage[] = [];
   readonly transferred: Transferable[][] = [];
+  onmessage: ((event: { data: RackReport }) => void) | null = null;
   postMessage(message: RackMessage, transfer?: Transferable[]): void {
     this.sent.push(message);
     if (transfer) this.transferred.push(transfer);
@@ -108,6 +110,47 @@ describe("The rack node", () => {
     rack.dispose();
     rack.dispose();
     expect(node.disconnected).toBe(1);
+  });
+});
+
+describe("What the audio thread says back", () => {
+  const report = (samples: number): RackReport => ({
+    type: "report",
+    modules: 4,
+    cables: 3,
+    samples,
+    peak: 0.25,
+    quanta: 16,
+  });
+
+  it("has nothing to report before the worklet has spoken", () => {
+    expect(new WasmRackNode(new FakeNode()).report).toBeNull();
+  });
+
+  it("keeps the last report the worklet sent", () => {
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    node.port.onmessage?.({ data: report(2) });
+    expect(rack.report?.samples).toBe(2);
+  });
+
+  it("keeps the newest rather than the first", () => {
+    // Reports arrive about six times a second; a stale one would make a meter
+    // freeze at whatever the first quantum happened to contain.
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    node.port.onmessage?.({ data: report(1) });
+    node.port.onmessage?.({ data: report(5) });
+    expect(rack.report?.samples).toBe(5);
+  });
+
+  it("ignores anything that is not a report", () => {
+    // The port is shared, and a message the main thread does not understand
+    // must not become a report full of undefined counts.
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    node.port.onmessage?.({ data: { type: "something-else" } as unknown as RackReport });
+    expect(rack.report).toBeNull();
   });
 });
 

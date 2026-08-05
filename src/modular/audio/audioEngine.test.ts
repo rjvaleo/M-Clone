@@ -31,7 +31,10 @@ const rustRig = () => {
   const { context, scheduler, engine } = rig();
   const posted: { type: string }[] = [];
   const node = {
-    port: { postMessage: (message: { type: string }) => posted.push(message) },
+    port: {
+      postMessage: (message: { type: string }) => posted.push(message),
+      onmessage: null as ((event: { data: unknown }) => void) | null,
+    },
     connect: () => {},
     disconnect: () => {},
   };
@@ -43,7 +46,7 @@ const rustRig = () => {
       compileModule: async () => ({}) as WebAssembly.Module,
       createNode: () => node,
     });
-  return { context, scheduler, engine, posted, attach };
+  return { context, scheduler, engine, posted, node, attach };
 };
 
 describe("Audio engine on the Rust rack", () => {
@@ -163,6 +166,23 @@ describe("Audio engine on the Rust rack", () => {
     engine.update(document);
     expect(posted.filter((message) => message.type === "sample").length).toBe(first);
     expect(first).toBeGreaterThan(0);
+  });
+
+  it("has no rack report before the worklet has said anything", () => {
+    // Null on Web Audio too, rather than a synthesised report: the two
+    // backends do not observe the same things, and a caller that could not
+    // tell the difference would draw a meter from a number nothing measured.
+    const { engine } = rig();
+    expect(engine.rackReport).toBeNull();
+  });
+
+  it("passes on what the audio thread reported", async () => {
+    const { engine, node, attach } = rustRig();
+    await attach();
+    node.port.onmessage?.({
+      data: { type: "report", modules: 4, cables: 3, samples: 2, peak: 0.25, quanta: 16 },
+    });
+    expect(engine.rackReport?.samples).toBe(2);
   });
 
   it("drops the rack on dispose", async () => {

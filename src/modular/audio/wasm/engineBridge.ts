@@ -28,7 +28,7 @@ import { AUDIO_MIX_PARAM, AUDIO_MUTE_PARAM } from "../../registry/audioModules";
 import { planSampleRefs } from "./sampleSync";
 import { transferSample, type SampleSource } from "./sampleTransfer";
 import { NoteSchedule } from "./noteSchedule";
-import type { ScheduledEvent } from "./rackProtocol";
+import { REPORT_INTERVAL_QUANTA, type RackReport, type ScheduledEvent } from "./rackProtocol";
 
 /** `u32::MAX`, as it appears once JavaScript has read it back as an `i32`. */
 export const NO_MODULE = 0xffffffff;
@@ -392,6 +392,7 @@ export interface EngineExports {
   quantum_size(): number;
   module_count(): number;
   cable_count(): number;
+  sample_count(): number;
   process_quantum(): void;
   /** Render part of a quantum, so a note can start between two of them. */
   process_range(start: number, len: number): void;
@@ -634,6 +635,46 @@ export class WasmRack {
       this.engine.process_range(offset, stop - offset);
       offset = stop;
     }
+    this.observe();
+  }
+
+  /** Loudest sample seen since the last report, and how many quanta ago. */
+  private peak = 0;
+  private quantaSinceReport = 0;
+  private quantaTotal = 0;
+
+  private observe(): void {
+    const output = this.output;
+    for (let i = 0; i < output.length; i += 1) {
+      const magnitude = Math.abs(output[i]);
+      if (magnitude > this.peak) this.peak = magnitude;
+    }
+    this.quantaSinceReport += 1;
+    this.quantaTotal += 1;
+  }
+
+  /**
+   * A report if one is due, otherwise `undefined`.
+   *
+   * Pull rather than push, so the decision about *when* is testable here
+   * instead of living in the worklet, which no test can construct. The peak
+   * resets on every report: it is the loudest sample of the interval just
+   * ended, which is what a meter wants — a running maximum would only ever
+   * climb.
+   */
+  takeReport(): RackReport | undefined {
+    if (this.quantaSinceReport < REPORT_INTERVAL_QUANTA) return undefined;
+    const report: RackReport = {
+      type: "report",
+      modules: this.engine.module_count(),
+      cables: this.engine.cable_count(),
+      samples: this.engine.sample_count(),
+      peak: this.peak,
+      quanta: this.quantaTotal,
+    };
+    this.peak = 0;
+    this.quantaSinceReport = 0;
+    return report;
   }
 
   /** Play one scheduled event now. */

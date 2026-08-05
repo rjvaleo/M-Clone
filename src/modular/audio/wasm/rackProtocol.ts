@@ -18,6 +18,41 @@ import type { AudioPlan } from "../audioPlan";
 export const RACK_PROCESSOR_NAME = "idmlab-rack";
 
 /**
+ * What the audio thread says back.
+ *
+ * Until this existed the message port ran one way, and the main thread could
+ * not answer the most basic question about the engine it had just handed a
+ * patch to: is anything in there. Every observation had to be inferred from
+ * whether sound came out of the speakers, which is why "does a sample actually
+ * reach the bank" went unverified for as long as it did.
+ *
+ * Everything here is a count or a level — nothing the UI could mistake for a
+ * source of truth about the document, and nothing that has to be freed.
+ */
+export interface RackReport {
+  type: "report";
+  /** Modules the engine holds, including the host input the plan never names. */
+  modules: number;
+  cables: number;
+  /** Samples resident in the bank. The answer to "did the audio arrive". */
+  samples: number;
+  /** Loudest output sample since the last report, for a meter. */
+  peak: number;
+  /** Quanta rendered since the engine started, so a stalled worklet shows. */
+  quanta: number;
+}
+
+/**
+ * How many quanta between reports.
+ *
+ * At 48 kHz a quantum is 2.7 ms, so 16 is about 170 ms — fast enough that a
+ * meter does not look like it is lagging, slow enough that the port carries
+ * roughly six messages a second rather than four hundred. The audio thread
+ * must not spend its budget describing itself.
+ */
+export const REPORT_INTERVAL_QUANTA = 16;
+
+/**
  * Something that happens to a note, as opposed to something the rack *is*.
  *
  * Named as its own union because these three are exactly what can be given a
