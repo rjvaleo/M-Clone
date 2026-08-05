@@ -42,7 +42,48 @@ export const MODULE_KINDS: Readonly<Record<string, number>> = {
   "m.audio-output": 2,
   "m.synth": 3,
   "m.audio-blackhole": 4,
+  "m.audio-dp4-reverb": 5,
+  "m.audio-dp4-nonlin": 6,
+  "m.audio-delay": 7,
+  "m.audio-reverb": 8,
+  "m.audio-eq": 9,
+  "m.audio-compressor": 10,
+  "m.audio-limiter": 11,
+  "m.audio-bitcrusher": 12,
 };
+
+/**
+ * The structural choice a module is built with, as the number
+ * `add_module_variant` takes.
+ *
+ * Structural because it decides *topology* — how many delay lines the tank
+ * has, whether there is a pre-echo section at all — which is fixed at
+ * construction and allocates. The plan already treats these as structure and
+ * rebuilds the node when one changes, which is the remove-then-add this pairs
+ * with. Anything not listed builds at variant 0.
+ */
+const STRUCTURAL_VARIANTS: Readonly<Record<string, readonly string[]>> = {
+  // Order is the wire protocol; it matches `Dp4Algorithm` in Rust.
+  "m.audio-dp4-reverb": ["small-plate", "large-plate", "small-room", "large-room", "hall"],
+  "m.audio-dp4-nonlin": ["non-lin-1", "non-lin-2", "non-lin-3"],
+};
+
+/** Which structural field carries the variant for a given module. */
+const VARIANT_FIELD: Readonly<Record<string, string>> = {
+  "m.audio-dp4-reverb": "algorithm",
+  "m.audio-dp4-nonlin": "variant",
+};
+
+/** The variant number for a spec, or 0 where the module has none. */
+export function variantOf(moduleType: string, structure: Record<string, unknown>): number {
+  const options = STRUCTURAL_VARIANTS[moduleType];
+  if (!options) return 0;
+  const field = VARIANT_FIELD[moduleType];
+  const index = options.indexOf(String(structure[field] ?? ""));
+  // An unrecognised name builds the default rather than refusing: a document
+  // from a newer build should still make a sound.
+  return index < 0 ? 0 : index;
+}
 
 /** Per-oscillator and per-LFO parameters are strided; see `Synth` in Rust. */
 const OSC_BASE = 1;
@@ -126,6 +167,104 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     level: 10,
     [AUDIO_MUTE_PARAM]: 11,
   },
+  // Each of the eight below mirrors its module in rust/dsp-core/src/modules.rs.
+  // The shell's three parameters are always last and always consecutive.
+  "m.audio-dp4-reverb": {
+    "decay-seconds": 0,
+    "pre-delay-seconds": 1,
+    "lf-decay": 2,
+    "hf-damping": 3,
+    "hf-bandwidth": 4,
+    "diffusion-1": 5,
+    "diffusion-2": 6,
+    "decay-definition": 7,
+    "detune-rate": 8,
+    "detune-depth": 9,
+    "primary-send": 10,
+    "ref-1-level": 11,
+    "ref-1-send": 12,
+    "ref-2-level": 13,
+    "ref-2-send": 14,
+    "early-refs": 15,
+    [AUDIO_MIX_PARAM]: 16,
+    level: 17,
+    [AUDIO_MUTE_PARAM]: 18,
+  },
+  "m.audio-dp4-nonlin": {
+    "envelope-1": 0,
+    "envelope-2": 1,
+    "envelope-3": 2,
+    "envelope-4": 3,
+    "envelope-5": 4,
+    "envelope-6": 5,
+    "envelope-7": 6,
+    "envelope-8": 7,
+    "envelope-9": 8,
+    "hf-damping": 9,
+    "hf-bandwidth": 10,
+    "diffusion-1": 11,
+    "diffusion-2": 12,
+    "density-1": 13,
+    "density-2": 14,
+    [AUDIO_MIX_PARAM]: 15,
+    level: 16,
+    [AUDIO_MUTE_PARAM]: 17,
+  },
+  "m.audio-delay": {
+    "delay-seconds": 0,
+    feedback: 1,
+    [AUDIO_MIX_PARAM]: 2,
+    level: 3,
+    [AUDIO_MUTE_PARAM]: 4,
+  },
+  // `impulse-seed` is absent: the Rust reverb is a feedback delay network
+  // rather than a convolver, so there is no impulse to seed. It stays a
+  // structural parameter on the descriptor and simply reaches nothing here.
+  "m.audio-reverb": {
+    "damping-hz": 0,
+    "tail-seconds": 1,
+    "decay-rate": 2,
+    [AUDIO_MIX_PARAM]: 3,
+    level: 4,
+    [AUDIO_MUTE_PARAM]: 5,
+  },
+  "m.audio-eq": {
+    "low-gain-db": 0,
+    "low-frequency": 1,
+    "mid-gain-db": 2,
+    "mid-frequency": 3,
+    "mid-q": 4,
+    "high-gain-db": 5,
+    "high-frequency": 6,
+    [AUDIO_MIX_PARAM]: 7,
+    level: 8,
+    [AUDIO_MUTE_PARAM]: 9,
+  },
+  "m.audio-compressor": {
+    "threshold-db": 0,
+    "knee-db": 1,
+    ratio: 2,
+    "attack-seconds": 3,
+    "release-seconds": 4,
+    "makeup-gain": 5,
+    [AUDIO_MIX_PARAM]: 6,
+    level: 7,
+    [AUDIO_MUTE_PARAM]: 8,
+  },
+  "m.audio-limiter": {
+    "ceiling-db": 0,
+    "release-seconds": 1,
+    [AUDIO_MIX_PARAM]: 2,
+    level: 3,
+    [AUDIO_MUTE_PARAM]: 4,
+  },
+  "m.audio-bitcrusher": {
+    "tone-hz": 0,
+    "bit-depth": 1,
+    [AUDIO_MIX_PARAM]: 2,
+    level: 3,
+    [AUDIO_MUTE_PARAM]: 4,
+  },
 };
 
 /**
@@ -138,6 +277,14 @@ const FADE_HANDLE: Readonly<Record<string, number | undefined>> = {
   "m.audio-output": undefined,
   "m.synth": PARAM_INDICES["m.synth"].level,
   "m.audio-blackhole": PARAM_INDICES["m.audio-blackhole"].level,
+  "m.audio-dp4-reverb": PARAM_INDICES["m.audio-dp4-reverb"].level,
+  "m.audio-dp4-nonlin": PARAM_INDICES["m.audio-dp4-nonlin"].level,
+  "m.audio-delay": PARAM_INDICES["m.audio-delay"].level,
+  "m.audio-reverb": PARAM_INDICES["m.audio-reverb"].level,
+  "m.audio-eq": PARAM_INDICES["m.audio-eq"].level,
+  "m.audio-compressor": PARAM_INDICES["m.audio-compressor"].level,
+  "m.audio-limiter": PARAM_INDICES["m.audio-limiter"].level,
+  "m.audio-bitcrusher": PARAM_INDICES["m.audio-bitcrusher"].level,
 };
 
 /** Modules that take notes. Everything else inherits the trait's no-op. */
@@ -155,6 +302,14 @@ const TAKES_AUDIO_INPUT: ReadonlySet<string> = new Set([
   "m.audio-gain",
   "m.audio-output",
   "m.audio-blackhole",
+  "m.audio-dp4-reverb",
+  "m.audio-dp4-nonlin",
+  "m.audio-delay",
+  "m.audio-reverb",
+  "m.audio-eq",
+  "m.audio-compressor",
+  "m.audio-limiter",
+  "m.audio-bitcrusher",
 ]);
 
 /** Every audio port on these modules is port 0; that changes with the DP/4. */
@@ -164,6 +319,7 @@ const PORT_INDEX = 0;
 export interface EngineExports {
   init(sampleRate: number): void;
   add_module(kind: number): number;
+  add_module_variant(kind: number, variant: number): number;
   remove_module(id: number): number;
   connect(fromModule: number, fromPort: number, toModule: number, toPort: number): number;
   disconnect(fromModule: number, fromPort: number, toModule: number, toPort: number): number;
@@ -377,7 +533,11 @@ export class WasmRack {
 
       let built = this.built.get(spec.nodeId);
       if (!built) {
-        const moduleId = asModuleId(this.engine.add_module(kind));
+        // Always the variant-aware constructor: it is a superset, and a module
+        // with no variants builds at 0 exactly as `add_module` would.
+        const moduleId = asModuleId(
+          this.engine.add_module_variant(kind, variantOf(spec.moduleType, spec.structure)),
+        );
         // A refused id means this build of the engine does not have the kind
         // after all — a version skew between the JS and the `.wasm`.
         if (moduleId === undefined) {
