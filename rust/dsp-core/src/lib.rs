@@ -60,6 +60,7 @@ pub mod modmatrix;
 pub mod modules;
 pub mod osc;
 pub mod reverb;
+pub mod sampler;
 pub mod samples;
 pub mod voice;
 

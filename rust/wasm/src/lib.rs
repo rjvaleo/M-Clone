@@ -33,10 +33,7 @@ const QUANTUM: usize = 128;
 const NO_MODULE: u32 = u32::MAX;
 
 static mut ENGINE: Option<Engine> = None;
-/// Audio the host has transferred in. Outlives any one patch: a sample is
-/// referenced by nodes but owned by the rack, so rebuilding a graph must not
-/// throw the audio away and make the host send it again.
-static mut SAMPLES: Option<SampleBank> = None;
+
 static mut INPUT: [f32; QUANTUM] = [0.0; QUANTUM];
 static mut OUTPUT: [f32; QUANTUM] = [0.0; QUANTUM];
 
@@ -51,9 +48,10 @@ fn engine() -> Option<&'static mut Engine> {
     unsafe { ENGINE.as_mut() }
 }
 
-#[allow(static_mut_refs)]
+/// The bank lives inside the engine, so `process` can lend it to modules
+/// without the host passing it in on the audio path.
 fn samples() -> Option<&'static mut SampleBank> {
-    unsafe { SAMPLES.as_mut() }
+    engine().map(|engine| engine.samples_mut())
 }
 
 #[allow(static_mut_refs)]
@@ -72,10 +70,6 @@ pub extern "C" fn init(sample_rate: f32) {
     let rate = if sample_rate.is_finite() && sample_rate > 0.0 { sample_rate } else { 48_000.0 };
     unsafe {
         ENGINE = Some(Engine::new(rate));
-        // Rebuilt with the engine: `init` replaces the whole rack, and audio
-        // written for the previous one is addressed by ids the new one has
-        // never issued.
-        SAMPLES = Some(SampleBank::new());
         INPUT_MODULE = NO_MODULE;
         OUTPUT_MODULE = NO_MODULE;
     }
@@ -275,6 +269,17 @@ pub extern "C" fn process_quantum() {
 // *after* `sample_alloc` returns and before writing. That is not a subtlety it
 // can discover safely: a stale view throws on write, or worse, writes into a
 // buffer nothing is reading any more.
+
+/// Point one of a module's sample slots at audio in the bank.
+///
+/// For a percussion kit `slot` is the MIDI note; for the looper and the grain
+/// cloud there is one source and the slot is ignored.
+#[no_mangle]
+pub extern "C" fn set_sample_slot(module: u32, slot: u32, sample: u32) {
+    if let Some(engine) = engine() {
+        engine.set_sample_slot(module, slot, sample);
+    }
+}
 
 /// Reserve zeroed room for a sample. Returns 1 on success, 0 on a shape that
 /// cannot hold audio. Replaces whatever the id already held.
