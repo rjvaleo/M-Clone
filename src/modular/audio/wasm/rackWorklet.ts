@@ -52,6 +52,17 @@ class RackProcessor extends AudioWorkletProcessor {
       if (this.broken) return;
       const message = event.data;
       switch (message.type) {
+        case "sample":
+          // Before any plan that names it: a plan assigning a slot to audio
+          // the engine does not hold yet would point a sampler at nothing.
+          this.rack.loadSample(message.slot, {
+            channels: message.channels,
+            sampleRate: message.sampleRate,
+          });
+          break;
+        case "sample-map":
+          this.rack.setSampleMap(message.map);
+          break;
         case "plan":
           this.rack.update(message.plan);
           break;

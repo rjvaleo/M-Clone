@@ -85,6 +85,28 @@ class FakeEngine implements EngineExports {
   set_sample_slot(module: number, slot: number, sample: number): void {
     this.calls.push(`slot:${module}.${slot}=${sample}`);
   }
+  /** A real little allocator, so the transfer's pointer maths is exercised. */
+  private sampleLens = new Map<number, number>();
+  private samplePtrs = new Map<number, number>();
+  private nextPtr = 1024;
+  sample_alloc(id: number, channels: number, frames: number, rate: number): number {
+    if (channels === 0 || frames === 0 || rate <= 0) return 0;
+    this.samplePtrs.set(id, this.nextPtr);
+    this.sampleLens.set(id, channels * frames);
+    this.nextPtr += channels * frames * 4;
+    this.calls.push(`salloc:${id}=${channels}x${frames}`);
+    return 1;
+  }
+  sample_ptr(id: number): number {
+    return this.samplePtrs.get(id) ?? 0;
+  }
+  sample_len(id: number): number {
+    return this.sampleLens.get(id) ?? 0;
+  }
+  sample_free(id: number): void {
+    this.samplePtrs.delete(id);
+    this.sampleLens.delete(id);
+  }
   set_bypassed(module: number, bypassed: number): void {
     this.calls.push(`bypass:${module}=${bypassed}`);
   }
@@ -155,6 +177,53 @@ const simplePlan = () =>
     [node("g", "m.audio-gain", { gain: 0.5 }), node("out", "m.audio-output", {})],
     [wire("g", "out")],
   );
+
+describe("Samplers and their audio", () => {
+  const kit = (slots: unknown) =>
+    plan([node("p", "m.percussion", {}, { structure: { slots } as never })]);
+
+  it("points each note at the slot its document names", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.setSampleMap({ kick: 0, snare: 1 });
+    rack.update(kit([{ note: 36, assetId: "kick" }, { note: 38, assetId: "snare" }]));
+    const id = rack.moduleIdOf("p")!;
+    expect(engine.of("slot")).toEqual([`slot:${id}.36=0`, `slot:${id}.38=1`]);
+  });
+
+  it("assigns nothing for an asset the engine was never told about", () => {
+    // The map is the only thing that turns a content hash into a number; an
+    // asset missing from it has no audio loaded either.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(kit([{ note: 36, assetId: "kick" }]));
+    expect(engine.of("slot")).toEqual([]);
+  });
+
+  it("does not re-issue an assignment that has not changed", () => {
+    // A knob move recompiles the plan. Re-pointing every note of every kit on
+    // each of those is pure traffic on the audio thread.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.setSampleMap({ kick: 0 });
+    rack.update(kit([{ note: 36, assetId: "kick" }]));
+    rack.update({ ...kit([{ note: 36, assetId: "kick" }]), generation: 2 });
+    expect(engine.of("slot")).toHaveLength(1);
+  });
+
+  it("writes a sample's audio into the engine", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    const written = rack.loadSample(3, {
+      channels: [Float32Array.from([0.25, 0.5]), Float32Array.from([-0.25, -0.5])],
+      sampleRate: 44100,
+    });
+    expect(written).toBe(true);
+    const view = new Float32Array(engine.memory.buffer, engine.sample_ptr(3), engine.sample_len(3));
+    // Planar, matching the Rust bank's layout.
+    expect([...view]).toEqual([0.25, 0.5, -0.25, -0.5]);
+  });
+});
 
 describe("variantOf", () => {
   it("maps a structural name onto the number Rust builds from", () => {

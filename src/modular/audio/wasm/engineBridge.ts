@@ -25,6 +25,8 @@
 
 import type { AudioNodeSpec, AudioPlan } from "../audioPlan";
 import { AUDIO_MIX_PARAM, AUDIO_MUTE_PARAM } from "../../registry/audioModules";
+import { planSampleRefs } from "./sampleSync";
+import { transferSample, type SampleSource } from "./sampleTransfer";
 
 /** `u32::MAX`, as it appears once JavaScript has read it back as an `i32`. */
 export const NO_MODULE = 0xffffffff;
@@ -374,6 +376,12 @@ export interface EngineExports {
   all_notes_off(module: number): void;
   set_modulation(module: number, source: number, dest: number, amount: number): void;
   set_sample_slot(module: number, slot: number, sample: number): void;
+  // The sample-bank half of the ABI; see sampleTransfer.ts for why the
+  // transfer is two calls rather than one.
+  sample_alloc(id: number, channels: number, frames: number, sampleRate: number): number;
+  sample_ptr(id: number): number;
+  sample_len(id: number): number;
+  sample_free(id: number): void;
   set_bypassed(module: number, bypassed: number): void;
   set_io(inputModule: number, outputModule: number): void;
   reset(): void;
@@ -461,6 +469,10 @@ export class WasmRack {
   private readonly cables = new Map<string, { from: number; to: number }>();
   private readonly unsupportedTypes = new Set<string>();
   private outputModuleId: number | undefined;
+  /** Asset hash to engine slot, as the main thread assigned them. */
+  private sampleMap: Record<string, number> = {};
+  /** Slots already written, so a plan update does not re-point every note. */
+  private readonly assignedSlots = new Set<string>();
 
   constructor(
     private readonly engine: EngineExports,
@@ -501,6 +513,8 @@ export class WasmRack {
     this.removeDeparted(plan);
     this.buildAndRamp(plan);
     this.rewire(plan);
+    // After the modules exist: a slot is set on a module id.
+    this.assignSamples(plan);
     this.pointHostAtOutput(plan);
   }
 
@@ -542,6 +556,36 @@ export class WasmRack {
     const moduleId = this.moduleIdOf(nodeId);
     if (moduleId === undefined) return;
     this.engine.set_modulation(moduleId, source, dest, amount);
+  }
+
+  /** Take one decoded sample into the engine's bank. */
+  loadSample(slot: number, source: SampleSource): boolean {
+    return transferSample(this.engine, slot, source);
+  }
+
+  /** The asset-hash-to-slot table the plan's structure is resolved against. */
+  setSampleMap(map: Record<string, number>): void {
+    this.sampleMap = map;
+  }
+
+  /**
+   * Point every sampler's slots at the audio its document names.
+   *
+   * Runs after the modules exist, because a slot is set on a module id. Kept
+   * idempotent by `assignedSlots`: a plan update that changed a knob must not
+   * re-issue a hundred slot assignments, and re-issuing the same one is
+   * harmless but pointless.
+   */
+  private assignSamples(plan: AudioPlan): void {
+    for (const ref of planSampleRefs(plan)) {
+      const moduleId = this.built.get(ref.nodeId)?.moduleId;
+      const sample = this.sampleMap[ref.assetId];
+      if (moduleId === undefined || sample === undefined) continue;
+      const key = `${moduleId}:${ref.slot}:${sample}`;
+      if (this.assignedSlots.has(key)) continue;
+      this.assignedSlots.add(key);
+      this.engine.set_sample_slot(moduleId, ref.slot, sample);
+    }
   }
 
   /** Advance one render quantum. `input` is read, `output` is written. */
