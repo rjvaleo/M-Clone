@@ -1,7 +1,7 @@
 /**
  * The rest of Classic M, decomposed into modules.
  *
- * Everything here comes from the catalogue in `MODULAR_IMPLEMENTATION_PLAN.md`
+ * Everything here comes from the catalogue in `IDMLAB_MASTER_PLAN.md`
  * §7.4–§7.6. Each one is a single-stream node with its complete working face
  * and, where the original workflow used preset views, eight embedded positions.
  *

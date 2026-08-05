@@ -457,7 +457,8 @@ export const ENGINE_ONLY_PARAMS: ReadonlySet<string> = new Set([
   AUDIO_MIX_PARAM,
   AUDIO_MUTE_PARAM,
   "level",
-  // The Rust synth is ahead of its face here; see §4 of RUST_PORT_STATUS.md.
+  // The Rust synth is ahead of its face here; Wave 0 of IDMLAB_MASTER_PLAN.md
+  // puts these on the face.
   "osc1-semitones",
   "osc2-semitones",
   "osc3-semitones",
