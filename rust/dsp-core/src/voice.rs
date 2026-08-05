@@ -152,6 +152,14 @@ pub struct Voice {
 
     /// The note currently sounding, if any.
     note: Option<u8>,
+    /// The microtonal remainder of that note's pitch.
+    ///
+    /// Belongs to the note rather than to `VoiceSettings` because it is not a
+    /// setting: `settings.detune_cents` is per-oscillator and fixed for the
+    /// life of a patch, while this changes with every note a scale quantiser
+    /// touches. Storing it here is what lets one voice play 17-EDO while the
+    /// patch above it is unaware there is a tuning system at all.
+    detune_cents: f32,
     velocity: f32,
     /// One random value per note — §9.7's `Random` source, which is fixed for
     /// the life of a note rather than noise.
@@ -175,6 +183,7 @@ impl Voice {
             lfos: [Lfo::new(rate, seed ^ 0x5EED), Lfo::new(rate, seed ^ 0xA5A5)],
             rng,
             note: None,
+            detune_cents: 0.0,
             velocity: 0.0,
             note_random,
             mod_wheel: 0.0,
@@ -220,9 +229,19 @@ impl Voice {
     }
 
     /// Note on.
-    pub fn start(&mut self, note: u8, velocity: f32, settings: &VoiceSettings) {
+    ///
+    /// `detune_cents` is the part of the pitch MIDI cannot say. A scale
+    /// quantiser working in a 19-tone scale lands between the keys, and splits
+    /// what it found into the nearest MIDI note plus this remainder; taking it
+    /// as an argument rather than inferring it is what keeps every tuning
+    /// system in the library a property of the score rather than of the
+    /// synthesiser.
+    pub fn start(&mut self, note: u8, velocity: f32, detune_cents: f32, settings: &VoiceSettings) {
         self.configure(settings);
         self.note = Some(note);
+        // A non-finite value would poison the oscillator frequency for the
+        // life of the voice, and there is no sound to recover to.
+        self.detune_cents = if detune_cents.is_finite() { detune_cents } else { 0.0 };
         self.velocity = clamp(velocity, 0.0, 1.0);
         self.note_random = self.rng.next_bipolar();
         self.amp.gate_on();
@@ -243,6 +262,7 @@ impl Voice {
         self.amp.kill();
         self.filter_env.kill();
         self.note = None;
+        self.detune_cents = 0.0;
         for osc in self.oscs.iter_mut() {
             osc.reset();
         }
@@ -298,7 +318,10 @@ impl Voice {
         }
 
         // 4. Oscillators.
-        let base = note_to_hz(self.note.unwrap_or(69) as f32);
+        // Fractional on purpose: `note_to_hz` takes an f32 so that the note
+        // and its microtonal remainder are one pitch by the time anything
+        // downstream sees it, rather than a pitch with a correction attached.
+        let base = note_to_hz(self.note.unwrap_or(69) as f32 + self.detune_cents / 100.0);
         let mut mixed = 0.0;
         for index in 0..OSC_COUNT {
             let pitch_dest = match index {
@@ -396,7 +419,7 @@ mod tests {
     #[test]
     fn a_note_makes_sound_and_stops_when_released() {
         let (mut voice, settings) = voice();
-        voice.start(60, 1.0, &settings);
+        voice.start(60, 1.0, 0.0, &settings);
         assert!(peak(&render(&mut voice, &settings, 0.1)) > 0.05);
 
         voice.release();
@@ -411,16 +434,56 @@ mod tests {
             samples.windows(2).filter(|p| p[0] <= 0.0 && p[1] > 0.0).count()
         };
         let (mut low, settings) = voice();
-        low.start(48, 1.0, &settings);
+        low.start(48, 1.0, 0.0, &settings);
         let low_crossings = count(&mono(&render(&mut low, &settings, 0.2)));
 
         let (mut high, settings) = voice();
-        high.start(72, 1.0, &settings);
+        high.start(72, 1.0, 0.0, &settings);
         let high_crossings = count(&mono(&render(&mut high, &settings, 0.2)));
 
         // Two octaves up is four times the rate.
         let ratio = high_crossings as f32 / low_crossings as f32;
         assert!((ratio - 4.0).abs() < 0.5, "expected 4x, got {ratio}");
+    }
+
+    #[test]
+    fn a_notes_detune_moves_its_pitch() {
+        // The whole point of the tuning library: a scale that does not fit the
+        // twelve keys arrives as a note plus a remainder, and the remainder
+        // has to reach the oscillator or every microtonal scale sounds like
+        // 12-TET with extra steps.
+        let count = |samples: &[f32]| {
+            samples.windows(2).filter(|p| p[0] <= 0.0 && p[1] > 0.0).count()
+        };
+        let (mut plain, settings) = voice();
+        plain.start(60, 1.0, 0.0, &settings);
+        let plain_crossings = count(&mono(&render(&mut plain, &settings, 0.4)));
+
+        // An octave expressed entirely as detune, so nothing but the argument
+        // under test can account for the difference.
+        let (mut sharp, settings) = voice();
+        sharp.start(60, 1.0, 1200.0, &settings);
+        let sharp_crossings = count(&mono(&render(&mut sharp, &settings, 0.4)));
+
+        let ratio = sharp_crossings as f32 / plain_crossings as f32;
+        assert!((ratio - 2.0).abs() < 0.2, "expected 2x, got {ratio}");
+    }
+
+    #[test]
+    fn a_detune_of_fifty_cents_lands_between_two_keys() {
+        // Half a semitone up from 60 is half a semitone down from 61, so the
+        // two have to agree — which they only do if the remainder is added to
+        // the note before the conversion rather than after it.
+        assert!((note_to_hz(60.0 + 0.5) - note_to_hz(61.0 - 0.5)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_nonsense_detune_is_ignored_rather_than_silencing_the_voice() {
+        // NaN in the frequency would stay in the oscillator for the life of
+        // the note, and there is no sound to recover to.
+        let (mut voice, settings) = voice();
+        voice.start(60, 1.0, f32::NAN, &settings);
+        assert!(peak(&render(&mut voice, &settings, 0.1)) > 0.05);
     }
 
     #[test]
@@ -433,11 +496,11 @@ mod tests {
     #[test]
     fn velocity_scales_the_voice() {
         let (mut loud, settings) = voice();
-        loud.start(60, 1.0, &settings);
+        loud.start(60, 1.0, 0.0, &settings);
         let loud_peak = peak(&render(&mut loud, &settings, 0.1));
 
         let (mut soft, settings) = voice();
-        soft.start(60, 0.25, &settings);
+        soft.start(60, 0.25, 0.0, &settings);
         let soft_peak = peak(&render(&mut soft, &settings, 0.1));
 
         assert!((soft_peak / loud_peak - 0.25).abs() < 0.05, "{soft_peak} vs {loud_peak}");
@@ -450,7 +513,7 @@ mod tests {
         settings.levels = [1.0; OSC_COUNT];
         settings.detune_cents = [-12.0, 0.0, 12.0];
         settings.cutoff_hz = 20_000.0;
-        voice.start(60, 1.0, &settings);
+        voice.start(60, 1.0, 0.0, &settings);
         let p = peak(&render(&mut voice, &settings, 0.3));
         assert!(p <= 1.0, "clipped at {p}");
         assert!(p > 0.1, "barely sounded: {p}");
@@ -461,7 +524,7 @@ mod tests {
         let at = |cutoff: f32| {
             let (mut v, mut settings) = voice();
             settings.cutoff_hz = cutoff;
-            v.start(48, 1.0, &settings);
+            v.start(48, 1.0, 0.0, &settings);
             brightness(&mono(&render(&mut v, &settings, 0.2)))
         };
         let bright = at(18_000.0);
@@ -476,14 +539,14 @@ mod tests {
         settings.key_follow = 1.0;
         // An octave above the pivot doubles the cutoff; the voice has to still
         // be producing sound with more top than the low note.
-        high_voice.start(72, 1.0, &settings);
+        high_voice.start(72, 1.0, 0.0, &settings);
         let high = mono(&render(&mut high_voice, &settings, 0.2))
             .windows(2)
             .map(|p| (p[1] - p[0]).abs())
             .sum::<f32>();
 
         let (mut low_voice, _) = voice();
-        low_voice.start(48, 1.0, &settings);
+        low_voice.start(48, 1.0, 0.0, &settings);
         let low = mono(&render(&mut low_voice, &settings, 0.2))
             .windows(2)
             .map(|p| (p[1] - p[0]).abs())
@@ -500,7 +563,7 @@ mod tests {
         settings.lfo[0].rate_hz = 8.0;
         settings.lfo[0].shape = LfoShape::Sine;
         settings.matrix.set(ModSource::Lfo1, ModDest::Osc1Pitch, 1.0);
-        voice.start(60, 1.0, &settings);
+        voice.start(60, 1.0, 0.0, &settings);
 
         // Zero crossings in the first eighth of the LFO cycle versus the third
         // eighth: with a sine on pitch, one is sharp and the other flat.
@@ -519,7 +582,7 @@ mod tests {
         let (mut voice, mut settings) = voice();
         settings.lfo[0].rate_hz = 6.0;
         settings.matrix.set(ModSource::Lfo1, ModDest::Volume, 1.0);
-        voice.start(60, 1.0, &settings);
+        voice.start(60, 1.0, 0.0, &settings);
         let samples = render(&mut voice, &settings, 0.4);
 
         // Peak level in successive tenth-cycles differs, which a static voice's
@@ -538,20 +601,20 @@ mod tests {
         settings.lfo[0].shape = LfoShape::Sawtooth;
         settings.lfo[0].rate_hz = 2.0;
         settings.matrix.set(ModSource::Lfo1, ModDest::Volume, 1.0);
-        free.start(60, 1.0, &settings);
+        free.start(60, 1.0, 0.0, &settings);
         render(&mut free, &settings, 0.25);
         let before = free.next(&settings);
-        free.start(60, 1.0, &settings);
+        free.start(60, 1.0, 0.0, &settings);
         let after = free.next(&settings);
         assert!((before.left - after.left).abs() < 0.15, "a note restarted a free LFO");
 
         let mut note_settings = settings.clone();
         note_settings.lfo[0].trigger = LfoTrigger::Note;
         let (mut retriggered, _) = voice();
-        retriggered.start(60, 1.0, &note_settings);
+        retriggered.start(60, 1.0, 0.0, &note_settings);
         render(&mut retriggered, &note_settings, 0.25);
         let before = retriggered.next(&note_settings);
-        retriggered.start(60, 1.0, &note_settings);
+        retriggered.start(60, 1.0, 0.0, &note_settings);
         let after = retriggered.next(&note_settings);
         assert!((before.left - after.left).abs() > 0.01, "a note did not restart a Note LFO");
     }
@@ -562,7 +625,7 @@ mod tests {
             let (mut v, mut settings) = voice();
             settings.cutoff_hz = 400.0;
             settings.matrix.set(ModSource::Velocity, ModDest::FilterCutoff, 1.0);
-            v.start(48, velocity, &settings);
+            v.start(48, velocity, 0.0, &settings);
             brightness(&mono(&render(&mut v, &settings, 0.2)))
         };
         let hard = at(1.0);
@@ -575,7 +638,7 @@ mod tests {
         let loudness = |pan: f32| {
             let (mut voice, mut settings) = voice();
             settings.pan = pan;
-            voice.start(60, 1.0, &settings);
+            voice.start(60, 1.0, 0.0, &settings);
             let samples = render(&mut voice, &settings, 0.1);
             let power: f32 = samples.iter().map(|s| s.left * s.left + s.right * s.right).sum();
             (power / samples.len() as f32).sqrt()
@@ -591,7 +654,7 @@ mod tests {
     fn hard_left_and_hard_right_reach_one_side_only() {
         let (mut left, mut settings) = voice();
         settings.pan = -1.0;
-        left.start(60, 1.0, &settings);
+        left.start(60, 1.0, 0.0, &settings);
         let samples = render(&mut left, &settings, 0.1);
         let left_energy: f32 = samples.iter().map(|s| s.left.abs()).sum();
         let right_energy: f32 = samples.iter().map(|s| s.right.abs()).sum();
@@ -602,7 +665,7 @@ mod tests {
     fn stealing_a_voice_silences_it_at_once() {
         let (mut voice, mut settings) = voice();
         settings.amp.release = 5.0;
-        voice.start(60, 1.0, &settings);
+        voice.start(60, 1.0, 0.0, &settings);
         render(&mut voice, &settings, 0.1);
         voice.steal();
         assert!(!voice.is_active());
@@ -634,7 +697,7 @@ mod tests {
         }
         voice.set_mod_wheel(1.0);
         for note in [0u8, 60, 127] {
-            voice.start(note, 1.0, &settings);
+            voice.start(note, 1.0, 0.0, &settings);
             for sample in render(&mut voice, &settings, 0.2) {
                 assert!(sample.left.is_finite() && sample.right.is_finite(), "not finite on note {note}");
                 assert!(sample.left.abs() <= 4.0, "ran away on note {note}: {}", sample.left);
@@ -648,8 +711,8 @@ mod tests {
         let settings = VoiceSettings::default();
         let mut a = Voice::new(RATE, 4);
         let mut b = Voice::new(RATE, 4);
-        a.start(64, 0.8, &settings);
-        b.start(64, 0.8, &settings);
+        a.start(64, 0.8, 0.0, &settings);
+        b.start(64, 0.8, 0.0, &settings);
         for i in 0..20_000 {
             let (x, y) = (a.next(&settings), b.next(&settings));
             assert_eq!(x.left, y.left, "diverged at {i}");
@@ -663,13 +726,13 @@ mod tests {
         // wherever it happened to be left.
         let (mut a, mut settings) = voice();
         settings.levels = [1.0, 0.0, 0.0];
-        a.start(60, 1.0, &settings);
+        a.start(60, 1.0, 0.0, &settings);
         render(&mut a, &settings, 0.1);
 
         let mut both = settings.clone();
         both.levels = [1.0, 1.0, 0.0];
         let (mut b, _) = voice();
-        b.start(60, 1.0, &both);
+        b.start(60, 1.0, 0.0, &both);
         render(&mut b, &both, 0.1);
         // Both oscillators tuned alike and in phase: the mix is coherent, so
         // the second raises the level rather than partially cancelling.

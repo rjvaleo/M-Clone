@@ -40,7 +40,16 @@ export type RackMessage =
   /** Asset hashes to slot numbers, so the worklet can resolve a plan. */
   | { type: "sample-map"; map: Record<string, number> }
   | { type: "reset" }
-  | { type: "note-on"; note: number; velocity: number }
+  /**
+   * `detuneCents` is the part of the pitch a MIDI note number cannot say.
+   *
+   * Required rather than optional, so that a caller with a tuning system
+   * behind it cannot silently omit it: the scale quantisers split every pitch
+   * into a note plus this remainder, and a message shape that made the
+   * remainder easy to forget is exactly how all eighty-one scales in the
+   * library ended up sounding like 12-TET on this path.
+   */
+  | { type: "note-on"; note: number; velocity: number; detuneCents: number }
   | { type: "note-off"; note: number }
   | { type: "all-notes-off" }
   | { type: "modulation"; nodeId: string; source: number; dest: number; amount: number };

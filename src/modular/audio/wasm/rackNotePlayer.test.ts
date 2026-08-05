@@ -19,7 +19,23 @@ describe("RackNotePlayer", () => {
   it("forwards note on with its velocity", () => {
     const rack = sink();
     new RackNotePlayer("n1", rack).noteOn(60, 0.8, 12.5);
-    expect(rack.noteOn).toHaveBeenCalledWith(60, 0.8);
+    expect(rack.noteOn).toHaveBeenCalledWith(60, 0.8, 0);
+  });
+
+  it("forwards the microtonal remainder a scale quantiser produced", () => {
+    // The one part of the event a MIDI note number cannot carry. Dropping it
+    // here would make every scale in the tuning library sound like 12-TET
+    // while the quantiser upstream reported that it had worked.
+    const rack = sink();
+    new RackNotePlayer("n1", rack).noteOn(60, 0.8, 12.5, -33.4);
+    expect(rack.noteOn).toHaveBeenCalledWith(60, 0.8, -33.4);
+  });
+
+  it("treats an absent detune as in tune", () => {
+    // Most callers have no tuning system and pass three arguments.
+    const rack = sink();
+    new RackNotePlayer("n1", rack).noteOn(60, 0.8, 12.5);
+    expect(rack.noteOn).toHaveBeenCalledWith(60, 0.8, 0);
   });
 
   it("forwards note off", () => {
@@ -43,7 +59,7 @@ describe("RackNotePlayer", () => {
     const player = new RackNotePlayer("n1", rack);
     player.noteOn(60, 1, 999);
     player.noteOn(60, 1, 0);
-    expect(rack.noteOn).toHaveBeenNthCalledWith(1, 60, 1);
-    expect(rack.noteOn).toHaveBeenNthCalledWith(2, 60, 1);
+    expect(rack.noteOn).toHaveBeenNthCalledWith(1, 60, 1, 0);
+    expect(rack.noteOn).toHaveBeenNthCalledWith(2, 60, 1, 0);
   });
 });

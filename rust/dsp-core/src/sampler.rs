@@ -155,11 +155,18 @@ impl Sampler {
         1.0 / (seconds.max(0.0005) * self.sample_rate)
     }
 
+    /// `detune_cents` is the microtonal remainder of the note, and for a
+    /// sampler that is a playback rate: there is no oscillator to retune, so a
+    /// pitch between the keys is the same audio read fractionally faster.
+    /// Compounds with `settings.pitch_semitones` rather than replacing it —
+    /// one is what the patch does to every note, the other is what the score
+    /// asked of this one.
     pub fn note_on(
         &mut self,
         bank: &SampleBank,
         note: u8,
         velocity: f32,
+        detune_cents: f32,
         settings: &SamplerSettings,
     ) {
         let sample = self.slots[note as usize];
@@ -174,7 +181,9 @@ impl Sampler {
             return;
         }
 
-        let ratio = semitone_ratio(settings.pitch_semitones) * settings.rate;
+        let cents = if detune_cents.is_finite() { detune_cents } else { 0.0 };
+        let ratio =
+            semitone_ratio(settings.pitch_semitones + cents / 100.0) * settings.rate;
         let mut advance = bank.advance_per_sample(sample, self.sample_rate, ratio);
         if settings.reverse {
             advance = -advance;
@@ -310,7 +319,75 @@ mod tests {
     #[test]
     fn a_note_plays_its_assigned_sample() {
         let (bank, mut sampler) = rig();
-        sampler.note_on(&bank, 60, 1.0, &settings());
+        sampler.note_on(&bank, 60, 1.0, 0.0, &settings());
+        assert_eq!(sampler.active_voices(), 1);
+        assert!((sampler.process(&bank, &settings()) - 1.0).abs() < 1e-3);
+    }
+
+    /// A one-second ramp from 0 to 1, so the value read *is* the read head's
+    /// position — which is how a rate change becomes something to assert on.
+    fn ramp_rig() -> (SampleBank, Sampler) {
+        let mut bank = SampleBank::new();
+        let frames = RATE as usize;
+        bank.allocate(0, 1, frames, RATE);
+        let data = bank.get_mut(0).unwrap().data_mut();
+        for (index, slot) in data.iter_mut().enumerate() {
+            *slot = index as f32 / frames as f32;
+        }
+        let mut sampler = Sampler::new(RATE);
+        sampler.set_slot(60, 0);
+        (bank, sampler)
+    }
+
+    #[test]
+    fn a_notes_detune_speeds_the_playback_up() {
+        // A sampler has no oscillator to retune, so a pitch between the keys is
+        // the same audio read faster. 1200 cents is an octave, so the head
+        // should be at twice the position after the same number of samples.
+        let advance_after = |cents: f32| {
+            let (bank, mut sampler) = ramp_rig();
+            sampler.note_on(&bank, 60, 1.0, cents, &settings());
+            let mut last = 0.0;
+            for _ in 0..1000 {
+                last = sampler.process(&bank, &settings());
+            }
+            last
+        };
+        let plain = advance_after(0.0);
+        let octave_up = advance_after(1200.0);
+        assert!(plain > 0.0);
+        let ratio = octave_up / plain;
+        assert!((ratio - 2.0).abs() < 0.05, "expected 2x, got {ratio}");
+    }
+
+    #[test]
+    fn a_notes_detune_compounds_with_the_patchs_pitch() {
+        // One is what the patch does to every note, the other is what the score
+        // asked of this one; an octave of each is two octaves.
+        let (bank, mut sampler) = ramp_rig();
+        let up_an_octave = SamplerSettings { pitch_semitones: 12.0, ..settings() };
+        sampler.note_on(&bank, 60, 1.0, 1200.0, &up_an_octave);
+        let mut last = 0.0;
+        for _ in 0..1000 {
+            last = sampler.process(&bank, &up_an_octave);
+        }
+
+        let (plain_bank, mut plain) = ramp_rig();
+        plain.note_on(&plain_bank, 60, 1.0, 0.0, &settings());
+        let mut base = 0.0;
+        for _ in 0..1000 {
+            base = plain.process(&plain_bank, &settings());
+        }
+        let ratio = last / base;
+        assert!((ratio - 4.0).abs() < 0.1, "expected 4x, got {ratio}");
+    }
+
+    #[test]
+    fn a_nonsense_detune_still_plays_the_note() {
+        // NaN in the advance would leave the read head lost for the life of the
+        // voice, and silence is the worse of the two failures.
+        let (bank, mut sampler) = rig();
+        sampler.note_on(&bank, 60, 1.0, f32::NAN, &settings());
         assert_eq!(sampler.active_voices(), 1);
         assert!((sampler.process(&bank, &settings()) - 1.0).abs() < 1e-3);
     }
@@ -319,7 +396,7 @@ mod tests {
     fn an_unassigned_note_is_silence_rather_than_a_fault() {
         // A kit with half its slots filled is normal; the rest must do nothing.
         let (bank, mut sampler) = rig();
-        sampler.note_on(&bank, 61, 1.0, &settings());
+        sampler.note_on(&bank, 61, 1.0, 0.0, &settings());
         assert_eq!(sampler.active_voices(), 0);
         assert_eq!(sampler.process(&bank, &settings()), 0.0);
     }
@@ -328,7 +405,7 @@ mod tests {
     fn a_note_whose_sample_is_gone_does_not_fault() {
         let (_, mut sampler) = rig();
         let empty = SampleBank::new();
-        sampler.note_on(&empty, 60, 1.0, &settings());
+        sampler.note_on(&empty, 60, 1.0, 0.0, &settings());
         assert_eq!(sampler.process(&empty, &settings()), 0.0);
     }
 
@@ -337,7 +414,7 @@ mod tests {
         // The difference between a drum kit and a keyboard: a hit finishes.
         let (bank, mut sampler) = rig();
         let hit = SamplerSettings { gate: false, ..settings() };
-        sampler.note_on(&bank, 60, 1.0, &hit);
+        sampler.note_on(&bank, 60, 1.0, 0.0, &hit);
         sampler.note_off(60, &hit);
         for _ in 0..1_000 {
             sampler.process(&bank, &hit);
@@ -349,7 +426,7 @@ mod tests {
     fn a_gated_note_releases_when_the_key_goes_up() {
         let (bank, mut sampler) = rig();
         let held = SamplerSettings { gate: true, decay_sec: 0.01, ..settings() };
-        sampler.note_on(&bank, 60, 1.0, &held);
+        sampler.note_on(&bank, 60, 1.0, 0.0, &held);
         sampler.note_off(60, &held);
         for _ in 0..((RATE * 0.05) as usize) {
             sampler.process(&bank, &held);
@@ -366,7 +443,7 @@ mod tests {
         for slot in short.get_mut(0).unwrap().data_mut() {
             *slot = 1.0;
         }
-        sampler.note_on(&short, 60, 1.0, &settings());
+        sampler.note_on(&short, 60, 1.0, 0.0, &settings());
         for _ in 0..200 {
             sampler.process(&short, &settings());
         }
@@ -386,7 +463,7 @@ mod tests {
         let mut sampler = Sampler::new(RATE);
         sampler.set_slot(60, 0);
         let backwards = SamplerSettings { reverse: true, ..settings() };
-        sampler.note_on(&bank, 60, 1.0, &backwards);
+        sampler.note_on(&bank, 60, 1.0, 0.0, &backwards);
         let first = sampler.process(&bank, &backwards);
         assert!(first > 90.0, "reverse started at the beginning: {first}");
     }
@@ -401,7 +478,7 @@ mod tests {
         let mut sampler = Sampler::new(RATE);
         sampler.set_slot(60, 0);
         let looped = SamplerSettings { looping: true, ..settings() };
-        sampler.note_on(&bank, 60, 1.0, &looped);
+        sampler.note_on(&bank, 60, 1.0, 0.0, &looped);
         for _ in 0..5_000 {
             sampler.process(&bank, &looped);
         }
@@ -425,7 +502,7 @@ mod tests {
             loop_end: 0.2,
             ..settings()
         };
-        sampler.note_on(&bank, 60, 1.0, &backwards);
+        sampler.note_on(&bank, 60, 1.0, 0.0, &backwards);
         for _ in 0..3_000 {
             sampler.process(&bank, &backwards);
         }
@@ -436,7 +513,7 @@ mod tests {
     fn pitch_and_rate_both_move_the_playback_speed() {
         let (bank, mut sampler) = rig();
         let up = SamplerSettings { pitch_semitones: 12.0, ..settings() };
-        sampler.note_on(&bank, 60, 1.0, &up);
+        sampler.note_on(&bank, 60, 1.0, 0.0, &up);
         for _ in 0..100 {
             sampler.process(&bank, &up);
         }
@@ -451,7 +528,7 @@ mod tests {
         let (bank, mut sampler) = rig();
         for note in 0..(MAX_VOICES as u8 + 8) {
             sampler.set_slot(u32::from(note), 0);
-            sampler.note_on(&bank, note, 1.0, &settings());
+            sampler.note_on(&bank, note, 1.0, 0.0, &settings());
         }
         assert_eq!(sampler.active_voices(), MAX_VOICES);
         assert!(sampler.process(&bank, &settings()).abs() > 0.0);
@@ -460,7 +537,7 @@ mod tests {
     #[test]
     fn all_notes_off_silences_everything_without_a_click() {
         let (bank, mut sampler) = rig();
-        sampler.note_on(&bank, 60, 1.0, &settings());
+        sampler.note_on(&bank, 60, 1.0, 0.0, &settings());
         sampler.all_notes_off();
         let mut previous = sampler.process(&bank, &settings());
         let mut biggest_step = 0.0f32;
@@ -477,7 +554,7 @@ mod tests {
     fn clearing_a_slot_stops_new_notes_from_using_it() {
         let (bank, mut sampler) = rig();
         sampler.set_slot(60, NO_SAMPLE);
-        sampler.note_on(&bank, 60, 1.0, &settings());
+        sampler.note_on(&bank, 60, 1.0, 0.0, &settings());
         assert_eq!(sampler.active_voices(), 0);
     }
 
@@ -503,7 +580,7 @@ mod tests {
                 decay_sec: t * 4.0 - 1.0,
                 gate: step % 4 == 0,
             };
-            sampler.note_on(&bank, 60, 1.0, &hostile);
+            sampler.note_on(&bank, 60, 1.0, 0.0, &hostile);
             for _ in 0..2_000 {
                 let out = sampler.process(&bank, &hostile);
                 assert!(out.is_finite(), "non-finite at step {step}");

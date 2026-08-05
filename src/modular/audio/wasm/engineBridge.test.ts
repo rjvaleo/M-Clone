@@ -70,8 +70,8 @@ class FakeEngine implements EngineExports {
     this.calls.push(`param:${module}.${index}=${value}`);
     this.params.set(`${module}.${index}`, value);
   }
-  note_on(module: number, note: number, velocity: number): void {
-    this.calls.push(`noteon:${module}.${note}@${velocity}`);
+  note_on(module: number, note: number, velocity: number, detuneCents: number): void {
+    this.calls.push(`noteon:${module}.${note}@${velocity}+${detuneCents}`);
   }
   note_off(module: number, note: number): void {
     this.calls.push(`noteoff:${module}.${note}`);
@@ -592,14 +592,27 @@ describe("The plan-to-engine bridge", () => {
     const rack = new WasmRack(engine, 48000);
     rack.update(plan([node("s", "m.synth"), node("g", "m.audio-gain")]));
 
-    rack.noteOn(60, 0.8);
+    rack.noteOn(60, 0.8, 0);
     rack.noteOff(60);
     rack.allNotesOff();
 
     const synth = rack.moduleIdOf("s");
-    expect(engine.of("noteon")).toEqual([`noteon:${synth}.60@0.8`]);
+    expect(engine.of("noteon")).toEqual([`noteon:${synth}.60@0.8+0`]);
     expect(engine.of("noteoff")).toEqual([`noteoff:${synth}.60`]);
     expect(engine.of("allnotesoff")).toEqual([`allnotesoff:${synth}`]);
+  });
+
+  it("carries a note's microtonal detune across the ABI", () => {
+    // The far end of the tuning library. A scale that does not fit the twelve
+    // keys arrives as a note plus a remainder in cents, and the remainder has
+    // to reach `note_on` or all eighty-one scales sound like 12-TET.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+
+    rack.noteOn(60, 0.8, -33.4);
+
+    expect(engine.of("noteon")).toEqual([`noteon:${rack.moduleIdOf("s")}.60@0.8+-33.4`]);
   });
 
   it("sends a matrix routing to the node that owns it", () => {

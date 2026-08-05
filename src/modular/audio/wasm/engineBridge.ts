@@ -371,7 +371,7 @@ export interface EngineExports {
   connect(fromModule: number, fromPort: number, toModule: number, toPort: number): number;
   disconnect(fromModule: number, fromPort: number, toModule: number, toPort: number): number;
   set_param(module: number, index: number, value: number): void;
-  note_on(module: number, note: number, velocity: number): void;
+  note_on(module: number, note: number, velocity: number, detuneCents: number): void;
   note_off(module: number, note: number): void;
   all_notes_off(module: number): void;
   set_modulation(module: number, source: number, dest: number, amount: number): void;
@@ -533,9 +533,9 @@ export class WasmRack {
    * note adapter, which already resolves an event's target by port. This is
    * what the bench and a MIDI-thru path need in the meantime.
    */
-  noteOn(note: number, velocity: number): void {
+  noteOn(note: number, velocity: number, detuneCents: number): void {
     for (const nodeId of this.instruments) {
-      this.engine.note_on(this.moduleIdOf(nodeId)!, note, velocity);
+      this.engine.note_on(this.moduleIdOf(nodeId)!, note, velocity, detuneCents);
     }
   }
 
