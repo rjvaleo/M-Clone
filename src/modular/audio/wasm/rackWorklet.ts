@@ -117,6 +117,12 @@ class RackProcessor extends AudioWorkletProcessor {
 
     // Same signal to every output channel. Stereo comes with the panner.
     for (const channel of output) channel.set(this.rack.output);
+
+    // The only thing that ever goes back up the port. `takeReport` decides
+    // whether one is due — that decision lives next door where it can be
+    // tested, rather than as a counter in this untestable file.
+    const report = this.rack.takeReport();
+    if (report) this.port.postMessage(report);
     return true;
   }
 }

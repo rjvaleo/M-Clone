@@ -13,6 +13,7 @@ import { moduleMenuGroups } from "./moduleMenu";
 import { parameterControlKind, selectorVariant } from "./parameterControl";
 import { isLiveStatus, statusLevel } from "./nodeStatus";
 import { preferredEngine, type RackEngineChoice } from "../audio/wasm/rackNode";
+import type { RackReport } from "../audio/wasm/rackProtocol";
 import { KitContext } from "../theme/kits/KitContext";
 import { KIT_IDS, KIT_META, type KitId } from "../theme/kits/types";
 import { Knob } from "../theme/kits/controls/Knob";
@@ -1145,6 +1146,10 @@ export function ModularApp() {
   const [playingAsset, setPlayingAsset] = useState<string | null>(null);
   /** Live audio node count. A stale "when it started" figure explains nothing. */
   const [audioNodes, setAudioNodes] = useState(0);
+  // What the Rust rack says about itself, polled on the same 100 ms tick as
+  // everything else in the status bar. Null on Web Audio, which reports
+  // nothing — see `AudioEngine.rackReport`.
+  const [rackReport, setRackReport] = useState<RackReport | null>(null);
   /** Manifest of a document opened before audio started, replayed on start. */
   const pendingAssetsRef = useRef<AssetEntry[] | null>(null);
   const publisherRef = useRef(new PlanPublisher());
@@ -1838,6 +1843,10 @@ export function ModularApp() {
       setRuntimeStatuses((current) =>
         JSON.stringify(current) === JSON.stringify(next) ? current : next);
       setAudioNodes(audioRef.current?.liveNodeCount ?? 0);
+      setRackReport((current) => {
+        const next = audioRef.current?.rackReport ?? null;
+        return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+      });
       const devices = midiSessionRef.current?.devices() ?? [];
       setMidiDevices((current) =>
         JSON.stringify(current) === JSON.stringify(devices) ? current : devices);
@@ -2191,7 +2200,7 @@ export function ModularApp() {
       onRemove={removeAsset}
       onClose={() => setPoolOpen(false)}
     /> : null}
-    <footer className="mm-status-bar"><span>{message}</span><span>{Object.keys(graph.nodes).length} nodes · {Object.keys(graph.edges).length} cable{audioOn ? ` · ${audioNodes} audio · ${engineKind === "rust" ? "Rust" : "Web Audio"}` : ""}</span></footer>
+    <footer className="mm-status-bar"><span>{message}</span><span>{Object.keys(graph.nodes).length} nodes · {Object.keys(graph.edges).length} cable{audioOn ? ` · ${audioNodes} audio · ${engineKind === "rust" ? "Rust" : "Web Audio"}` : ""}{rackReport ? ` · ${rackReport.modules} in engine · ${rackReport.samples} sample${rackReport.samples === 1 ? "" : "s"}` : ""}</span></footer>
   </main>
   </KitContext.Provider>
   </SoundPoolContext.Provider>;

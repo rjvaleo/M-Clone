@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { REPORT_INTERVAL_QUANTA } from "./rackProtocol";
 import { WasmRack, MODULE_KINDS, PARAM_INDICES, NO_MODULE, variantOf, type EngineExports } from "./engineBridge";
 import type { AudioPlan, AudioNodeSpec } from "../audioPlan";
 
@@ -131,12 +132,20 @@ class FakeEngine implements EngineExports {
   cable_count(): number {
     return this.cables.size;
   }
+  sample_count(): number {
+    return this.samplesHeld;
+  }
+  samplesHeld = 0;
   process_quantum(): void {
     this.process_range(0, 128);
   }
+  /** What every rendered sample comes out at, so a peak is assertable. */
+  renderLevel = 0;
   /** Records the range, so a test can see where a quantum was broken. */
   process_range(start: number, len: number): void {
     this.calls.push(`process:${start}+${len}`);
+    const output = new Float32Array(this.memory.buffer, this.output_ptr(), 128);
+    output.fill(this.renderLevel, start, start + len);
   }
   /** Every rendered range, in order, as `start+len` pairs. */
   get ranges(): string[] {
@@ -659,6 +668,63 @@ describe("The plan-to-engine bridge", () => {
     rack.process(0);
     expect(engine.of("noteon")).toEqual([]);
     expect(engine.ranges).toEqual(["0+128"]);
+  });
+
+  it("says nothing until a report is due", () => {
+    // The audio thread must not spend its budget describing itself: at 48 kHz
+    // a report per quantum would be four hundred messages a second.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) {
+      expect(rack.takeReport()).toBeUndefined();
+      rack.process(i * 128);
+    }
+    expect(rack.takeReport()).toBeDefined();
+  });
+
+  it("reports what the engine holds, including how many samples arrived", () => {
+    // The question that could not be asked before this existed, and the reason
+    // "does a sample actually reach the bank" went unverified for so long.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("out", "m.audio-output")]));
+    engine.samplesHeld = 3;
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+
+    const report = rack.takeReport();
+    expect(report?.samples).toBe(3);
+    expect(report?.modules).toBe(engine.modules.size);
+    expect(report?.cables).toBe(engine.cables.size);
+    expect(report?.quanta).toBe(REPORT_INTERVAL_QUANTA);
+  });
+
+  it("reports the loudest sample of the interval just ended", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    engine.renderLevel = 0.5;
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.peak).toBeCloseTo(0.5);
+  });
+
+  it("starts the peak over each interval rather than keeping a high-water mark", () => {
+    // A running maximum only ever climbs, so a meter drawn from it would stick
+    // at the loudest moment of the session and never fall.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    engine.renderLevel = 0.9;
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    rack.takeReport();
+
+    engine.renderLevel = 0.1;
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.peak).toBeCloseTo(0.1);
+  });
+
+  it("counts every quantum it has rendered, so a stalled worklet shows", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA * 2; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.quanta).toBe(REPORT_INTERVAL_QUANTA * 2);
   });
 
   it("forwards a transport reset to the engine", () => {
