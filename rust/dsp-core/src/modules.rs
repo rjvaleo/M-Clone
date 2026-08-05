@@ -25,6 +25,11 @@ use crate::engine::{Module, Ports, ProcessContext};
 use crate::lfo::{LfoShape, LfoTrigger};
 use crate::modmatrix::{ModDest, ModSource};
 use crate::osc::Wave;
+use crate::delay::DelayLine;
+use crate::dp4::{Dp4Algorithm, Dp4Reverb, NonLin, NonLinVariant, NONLIN_TAPS};
+use crate::dynamics::{DynamicsMode, EnvelopeFollower, GainComputer};
+use crate::fdn::{Fdn, MixMatrix};
+use crate::filter::{Biquad, BiquadKind, OnePole};
 use crate::reverb::Blackhole;
 use crate::voice::{
     AdsrSettings, LfoSettings, VoiceSettings, MAX_CUTOFF_HZ, MIN_CUTOFF_HZ, OSC_COUNT,
@@ -623,6 +628,822 @@ impl Module for BlackholeVerb {
     }
 }
 
+
+// ---- the effect rack -------------------------------------------------------
+//
+// Eight shells over DSP that already existed in this crate. Each one owns the
+// same three shell parameters as every other effect — a wet/dry `MIX`, the
+// adapter's fade `LEVEL`, and a hard `MUTE` — so the host treats them
+// identically and a crossfade during a rebuild works the same everywhere.
+//
+// `mix` is deliberately per-module rather than something the graph applies:
+// the dry path has to skip the effect's own latency and colouring, which only
+// the effect knows about.
+
+/// The wet/dry, fade and mute every effect shares, in that order after the
+/// module's own parameters.
+struct Shell {
+    mix: Tracked,
+    level: Tracked,
+}
+
+impl Shell {
+    fn new(default_mix: f32) -> Self {
+        Self { mix: Tracked::new(default_mix), level: Tracked::new(0.0) }
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.mix.set_sample_rate(sample_rate);
+        self.level.set_sample_rate(sample_rate);
+    }
+
+    fn reset(&mut self) {
+        self.mix.reset();
+        self.level.reset();
+    }
+
+    /// Blend, fade and gate one sample.
+    #[inline]
+    fn finish(&mut self, ports: &Ports, dry: f32, wet: f32, mix_index: usize) -> f32 {
+        let mix = self.mix.follow(clamp(ports.param(mix_index), 0.0, 1.0));
+        let level = self.level.follow(clamp(ports.param(mix_index + 1), 0.0, 1.0));
+        let muted = ports.param(mix_index + 2) >= 0.5;
+        if muted {
+            return 0.0;
+        }
+        (dry * (1.0 - mix) + wet * mix) * level
+    }
+}
+
+/// `m.audio-dp4-reverb` — the plate, room and hall algorithms.
+pub struct Dp4ReverbModule {
+    verb: Dp4Reverb,
+    shell: Shell,
+    algorithm: Dp4Algorithm,
+    seen: [f32; Self::SETTER_COUNT],
+}
+
+impl Dp4ReverbModule {
+    pub const DECAY: usize = 0;
+    pub const PREDELAY: usize = 1;
+    pub const LF_DECAY: usize = 2;
+    pub const HF_DAMPING: usize = 3;
+    pub const HF_BANDWIDTH: usize = 4;
+    pub const DIFFUSION_1: usize = 5;
+    pub const DIFFUSION_2: usize = 6;
+    pub const DECAY_DEFINITION: usize = 7;
+    pub const DETUNE_RATE: usize = 8;
+    pub const DETUNE_DEPTH: usize = 9;
+    pub const PRIMARY_SEND: usize = 10;
+    pub const REF_1_LEVEL: usize = 11;
+    pub const REF_1_SEND: usize = 12;
+    pub const REF_2_LEVEL: usize = 13;
+    pub const REF_2_SEND: usize = 14;
+    pub const EARLY_REFS: usize = 15;
+    pub const MIX: usize = 16;
+    pub const LEVEL: usize = 17;
+    pub const MUTE: usize = 18;
+    pub const PARAM_COUNT: usize = 19;
+    const SETTER_COUNT: usize = 16;
+
+    pub fn new(algorithm: Dp4Algorithm, sample_rate: f32) -> Self {
+        let mut verb = Dp4Reverb::new(algorithm, sample_rate);
+        verb.set_decay_seconds(2.0);
+        verb.set_hf_damping(0.35);
+        verb.set_hf_bandwidth(0.75);
+        verb.set_diffusion(0.75, 0.625);
+        Self {
+            verb,
+            shell: Shell::new(0.3),
+            algorithm,
+            seen: [f32::NAN; Self::SETTER_COUNT],
+        }
+    }
+
+    pub fn algorithm(&self) -> Dp4Algorithm {
+        self.algorithm
+    }
+
+    fn sync(&mut self, raw: &[f32; Self::SETTER_COUNT]) {
+        if raw[Self::DECAY] != self.seen[Self::DECAY] {
+            self.verb.set_decay_seconds(raw[Self::DECAY]);
+        }
+        if raw[Self::PREDELAY] != self.seen[Self::PREDELAY] {
+            self.verb.set_predelay_seconds(raw[Self::PREDELAY]);
+        }
+        if raw[Self::LF_DECAY] != self.seen[Self::LF_DECAY] {
+            self.verb.set_lf_decay(raw[Self::LF_DECAY]);
+        }
+        if raw[Self::HF_DAMPING] != self.seen[Self::HF_DAMPING] {
+            self.verb.set_hf_damping(raw[Self::HF_DAMPING]);
+        }
+        if raw[Self::HF_BANDWIDTH] != self.seen[Self::HF_BANDWIDTH] {
+            self.verb.set_hf_bandwidth(raw[Self::HF_BANDWIDTH]);
+        }
+        if raw[Self::DIFFUSION_1] != self.seen[Self::DIFFUSION_1]
+            || raw[Self::DIFFUSION_2] != self.seen[Self::DIFFUSION_2]
+        {
+            self.verb.set_diffusion(raw[Self::DIFFUSION_1], raw[Self::DIFFUSION_2]);
+        }
+        if raw[Self::DECAY_DEFINITION] != self.seen[Self::DECAY_DEFINITION] {
+            self.verb.set_decay_definition(raw[Self::DECAY_DEFINITION]);
+        }
+        if raw[Self::DETUNE_RATE] != self.seen[Self::DETUNE_RATE]
+            || raw[Self::DETUNE_DEPTH] != self.seen[Self::DETUNE_DEPTH]
+        {
+            self.verb.set_detune(raw[Self::DETUNE_RATE], raw[Self::DETUNE_DEPTH]);
+        }
+        if raw[Self::PRIMARY_SEND] != self.seen[Self::PRIMARY_SEND] {
+            self.verb.set_primary_send(raw[Self::PRIMARY_SEND]);
+        }
+        if raw[Self::REF_1_LEVEL] != self.seen[Self::REF_1_LEVEL]
+            || raw[Self::REF_1_SEND] != self.seen[Self::REF_1_SEND]
+        {
+            self.verb.set_reference(0, raw[Self::REF_1_LEVEL], raw[Self::REF_1_SEND]);
+        }
+        if raw[Self::REF_2_LEVEL] != self.seen[Self::REF_2_LEVEL]
+            || raw[Self::REF_2_SEND] != self.seen[Self::REF_2_SEND]
+        {
+            self.verb.set_reference(1, raw[Self::REF_2_LEVEL], raw[Self::REF_2_SEND]);
+        }
+        if raw[Self::EARLY_REFS] != self.seen[Self::EARLY_REFS] {
+            self.verb.set_early_refs(raw[Self::EARLY_REFS]);
+        }
+        self.seen = *raw;
+    }
+}
+
+impl Module for Dp4ReverbModule {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let mut raw = [0.0; Self::SETTER_COUNT];
+        for (index, slot) in raw.iter_mut().enumerate() {
+            *slot = ports.param(index);
+        }
+        self.sync(&raw);
+        let dry = ports.input(0);
+        let wet = self.verb.process(dry);
+        let out = self.shell.finish(ports, dry, wet, Self::MIX);
+        ports.output(0, out);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.verb = Dp4Reverb::new(self.algorithm, sample_rate);
+        self.shell.set_sample_rate(sample_rate);
+        self.seen = [f32::NAN; Self::SETTER_COUNT];
+    }
+
+    fn reset(&mut self) {
+        self.verb.clear();
+        self.shell.reset();
+    }
+
+    fn input_count(&self) -> usize { 1 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::DECAY => 2.0,
+            Self::HF_DAMPING => 0.35,
+            Self::HF_BANDWIDTH => 0.75,
+            Self::DIFFUSION_1 => 0.75,
+            Self::DIFFUSION_2 => 0.625,
+            Self::DECAY_DEFINITION => 0.5,
+            Self::PRIMARY_SEND => 0.8,
+            Self::MIX => 0.3,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.audio-dp4-nonlin` — the drawn-envelope reverbs.
+pub struct Dp4NonLinModule {
+    verb: NonLin,
+    shell: Shell,
+    variant: NonLinVariant,
+    seen: [f32; Self::SETTER_COUNT],
+}
+
+impl Dp4NonLinModule {
+    /// Envelope points 1..9 occupy indices 0..=8.
+    pub const ENVELOPE_BASE: usize = 0;
+    pub const HF_DAMPING: usize = 9;
+    pub const HF_BANDWIDTH: usize = 10;
+    pub const DIFFUSION_1: usize = 11;
+    pub const DIFFUSION_2: usize = 12;
+    pub const DENSITY_1: usize = 13;
+    pub const DENSITY_2: usize = 14;
+    pub const MIX: usize = 15;
+    pub const LEVEL: usize = 16;
+    pub const MUTE: usize = 17;
+    pub const PARAM_COUNT: usize = 18;
+    const SETTER_COUNT: usize = 15;
+
+    pub fn new(variant: NonLinVariant, sample_rate: f32) -> Self {
+        let mut verb = NonLin::new(variant, sample_rate);
+        verb.set_diffusion(0.7, 0.6);
+        verb.set_density(0.6, 0.6);
+        Self { verb, shell: Shell::new(0.35), variant, seen: [f32::NAN; Self::SETTER_COUNT] }
+    }
+
+    pub fn variant(&self) -> NonLinVariant {
+        self.variant
+    }
+
+    fn sync(&mut self, raw: &[f32; Self::SETTER_COUNT]) {
+        for i in 0..NONLIN_TAPS {
+            if raw[Self::ENVELOPE_BASE + i] != self.seen[Self::ENVELOPE_BASE + i] {
+                self.verb.set_envelope(i, raw[Self::ENVELOPE_BASE + i]);
+            }
+        }
+        if raw[Self::HF_DAMPING] != self.seen[Self::HF_DAMPING] {
+            self.verb.set_hf_damping(raw[Self::HF_DAMPING]);
+        }
+        if raw[Self::HF_BANDWIDTH] != self.seen[Self::HF_BANDWIDTH] {
+            self.verb.set_hf_bandwidth(raw[Self::HF_BANDWIDTH]);
+        }
+        if raw[Self::DIFFUSION_1] != self.seen[Self::DIFFUSION_1]
+            || raw[Self::DIFFUSION_2] != self.seen[Self::DIFFUSION_2]
+        {
+            self.verb.set_diffusion(raw[Self::DIFFUSION_1], raw[Self::DIFFUSION_2]);
+        }
+        if raw[Self::DENSITY_1] != self.seen[Self::DENSITY_1]
+            || raw[Self::DENSITY_2] != self.seen[Self::DENSITY_2]
+        {
+            self.verb.set_density(raw[Self::DENSITY_1], raw[Self::DENSITY_2]);
+        }
+        self.seen = *raw;
+    }
+}
+
+impl Module for Dp4NonLinModule {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let mut raw = [0.0; Self::SETTER_COUNT];
+        for (index, slot) in raw.iter_mut().enumerate() {
+            *slot = ports.param(index);
+        }
+        self.sync(&raw);
+        let dry = ports.input(0);
+        let wet = self.verb.process(dry);
+        let out = self.shell.finish(ports, dry, wet, Self::MIX);
+        ports.output(0, out);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.verb = NonLin::new(self.variant, sample_rate);
+        self.shell.set_sample_rate(sample_rate);
+        self.seen = [f32::NAN; Self::SETTER_COUNT];
+    }
+
+    fn reset(&mut self) {
+        self.verb.clear();
+        self.shell.reset();
+    }
+
+    fn input_count(&self) -> usize { 1 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            // A flat, fully open envelope: the neutral starting shape a person
+            // then draws a gate or a swell out of.
+            0..=8 => 0.5,
+            Self::HF_DAMPING => 0.3,
+            Self::HF_BANDWIDTH => 0.75,
+            Self::DIFFUSION_1 => 0.7,
+            Self::DIFFUSION_2 => 0.6,
+            Self::DENSITY_1 | Self::DENSITY_2 => 0.6,
+            Self::MIX => 0.35,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.audio-delay` — one line with feedback.
+pub struct DelayModule {
+    line: DelayLine,
+    feedback_state: f32,
+    delay_samples: Tracked,
+    feedback: Tracked,
+    shell: Shell,
+    sample_rate: f32,
+}
+
+impl DelayModule {
+    pub const DELAY_SECONDS: usize = 0;
+    pub const FEEDBACK: usize = 1;
+    pub const MIX: usize = 2;
+    pub const LEVEL: usize = 3;
+    pub const MUTE: usize = 4;
+    pub const PARAM_COUNT: usize = 5;
+    /// Matches the descriptor's `max-delay-seconds` ceiling.
+    pub const MAX_DELAY_SECONDS: f32 = 4.0;
+    /// Below unity, always: a delay at exactly 1.0 never decays, and one above
+    /// it is an oscillator that takes the speakers with it.
+    pub const MAX_FEEDBACK: f32 = 0.95;
+
+    pub fn new(sample_rate: f32) -> Self {
+        let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
+        Self {
+            line: DelayLine::new(Self::MAX_DELAY_SECONDS + 0.01, rate),
+            feedback_state: 0.0,
+            delay_samples: Tracked::new(0.25 * rate),
+            feedback: Tracked::new(0.3),
+            shell: Shell::new(0.35),
+            sample_rate: rate,
+        }
+    }
+}
+
+impl Module for DelayModule {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let seconds = clamp(ports.param(Self::DELAY_SECONDS), 0.0, Self::MAX_DELAY_SECONDS);
+        let samples = self.delay_samples.follow(seconds * self.sample_rate);
+        let feedback = self.feedback.follow(clamp(ports.param(Self::FEEDBACK), 0.0, Self::MAX_FEEDBACK));
+
+        let dry = ports.input(0);
+        self.line.push(dry + self.feedback_state * feedback);
+        let wet = self.line.read(samples);
+        self.feedback_state = wet;
+        let out = self.shell.finish(ports, dry, wet, Self::MIX);
+        ports.output(0, out);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.sample_rate = sample_rate;
+        self.line = DelayLine::new(Self::MAX_DELAY_SECONDS + 0.01, sample_rate);
+        self.delay_samples.set_sample_rate(sample_rate);
+        self.feedback.set_sample_rate(sample_rate);
+        self.shell.set_sample_rate(sample_rate);
+    }
+
+    fn reset(&mut self) {
+        self.line.clear();
+        self.feedback_state = 0.0;
+        self.delay_samples.reset();
+        self.feedback.reset();
+        self.shell.reset();
+    }
+
+    fn input_count(&self) -> usize { 1 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::DELAY_SECONDS => 0.25,
+            Self::FEEDBACK => 0.3,
+            Self::MIX => 0.35,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.audio-reverb` — the general-purpose tank.
+///
+/// The TypeScript build convolves a generated impulse response. An FDN is used
+/// here instead: it is what this crate has, it is cheaper, and it takes a decay
+/// control directly rather than by regenerating and re-uploading an impulse
+/// every time the knob moves. `impulse-seed` therefore no longer means
+/// anything, which is why it is not in the parameter table.
+pub struct ReverbModule {
+    tank: Fdn,
+    damping: OnePole,
+    shell: Shell,
+    sample_rate: f32,
+    seen_decay: f32,
+    seen_damping: f32,
+}
+
+impl ReverbModule {
+    pub const DAMPING_HZ: usize = 0;
+    pub const TAIL_SECONDS: usize = 1;
+    pub const DECAY_RATE: usize = 2;
+    pub const MIX: usize = 3;
+    pub const LEVEL: usize = 4;
+    pub const MUTE: usize = 5;
+    pub const PARAM_COUNT: usize = 6;
+
+    pub fn new(sample_rate: f32) -> Self {
+        let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
+        let mut tank = Fdn::new(8, rate, MixMatrix::Hadamard);
+        tank.set_decay(2.0, 2.0);
+        let mut damping = OnePole::new();
+        damping.set_cutoff(8_000.0, rate);
+        Self {
+            tank,
+            damping,
+            shell: Shell::new(0.3),
+            sample_rate: rate,
+            seen_decay: f32::NAN,
+            seen_damping: f32::NAN,
+        }
+    }
+}
+
+impl Module for ReverbModule {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let tail = clamp(ports.param(Self::TAIL_SECONDS), 0.1, 20.0);
+        let rate = clamp(ports.param(Self::DECAY_RATE), 0.1, 4.0);
+        let decay = clamp(tail / rate, 0.1, 60.0);
+        if decay != self.seen_decay {
+            self.seen_decay = decay;
+            self.tank.set_decay(decay, decay);
+        }
+        let hz = clamp(ports.param(Self::DAMPING_HZ), 200.0, 20_000.0);
+        if hz != self.seen_damping {
+            self.seen_damping = hz;
+            self.damping.set_cutoff(hz, self.sample_rate);
+        }
+
+        let dry = ports.input(0);
+        let wet = self.damping.process(self.tank.process(dry));
+        let out = self.shell.finish(ports, dry, wet, Self::MIX);
+        ports.output(0, out);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.sample_rate = sample_rate;
+        self.tank = Fdn::new(8, sample_rate, MixMatrix::Hadamard);
+        self.shell.set_sample_rate(sample_rate);
+        self.seen_decay = f32::NAN;
+        self.seen_damping = f32::NAN;
+    }
+
+    fn reset(&mut self) {
+        self.tank.clear();
+        self.damping.clear();
+        self.shell.reset();
+    }
+
+    fn input_count(&self) -> usize { 1 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::DAMPING_HZ => 8_000.0,
+            Self::TAIL_SECONDS => 2.0,
+            Self::DECAY_RATE => 1.0,
+            Self::MIX => 0.3,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.audio-eq` — low shelf, peaking mid, high shelf.
+pub struct EqModule {
+    low: Biquad,
+    mid: Biquad,
+    high: Biquad,
+    shell: Shell,
+    sample_rate: f32,
+    seen: [f32; 7],
+}
+
+impl EqModule {
+    pub const LOW_GAIN_DB: usize = 0;
+    pub const LOW_FREQUENCY: usize = 1;
+    pub const MID_GAIN_DB: usize = 2;
+    pub const MID_FREQUENCY: usize = 3;
+    pub const MID_Q: usize = 4;
+    pub const HIGH_GAIN_DB: usize = 5;
+    pub const HIGH_FREQUENCY: usize = 6;
+    pub const MIX: usize = 7;
+    pub const LEVEL: usize = 8;
+    pub const MUTE: usize = 9;
+    pub const PARAM_COUNT: usize = 10;
+
+    pub fn new(sample_rate: f32) -> Self {
+        let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
+        Self {
+            low: Biquad::identity(),
+            mid: Biquad::identity(),
+            high: Biquad::identity(),
+            // An EQ is not a send effect: it is fully wet or it is not doing
+            // anything, so its mix starts at 1 unlike every other effect here.
+            shell: Shell::new(1.0),
+            sample_rate: rate,
+            seen: [f32::NAN; 7],
+        }
+    }
+}
+
+impl Module for EqModule {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let mut raw = [0.0; 7];
+        for (index, slot) in raw.iter_mut().enumerate() {
+            *slot = ports.param(index);
+        }
+        if raw != self.seen {
+            self.seen = raw;
+            self.low.set(
+                BiquadKind::LowShelf,
+                clamp(raw[Self::LOW_FREQUENCY], 20.0, 2_000.0),
+                0.7,
+                clamp(raw[Self::LOW_GAIN_DB], -24.0, 24.0),
+                self.sample_rate,
+            );
+            self.mid.set(
+                BiquadKind::Peaking,
+                clamp(raw[Self::MID_FREQUENCY], 100.0, 12_000.0),
+                clamp(raw[Self::MID_Q], 0.1, 18.0),
+                clamp(raw[Self::MID_GAIN_DB], -24.0, 24.0),
+                self.sample_rate,
+            );
+            self.high.set(
+                BiquadKind::HighShelf,
+                clamp(raw[Self::HIGH_FREQUENCY], 1_000.0, 20_000.0),
+                0.7,
+                clamp(raw[Self::HIGH_GAIN_DB], -24.0, 24.0),
+                self.sample_rate,
+            );
+        }
+
+        let dry = ports.input(0);
+        let wet = self.high.process(self.mid.process(self.low.process(dry)));
+        let out = self.shell.finish(ports, dry, wet, Self::MIX);
+        ports.output(0, out);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.sample_rate = sample_rate;
+        self.shell.set_sample_rate(sample_rate);
+        self.seen = [f32::NAN; 7];
+    }
+
+    fn reset(&mut self) {
+        self.low.clear();
+        self.mid.clear();
+        self.high.clear();
+        self.shell.reset();
+    }
+
+    fn input_count(&self) -> usize { 1 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::LOW_FREQUENCY => 200.0,
+            Self::MID_FREQUENCY => 1_000.0,
+            Self::MID_Q => 1.0,
+            Self::HIGH_FREQUENCY => 6_000.0,
+            Self::MIX => 1.0,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.audio-compressor` — envelope follower into a gain computer.
+pub struct CompressorModule {
+    follower: EnvelopeFollower,
+    computer: GainComputer,
+    shell: Shell,
+    sample_rate: f32,
+    seen: [f32; 5],
+}
+
+impl CompressorModule {
+    pub const THRESHOLD_DB: usize = 0;
+    pub const KNEE_DB: usize = 1;
+    pub const RATIO: usize = 2;
+    pub const ATTACK_SECONDS: usize = 3;
+    pub const RELEASE_SECONDS: usize = 4;
+    pub const MAKEUP_GAIN: usize = 5;
+    pub const MIX: usize = 6;
+    pub const LEVEL: usize = 7;
+    pub const MUTE: usize = 8;
+    pub const PARAM_COUNT: usize = 9;
+
+    pub fn new(sample_rate: f32) -> Self {
+        let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
+        let mut follower = EnvelopeFollower::new();
+        follower.set_times(0.01, 0.1, rate);
+        Self {
+            follower,
+            computer: GainComputer { threshold_db: -18.0, ratio: 4.0, mode: DynamicsMode::Compress },
+            shell: Shell::new(1.0),
+            sample_rate: rate,
+            seen: [f32::NAN; 5],
+        }
+    }
+}
+
+impl Module for CompressorModule {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let mut raw = [0.0; 5];
+        for (index, slot) in raw.iter_mut().enumerate() {
+            *slot = ports.param(index);
+        }
+        if raw != self.seen {
+            self.seen = raw;
+            // `KNEE_DB` keeps its slot so the parameter indices line up with
+            // the descriptor, but `GainComputer` is hard-knee — the DP/4's
+            // dynamics section models one continuous signed slope rather than a
+            // soft corner. Honouring the knee means adding it there, not
+            // faking it here.
+            self.computer = GainComputer {
+                threshold_db: clamp(raw[Self::THRESHOLD_DB], -60.0, 0.0),
+                ratio: clamp(raw[Self::RATIO], 1.0, 20.0),
+                mode: DynamicsMode::Compress,
+            };
+            self.follower.set_times(
+                clamp(raw[Self::ATTACK_SECONDS], 0.0001, 1.0),
+                clamp(raw[Self::RELEASE_SECONDS], 0.001, 4.0),
+                self.sample_rate,
+            );
+        }
+
+        let dry = ports.input(0);
+        let env = self.follower.process(dry);
+        let makeup = clamp(ports.param(Self::MAKEUP_GAIN), 0.0, 4.0);
+        let wet = dry * self.computer.gain_linear(env) * makeup;
+        let out = self.shell.finish(ports, dry, wet, Self::MIX);
+        ports.output(0, out);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.sample_rate = sample_rate;
+        self.shell.set_sample_rate(sample_rate);
+        self.seen = [f32::NAN; 5];
+    }
+
+    fn reset(&mut self) {
+        self.follower.clear();
+        self.shell.reset();
+    }
+
+    fn input_count(&self) -> usize { 1 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::THRESHOLD_DB => -18.0,
+            Self::KNEE_DB => 6.0,
+            Self::RATIO => 4.0,
+            Self::ATTACK_SECONDS => 0.01,
+            Self::RELEASE_SECONDS => 0.1,
+            Self::MAKEUP_GAIN => 1.0,
+            Self::MIX => 1.0,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.audio-limiter` — a brick wall, not an effect.
+///
+/// Mix is fixed fully wet and not exposed: a limiter blended half dry is not a
+/// limiter, and this is the module people put last to be safe.
+pub struct LimiterModule {
+    follower: EnvelopeFollower,
+    computer: GainComputer,
+    shell: Shell,
+    sample_rate: f32,
+    seen: [f32; 2],
+}
+
+impl LimiterModule {
+    pub const CEILING_DB: usize = 0;
+    pub const RELEASE_SECONDS: usize = 1;
+    pub const MIX: usize = 2;
+    pub const LEVEL: usize = 3;
+    pub const MUTE: usize = 4;
+    pub const PARAM_COUNT: usize = 5;
+
+    pub fn new(sample_rate: f32) -> Self {
+        let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
+        let mut follower = EnvelopeFollower::new();
+        follower.set_times(0.0005, 0.05, rate);
+        Self {
+            follower,
+            computer: GainComputer { threshold_db: -1.0, ratio: 1.0e6, mode: DynamicsMode::Compress },
+            shell: Shell::new(1.0),
+            sample_rate: rate,
+            seen: [f32::NAN; 2],
+        }
+    }
+}
+
+impl Module for LimiterModule {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let raw = [ports.param(Self::CEILING_DB), ports.param(Self::RELEASE_SECONDS)];
+        if raw != self.seen {
+            self.seen = raw;
+            // A limiter is compression at the ratio's limit; `gain_db` models
+            // infinity as 1e6 precisely so the curve stays continuous there.
+            self.computer = GainComputer {
+                threshold_db: clamp(raw[0], -24.0, 0.0),
+                ratio: 1.0e6,
+                mode: DynamicsMode::Compress,
+            };
+            // A fixed, very fast attack: a limiter that let a transient through
+            // while it ramped would not be one.
+            self.follower.set_times(0.0005, clamp(raw[1], 0.001, 1.0), self.sample_rate);
+        }
+
+        let dry = ports.input(0);
+        let env = self.follower.process(dry);
+        let wet = dry * self.computer.gain_linear(env);
+        let out = self.shell.finish(ports, dry, wet, Self::MIX);
+        ports.output(0, out);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.sample_rate = sample_rate;
+        self.shell.set_sample_rate(sample_rate);
+        self.seen = [f32::NAN; 2];
+    }
+
+    fn reset(&mut self) {
+        self.follower.clear();
+        self.shell.reset();
+    }
+
+    fn input_count(&self) -> usize { 1 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::CEILING_DB => -1.0,
+            Self::RELEASE_SECONDS => 0.05,
+            Self::MIX => 1.0,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.audio-bitcrusher` — quantise, then filter what that produced.
+pub struct BitcrusherModule {
+    tone: OnePole,
+    shell: Shell,
+    sample_rate: f32,
+    seen_tone: f32,
+}
+
+impl BitcrusherModule {
+    pub const TONE_HZ: usize = 0;
+    pub const BIT_DEPTH: usize = 1;
+    pub const MIX: usize = 2;
+    pub const LEVEL: usize = 3;
+    pub const MUTE: usize = 4;
+    pub const PARAM_COUNT: usize = 5;
+
+    pub fn new(sample_rate: f32) -> Self {
+        let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
+        let mut tone = OnePole::new();
+        tone.set_cutoff(6_000.0, rate);
+        Self { tone, shell: Shell::new(0.5), sample_rate: rate, seen_tone: f32::NAN }
+    }
+}
+
+impl Module for BitcrusherModule {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let hz = clamp(ports.param(Self::TONE_HZ), 200.0, 20_000.0);
+        if hz != self.seen_tone {
+            self.seen_tone = hz;
+            self.tone.set_cutoff(hz, self.sample_rate);
+        }
+        let bits = clamp(ports.param(Self::BIT_DEPTH), 1.0, 16.0);
+        // Levels per unit, so 1 bit is two levels and 16 is 65536.
+        let levels = 2.0f32.powf(bits);
+        let dry = ports.input(0);
+        // Round rather than truncate: truncation biases every sample toward
+        // zero, which is a DC offset on top of the intended distortion.
+        let crushed = (dry * levels).round() / levels;
+        let wet = self.tone.process(crushed);
+        let out = self.shell.finish(ports, dry, wet, Self::MIX);
+        ports.output(0, out);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.sample_rate = sample_rate;
+        self.shell.set_sample_rate(sample_rate);
+        self.seen_tone = f32::NAN;
+    }
+
+    fn reset(&mut self) {
+        self.tone.clear();
+        self.shell.reset();
+    }
+
+    fn input_count(&self) -> usize { 1 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::TONE_HZ => 6_000.0,
+            Self::BIT_DEPTH => 8.0,
+            Self::MIX => 0.5,
+            _ => 0.0,
+        }
+    }
+}
+
 /// Every module the host can name, so the shim never matches on strings.
 ///
 /// The discriminants are part of the wire protocol between TypeScript and
@@ -635,6 +1456,14 @@ pub enum ModuleKind {
     AudioOutput = 2,
     Synth = 3,
     Blackhole = 4,
+    Dp4Reverb = 5,
+    Dp4NonLin = 6,
+    Delay = 7,
+    Reverb = 8,
+    Eq = 9,
+    Compressor = 10,
+    Limiter = 11,
+    Bitcrusher = 12,
 }
 
 impl ModuleKind {
@@ -645,6 +1474,14 @@ impl ModuleKind {
             2 => Some(Self::AudioOutput),
             3 => Some(Self::Synth),
             4 => Some(Self::Blackhole),
+            5 => Some(Self::Dp4Reverb),
+            6 => Some(Self::Dp4NonLin),
+            7 => Some(Self::Delay),
+            8 => Some(Self::Reverb),
+            9 => Some(Self::Eq),
+            10 => Some(Self::Compressor),
+            11 => Some(Self::Limiter),
+            12 => Some(Self::Bitcrusher),
             _ => None,
         }
     }
@@ -656,12 +1493,37 @@ impl ModuleKind {
     /// that had to survive being built at the wrong rate first is a module with
     /// two initialisation paths.
     pub fn build_at(self, sample_rate: f32) -> Box<dyn Module> {
+        self.build_variant_at(0, sample_rate)
+    }
+
+    /// Build with a structural variant — the DP/4's algorithm, Non Lin's
+    /// flavour.
+    ///
+    /// Separate from a parameter because it decides *topology*: how many delay
+    /// lines the tank has, whether there is a pre-echo section at all. Those
+    /// are fixed at construction and allocate, so they cannot be a value
+    /// arriving on the audio thread. The host already treats such controls as
+    /// structural and rebuilds the node when one changes, which is exactly the
+    /// remove-then-add this pairs with. Kinds with no variants ignore it.
+    pub fn build_variant_at(self, variant: u32, sample_rate: f32) -> Box<dyn Module> {
         match self {
             Self::HostInput => Box::<HostInput>::default(),
             Self::Gain => Box::<Gain>::default(),
             Self::AudioOutput => Box::<AudioOutput>::default(),
             Self::Synth => Box::new(Synth::new(sample_rate)),
             Self::Blackhole => Box::new(BlackholeVerb::new(sample_rate)),
+            Self::Dp4Reverb => {
+                Box::new(Dp4ReverbModule::new(Dp4Algorithm::from_u32(variant), sample_rate))
+            }
+            Self::Dp4NonLin => {
+                Box::new(Dp4NonLinModule::new(NonLinVariant::from_u32(variant), sample_rate))
+            }
+            Self::Delay => Box::new(DelayModule::new(sample_rate)),
+            Self::Reverb => Box::new(ReverbModule::new(sample_rate)),
+            Self::Eq => Box::new(EqModule::new(sample_rate)),
+            Self::Compressor => Box::new(CompressorModule::new(sample_rate)),
+            Self::Limiter => Box::new(LimiterModule::new(sample_rate)),
+            Self::Bitcrusher => Box::new(BitcrusherModule::new(sample_rate)),
         }
     }
 
@@ -701,6 +1563,194 @@ mod tests {
             peak = peak.max(engine.output_of(output, 0).abs());
         }
         peak
+    }
+
+    /// input → effect → output, with the shell's fade opened.
+    fn effect_chain(kind: ModuleKind, level_index: usize) -> (Engine, u32, u32, u32) {
+        let mut engine = Engine::new(RATE);
+        let input = engine.add(ModuleKind::HostInput.build());
+        let fx = engine.add(kind.build());
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: input, port: 0 }, PortRef { module: fx, port: 0 });
+        engine.connect(PortRef { module: fx, port: 0 }, PortRef { module: output, port: 0 });
+        engine.set_param(fx, level_index, 1.0);
+        (engine, input, fx, output)
+    }
+
+    /// Every effect, with the index of its MIX parameter — MIX, LEVEL and MUTE
+    /// are always consecutive, which is the shell contract.
+    const EFFECTS: [(ModuleKind, usize); 8] = [
+        (ModuleKind::Dp4Reverb, Dp4ReverbModule::MIX),
+        (ModuleKind::Dp4NonLin, Dp4NonLinModule::MIX),
+        (ModuleKind::Delay, DelayModule::MIX),
+        (ModuleKind::Reverb, ReverbModule::MIX),
+        (ModuleKind::Eq, EqModule::MIX),
+        (ModuleKind::Compressor, CompressorModule::MIX),
+        (ModuleKind::Limiter, LimiterModule::MIX),
+        (ModuleKind::Bitcrusher, BitcrusherModule::MIX),
+    ];
+
+    #[test]
+    fn every_effect_is_reachable_by_its_wire_number() {
+        for (index, kind) in [
+            (5, ModuleKind::Dp4Reverb),
+            (6, ModuleKind::Dp4NonLin),
+            (7, ModuleKind::Delay),
+            (8, ModuleKind::Reverb),
+            (9, ModuleKind::Eq),
+            (10, ModuleKind::Compressor),
+            (11, ModuleKind::Limiter),
+            (12, ModuleKind::Bitcrusher),
+        ] {
+            assert_eq!(ModuleKind::from_u32(index), Some(kind), "kind {index} drifted");
+            assert_eq!(kind as u32, index);
+        }
+    }
+
+    #[test]
+    fn every_effect_passes_the_dry_signal_at_zero_mix() {
+        // The shell contract. A mix of zero has to be a clean bypass on all of
+        // them, or automating mix to zero is not the escape hatch it looks like.
+        for (kind, mix) in EFFECTS {
+            let (mut engine, input, fx, output) = effect_chain(kind, mix + 1);
+            engine.set_param(fx, mix, 0.0);
+            settle(&mut engine);
+            let out = steady(&mut engine, input, output, 0.5);
+            assert!((out - 0.5).abs() < 1e-3, "{kind:?} did not pass dry at zero mix: {out}");
+        }
+    }
+
+    #[test]
+    fn every_effect_goes_silent_when_muted() {
+        for (kind, mix) in EFFECTS {
+            let (mut engine, input, fx, output) = effect_chain(kind, mix + 1);
+            engine.set_param(fx, mix + 2, 1.0);
+            settle(&mut engine);
+            assert_eq!(steady(&mut engine, input, output, 1.0), 0.0, "{kind:?} was audible muted");
+        }
+    }
+
+    #[test]
+    fn every_effect_is_silent_before_its_fade_is_opened() {
+        // Modules are built silent so the adapter can fade them in; that is
+        // what keeps a rebuild from popping.
+        for (kind, mix) in EFFECTS {
+            let mut engine = Engine::new(RATE);
+            let input = engine.add(ModuleKind::HostInput.build());
+            let fx = engine.add(kind.build());
+            let output = engine.add(ModuleKind::AudioOutput.build());
+            engine.connect(PortRef { module: input, port: 0 }, PortRef { module: fx, port: 0 });
+            engine.connect(PortRef { module: fx, port: 0 }, PortRef { module: output, port: 0 });
+            let _ = mix;
+            settle(&mut engine);
+            assert_eq!(steady(&mut engine, input, output, 1.0), 0.0, "{kind:?} was audible unfaded");
+        }
+    }
+
+    #[test]
+    fn every_effect_stays_finite_under_a_hostile_sweep() {
+        for (kind, mix) in EFFECTS {
+            let (mut engine, input, fx, output) = effect_chain(kind, mix + 1);
+            let count = kind.build().param_count();
+            for step in 0..=6 {
+                let t = step as f32 / 6.0;
+                for index in 0..count {
+                    // Deliberately nonsense for most parameters: every one is
+                    // swept over a range far wider than its descriptor allows.
+                    engine.set_param(fx, index, t * 2.0 - 1.0);
+                }
+                engine.set_param(fx, mix + 1, 1.0);
+                for i in 0..1_500 {
+                    engine.set_param(input, HostInput::SAMPLE, if i % 97 == 0 { 1.0 } else { 0.0 });
+                    engine.process();
+                    let out = engine.output_of(output, 0);
+                    assert!(out.is_finite(), "{kind:?} went non-finite at step {step}");
+                    assert!(out.abs() < 50.0, "{kind:?} ran away at step {step}: {out}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_structural_variant_reaches_the_module_it_builds() {
+        // The whole reason `build_variant_at` exists: the algorithm decides the
+        // topology and cannot arrive later as a parameter.
+        let hall = ModuleKind::Dp4Reverb.build_variant_at(Dp4Algorithm::Hall as u32, RATE);
+        assert_eq!(hall.param_count(), Dp4ReverbModule::PARAM_COUNT);
+        let nonlin = ModuleKind::Dp4NonLin.build_variant_at(NonLinVariant::NonLin2 as u32, RATE);
+        assert_eq!(nonlin.param_count(), Dp4NonLinModule::PARAM_COUNT);
+        // A kind with no variants ignores it rather than refusing to build.
+        assert_eq!(ModuleKind::Gain.build_variant_at(7, RATE).param_count(), 3);
+    }
+
+    #[test]
+    fn the_delay_actually_delays() {
+        let (mut engine, input, fx, output) = effect_chain(ModuleKind::Delay, DelayModule::MIX + 1);
+        engine.set_param(fx, DelayModule::MIX, 1.0);
+        engine.set_param(fx, DelayModule::DELAY_SECONDS, 0.01);
+        engine.set_param(fx, DelayModule::FEEDBACK, 0.0);
+        settle(&mut engine);
+        engine.set_param(input, HostInput::SAMPLE, 1.0);
+        engine.process();
+        engine.set_param(input, HostInput::SAMPLE, 0.0);
+        // Nothing at once…
+        let mut early = 0.0f32;
+        for _ in 0..((RATE * 0.005) as usize) {
+            engine.process();
+            early = early.max(engine.output_of(output, 0).abs());
+        }
+        // …then the repeat.
+        let mut later = 0.0f32;
+        for _ in 0..((RATE * 0.02) as usize) {
+            engine.process();
+            later = later.max(engine.output_of(output, 0).abs());
+        }
+        assert!(early < 1e-4, "the delay was not delaying: {early}");
+        assert!(later > 1e-3, "the repeat never arrived: {later}");
+    }
+
+    #[test]
+    fn the_bitcrusher_quantises_without_a_dc_offset() {
+        // Rounding rather than truncating: truncation biases every sample
+        // toward zero, which is DC on top of the intended distortion.
+        let (mut engine, input, fx, output) =
+            effect_chain(ModuleKind::Bitcrusher, BitcrusherModule::MIX + 1);
+        engine.set_param(fx, BitcrusherModule::MIX, 1.0);
+        engine.set_param(fx, BitcrusherModule::BIT_DEPTH, 2.0);
+        engine.set_param(fx, BitcrusherModule::TONE_HZ, 20_000.0);
+        settle(&mut engine);
+        let positive = steady(&mut engine, input, output, 0.3);
+        let negative = steady(&mut engine, input, output, -0.3);
+        assert!((positive + negative).abs() < 0.05, "asymmetric crush: {positive} vs {negative}");
+    }
+
+    #[test]
+    fn the_limiter_holds_the_ceiling() {
+        let (mut engine, input, fx, output) =
+            effect_chain(ModuleKind::Limiter, LimiterModule::MIX + 1);
+        engine.set_param(fx, LimiterModule::MIX, 1.0);
+        engine.set_param(fx, LimiterModule::CEILING_DB, -6.0);
+        settle(&mut engine);
+        let loud = steady(&mut engine, input, output, 1.0).abs();
+        // -6 dB is about 0.5; allow the follower's own slop.
+        assert!(loud < 0.75, "the limiter let {loud} through a -6 dB ceiling");
+    }
+
+    #[test]
+    fn the_eq_is_flat_at_zero_gain_and_not_at_others() {
+        let (mut engine, input, fx, output) = effect_chain(ModuleKind::Eq, EqModule::MIX + 1);
+        engine.set_param(fx, EqModule::MIX, 1.0);
+        engine.set_param(fx, EqModule::LOW_FREQUENCY, 200.0);
+        engine.set_param(fx, EqModule::MID_FREQUENCY, 1_000.0);
+        engine.set_param(fx, EqModule::MID_Q, 1.0);
+        engine.set_param(fx, EqModule::HIGH_FREQUENCY, 6_000.0);
+        settle(&mut engine);
+        let flat = steady(&mut engine, input, output, 0.5);
+        assert!((flat - 0.5).abs() < 1e-2, "a flat EQ coloured DC: {flat}");
+        engine.set_param(fx, EqModule::LOW_GAIN_DB, 12.0);
+        settle(&mut engine);
+        let boosted = steady(&mut engine, input, output, 0.5);
+        assert!(boosted > flat, "a low shelf boost did nothing at DC");
     }
 
     #[test]

@@ -98,6 +98,17 @@ pub extern "C" fn add_module(kind: u32) -> u32 {
     }
 }
 
+/// Add a module with a structural variant — the DP/4's algorithm, Non Lin's
+/// flavour. Kinds with no variants ignore it, so this is a superset of
+/// `add_module` rather than a replacement for it.
+#[no_mangle]
+pub extern "C" fn add_module_variant(kind: u32, variant: u32) -> u32 {
+    let Some(kind) = ModuleKind::from_u32(kind) else { return NO_MODULE };
+    let Some(engine) = engine() else { return NO_MODULE };
+    let rate = engine.sample_rate();
+    engine.add(kind.build_variant_at(variant, rate))
+}
+
 #[no_mangle]
 pub extern "C" fn remove_module(id: u32) -> u32 {
     u32::from(engine().map(|e| e.remove(id)).unwrap_or(false))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WasmRack, MODULE_KINDS, PARAM_INDICES, NO_MODULE, type EngineExports } from "./engineBridge";
+import { WasmRack, MODULE_KINDS, PARAM_INDICES, NO_MODULE, variantOf, type EngineExports } from "./engineBridge";
 import type { AudioPlan, AudioNodeSpec } from "../audioPlan";
 
 /**
@@ -32,11 +32,18 @@ class FakeEngine implements EngineExports {
   init(sampleRate: number): void {
     this.calls.push(`init:${sampleRate}`);
   }
+  variants = new Map<number, number>();
   add_module(kind: number): number {
     if (this.unknownKinds.has(kind)) return -1; // u32::MAX, seen from JS as i32
     const id = this.nextId++;
     this.modules.set(id, kind);
     this.calls.push(`add:${kind}→${id}`);
+    return id;
+  }
+  /** Records the variant so a test can assert the algorithm reached the ABI. */
+  add_module_variant(kind: number, variant: number): number {
+    const id = this.add_module(kind);
+    if (id >= 0) this.variants.set(id, variant);
     return id;
   }
   remove_module(id: number): number {
@@ -145,6 +152,36 @@ const simplePlan = () =>
     [node("g", "m.audio-gain", { gain: 0.5 }), node("out", "m.audio-output", {})],
     [wire("g", "out")],
   );
+
+describe("variantOf", () => {
+  it("maps a structural name onto the number Rust builds from", () => {
+    // The order is the wire protocol: it matches `Dp4Algorithm` in Rust, so a
+    // reordering here silently turns every saved hall into a plate.
+    expect(variantOf("m.audio-dp4-reverb", { algorithm: "small-plate" })).toBe(0);
+    expect(variantOf("m.audio-dp4-reverb", { algorithm: "hall" })).toBe(4);
+    expect(variantOf("m.audio-dp4-nonlin", { variant: "non-lin-2" })).toBe(1);
+  });
+
+  it("builds the default for a name this build does not know", () => {
+    // A document from a newer build should still make a sound.
+    expect(variantOf("m.audio-dp4-reverb", { algorithm: "cathedral" })).toBe(0);
+    expect(variantOf("m.audio-dp4-reverb", {})).toBe(0);
+  });
+
+  it("is zero for a module that has no variants at all", () => {
+    expect(variantOf("m.audio-gain", { algorithm: "hall" })).toBe(0);
+    expect(variantOf("m.synth", {})).toBe(0);
+  });
+
+  it("carries the algorithm through to the engine", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(
+      plan([node("v", "m.audio-dp4-reverb", {}, { structure: { algorithm: "hall" } })]),
+    );
+    expect(engine.variants.get(rack.moduleIdOf("v")!)).toBe(4);
+  });
+});
 
 describe("The plan-to-engine bridge", () => {
   it("initialises the engine at the context's sample rate", () => {
@@ -300,19 +337,23 @@ describe("The plan-to-engine bridge", () => {
   });
 
   it("skips a module type the engine does not have yet", () => {
-    // During the migration most modules are still Web Audio. A plan naming one
+    // During the migration some modules are still Web Audio. A plan naming one
     // must leave the rest of the rack working rather than take it down.
+    //
+    // `m.percussion` is the stand-in because it is genuinely unported — it
+    // needs the sample bank wired to a voice. This used to be `m.audio-reverb`
+    // until that landed in Rust, and the test failing was the correct signal.
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update(
       plan(
-        [node("r", "m.audio-reverb", {}), node("out", "m.audio-output", {})],
+        [node("r", "m.percussion", {}), node("out", "m.audio-output", {})],
         [wire("r", "out")],
       ),
     );
     expect(rack.moduleIdOf("r")).toBeUndefined();
     expect(rack.moduleIdOf("out")).not.toBeUndefined();
-    expect(rack.unsupported).toEqual(["m.audio-reverb"]);
+    expect(rack.unsupported).toEqual(["m.percussion"]);
   });
 
   it("treats a refused module id as a failure rather than a negative id", () => {
@@ -332,7 +373,7 @@ describe("The plan-to-engine bridge", () => {
     const rack = new WasmRack(engine, 48000);
     rack.update(
       plan(
-        [node("r", "m.audio-reverb", {}), node("out", "m.audio-output", {})],
+        [node("r", "m.percussion", {}), node("out", "m.audio-output", {})],
         [wire("r", "out")],
       ),
     );
