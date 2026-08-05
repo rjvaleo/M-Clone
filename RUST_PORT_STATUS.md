@@ -1,6 +1,7 @@
 # The Rust audio port — state, and what to do next
 
-**Written 2026-08-05, at the end of a long session. Branch `modular`.**
+**Written 2026-08-05; updated the same day after §2 and §4a–4d landed.
+Branch `modular`.**
 
 This is the authoritative handoff for the audio migration. `MODULAR_MODULE_MAP.md`
 is stale (it claims sixteen of forty modules registered; it is sixty-one, and
@@ -39,48 +40,24 @@ silently and says so.
 Build artifacts: `npm run build:engine` → `public/idmlab-engine.wasm` +
 `public/idmlab-rack.js`. Both gitignored.
 
-**Test counts at last green run:** 2029 TS, 284 Rust, coverage gate passing,
+**Test counts at last green run:** 2068 TS, 291 Rust, coverage gate at 100 %,
 `npm run verify:wasm` passing, `npm run build` clean.
 
 ---
 
-## 2. UNCOMMITTED WORK — read this first
+## 2. The sample loop — done, and proven live
 
-The working tree holds the **sample-transfer loop**, finished and fully green
-but not committed. Verified before stopping: typecheck, 2029 TS tests, 284 Rust
-tests, coverage gate, `verify:wasm`, `build` — all passing.
+The sample-transfer loop is committed and **verified in a real browser**, which
+is what §2 used to be waiting for. On `?engine=rust`, with Audio on, adding a
+Percussion node puts the starter kit in WASM memory; the status bar reads
+`2 in engine · 3 samples`. That number comes from `sample_count()` over the
+telemetry channel, not from an inference about whether sound came out.
 
-Modified:
-- `src/modular/audio/audioEngine.ts` (+test) — `sendSamples()` pushes decoded
-  assets to the rack before each plan
-- `src/modular/audio/wasm/engineBridge.ts` (+test) — `loadSample`,
-  `setSampleMap`, `assignSamples()` from the plan
-- `src/modular/audio/wasm/rackNode.ts` (+test) — `loadSample`, `setSampleMap`
-- `src/modular/audio/wasm/rackProtocol.ts` — two new messages: `sample`,
-  `sample-map`
-- `src/modular/audio/wasm/rackWorklet.ts` — handles both
-
-New (untracked):
-- `src/modular/audio/wasm/sampleSync.ts` (+test) — `planSampleRefs`,
-  `SampleSlots`
-
-**What it does:** a document names audio by content hash; the engine addresses
-it by `u32`. `SampleSlots` maps between them. On each `update`, `AudioEngine`
-finds every sample the plan wants, transfers any it has not sent (channel
-buffers are *transferred*, not copied — 40 MB per stereo file), then posts the
-plan. Order matters and is tested: audio before plan, or the sampler points at
+A document names audio by content hash; the engine addresses it by `u32`.
+`SampleSlots` is the translation, per-rack rather than global because `init`
+rebuilds the engine and its bank together. Audio goes before the plan and it
+has a test — a plan naming a sample the engine does not hold assigns a slot to
 nothing.
-
-**The one thing not proven:** I never confirmed in a live browser session that a
-sample actually lands in WASM memory. Everything is unit-tested and the path is
-wired end to end; Percussion and Granular both add cleanly on `?engine=rust`
-with no console errors, and Percussion renders its 8 slot rows. But
-"audio reaches the bank at runtime" is verified only by fakes.
-
-**First action on resume:** either commit this, or verify it in the browser and
-then commit. See §4 for how.
-
----
 
 ## 3. Architecture notes worth not rediscovering
 
@@ -97,6 +74,17 @@ then commit. See §4 for how.
 - **Every effect shares a `Shell`** — mix, level, mute, always the last three
   consecutive parameters. Four tests assert that contract across all eight
   effects at once.
+- **Notes carry `detuneCents` and a `nodeId`, and both are required.** The
+  first because the scale quantisers split a pitch into a note plus a
+  remainder and dropping it made all 81 microtonal scales sound like 12-TET;
+  the second because dropping it made every instrument play every note. Both
+  were easy to omit when they were optional, which is why they are not.
+- **`process_range(start, len)` renders part of a quantum**, which is what
+  makes note timing sample-accurate. `process_quantum` is that call over the
+  whole buffer — do not add a second copy of the hot loop.
+- **The port runs both ways now.** `RackReport` comes back every 16 quanta.
+  `takeReport` is a pull so the "is one due" decision sits in `engineBridge.ts`
+  where it can be tested, rather than as a counter in the untestable worklet.
 - **Growing WASM memory detaches JS views.** This bit twice. `WasmRack.input`/
   `.output` are getters that re-derive; `sampleTransfer.ts` takes its view
   *after* `sample_alloc`. Do not "optimise" either back into a field.
@@ -105,51 +93,54 @@ then commit. See §4 for how.
 
 ## 4. What to do next, in order
 
-### 4a. Commit the sample loop (or verify first)
+**4a–4d as originally written are all done.** Detune reaches the oscillator,
+notes fire at the frame the score asked for, and the worklet reports back.
+What is left is the one that was always last:
 
-To verify in the browser before committing:
+### 4a. Do NOT delete the Web Audio path yet
 
-```bash
-npm run build:engine && npm run dev
-```
+This was the plan, and the assessment done while attempting it says no. Two
+reasons, both concrete:
 
-Then open `http://localhost:5173/?engine=rust`, click **Audio**, add a
-**Percussion** node from the right-click menu. Its default slots reference the
-synthetic starter kit, so audio should transfer with no file dropped. Confirm
-via `sample_count()` on the engine, or add temporary telemetry from the worklet
-— there is currently **no telemetry channel from worklet to main thread**,
-which is why this was not straightforward.
+**The Rust path is still opt-in.** Deleting the Web Audio renderer without
+first making Rust the default leaves the default path with no renderer at all.
+Making Rust the default is a separate change and needs its own verification.
 
-### 4b. Note detune through Rust (task #71) — a correctness gap in shipped code
+**Parity is not established, and the search for it found a real bug.** Notes
+were being broadcast to every instrument rather than routed to the one they
+were addressed to — a four-part kit played all four parts on each hit. That is
+fixed, but it was found by looking, not by a test failing, which is the
+argument for keeping a working fallback until more of the surface has been
+exercised.
 
-The scale quantisers split a pitch into MIDI note + `detuneCents`, and the Web
-Audio synth applies it. **The Rust path drops it entirely**, so all 81
-microtonal scales currently sound like 12-TET on the engine everything is
-moving to.
+The order that would actually work:
 
-Thread cents through: `rackProtocol.ts` note-on → `rackNode.ts` → `engineBridge`
-→ `rust/wasm/src/lib.rs` `note_on` → `Module::note_on` in `engine.rs` → `Synth`
-in `modules.rs` → `VoiceBank` in `bank.rs` → `Voice` in `voice.rs` where the
-oscillator frequency is set. Every Rust test call site needs the extra argument.
+1. Build a patch with several instruments and several effects, and listen to
+   it on both backends. Nothing below the level of "does this sound the same"
+   will catch the next gap.
+2. Make Rust the default (`preferredEngine` in `rackNode.ts`), keeping
+   `?engine=web-audio` as the escape hatch.
+3. Run on that for a while.
+4. Then delete `graphAdapter`, `effects`, `players`, `synthPlayer`,
+   `synthVoice`, `voices`, `nodes`, `voicePool`, `grains`, `reverbTank`,
+   `blackhole`, `dp4`, `transitions`, `params` and their tests — about 4,000
+   lines of source and as much again of test.
 
-### 4c. Scheduled note timing
+Note what is **not** deleted, because it is not the Web Audio *path*: the
+`AudioContext` itself, `masterChain` (the rack connects into its input),
+`audition`, `decode`, `waveform`, `kit`, `assets`. Those stay whatever the
+renderer is.
 
-`RackMessage` carries no timestamp, so a Rust note sounds when its message is
-handled rather than at `atSec`. The Web Audio path *is* sample-accurate here.
-Needs a scheduled-note message and a queue on the Rust side. Documented in
-`rackNotePlayer.ts`.
+### 4b. Meters, now that there is something to draw them from
 
-### 4d. Telemetry channel worklet → main thread
+`RackReport.peak` is measured and delivered and nothing draws it. The status
+bar shows module and sample counts only. Per-node voice counts need one more
+ABI call — the engine knows `active_count` per bank but does not export it.
 
-Needed for voice counts on node faces, meters, and to make 4a verifiable.
-Nothing exists yet.
+### 4c. The event side
 
-### 4e. Only then: delete the Web Audio path
-
-Do **not** do this before 4b–4c. Removing the fallback earlier replaces working
-audio with silence.
-
----
+See §7. 28 modules render, appear in the menu, can be patched, and do nothing.
+That is now a bigger gap than anything left in the audio layer.
 
 ## 5. Decisions already made — do not silently revisit
 
@@ -184,7 +175,8 @@ audio with silence.
 - **`reference/details/`** — Sugar Bytes / O3 panel images, never ingested.
 - **Untracked and deliberately not committed:** `fonts/` (licensing),
   `reference/machines/` + `reference/theory/` (70 MB of PDFs),
-  `Audio - Archival LIBRARY/` and `Audio - dec 2004 sound design/` (new, unexamined).
+  `Audio - Archival LIBRARY/` and `Audio - dec 2004 sound design/`, and
+  `reference/emulate/` (all new, all unexamined).
 
 ---
 
