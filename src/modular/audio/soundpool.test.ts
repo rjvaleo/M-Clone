@@ -15,6 +15,26 @@ import { emptyGraph } from "../model/graph";
 const sample = (length = 64): Uint8Array =>
   Uint8Array.from({ length }, (_, i) => (i * 7) % 256);
 
+/** A minimal 16-bit mono 44.1 kHz AIFF holding the given samples. */
+const aiffBytes = (samples: number[]): Uint8Array => {
+  const be32 = (v: number) => [(v >>> 24) & 0xff, (v >>> 16) & 0xff, (v >>> 8) & 0xff, v & 0xff];
+  const ascii = (text: string) => [...text].map((c) => c.charCodeAt(0));
+  // 44100 as an 80-bit IEEE extended float, taken from a real file's COMM.
+  const rate = [0x40, 0x0e, 0xac, 0x44, 0, 0, 0, 0, 0, 0];
+  const comm = [0, 1, ...be32(samples.length), 0, 16, ...rate];
+  const ssnd = [
+    ...be32(0),
+    ...be32(0),
+    ...samples.flatMap((v) => [(v >> 8) & 0xff, v & 0xff]),
+  ];
+  const body = [
+    ...ascii("AIFF"),
+    ...ascii("COMM"), ...be32(comm.length), ...comm,
+    ...ascii("SSND"), ...be32(ssnd.length), ...ssnd,
+  ];
+  return new Uint8Array([...ascii("FORM"), ...be32(body.length), ...body]);
+};
+
 describe("Decoding a dropped file", () => {
   it("hashes the caller's bytes before handing the decoder a copy", async () => {
     // `decodeAudioData` detaches what it is given. Hashing afterwards would see
@@ -54,6 +74,38 @@ describe("Decoding a dropped file", () => {
     });
     expect(result.asset.record.durationSec).toBeCloseTo(0.1, 6);
     expect(result.asset.record.peaks.length).toBeGreaterThan(0);
+  });
+
+  it("decodes an AIFF the browser refuses", async () => {
+    // Chromium has no AIFF decoder, and a real sample library is mostly AIFF —
+    // without the fallback in `decode.ts` the pool silently rejects most of
+    // what someone drops on it. The fake refuses these exactly as Chrome does.
+    const context = new FakeAudioContext(44100);
+    const result = await decodeAsset(context, "hit.aif", aiffBytes([0, 16384, -16384, 0]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.asset.record.channels).toBe(1);
+    expect(result.asset.record.sampleRate).toBe(44100);
+    expect(result.asset.buffer.getChannelData(0)[1]).toBeCloseTo(0.5, 3);
+  });
+
+  it("still hashes an AIFF from the caller's own bytes", async () => {
+    // The failed `decodeAudioData` detached the copy on its way to rejecting,
+    // so the fallback has to read the original — the same trap as above, one
+    // step further along.
+    const context = new FakeAudioContext(44100);
+    const bytes = aiffBytes([0, 1000, -1000, 0]);
+    const expected = assetIdForBytes(bytes);
+    const result = await decodeAsset(context, "hit.aif", bytes);
+    expect(result.ok && result.asset.record.id).toBe(expected);
+  });
+
+  it("reports an AIFF it genuinely cannot read rather than pretending", async () => {
+    const context = new FakeAudioContext();
+    const broken = aiffBytes([0, 0]);
+    broken[9] = 0xff; // corrupt the FORM size, then truncate the chunks away
+    const result = await decodeAsset(context, "broken.aif", broken.slice(0, 12));
+    expect(result.ok).toBe(false);
   });
 
   it("returns a failure instead of throwing, so one bad file is not the whole drop", async () => {

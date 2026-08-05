@@ -148,6 +148,13 @@ export interface EffectContext {
 export interface SampleContext extends EffectContext {
   createBufferSource(): AudioBufferSourceNodeLike;
   /**
+   * An empty buffer to fill. Needed by decoders this codebase implements
+   * itself — see `aiff.ts`, which exists because Chromium has no AIFF support
+   * — and it has to produce a real `AudioBuffer` rather than a plain object,
+   * because an `AudioBufferSourceNode` will not accept anything else.
+   */
+  createBuffer(channels: number, frames: number, sampleRate: number): AudioBufferLike;
+  /**
    * Note that this **detaches** the buffer it is given: the caller keeps no
    * usable copy afterwards, so anything else that needs the bytes must read
    * them first or hand over a copy.
