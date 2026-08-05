@@ -54,6 +54,7 @@ pub mod envelope;
 pub mod dynamics;
 pub mod fdn;
 pub mod filter;
+pub mod grain;
 pub mod lfo;
 pub mod modmatrix;
 pub mod modules;
