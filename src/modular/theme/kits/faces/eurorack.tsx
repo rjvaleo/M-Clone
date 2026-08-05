@@ -11,6 +11,7 @@
 
 import { knobAngle, normalize, polarToCartesian, sliderPosition, stepperStep, tickAngles } from "../geometry";
 import type { ButtonProps, JackProps, KitFace, KnobFaceProps, LedProps, SliderFaceProps, StepperProps, ToggleProps } from "../types";
+import { makeParts } from "./parts";
 
 const ACCENT = "var(--mm-accent, #f2c14e)";
 const INK = "var(--mm-text, #1a1815)";
@@ -150,4 +151,22 @@ function stepper(props: StepperProps) {
   );
 }
 
-export const eurorackFace: KitFace = { knob, slider, toggle, button, jack, led, stepper };
+// Screen-printed on a white aluminium panel: near-square corners, dark ink,
+// and the tight condensed caps a panel printer actually uses.
+const parts = makeParts({
+  radius: 2,
+  filled: true,
+  readoutFont: '700 12px/1 ui-monospace, "SF Mono", Menlo, monospace',
+  labelFont: '700 9.5px/1.2 ui-sans-serif, "Helvetica Neue", sans-serif',
+  ink: INK,
+  accent: ACCENT,
+  dim: "rgba(26,24,21,.5)",
+  surface: "var(--mm-surface, #efece6)",
+  border: PANEL_LINE,
+  onAccent: "var(--mm-on-accent, #1a1815)",
+  warn: "var(--status-blocked-text, #c0392b)",
+  meterGap: 1.5,
+  handleHeight: 14,
+});
+
+export const eurorackFace: KitFace = { knob, slider, toggle, button, jack, led, stepper, ...parts };

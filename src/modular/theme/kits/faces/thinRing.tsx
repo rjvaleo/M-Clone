@@ -12,6 +12,7 @@
 
 import { describeArc, knobAngle, normalize, polarToCartesian, sliderPosition, stepperStep } from "../geometry";
 import type { ButtonProps, JackProps, KitFace, KnobFaceProps, LedProps, SliderFaceProps, StepperProps, ToggleProps } from "../types";
+import { makeParts } from "./parts";
 
 const RING_TRACK = "rgba(255,255,255,.12)";
 const ACCENT = "var(--mm-accent, #5fd0c2)";
@@ -185,4 +186,22 @@ function stepper(props: StepperProps) {
   );
 }
 
-export const thinRingFace: KitFace = { knob, slider, toggle, button, jack, led, stepper };
+// The softest corners of the six, and proportional type throughout — this
+// kit is a modern plugin GUI, not a piece of hardware pretending to be one.
+const parts = makeParts({
+  radius: 8,
+  filled: true,
+  readoutFont: '600 12px/1 ui-sans-serif, system-ui, sans-serif',
+  labelFont: '500 10px/1.2 ui-sans-serif, system-ui, sans-serif',
+  ink: INK,
+  accent: ACCENT,
+  dim: "var(--mm-muted, #8a97a0)",
+  surface: "var(--mm-surface-2, #1a1f24)",
+  border: RING_TRACK,
+  onAccent: "var(--mm-on-accent, #05100e)",
+  warn: "var(--status-blocked-text, #e4574b)",
+  meterGap: 2,
+  handleHeight: 14,
+});
+
+export const thinRingFace: KitFace = { knob, slider, toggle, button, jack, led, stepper, ...parts };

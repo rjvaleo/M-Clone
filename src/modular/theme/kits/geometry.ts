@@ -185,3 +185,130 @@ export function dragDeltaToValue(
   const deltaT = -pixelDeltaY / sensitivity;
   return clamp(startValue + deltaT * range, min, max);
 }
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** An SVG path through a run of points: one move, then a line to each of
+ * the rest. Shared by the envelope and by any face drawing a curve. */
+export function polylinePath(points: readonly Point[]): string {
+  if (points.length === 0) return "";
+  return points
+    .slice(1)
+    .reduce((d, p) => `${d} L ${p.x} ${p.y}`, `M ${points[0].x} ${points[0].y}`);
+}
+
+/** An ADSR envelope. `attack`/`decay`/`release` are relative durations —
+ * any non-negative numbers, read as a ratio between the three — while
+ * `sustain` is a level in `0..1`. */
+export interface EnvelopeShape {
+  attack: number;
+  decay: number;
+  sustain: number;
+  release: number;
+}
+
+/**
+ * How much of an envelope display's width is given to the held sustain
+ * segment, rather than shared out between attack, decay and release.
+ *
+ * An envelope's sustain has no duration of its own — it lasts as long as
+ * the key is held — so it cannot be scaled from a parameter the way the
+ * other three stages are. Every drawn envelope in `CATALOG.md` solves this
+ * the same way: reserve a fixed slice of the width for the flat part, and
+ * let the sloped parts compete for what remains.
+ */
+const SUSTAIN_HOLD_FRACTION = 0.22;
+
+/** A stage duration, guarding against negatives and NaN. Unlike a level,
+ * a duration has no upper bound — it is only meaningful relative to the
+ * other two stages. */
+function stageTime(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/**
+ * The five corners of an ADSR shape, in a box `width` × `height`, with `y`
+ * measured downward from the top the way SVG does — so the peak sits at
+ * `y = 0` and silence at `y = height`.
+ *
+ * Returned as points rather than a path so a face can do more than stroke
+ * them: the kits that draw handles need somewhere to put them, and the LCD
+ * kit quantises the same points onto its pixel grid before drawing.
+ *
+ * A fully degenerate envelope — all three durations zero — is drawn with the
+ * three stages sharing the width equally rather than collapsing onto `x = 0`.
+ * A vertical spike is not a more honest picture of "no envelope"; it is just
+ * an unreadable one, and the numbers beside it already say zero.
+ */
+export function envelopePoints(env: EnvelopeShape, width: number, height: number): Point[] {
+  const attack = stageTime(env.attack);
+  const decay = stageTime(env.decay);
+  const release = stageTime(env.release);
+  const total = attack + decay + release;
+  const available = width * (1 - SUSTAIN_HOLD_FRACTION);
+  const share = total > 0 ? available / total : available / 3;
+
+  const attackX = total > 0 ? attack * share : share;
+  const decayX = attackX + (total > 0 ? decay * share : share);
+  const sustainEndX = decayX + width * SUSTAIN_HOLD_FRACTION;
+  const sustainY = height * (1 - clamp(env.sustain, 0, 1));
+
+  return [
+    { x: 0, y: height },
+    { x: attackX, y: 0 },
+    { x: decayX, y: sustainY },
+    { x: sustainEndX, y: sustainY },
+    { x: width, y: height },
+  ];
+}
+
+/** The envelope as a single stroked path. */
+export function envelopePath(env: EnvelopeShape, width: number, height: number): string {
+  return polylinePath(envelopePoints(env, width, height));
+}
+
+/**
+ * A closed, filled waveform outline from peak magnitudes in `0..1`.
+ *
+ * Peaks are magnitudes, not samples: the shape is drawn mirrored around the
+ * vertical centre, which is what every waveform in the catalogue shows. A
+ * sign on the input is therefore not information — it is taken as its
+ * magnitude rather than silently drawing half the shape inside out.
+ *
+ * Fewer than two peaks draws nothing. A single sample cannot describe a
+ * waveform, and stretching it across the full width would draw a confident
+ * rectangle from data that says nothing at all.
+ */
+export function waveformPath(peaks: readonly number[], width: number, height: number): string {
+  if (peaks.length < 2) return "";
+  const centre = height / 2;
+  let top = "";
+  let bottom = "";
+  for (let i = 0; i < peaks.length; i += 1) {
+    // Fractions of the span rather than a running step, so the last peak
+    // lands exactly on `width` instead of a float-accumulated near-miss.
+    const x = (i / (peaks.length - 1)) * width;
+    const offset = clamp(Math.abs(peaks[i]), 0, 1) * centre;
+    top += i === 0 ? `M ${x} ${centre - offset}` : ` L ${x} ${centre - offset}`;
+    bottom = ` L ${x} ${centre + offset}${bottom}`;
+  }
+  return `${top}${bottom} Z`;
+}
+
+/**
+ * How many of a meter's segments are lit at `level` (`0..1`).
+ *
+ * Rounds up rather than to nearest, so the faintest signal lights the first
+ * segment — the behaviour of every hardware meter in the catalogue, and the
+ * reason a meter reading empty on audible output looks broken. Only true
+ * silence lights nothing.
+ */
+export function meterSegments(level: number, count: number): number {
+  if (count <= 0) return 0;
+  const t = clamp(level, 0, 1);
+  if (t <= 0) return 0;
+  return Math.min(count, Math.ceil(t * count));
+}

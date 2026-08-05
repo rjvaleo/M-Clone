@@ -4,7 +4,12 @@ import {
   denormalize,
   describeArc,
   dragDeltaToValue,
+  envelopePath,
+  envelopePoints,
   knobAngle,
+  meterSegments,
+  polylinePath,
+  waveformPath,
   KNOB_END_DEG,
   KNOB_START_DEG,
   normalize,
@@ -240,5 +245,141 @@ describe("dragDeltaToValue", () => {
 
   it("is a no-op for a zero-pixel drag", () => {
     expect(dragDeltaToValue(42, 0, 0, 100)).toBe(42);
+  });
+});
+
+describe("polylinePath", () => {
+  it("draws a move followed by a line per remaining point", () => {
+    expect(polylinePath([{ x: 0, y: 1 }, { x: 2, y: 3 }, { x: 4, y: 5 }])).toBe("M 0 1 L 2 3 L 4 5");
+  });
+
+  it("draws a bare move for a single point", () => {
+    expect(polylinePath([{ x: 7, y: 8 }])).toBe("M 7 8");
+  });
+
+  it("draws nothing at all for no points", () => {
+    expect(polylinePath([])).toBe("");
+  });
+});
+
+describe("envelopePoints", () => {
+  const env = { attack: 1, decay: 1, sustain: 0.5, release: 1 };
+
+  it("returns the five corners of an ADSR shape", () => {
+    const points = envelopePoints(env, 100, 40);
+    expect(points).toHaveLength(5);
+  });
+
+  it("splits the non-held width evenly when the three times are equal", () => {
+    // 22% of the width is the sustain hold; the remaining 78 splits three ways.
+    const [start, peak, sustainIn, sustainOut, end] = envelopePoints(env, 100, 40);
+    expect(start).toEqual({ x: 0, y: 40 });
+    expect(peak).toEqual({ x: 26, y: 0 });
+    expect(sustainIn).toEqual({ x: 52, y: 20 });
+    expect(sustainOut).toEqual({ x: 74, y: 20 });
+    expect(end).toEqual({ x: 100, y: 40 });
+  });
+
+  it("always ends at the full width and the baseline", () => {
+    const end = envelopePoints({ attack: 0.1, decay: 0.9, sustain: 0.3, release: 0.4 }, 200, 60)[4];
+    expect(end.x).toBeCloseTo(200);
+    expect(end.y).toBe(60);
+  });
+
+  it("puts the sustain segment on the baseline at zero sustain", () => {
+    const points = envelopePoints({ ...env, sustain: 0 }, 100, 40);
+    expect(points[2].y).toBe(40);
+    expect(points[3].y).toBe(40);
+  });
+
+  it("puts the sustain segment at the peak when sustain is full", () => {
+    const points = envelopePoints({ ...env, sustain: 1 }, 100, 40);
+    expect(points[2].y).toBe(0);
+    expect(points[3].y).toBe(0);
+  });
+
+  it("gives each stage an equal share when all three times are zero", () => {
+    // A degenerate envelope still has to draw something recognisable rather
+    // than collapsing every stage onto x=0 and showing a vertical spike.
+    const points = envelopePoints({ attack: 0, decay: 0, sustain: 0.5, release: 0 }, 100, 40);
+    expect(points[1].x).toBeCloseTo(26);
+    expect(points[2].x).toBeCloseTo(52);
+  });
+
+  it("gives a longer stage more width than a shorter one", () => {
+    const points = envelopePoints({ attack: 3, decay: 1, sustain: 0.5, release: 1 }, 100, 40);
+    const attackWidth = points[1].x;
+    const decayWidth = points[2].x - points[1].x;
+    expect(attackWidth).toBeGreaterThan(decayWidth);
+  });
+
+  it("clamps a negative or over-unit stage into range", () => {
+    const points = envelopePoints({ attack: -5, decay: 1, sustain: 4, release: 1 }, 100, 40);
+    expect(points[1].x).toBe(0);
+    expect(points[2].y).toBe(0);
+  });
+});
+
+describe("envelopePath", () => {
+  it("is the polyline through the envelope's own points", () => {
+    const env = { attack: 1, decay: 1, sustain: 0.5, release: 1 };
+    expect(envelopePath(env, 100, 40)).toBe(polylinePath(envelopePoints(env, 100, 40)));
+  });
+});
+
+describe("waveformPath", () => {
+  it("mirrors the peaks around the vertical centre and closes the shape", () => {
+    expect(waveformPath([1, 0, 1], 100, 40)).toBe("M 0 0 L 50 20 L 100 0 L 100 40 L 50 20 L 0 40 Z");
+  });
+
+  it("spans the full width, first peak to last", () => {
+    const path = waveformPath([0.5, 0.5, 0.5, 0.5], 80, 20);
+    expect(path.startsWith("M 0 ")).toBe(true);
+    expect(path).toContain("L 80 ");
+  });
+
+  it("clamps out-of-range peak data inside the box", () => {
+    // A peak extractor handing back 1.4 must not draw above the top edge.
+    const path = waveformPath([1.4], 100, 40);
+    expect(path).not.toContain("-");
+    expect(waveformPath([1.4, 1.4], 100, 40)).toBe("M 0 0 L 100 0 L 100 40 L 0 40 Z");
+  });
+
+  it("treats a negative peak as its magnitude", () => {
+    expect(waveformPath([-1, -1], 100, 40)).toBe(waveformPath([1, 1], 100, 40));
+  });
+
+  it("draws nothing from fewer than two peaks", () => {
+    // One sample is not a waveform; drawing a spike from it would be a lie.
+    expect(waveformPath([], 100, 40)).toBe("");
+    expect(waveformPath([0.5], 100, 40)).toBe("");
+  });
+});
+
+describe("meterSegments", () => {
+  it("lights every segment at full scale and none at silence", () => {
+    expect(meterSegments(1, 8)).toBe(8);
+    expect(meterSegments(0, 8)).toBe(0);
+  });
+
+  it("lights a segment as soon as there is any signal at all", () => {
+    // Hardware meters tick their first segment on the faintest signal rather
+    // than waiting for it to round up — a meter reading zero on audible
+    // output looks broken.
+    expect(meterSegments(0.001, 8)).toBe(1);
+  });
+
+  it("lights half the segments at half scale", () => {
+    expect(meterSegments(0.5, 8)).toBe(4);
+  });
+
+  it("clamps out-of-range levels", () => {
+    expect(meterSegments(2, 8)).toBe(8);
+    expect(meterSegments(-1, 8)).toBe(0);
+  });
+
+  it("returns nothing lit for a meter with no segments", () => {
+    expect(meterSegments(1, 0)).toBe(0);
+    expect(meterSegments(1, -4)).toBe(0);
   });
 });
