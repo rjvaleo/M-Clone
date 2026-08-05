@@ -48,6 +48,28 @@ export type ParameterDescriptor = {
   smoothing: "none" | "linear" | "exponential";
   morph: "immediate" | "linear" | "exponential" | "step-start" | "step-end";
   automation: "none" | "record" | "record-and-host";
+  /**
+   * Force a particular control instead of the one the parameter's shape
+   * implies.
+   *
+   * `ui/parameterControl.ts` derives a sensible control from kind, range and
+   * unit, which is right for almost everything. This is the escape hatch for
+   * the parameter that knows better — a 0..1 amount that should read as a
+   * fader, a boolean that is really a momentary action. Typed loosely as a
+   * string union there rather than imported here so the model layer does not
+   * depend on the UI layer.
+   */
+  control?:
+    | "toggle"
+    | "selector"
+    | "knob"
+    | "slider"
+    | "fader"
+    | "stepper"
+    | "button"
+    | "number"
+    | "text"
+    | "none";
 };
 
 export type NodeFaceElement =
