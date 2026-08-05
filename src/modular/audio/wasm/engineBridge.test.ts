@@ -19,6 +19,12 @@ class FakeEngine implements EngineExports {
   readonly cables = new Set<string>();
   readonly modules = new Map<number, number>();
   memory = { buffer: new ArrayBuffer(2048) };
+
+  /** What `memory.grow` looks like from JavaScript: a fresh, larger buffer,
+   * with every view into the old one now detached. */
+  growMemory(): void {
+    this.memory = { buffer: new ArrayBuffer(4096) };
+  }
   private nextId = 0;
   /** Kinds this build does not have, to stand in for a version skew. */
   unknownKinds = new Set<number>();
@@ -166,6 +172,59 @@ describe("The plan-to-engine bridge", () => {
     rack.update(simplePlan());
     expect(engine.of("io")).toHaveLength(1);
     expect(engine.of("io")[0]).toBe(`io:${rack.hostInputId},${rack.moduleIdOf("out")}`);
+  });
+
+  it("re-derives its buffers after WASM memory grows", () => {
+    // Adding a module that allocates — a reverb's delay lines, say — can grow
+    // linear memory, which *detaches* every existing view into it. The rack
+    // held its input and output views from construction, so the first quantum
+    // after a Blackhole was added threw
+    // "Cannot perform %TypedArray%.prototype.fill on a detached ArrayBuffer"
+    // and the worklet went silent. Found in the browser, not in a test.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    const before = rack.input;
+    expect(before.byteLength).toBeGreaterThan(0);
+
+    engine.growMemory();
+
+    expect(rack.input).not.toBe(before);
+    expect(rack.input.buffer).toBe(engine.memory.buffer);
+    expect(rack.output.buffer).toBe(engine.memory.buffer);
+    expect(rack.input).toHaveLength(before.length);
+  });
+
+  it("keeps handing back the same buffers while memory is stable", () => {
+    // The views are on the audio path; rebuilding one per quantum for no
+    // reason would allocate in the hot loop.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    expect(rack.input).toBe(rack.input);
+    expect(rack.output).toBe(rack.output);
+  });
+
+  it("knows Blackhole's wire number and its whole parameter surface", () => {
+    // The discriminants are the protocol with rust/dsp-core/src/modules.rs.
+    // A drift here does not fail loudly — it sends Gravity to whatever
+    // parameter happens to sit at that index instead.
+    expect(MODULE_KINDS["m.audio-blackhole"]).toBe(4);
+    const indices = PARAM_INDICES["m.audio-blackhole"];
+    expect(Object.values(indices).sort((a, b) => a - b)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+    ]);
+    // Spot-check the two ends and the shell's own handles.
+    expect(indices.gravity).toBe(0);
+    expect(indices.resonance).toBe(8);
+    expect(indices.level).toBe(10);
+    expect(indices.mute).toBe(11);
+    // `line-count` is structural: it rebuilds the node rather than moving a
+    // value, so it must not claim a parameter slot.
+    expect(indices["line-count"]).toBeUndefined();
+  });
+
+  it("gives every ported module a distinct wire number", () => {
+    const kinds = Object.values(MODULE_KINDS);
+    expect(new Set(kinds).size).toBe(kinds.length);
   });
 
   it("sends each parameter to the index its module declares", () => {

@@ -25,6 +25,7 @@ use crate::engine::{Module, Ports, ProcessContext};
 use crate::lfo::{LfoShape, LfoTrigger};
 use crate::modmatrix::{ModDest, ModSource};
 use crate::osc::Wave;
+use crate::reverb::Blackhole;
 use crate::voice::{
     AdsrSettings, LfoSettings, VoiceSettings, MAX_CUTOFF_HZ, MIN_CUTOFF_HZ, OSC_COUNT,
 };
@@ -449,6 +450,179 @@ impl Module for Synth {
     }
 }
 
+/// `m.audio-blackhole` — the H90's reverb as a rack module.
+///
+/// The DSP is `reverb::Blackhole`; this is only the shell that gives it
+/// parameter indices, a wet/dry mix and the fade handle every effect needs.
+///
+/// **This build does something the browser one could not.** The TypeScript
+/// Blackhole approximates Gravity's negative half — the manual's "inverse
+/// mode" — by dropping diffusion and stretching the pre-tank delay, because a
+/// graph of native Web Audio nodes has no envelope follower and therefore no
+/// way to detect an onset. `reverb::Blackhole` has one, so the left half of
+/// Gravity is a real reverse envelope here rather than a swell that resembles
+/// one. That is the first place the two backends genuinely differ in what they
+/// can produce, rather than only in how they produce it.
+///
+/// # Why the setters are driven on change
+///
+/// `set_gravity` recomputes the tank's per-line decay gains and `set_shelves`
+/// rebuilds two biquads. Those are cheap once and ruinous at forty-eight
+/// thousand times a second, so each is called only when its parameter actually
+/// moves. The wet/dry mix and the fade level are different — they move every
+/// sample by design, so they are smoothed rather than gated.
+pub struct BlackholeVerb {
+    verb: Blackhole,
+    mix: Tracked,
+    level: Tracked,
+    /// Last raw value seen for each setter-driven parameter, in the order of
+    /// the `SETTER_*` indices below.
+    seen: [f32; Self::SETTER_COUNT],
+}
+
+impl BlackholeVerb {
+    pub const GRAVITY: usize = 0;
+    pub const SIZE: usize = 1;
+    pub const PREDELAY: usize = 2;
+    pub const LOW_DB: usize = 3;
+    pub const HIGH_DB: usize = 4;
+    pub const MOD_DEPTH: usize = 5;
+    pub const MOD_RATE: usize = 6;
+    pub const FEEDBACK: usize = 7;
+    pub const RESONANCE: usize = 8;
+    pub const MIX: usize = 9;
+    pub const LEVEL: usize = 10;
+    pub const MUTE: usize = 11;
+    pub const PARAM_COUNT: usize = 12;
+
+    /// The parameters that reach the DSP through a setter rather than by being
+    /// read every sample. Indices 0..=8, so the cache is indexed by the
+    /// parameter index itself.
+    const SETTER_COUNT: usize = 9;
+
+    pub fn new(sample_rate: f32) -> Self {
+        let mut verb = Blackhole::new(sample_rate);
+        // The registry's defaults, so a freshly added node sounds the way its
+        // face says it does before anything is written to it.
+        verb.set_gravity(0.5);
+        verb.set_size(0.5);
+        verb.set_predelay_seconds(0.0);
+        verb.set_shelves(0.0, 0.0, 0.0);
+        verb.set_modulation(0.3, 0.3);
+        verb.set_feedback(0.0);
+        Self {
+            verb,
+            mix: Tracked::new(0.35),
+            level: Tracked::new(0.0),
+            // NaN forces the first sync: no real parameter value equals it, so
+            // every setter runs once on the first block rather than the cache
+            // starting out agreeing with a DSP it has never spoken to.
+            seen: [f32::NAN; Self::SETTER_COUNT],
+        }
+    }
+
+    /// Push any moved parameter into the DSP.
+    fn sync(&mut self, raw: &[f32; Self::SETTER_COUNT]) {
+        if raw[Self::GRAVITY] != self.seen[Self::GRAVITY] {
+            self.verb.set_gravity(raw[Self::GRAVITY]);
+        }
+        if raw[Self::SIZE] != self.seen[Self::SIZE] {
+            self.verb.set_size(raw[Self::SIZE]);
+        }
+        if raw[Self::PREDELAY] != self.seen[Self::PREDELAY] {
+            self.verb.set_predelay_seconds(raw[Self::PREDELAY]);
+        }
+        // One call takes all three, so any of them moving reapplies the set.
+        if raw[Self::LOW_DB] != self.seen[Self::LOW_DB]
+            || raw[Self::HIGH_DB] != self.seen[Self::HIGH_DB]
+            || raw[Self::RESONANCE] != self.seen[Self::RESONANCE]
+        {
+            self.verb.set_shelves(raw[Self::LOW_DB], raw[Self::HIGH_DB], raw[Self::RESONANCE]);
+        }
+        if raw[Self::MOD_DEPTH] != self.seen[Self::MOD_DEPTH]
+            || raw[Self::MOD_RATE] != self.seen[Self::MOD_RATE]
+        {
+            self.verb.set_modulation(raw[Self::MOD_DEPTH], raw[Self::MOD_RATE]);
+        }
+        // Feedback last: it decides the tank's infinite state and re-derives
+        // the outer loop from the decay the gravity above may have just set.
+        if raw[Self::FEEDBACK] != self.seen[Self::FEEDBACK] {
+            self.verb.set_feedback(raw[Self::FEEDBACK]);
+        }
+        self.seen = *raw;
+    }
+}
+
+impl Module for BlackholeVerb {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let raw = [
+            ports.param(Self::GRAVITY),
+            ports.param(Self::SIZE),
+            ports.param(Self::PREDELAY),
+            ports.param(Self::LOW_DB),
+            ports.param(Self::HIGH_DB),
+            ports.param(Self::MOD_DEPTH),
+            ports.param(Self::MOD_RATE),
+            ports.param(Self::FEEDBACK),
+            ports.param(Self::RESONANCE),
+        ];
+        self.sync(&raw);
+
+        let input = ports.input(0);
+        let wet = self.verb.process(input);
+        let mix = self.mix.follow(clamp(ports.param(Self::MIX), 0.0, 1.0));
+        let level = self.level.follow(clamp(ports.param(Self::LEVEL), 0.0, 1.0));
+        let muted = ports.param(Self::MUTE) >= 0.5;
+        let mixed = input * (1.0 - mix) + wet * mix;
+        ports.output(0, if muted { 0.0 } else { mixed * level });
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        // `Blackhole` sizes its delay lines at construction, so a rate change
+        // is a rebuild. The trait guarantees this runs off the audio thread,
+        // which is the only reason allocating here is allowed.
+        self.verb = Blackhole::new(sample_rate);
+        self.mix.set_sample_rate(sample_rate);
+        self.level.set_sample_rate(sample_rate);
+        // The new tank has never been told anything, so every setter has to
+        // run again on the next block.
+        self.seen = [f32::NAN; Self::SETTER_COUNT];
+    }
+
+    fn reset(&mut self) {
+        self.verb.clear();
+        self.mix.reset();
+        self.level.reset();
+    }
+
+    fn input_count(&self) -> usize {
+        1
+    }
+    fn output_count(&self) -> usize {
+        1
+    }
+    fn param_count(&self) -> usize {
+        Self::PARAM_COUNT
+    }
+
+    /// The registry descriptor's defaults, so a node that has never been
+    /// written to sounds the way its face says it does. Without this a fresh
+    /// Blackhole would arrive at Gravity 0 and Mix 0 — a dry, mid-sweep reverb
+    /// that looks nothing like the panel above it.
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::GRAVITY => 0.5,
+            Self::SIZE => 0.5,
+            Self::MOD_DEPTH => 0.3,
+            Self::MOD_RATE => 0.3,
+            Self::MIX => 0.35,
+            // Level stays 0: like every other effect, the adapter fades it in,
+            // which is what stops a rebuild from popping.
+            _ => 0.0,
+        }
+    }
+}
+
 /// Every module the host can name, so the shim never matches on strings.
 ///
 /// The discriminants are part of the wire protocol between TypeScript and
@@ -460,6 +634,7 @@ pub enum ModuleKind {
     Gain = 1,
     AudioOutput = 2,
     Synth = 3,
+    Blackhole = 4,
 }
 
 impl ModuleKind {
@@ -469,6 +644,7 @@ impl ModuleKind {
             1 => Some(Self::Gain),
             2 => Some(Self::AudioOutput),
             3 => Some(Self::Synth),
+            4 => Some(Self::Blackhole),
             _ => None,
         }
     }
@@ -485,6 +661,7 @@ impl ModuleKind {
             Self::Gain => Box::<Gain>::default(),
             Self::AudioOutput => Box::<AudioOutput>::default(),
             Self::Synth => Box::new(Synth::new(sample_rate)),
+            Self::Blackhole => Box::new(BlackholeVerb::new(sample_rate)),
         }
     }
 
@@ -500,6 +677,131 @@ mod tests {
     use crate::engine::{Engine, PortRef};
 
     const RATE: f32 = 48_000.0;
+
+    /// input → blackhole → output, with the shell level opened up.
+    fn verb_chain() -> (Engine, u32, u32, u32) {
+        let mut engine = Engine::new(RATE);
+        let input = engine.add(ModuleKind::HostInput.build());
+        let verb = engine.add(ModuleKind::Blackhole.build());
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: input, port: 0 }, PortRef { module: verb, port: 0 });
+        engine.connect(PortRef { module: verb, port: 0 }, PortRef { module: output, port: 0 });
+        engine.set_param(verb, BlackholeVerb::LEVEL, 1.0);
+        (engine, input, verb, output)
+    }
+
+    /// Strike once, then run silent and report the loudest sample of the tail.
+    fn tail_peak(engine: &mut Engine, input: u32, output: u32, samples: usize) -> f32 {
+        engine.set_param(input, HostInput::SAMPLE, 1.0);
+        engine.process();
+        engine.set_param(input, HostInput::SAMPLE, 0.0);
+        let mut peak = 0.0f32;
+        for _ in 0..samples {
+            engine.process();
+            peak = peak.max(engine.output_of(output, 0).abs());
+        }
+        peak
+    }
+
+    #[test]
+    fn blackhole_is_reachable_by_its_wire_number() {
+        // The discriminant is the protocol; if this drifts, every saved patch
+        // naming module 4 becomes a different module.
+        assert_eq!(ModuleKind::from_u32(4), Some(ModuleKind::Blackhole));
+        assert_eq!(ModuleKind::Blackhole as u32, 4);
+    }
+
+    #[test]
+    fn blackhole_exposes_every_parameter_its_descriptor_declares() {
+        let module = ModuleKind::Blackhole.build();
+        assert_eq!(module.param_count(), BlackholeVerb::PARAM_COUNT);
+        assert_eq!(module.input_count(), 1);
+        assert_eq!(module.output_count(), 1);
+    }
+
+    #[test]
+    fn blackhole_rings_on_after_the_input_stops() {
+        // The whole point of a reverb: energy outlives its cause.
+        let (mut engine, input, verb, output) = verb_chain();
+        engine.set_param(verb, BlackholeVerb::MIX, 1.0);
+        settle(&mut engine);
+        assert!(tail_peak(&mut engine, input, output, 8_000) > 1e-5);
+    }
+
+    #[test]
+    fn blackhole_passes_the_dry_signal_through_at_zero_mix() {
+        let (mut engine, input, verb, output) = verb_chain();
+        engine.set_param(verb, BlackholeVerb::MIX, 0.0);
+        settle(&mut engine);
+        assert!((steady(&mut engine, input, output, 0.5) - 0.5).abs() < 1e-3);
+    }
+
+    #[test]
+    fn blackhole_mute_silences_wet_and_dry_alike() {
+        let (mut engine, input, verb, output) = verb_chain();
+        engine.set_param(verb, BlackholeVerb::MIX, 0.5);
+        engine.set_param(verb, BlackholeVerb::MUTE, 1.0);
+        settle(&mut engine);
+        assert_eq!(steady(&mut engine, input, output, 1.0), 0.0);
+    }
+
+    #[test]
+    fn blackhole_freeze_closes_the_input_but_keeps_the_tail() {
+        // `[DOC]` Freeze "sets the reverberation time to infinite, and does not
+        // allow incoming signal". Energy already inside must survive; new
+        // energy must not get in.
+        let (mut engine, input, verb, output) = verb_chain();
+        engine.set_param(verb, BlackholeVerb::MIX, 1.0);
+        settle(&mut engine);
+        let before = tail_peak(&mut engine, input, output, 4_000);
+        engine.set_param(verb, BlackholeVerb::FEEDBACK, 1.0);
+        settle(&mut engine);
+        let frozen = tail_peak(&mut engine, input, output, 4_000);
+        assert!(before > 1e-5);
+        assert!(frozen > 1e-6);
+    }
+
+    #[test]
+    fn blackhole_stays_finite_across_its_whole_parameter_range() {
+        // A feedback network is the one place a bad coefficient does not merely
+        // sound wrong — it runs away and takes the output with it.
+        let (mut engine, input, verb, output) = verb_chain();
+        engine.set_param(verb, BlackholeVerb::MIX, 1.0);
+        for step in 0..=10 {
+            let t = step as f32 / 10.0;
+            engine.set_param(verb, BlackholeVerb::GRAVITY, t * 2.0 - 1.0);
+            engine.set_param(verb, BlackholeVerb::SIZE, t);
+            engine.set_param(verb, BlackholeVerb::FEEDBACK, t);
+            engine.set_param(verb, BlackholeVerb::RESONANCE, t);
+            engine.set_param(verb, BlackholeVerb::LOW_DB, t * 12.0);
+            engine.set_param(verb, BlackholeVerb::HIGH_DB, t * 12.0);
+            engine.set_param(input, HostInput::SAMPLE, 1.0);
+            for _ in 0..2_000 {
+                engine.process();
+                let sample = engine.output_of(output, 0);
+                assert!(sample.is_finite(), "non-finite output at gravity step {step}");
+                assert!(sample.abs() < 50.0, "runaway output {sample} at step {step}");
+            }
+        }
+    }
+
+    #[test]
+    fn blackhole_reset_clears_the_tail() {
+        let (mut engine, input, verb, output) = verb_chain();
+        engine.set_param(verb, BlackholeVerb::MIX, 1.0);
+        settle(&mut engine);
+        // Long enough for a default-sized tank to have said anything at all:
+        // Size defaults to 0.5, which is a ~2x scale, so the first energy out
+        // of the network arrives well after a couple of thousand samples.
+        assert!(tail_peak(&mut engine, input, output, 8_000) > 1e-5);
+        engine.reset();
+        engine.set_param(verb, BlackholeVerb::LEVEL, 1.0);
+        engine.set_param(verb, BlackholeVerb::MIX, 1.0);
+        settle(&mut engine);
+        engine.set_param(input, HostInput::SAMPLE, 0.0);
+        engine.process();
+        assert!(engine.output_of(output, 0).abs() < 1e-6);
+    }
 
     /// Long enough for any 5 ms ramp to have arrived.
     fn settle(engine: &mut Engine) {
