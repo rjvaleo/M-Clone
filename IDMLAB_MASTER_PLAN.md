@@ -121,50 +121,60 @@ not before, and not for performance.
 **The document, registry, compiler and `.mmod`/`.mmodpack` formats stay.** They
 are platform-independent already and are the project's most valuable asset.
 
-### 1.1 The application shell — an open decision
+### 1.1 The shell is the canvas — decided
 
-`ModularAudio_FuncSpec_v11` §3 describes a shell that idMLab does not have, and
-it is not a detail. The spec's application is **column-based and zoned**:
+`ModularAudio_FuncSpec_v11` §3 describes a column-based, zoned application:
+transport fixed at the top, sources in column headers, one fluid effects canvas
+in the middle, mixer across the bottom, master right, global panel down the
+side. It is a coherent design and it is not the one we are building.
 
-```
-┌── Transport bar ─────────────────────────────── fixed, full width ──┐
-├── Column headers — sources live here ────────── fixed, anchored ────┤
-│  PLAYER    PLAYER    PLAYER    FX BUS   CHANNEL │  G │             │
-│  Looper    Granular  Synth              live in │  L │  M          │
-├─────────────────────────────────────────────────│  O │  A          │
-│                                                 │  B │  S          │
-│      effects canvas — the only fluid zone       │  A │  T          │
-│      node graphs hang below each column         │  L │  E          │
-│      and flow downward · scroll · zoom          │    │  R          │
-├── Mixer — one strip per column ──────────────── fixed, bottom ──────┤
-└─────────────────────────────────────────────────────────────────────┘
-```
+**The free-form node canvas is the shell. There is no second layout.**
 
-Sources at the top, effects in the middle, console at the bottom, master at the
-right. Four column types (Player · FX Bus · Channel · Master), four Player
-engines (Looper · Granular · Percussion · Synth). The visual language is
-deliberately Amiga tracker — OctaMED, ProTracker — because the tracker's column
-structure *is* the signal flow, not decoration.
+The spec's zones do not disappear — they stop being *zones around* the canvas
+and become **objects on** it:
 
-idMLab today is a free-floating node canvas with no zones, no columns, and no
-mixer. Both are coherent designs. They are not the same application.
-
-**This plan does not decide it.** Every feature the spec describes is captured
-below and every one of them can be built in either shell — a column is a
-subgraph with a fixed layout policy, which P6 already gives us. But the shell
-choice changes Wave 3 substantially and it belongs to the product, not to me.
-Until it is decided, build features shell-agnostically: no feature below may
-assume columns, and none may assume their absence.
-
-Three options, for when it is decided:
-
-| | Consequence |
+| The spec's zone | Here |
 |---|---|
-| **Adopt the column shell** | Matches the spec exactly; the mixer, sends, master strip and Performance View all get a natural home; loses free node placement |
-| **Keep the free canvas** | Keeps what exists and what users have learned; the mixer and global panel become panels rather than zones; column colour becomes group colour |
-| **Both — a view toggle** | The document stays one graph; "column view" is a layout projection over it. Most work, most flexibility, and the only option that needs deciding *before* Wave 3 rather than during it |
+| Mixer across the bottom | `m.audio-mixer` — a module with N channel strips, sends, and a master section. Patch into it |
+| Column headers / sources | The source modules themselves, placed anywhere |
+| A column's effect chain | A chain of cables. What made it a column was that it was linear; the canvas draws linear things linearly |
+| The tracker's time grid | A sequencer module whose *face* is columns × rows. Vertical is time, which is what a tracker is actually for |
+| Global panel · transport · CPU meter | Minimal app chrome, because they are Always-On in the flag system's sense and belong to no node |
 
----
+This is why it is the right answer rather than a compromise:
+
+- **One document, one layout, one truth.** No projection to keep honest, no
+  badge for wiring a column cannot draw, no view that disagrees with another.
+- **A tracker is an editor, not a shell.** The thing worth having from
+  OctaMED is the time grid — rows are time, columns are streams. That is a
+  *face*, and faces are already a solved problem here.
+- **The spec's column is linear signal flow**, and a cable already expresses
+  that. The column bought visual discipline, which the kit and theme system
+  can supply without imposing a layout.
+
+### 1.2 Two modes, and the flag system that makes them work
+
+There are exactly two ways to look at a patch.
+
+**Edit mode** — the node editor. Everything visible: every module, every
+control, every cable, every port.
+
+**Performance mode** — only what the performer chose. Flagged controls and
+flagged visual elements, and nothing else.
+
+The important consequence, and the reason the flag system earns its complexity:
+
+> A module may be enormous without being unusable. A face can carry a hundred
+> controls in Edit mode and show four in Performance mode. Size in Edit costs
+> nothing at performance time.
+
+That removes the pressure to keep faces small, which has quietly shaped every
+module in this project so far. Build the complete instrument; let the flag
+system decide what a performance looks like.
+
+It also means **every face has two renderings, not one** — see P16. That is a
+contract on all 61 modules and every module added after them, and it is much
+cheaper to establish now than to retrofit.
 
 ## 2. The shared spine
 
@@ -222,6 +232,7 @@ wave that builds it is the wave its first consumer needs it.
 | P13 | **Per-source transport and sync** — sync mode, start offset in bars, phase offset, retrigger, mute/solo | 3 | polyrhythmic entry · the whole §26 phase system · per-player scrub |
 | P14 | **Step-sequencer core** — five step types, per-step length, probability, repeat | 3 | Mono Note Sequencer · pattern modules · any future arpeggiator |
 | P15 | **Global choke bus** — 16 session-wide groups, cross-source | 3 | drum realism · hi-hat behaviour. **Does not exist in Rust at all** |
+| P16 | **Two-rendering faces** — every face draws in Edit mode and Performance mode, driven by per-parameter flags | 2 | Performance mode · arbitrarily large modules · the mixer and tracker as canvas objects |
 
 **P4 is the keystone.** Snapshots, macros, the Performance View, automation
 lanes, the timeline, MIDI learn, conducting and host automation are not seven
@@ -461,27 +472,27 @@ mode. Named in the plan before; specified in full here.
 | Cables colour-coded **by source node**; feedback connections warn and require confirmation | 3 |
 | Node wet/dry default **100 % wet**; bank default 50 % | 1 |
 
-### 3.6b The shell, views, and the flag system
+### 3.6b Modes, faces, and the flag system
 
-Depends on §1.1 being decided. Everything here is shell-agnostic except where
-marked.
+§1.1 is decided: the canvas is the shell. What the spec drew as zones are
+modules here, and what it drew as views are two modes over one layout.
 
 | Feature | Wave |
 |---|---|
 | **The flag system** — every parameter is Default · Performance · Always-On, set by right-click | 2 |
-| Performance-flagged parameters change to the accent colour in Edit View and render **larger** in Performance View | 2 |
-| Always-On elements cannot be flagged off: transport, BPM, master level and metering, mixer faders and mutes, CPU meter, global panel | 2 |
-| Edit View ↔ Performance View, instant, single button, no state change | 2 |
-| Macro strip at the top of Performance View; clicking it opens the Timeline | 2 |
-| **Global Panel** — right edge, full height, always visible in both views; snapshots live here. Design reference: M by Intelligent Music | 2 |
-| Column/group identity colour propagating to header, cables, mixer strip, timeline lanes and viz borders | 3 |
-| *(shell)* Fixed zones: transport top · headers · global panel right · mixer bottom · master strip | 3 |
-| *(shell)* Fluid effects canvas — the only zone that scrolls and zooms | 3 |
-| *(shell)* Four column types and right-click instantiation with an engine submenu | 3 |
-| *(shell)* Default rack on new FX Bus / Channel: **Limiter → EQ → Compressor**, all active, all removable | 3 |
-| *(shell)* Column reorder by dragging headers; remove with confirmation when non-empty | 3 |
+| **P16 — every face renders twice**: Edit (everything) and Performance (flagged only). A contract on all 61 existing faces and every future one | 2 |
+| Performance-flagged parameters take the accent colour in Edit mode and render **larger** in Performance mode | 2 |
+| Always-On elements cannot be flagged off: transport, BPM, master level and metering, CPU meter, global panel | 2 |
+| Edit ↔ Performance, instant, single button, no state change — only visibility changes | 2 |
+| Flagging applies to **visual elements too**, not only controls — a face's scope, meter or grid can be surfaced or hidden independently of its knobs | 2 |
+| Macro strip in Performance mode; clicking it opens the Timeline | 2 |
+| **Global panel** — snapshots, always available in both modes. Design reference: M by Intelligent Music | 2 |
+| **`m.audio-mixer` as a module** — N channel strips, sends, master section; patched into like anything else | 1 |
+| **Tracker module** — a face whose grid is streams × time; the OctaMED idea as an editor rather than a shell | 3 |
+| Group/identity colour propagating to cables, mixer strip, timeline lanes and viz borders | 3 |
+| Amiga-tracker visual language — deep charcoal ground, monospace, uppercase labels, grid discipline, colour as signal identity — delivered through the kit and theme system, not through a layout | 3 |
 | **VAST preset** shipped in the node browser — giant algorithmic reverb, tempo-synced dripping delay, chorus/flanger with depth and width | 4 |
-| Amiga-tracker visual language — deep charcoal ground, monospace, uppercase headers, grid discipline, colour as signal identity | 3 |
+| Default rack offered when instantiating an effects chain: **Limiter → EQ → Compressor**, all active, all removable | 3 |
 
 ### 3.6c Mixer, transport, and export
 
@@ -602,9 +613,10 @@ chain of mono boxes.
 4. Summing bus, Mixer, Send, Return, Utility, Feedback module.
 5. DP/4+ four-unit with its routing matrix — the first consumer of P2.
 
-6. Mixer strips, sends (pre/post fader), master strip with peak and RMS meters,
-   the default master chain, and the audio device / sample rate / buffer
-   preferences.
+6. **`m.audio-mixer`** — N channel strips with sends (pre/post fader), pan,
+   mute, solo, peak metering and faders, plus a master section with peak and
+   RMS. A module on the canvas, not a zone (§1.1). The default master chain and
+   the audio device / sample rate / buffer preferences land here too.
 
 **Gate:** a patch with two instruments into a mixer, one send to a shared
 reverb, panned hard left and right, sounds correct in both ears; the DP/4+
@@ -628,10 +640,17 @@ P4 and P5. The keystone.
 10. **The flag system** — Default / Performance / Always-On per parameter, set
     by right-click. It is a field on the parameter address, which is why it
     lands here rather than in the canvas wave.
+11. **P16 — the two-rendering face contract**, applied to all 61 existing faces.
+    Establish it here, before Waves 3–5 add another forty faces that would
+    otherwise need retrofitting. Flags cover visual elements as well as
+    controls.
+12. Performance mode itself, over the one canvas layout.
 
 **Gate:** recall a snapshot mid-performance and hear a click-free morph; a macro
 moves twelve parameters at once; the baton conducts tempo and three variables
-simultaneously; snapshots round-trip through `.mmod` exactly.
+simultaneously; snapshots round-trip through `.mmod` exactly. A face carrying
+forty controls in Edit mode shows exactly the four that were flagged in
+Performance mode, and switching between them changes nothing but visibility.
 
 ### Wave 3 — The performance model, the event side, and the canvas
 
@@ -641,8 +660,8 @@ taken in either order**:
 
 - **3A — the performance model.** P12, P13, P14, P15, banks, the sequencer, the
   scales. This is what the funcspec is mostly about, and none of it exists.
-- **3B — the event side and the shell.** The 29 inert modules, the canvas
-  interaction work, persistence, and whatever §1.1 decides.
+- **3B — the event side and the canvas.** The 29 inert modules, the canvas
+  interaction work, persistence, and the tracker module.
 
 Splitting them is allowed. Skipping the gate is not.
 
@@ -667,7 +686,9 @@ Splitting them is allowed. Skipping the gate is not.
     highlighting, keyboard patching, low-zoom non-interactive threshold.
 11. Autosave and crash recovery; unknown-module preservation; undo bounded to 30
     and no longer cleared on save (D7).
-12. Whatever §1.1 decides about the shell.
+12. The **tracker module** — a face whose grid is streams × time — as the home
+    for pattern and sequenced data. §1.1 settled that this is an editor, not a
+    shell.
 
 **Gate:** every module in the registry does something when patched. Four sources
 with different sync modes and start offsets enter at their own bars and drift
@@ -793,12 +814,18 @@ cheap now and expensive after something depends on it.
 | D8 | Reverb has an **algorithm/convolution switch** in one module | Two separate ideas | One module, structural variant — the mechanism already exists |
 | D9 | Play States, trigger modes, per-source sync | Percussion has note→sample slots only | P12 and P13. The single largest gap the spec exposed |
 | D10 | **Only the foreground window makes sound** | Single window, no rule | Wave 8, with the multi-window model |
+| D11 | A **column-based zoned shell** with fixed transport, mixer and global-panel zones | A free-form node canvas | **Resolved (§1.1):** the canvas is the shell. The mixer and the tracker become modules on it; the spec's zones become objects, not chrome |
 
 ## 6. Decisions of record
 
 Settled. Do not reopen without a stated reason.
 
 - **Rust only.** No fallback, no flag. §0.1.
+- **The free-form canvas is the shell**, and there is no second layout. The
+  mixer and the tracker are modules on it. §1.1.
+- **Two modes, not two layouts.** Edit shows everything; Performance shows what
+  was flagged. A module may be arbitrarily large because size in Edit costs
+  nothing at performance time. §1.2.
 - **Bypass is a mute; `mix = 0` is the pass-through.** A bypassed node stays
   wired and costs two ramps to restore.
 - **Wet at zero keeps DSP alive; bypass does not.**
