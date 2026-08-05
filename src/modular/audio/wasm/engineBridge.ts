@@ -27,6 +27,8 @@ import type { AudioNodeSpec, AudioPlan } from "../audioPlan";
 import { AUDIO_MIX_PARAM, AUDIO_MUTE_PARAM } from "../../registry/audioModules";
 import { planSampleRefs } from "./sampleSync";
 import { transferSample, type SampleSource } from "./sampleTransfer";
+import { NoteSchedule } from "./noteSchedule";
+import type { ScheduledEvent } from "./rackProtocol";
 
 /** `u32::MAX`, as it appears once JavaScript has read it back as an `i32`. */
 export const NO_MODULE = 0xffffffff;
@@ -391,6 +393,8 @@ export interface EngineExports {
   module_count(): number;
   cable_count(): number;
   process_quantum(): void;
+  /** Render part of a quantum, so a note can start between two of them. */
+  process_range(start: number, len: number): void;
   readonly memory: { readonly buffer: ArrayBuffer };
 }
 
@@ -473,10 +477,12 @@ export class WasmRack {
   private sampleMap: Record<string, number> = {};
   /** Slots already written, so a plan update does not re-point every note. */
   private readonly assignedSlots = new Set<string>();
+  /** Notes waiting for their frame. See `noteSchedule.ts`. */
+  private readonly pending = new NoteSchedule();
 
   constructor(
     private readonly engine: EngineExports,
-    sampleRate: number,
+    private readonly sampleRate: number,
   ) {
     engine.init(sampleRate);
     // The one module no document mentions and every rack needs: without it the
@@ -588,12 +594,67 @@ export class WasmRack {
     }
   }
 
-  /** Advance one render quantum. `input` is read, `output` is written. */
-  process(): void {
-    this.engine.process_quantum();
+  /**
+   * Hold these events until `atSec` on the audio clock.
+   *
+   * The conversion to a frame happens here rather than on the main thread
+   * because this side already knows the sample rate and counts in the same
+   * clock; sending a frame number would mean the two had to agree about a
+   * conversion neither owns.
+   */
+  schedule(atSec: number, events: ScheduledEvent[]): void {
+    const frame = Math.round(atSec * this.sampleRate);
+    for (const event of events) this.pending.push({ frame, event });
+  }
+
+  /**
+   * Advance one render quantum, firing scheduled notes at their exact frames.
+   *
+   * `startFrame` is the audio clock's frame index for the first sample of this
+   * quantum — the worklet's `currentFrame`. The quantum is rendered as a run
+   * of ranges broken wherever a note is due, which is what makes the timing
+   * sample-accurate rather than accurate to the nearest 2.7 ms.
+   *
+   * With nothing scheduled this is one `process_range` over the whole buffer,
+   * so the common case costs a comparison.
+   */
+  process(startFrame = 0): void {
+    const end = startFrame + this.quantum;
+    let offset = 0;
+    while (offset < this.quantum) {
+      // Everything due at the frame about to be rendered, including anything
+      // overdue — a late note still sounds.
+      for (const entry of this.pending.drainThrough(startFrame + offset)) {
+        this.dispatch(entry.event);
+      }
+      // The drain leaves nothing at or before this frame, so the next entry is
+      // strictly later and the loop always advances.
+      const next = this.pending.nextFrame();
+      const stop = next === undefined || next >= end ? this.quantum : next - startFrame;
+      this.engine.process_range(offset, stop - offset);
+      offset = stop;
+    }
+  }
+
+  /** Play one scheduled event now. */
+  private dispatch(event: ScheduledEvent): void {
+    switch (event.type) {
+      case "note-on":
+        this.noteOn(event.note, event.velocity, event.detuneCents);
+        break;
+      case "note-off":
+        this.noteOff(event.note);
+        break;
+      case "all-notes-off":
+        this.allNotesOff();
+        break;
+    }
   }
 
   reset(): void {
+    // The future is cancelled with the transport: a note held for a frame that
+    // is now in a different piece is not a note anyone asked for.
+    this.pending.clear();
     this.engine.reset();
   }
 

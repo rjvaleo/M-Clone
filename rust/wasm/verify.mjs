@@ -155,6 +155,21 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   run(200);
   check("note off eventually silences it", run(8) === 0);
 
+  // Partial renders, which is what makes note timing sample-accurate.
+  api.note_on(synth, 60, 1.0, 0.0);
+  api.process_quantum();
+  outBuf2.fill(0);
+  api.process_range(0, 64);
+  const firstHalf = outBuf2.slice(0, 64).some((v) => v !== 0);
+  const secondHalfUntouched = outBuf2.slice(64).every((v) => v === 0);
+  check("process_range renders only the range it was given", firstHalf && secondHalfUntouched);
+
+  outBuf2.fill(7);
+  api.process_range(0, QUANTUM + 1);
+  check("a range past the end of the buffer renders nothing", outBuf2.every((v) => v === 7));
+  api.all_notes_off(synth);
+  run(400);
+
   // The tuning library's far end. That the detune *moves the pitch* is proved
   // in `modules.rs`; what only this can prove is that a fourth argument
   // crosses the real ABI without poisoning the frequency, which would show up

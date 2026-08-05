@@ -242,16 +242,41 @@ pub extern "C" fn cable_count() -> u32 {
 /// Allocation-free — every buffer was sized before this was ever called.
 #[no_mangle]
 pub extern "C" fn process_quantum() {
+    process_range(0, QUANTUM as u32);
+}
+
+/// Advance the rack by part of a quantum, writing to `output[start..start+len]`.
+///
+/// This is what makes note timing sample-accurate. A quantum is 128 frames —
+/// 2.7 ms at 48 kHz — and a note that may only start on a quantum boundary
+/// inherits every bit of that as jitter, which is audible on anything with a
+/// sharp attack and is exactly what a sequencer must not do. Rendering a
+/// quantum as several ranges lets the host fire each note at the frame the
+/// score asked for and render around it.
+///
+/// Not a separate render path: `process_quantum` *is* this call with the whole
+/// buffer, so there is no second copy of the hot loop to keep in step.
+///
+/// A range outside the buffer renders nothing rather than clamping. Clamping
+/// would turn an arithmetic mistake in the host's scheduler into audio that is
+/// subtly in the wrong place, which is far harder to see than silence.
+#[no_mangle]
+pub extern "C" fn process_range(start: u32, len: u32) {
+    let (start, len) = (start as usize, len as usize);
+    let Some(end) = start.checked_add(len).filter(|end| *end <= QUANTUM) else {
+        return;
+    };
+
     let (input_module, output_module) = unsafe { (INPUT_MODULE, OUTPUT_MODULE) };
     let input = input_buffer();
     let output = output_buffer();
 
     let Some(engine) = engine() else {
-        output.fill(0.0);
+        output[start..end].fill(0.0);
         return;
     };
 
-    for i in 0..QUANTUM {
+    for i in start..end {
         if input_module != NO_MODULE {
             engine.set_param(input_module, HostInput::SAMPLE, input[i]);
         }

@@ -132,7 +132,15 @@ class FakeEngine implements EngineExports {
     return this.cables.size;
   }
   process_quantum(): void {
-    this.calls.push("process");
+    this.process_range(0, 128);
+  }
+  /** Records the range, so a test can see where a quantum was broken. */
+  process_range(start: number, len: number): void {
+    this.calls.push(`process:${start}+${len}`);
+  }
+  /** Every rendered range, in order, as `start+len` pairs. */
+  get ranges(): string[] {
+    return this.calls.filter((call) => call.startsWith("process:")).map((c) => c.slice(8));
   }
 
   /** Only the calls of one kind, for asserting on a slice of the traffic. */
@@ -549,7 +557,108 @@ describe("The plan-to-engine bridge", () => {
     rack.update(simplePlan());
     rack.process();
     rack.process();
-    expect(engine.calls.filter((call) => call === "process")).toHaveLength(2);
+    // Nothing scheduled, so each quantum is one whole range: the common case
+    // must not pay for the scheduler.
+    expect(engine.ranges).toEqual(["0+128", "0+128"]);
+  });
+
+  it("breaks the quantum at the frame a scheduled note is due", () => {
+    // The whole reason `process_range` exists. A note that may only start on a
+    // quantum boundary carries up to 2.7 ms of jitter at 48 kHz, which is
+    // audible on anything with a sharp attack.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    // Frame 1050 is 26 frames into the quantum starting at 1024.
+    rack.schedule(1050 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.process(1024);
+
+    expect(engine.ranges).toEqual(["0+26", "26+102"]);
+    expect(engine.of("noteon")).toEqual([`noteon:${rack.moduleIdOf("s")}.60@1+0`]);
+  });
+
+  it("holds a note until the quantum it belongs to", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule(5000 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+
+    rack.process(0);
+    expect(engine.of("noteon")).toEqual([]);
+    expect(engine.ranges).toEqual(["0+128"]);
+  });
+
+  it("plays a chord as one break rather than several", () => {
+    // Three notes at one moment are one edge in the render, not three.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule(64 / 48000, [
+      { type: "note-on", note: 60, velocity: 1, detuneCents: 0 },
+      { type: "note-on", note: 64, velocity: 1, detuneCents: 0 },
+      { type: "note-on", note: 67, velocity: 1, detuneCents: 0 },
+    ]);
+    rack.process(0);
+    expect(engine.ranges).toEqual(["0+64", "64+64"]);
+    expect(engine.of("noteon")).toHaveLength(3);
+  });
+
+  it("breaks the quantum twice for two notes at different frames", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule(32 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.schedule(96 / 48000, [{ type: "note-off", note: 60 }]);
+    rack.process(0);
+    expect(engine.ranges).toEqual(["0+32", "32+64", "96+32"]);
+  });
+
+  it("plays an overdue note at the start of the quantum rather than dropping it", () => {
+    // A note the host was slow to deliver is late; a note that never sounds is
+    // a hole in the piece.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule(10 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.process(4096);
+    expect(engine.ranges).toEqual(["0+128"]);
+    expect(engine.of("noteon")).toHaveLength(1);
+  });
+
+  it("plays a note landing exactly on a quantum boundary in that quantum", () => {
+    // The off-by-one that would make every on-the-beat note a quantum late.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule(128 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+
+    rack.process(0);
+    expect(engine.of("noteon")).toEqual([]);
+    rack.process(128);
+    expect(engine.of("noteon")).toHaveLength(1);
+  });
+
+  it("schedules note off and all-notes-off, not just note on", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule(0, [{ type: "note-off", note: 60 }, { type: "all-notes-off" }]);
+    rack.process(0);
+    const synth = rack.moduleIdOf("s");
+    expect(engine.of("noteoff")).toEqual([`noteoff:${synth}.60`]);
+    expect(engine.of("allnotesoff")).toEqual([`allnotesoff:${synth}`]);
+  });
+
+  it("cancels the future when the transport resets", () => {
+    // The scheduled notes belong to a passage that is no longer playing.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule(64 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.reset();
+    rack.process(0);
+    expect(engine.of("noteon")).toEqual([]);
+    expect(engine.ranges).toEqual(["0+128"]);
   });
 
   it("forwards a transport reset to the engine", () => {

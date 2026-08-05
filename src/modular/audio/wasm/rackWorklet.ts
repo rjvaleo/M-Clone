@@ -26,6 +26,14 @@ export { RACK_PROCESSOR_NAME };
 export type { RackMessage };
 
 declare const sampleRate: number;
+/**
+ * The audio clock's frame index for the first sample of this quantum.
+ *
+ * An `AudioWorkletGlobalScope` global, and the same clock
+ * `AudioContext.currentTime` counts in — which is what lets a scheduled note
+ * be placed against a time the main thread measured.
+ */
+declare const currentFrame: number;
 declare const AudioWorkletProcessor: {
   new (): { readonly port: MessagePort };
 };
@@ -72,6 +80,9 @@ class RackProcessor extends AudioWorkletProcessor {
         case "note-on":
           this.rack.noteOn(message.note, message.velocity, message.detuneCents);
           break;
+        case "schedule":
+          this.rack.schedule(message.atSec, message.events);
+          break;
         case "note-off":
           this.rack.noteOff(message.note);
           break;
@@ -102,7 +113,7 @@ class RackProcessor extends AudioWorkletProcessor {
       this.rack.input.fill(0);
     }
 
-    this.rack.process();
+    this.rack.process(currentFrame);
 
     // Same signal to every output channel. Stereo comes with the panner.
     for (const channel of output) channel.set(this.rack.output);

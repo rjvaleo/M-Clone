@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { isNotePlayer } from "../players";
 import { RackNotePlayer } from "./rackNotePlayer";
 
-const sink = () => ({ noteOn: vi.fn(), noteOff: vi.fn(), allNotesOff: vi.fn() });
+const sink = () => ({ schedule: vi.fn() });
 
 describe("RackNotePlayer", () => {
   it("is accepted by the note adapter's duck test", () => {
@@ -16,50 +16,47 @@ describe("RackNotePlayer", () => {
     expect(new RackNotePlayer("n1", sink()).nodeId).toBe("n1");
   });
 
-  it("forwards note on with its velocity", () => {
+  it("schedules note on for the moment the score asked for", () => {
     const rack = sink();
     new RackNotePlayer("n1", rack).noteOn(60, 0.8, 12.5);
-    expect(rack.noteOn).toHaveBeenCalledWith(60, 0.8, 0);
+    expect(rack.schedule).toHaveBeenCalledWith(12.5, [
+      { type: "note-on", note: 60, velocity: 0.8, detuneCents: 0 },
+    ]);
   });
 
-  it("forwards the microtonal remainder a scale quantiser produced", () => {
-    // The one part of the event a MIDI note number cannot carry. Dropping it
-    // here would make every scale in the tuning library sound like 12-TET
-    // while the quantiser upstream reported that it had worked.
+  it("carries the microtonal remainder a scale quantiser produced", () => {
+    // The one part of the event a MIDI note number cannot hold. Dropping it
+    // would make every scale in the tuning library sound like 12-TET while the
+    // quantiser upstream reported that it had worked.
     const rack = sink();
     new RackNotePlayer("n1", rack).noteOn(60, 0.8, 12.5, -33.4);
-    expect(rack.noteOn).toHaveBeenCalledWith(60, 0.8, -33.4);
+    expect(rack.schedule).toHaveBeenCalledWith(12.5, [
+      { type: "note-on", note: 60, velocity: 0.8, detuneCents: -33.4 },
+    ]);
   });
 
-  it("treats an absent detune as in tune", () => {
-    // Most callers have no tuning system and pass three arguments.
-    const rack = sink();
-    new RackNotePlayer("n1", rack).noteOn(60, 0.8, 12.5);
-    expect(rack.noteOn).toHaveBeenCalledWith(60, 0.8, 0);
-  });
-
-  it("forwards note off", () => {
+  it("schedules note off for its own moment", () => {
     const rack = sink();
     new RackNotePlayer("n1", rack).noteOff(60, 12.5);
-    expect(rack.noteOff).toHaveBeenCalledWith(60);
+    expect(rack.schedule).toHaveBeenCalledWith(12.5, [{ type: "note-off", note: 60 }]);
   });
 
-  it("silences by sending all-notes-off", () => {
+  it("schedules silence rather than taking effect immediately", () => {
     const rack = sink();
     new RackNotePlayer("n1", rack).silence(12.5);
-    expect(rack.allNotesOff).toHaveBeenCalled();
+    expect(rack.schedule).toHaveBeenCalledWith(12.5, [{ type: "all-notes-off" }]);
   });
 
-  it("drops the scheduled time, because the rack protocol has nowhere to put it", () => {
-    // Documented rather than worked around: `RackMessage` carries no
-    // timestamp, so a note sounds when its message is handled rather than at
-    // `atSec`. Sample-accurate scheduling needs a protocol change, and
-    // pretending otherwise here would hide that.
+  it("keeps two notes apart when they were asked for at different times", () => {
+    // The regression this file used to document as a limitation: both notes
+    // used to be sent bare, so both sounded whenever their messages happened
+    // to be handled, and the gap between them was whatever the main thread's
+    // scheduling made it.
     const rack = sink();
     const player = new RackNotePlayer("n1", rack);
-    player.noteOn(60, 1, 999);
-    player.noteOn(60, 1, 0);
-    expect(rack.noteOn).toHaveBeenNthCalledWith(1, 60, 1, 0);
-    expect(rack.noteOn).toHaveBeenNthCalledWith(2, 60, 1, 0);
+    player.noteOn(60, 1, 1.0);
+    player.noteOn(62, 1, 1.5);
+    expect(rack.schedule.mock.calls[0][0]).toBe(1.0);
+    expect(rack.schedule.mock.calls[1][0]).toBe(1.5);
   });
 });
