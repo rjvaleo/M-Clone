@@ -24,7 +24,7 @@
 //     working.
 
 import type { AudioNodeSpec, AudioPlan } from "../audioPlan";
-import { AUDIO_MUTE_PARAM } from "../../registry/audioModules";
+import { AUDIO_MIX_PARAM, AUDIO_MUTE_PARAM } from "../../registry/audioModules";
 
 /** `u32::MAX`, as it appears once JavaScript has read it back as an `i32`. */
 export const NO_MODULE = 0xffffffff;
@@ -41,6 +41,7 @@ export const MODULE_KINDS: Readonly<Record<string, number>> = {
   "m.audio-gain": 1,
   "m.audio-output": 2,
   "m.synth": 3,
+  "m.audio-blackhole": 4,
 };
 
 /** Per-oscillator and per-LFO parameters are strided; see `Synth` in Rust. */
@@ -107,6 +108,24 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     volume: 39,
     "mod-wheel": 40,
   },
+  // Mirrors `BlackholeVerb` in rust/dsp-core/src/modules.rs. `line-count` is
+  // absent on purpose: it is a structural parameter, so changing it rebuilds
+  // the node rather than moving a value, and the Rust tank sizes its own
+  // network. `mix` and `mute` are the shell's, as on every other effect.
+  "m.audio-blackhole": {
+    gravity: 0,
+    size: 1,
+    "pre-delay-seconds": 2,
+    "low-level-db": 3,
+    "high-level-db": 4,
+    "mod-depth": 5,
+    "mod-rate": 6,
+    feedback: 7,
+    resonance: 8,
+    [AUDIO_MIX_PARAM]: 9,
+    level: 10,
+    [AUDIO_MUTE_PARAM]: 11,
+  },
 };
 
 /**
@@ -118,6 +137,7 @@ const FADE_HANDLE: Readonly<Record<string, number | undefined>> = {
   "m.audio-gain": PARAM_INDICES["m.audio-gain"].level,
   "m.audio-output": undefined,
   "m.synth": PARAM_INDICES["m.synth"].level,
+  "m.audio-blackhole": PARAM_INDICES["m.audio-blackhole"].level,
 };
 
 /** Modules that take notes. Everything else inherits the trait's no-op. */
@@ -131,7 +151,11 @@ const INSTRUMENTS: ReadonlySet<string> = new Set(["m.synth"]);
  * silently, so the mirror would believe in a cable that does not exist and
  * disconnect a real one later.
  */
-const TAKES_AUDIO_INPUT: ReadonlySet<string> = new Set(["m.audio-gain", "m.audio-output"]);
+const TAKES_AUDIO_INPUT: ReadonlySet<string> = new Set([
+  "m.audio-gain",
+  "m.audio-output",
+  "m.audio-blackhole",
+]);
 
 /** Every audio port on these modules is port 0; that changes with the DP/4. */
 const PORT_INDEX = 0;
@@ -187,8 +211,42 @@ type Built = {
  */
 export class WasmRack {
   readonly hostInputId: number;
-  readonly input: Float32Array;
-  readonly output: Float32Array;
+
+  private readonly quantum: number;
+  private inputView: Float32Array;
+  private outputView: Float32Array;
+
+  /**
+   * The host's quantum, as a view straight into WASM linear memory.
+   *
+   * A getter rather than a field because **growing WASM memory detaches every
+   * existing view into it**, and adding a module that allocates — a reverb's
+   * delay lines — does exactly that. Held as a field, the first quantum after
+   * a Blackhole was added threw on a detached buffer and the worklet went
+   * silent. The check below is a pointer comparison against the engine's
+   * current buffer, so the common case costs nothing and no view is rebuilt
+   * while memory is stable.
+   */
+  get input(): Float32Array {
+    this.refreshViews();
+    return this.inputView;
+  }
+
+  get output(): Float32Array {
+    this.refreshViews();
+    return this.outputView;
+  }
+
+  private refreshViews(): void {
+    // `byteLength === 0` catches a detached view; the buffer identity check
+    // catches a swap. Both mean the same thing here: this view no longer
+    // points at the engine's memory.
+    if (this.inputView.buffer === this.engine.memory.buffer && this.inputView.byteLength > 0) {
+      return;
+    }
+    this.inputView = new Float32Array(this.engine.memory.buffer, this.engine.input_ptr(), this.quantum);
+    this.outputView = new Float32Array(this.engine.memory.buffer, this.engine.output_ptr(), this.quantum);
+  }
 
   private readonly built = new Map<string, Built>();
   /**
@@ -212,9 +270,9 @@ export class WasmRack {
     // correctly renders silence.
     this.hostInputId = asModuleId(engine.add_module(HOST_INPUT_KIND)) ?? NO_MODULE;
 
-    const quantum = engine.quantum_size();
-    this.input = new Float32Array(engine.memory.buffer, engine.input_ptr(), quantum);
-    this.output = new Float32Array(engine.memory.buffer, engine.output_ptr(), quantum);
+    this.quantum = engine.quantum_size();
+    this.inputView = new Float32Array(engine.memory.buffer, engine.input_ptr(), this.quantum);
+    this.outputView = new Float32Array(engine.memory.buffer, engine.output_ptr(), this.quantum);
   }
 
   /** Module types the plan asked for that this engine does not have yet. */
