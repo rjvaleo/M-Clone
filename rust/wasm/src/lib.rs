@@ -23,6 +23,7 @@
 
 use dsp_core::engine::{Engine, PortRef};
 use dsp_core::modules::{HostInput, ModuleKind};
+use dsp_core::samples::SampleBank;
 
 /// One render quantum. Web Audio has always handed a worklet exactly this many
 /// frames and the spec fixes it, so the buffers can be sized once.
@@ -32,6 +33,10 @@ const QUANTUM: usize = 128;
 const NO_MODULE: u32 = u32::MAX;
 
 static mut ENGINE: Option<Engine> = None;
+/// Audio the host has transferred in. Outlives any one patch: a sample is
+/// referenced by nodes but owned by the rack, so rebuilding a graph must not
+/// throw the audio away and make the host send it again.
+static mut SAMPLES: Option<SampleBank> = None;
 static mut INPUT: [f32; QUANTUM] = [0.0; QUANTUM];
 static mut OUTPUT: [f32; QUANTUM] = [0.0; QUANTUM];
 
@@ -44,6 +49,11 @@ static mut OUTPUT_MODULE: u32 = NO_MODULE;
 #[allow(static_mut_refs)]
 fn engine() -> Option<&'static mut Engine> {
     unsafe { ENGINE.as_mut() }
+}
+
+#[allow(static_mut_refs)]
+fn samples() -> Option<&'static mut SampleBank> {
+    unsafe { SAMPLES.as_mut() }
 }
 
 #[allow(static_mut_refs)]
@@ -62,6 +72,10 @@ pub extern "C" fn init(sample_rate: f32) {
     let rate = if sample_rate.is_finite() && sample_rate > 0.0 { sample_rate } else { 48_000.0 };
     unsafe {
         ENGINE = Some(Engine::new(rate));
+        // Rebuilt with the engine: `init` replaces the whole rack, and audio
+        // written for the previous one is addressed by ids the new one has
+        // never issued.
+        SAMPLES = Some(SampleBank::new());
         INPUT_MODULE = NO_MODULE;
         OUTPUT_MODULE = NO_MODULE;
     }
@@ -236,4 +250,60 @@ pub extern "C" fn process_quantum() {
         output[i] =
             if output_module != NO_MODULE { engine.output_of(output_module, 0) } else { 0.0 };
     }
+}
+
+// ---- samples ---------------------------------------------------------------
+//
+// Transfer is two calls, not one: the host allocates, then writes straight into
+// the pointer it gets back. Passing the audio *through* the ABI would mean
+// copying it twice — once into WASM's memory to hand over and once into the
+// bank — for buffers that run to megabytes.
+//
+// **Allocating can grow WASM linear memory, which detaches every existing
+// JavaScript view into it.** The host must therefore re-read `memory.buffer`
+// *after* `sample_alloc` returns and before writing. That is not a subtlety it
+// can discover safely: a stale view throws on write, or worse, writes into a
+// buffer nothing is reading any more.
+
+/// Reserve zeroed room for a sample. Returns 1 on success, 0 on a shape that
+/// cannot hold audio. Replaces whatever the id already held.
+#[no_mangle]
+pub extern "C" fn sample_alloc(id: u32, channels: u32, frames: u32, sample_rate: f32) -> u32 {
+    match samples() {
+        Some(bank) => u32::from(bank.allocate(id, channels as usize, frames as usize, sample_rate)),
+        None => 0,
+    }
+}
+
+/// Where to write a sample's audio, channel-major. Null if the id holds
+/// nothing — the host must check, because writing to null is not recoverable.
+#[no_mangle]
+pub extern "C" fn sample_ptr(id: u32) -> *mut f32 {
+    match samples().and_then(|bank| bank.get_mut(id)) {
+        Some(sample) => sample.data_mut().as_mut_ptr(),
+        None => core::ptr::null_mut(),
+    }
+}
+
+/// How many floats `sample_ptr` points at: channels x frames.
+#[no_mangle]
+pub extern "C" fn sample_len(id: u32) -> u32 {
+    match samples().and_then(|bank| bank.get(id)) {
+        Some(sample) => (sample.channels() * sample.frames()) as u32,
+        None => 0,
+    }
+}
+
+/// Release a sample. Freeing an id that holds nothing is not an error.
+#[no_mangle]
+pub extern "C" fn sample_free(id: u32) {
+    if let Some(bank) = samples() {
+        bank.free(id);
+    }
+}
+
+/// How many samples the rack is holding, for the host to assert against.
+#[no_mangle]
+pub extern "C" fn sample_count() -> u32 {
+    samples().map_or(0, |bank| bank.len() as u32)
 }

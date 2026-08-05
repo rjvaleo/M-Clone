@@ -177,5 +177,44 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   api.all_notes_off(synth);
 }
 
+
+// ---- samples ---------------------------------------------------------------
+//
+// The seam granular processing depends on: audio written from JavaScript has to
+// arrive intact in the engine's own memory. The hazard being proved against is
+// that `sample_alloc` may grow linear memory, which detaches any view taken
+// before it — so the view is always taken afterwards.
+{
+  const FRAMES = 4096;
+  const CHANNELS = 2;
+  const ok = api.sample_alloc(0, CHANNELS, FRAMES, 44100);
+  check("sample_alloc accepts a real buffer shape", ok === 1);
+  check("sample_len reports channels x frames", api.sample_len(0) === CHANNELS * FRAMES);
+
+  const pointer = api.sample_ptr(0);
+  check("sample_ptr is not null after allocating", pointer !== 0);
+
+  // Deliberately re-read after the allocation, exactly as sampleTransfer.ts does.
+  const target = new Float32Array(api.memory.buffer, pointer, CHANNELS * FRAMES);
+  for (let i = 0; i < FRAMES; i++) {
+    target[i] = i / FRAMES;
+    target[FRAMES + i] = -(i / FRAMES);
+  }
+  const readBack = new Float32Array(api.memory.buffer, api.sample_ptr(0), CHANNELS * FRAMES);
+  check("audio written from JavaScript survives in engine memory",
+    readBack[0] === 0 && Math.abs(readBack[FRAMES - 1] - (FRAMES - 1) / FRAMES) < 1e-6);
+  check("channels stay separate in the planar layout",
+    Math.abs(readBack[FRAMES + 100] + 100 / FRAMES) < 1e-6);
+
+  check("sample_count sees it", api.sample_count() === 1);
+  check("a shape that cannot hold audio is refused", api.sample_alloc(1, 0, 10, 44100) === 0);
+  check("an unknown id has no pointer", api.sample_ptr(99) === 0);
+
+  api.sample_free(0);
+  check("freeing releases the slot", api.sample_count() === 0 && api.sample_ptr(0) === 0);
+  api.sample_free(99); // must not fault
+  check("freeing nothing is not fatal", true);
+}
+
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

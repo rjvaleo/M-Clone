@@ -58,6 +58,7 @@ pub mod modmatrix;
 pub mod modules;
 pub mod osc;
 pub mod reverb;
+pub mod samples;
 pub mod voice;
 
 /// Below this, a value is flushed to zero.
