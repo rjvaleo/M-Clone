@@ -38,6 +38,7 @@
 //! That is what lets `NATIVE_PLUGIN_SPEC.md` §4 hold: identical musical
 //! decisions in standalone and plugin, and no coupling to frame rate.
 
+use crate::samples::SampleBank;
 use crate::clamp;
 
 /// How many channels one port carries.
@@ -120,8 +121,16 @@ pub struct Cable {
 }
 
 /// What a module is told on every sample.
-#[derive(Clone, Copy, Debug)]
-pub struct ProcessContext {
+// Not Copy or Debug any more: it borrows the sample bank, which is neither.
+#[derive(Clone)]
+pub struct ProcessContext<'a> {
+    /// Audio the host transferred in, for the modules that read samples.
+    ///
+    /// Borrowed rather than owned by each module because a sample outlives any
+    /// one node and several may read the same one — a percussion kit and a
+    /// looper pointed at the same file should not hold two copies of it in
+    /// linear memory.
+    pub samples: &'a SampleBank,
     pub sample_rate: f32,
     pub sample_time: f32,
     /// Samples since the transport started. Wraps after ~27 hours at 48 kHz;
@@ -183,6 +192,15 @@ pub trait Module: Send {
     /// of the two instruments that care. Notes reach a module by id rather than
     /// down a cable: an event is not a signal, and giving it a port would mean
     /// inventing a second kind of cable that carries neither audio nor CV.
+    /// Point one of this module's slots at a sample in the bank.
+    ///
+    /// A separate call rather than a parameter for the same reason
+    /// `set_modulation` is: a percussion kit has sixteen note-to-sample
+    /// assignments, and sixteen parameters carrying opaque ids would bury the
+    /// handful of controls a person actually turns. Default no-op, because
+    /// most modules are not samplers.
+    fn set_sample_slot(&mut self, _slot: u32, _sample: u32) {}
+
     fn note_on(&mut self, _note: u8, _velocity: f32) {}
     fn note_off(&mut self, _note: u8) {}
     fn all_notes_off(&mut self) {}
@@ -224,11 +242,29 @@ pub struct Engine {
     cables: Vec<Cable>,
     sample_rate: f32,
     frame: u64,
+    /// Owned by the engine so `process` can lend it to every module without
+    /// the host having to pass it in on the audio path.
+    samples: SampleBank,
 }
 
 impl Engine {
     pub fn new(sample_rate: f32) -> Self {
-        Self { slots: Vec::new(), cables: Vec::new(), sample_rate, frame: 0 }
+        Self {
+            slots: Vec::new(),
+            cables: Vec::new(),
+            sample_rate,
+            frame: 0,
+            samples: SampleBank::new(),
+        }
+    }
+
+    /// The sample bank, for the host to load audio into off the audio thread.
+    pub fn samples(&self) -> &SampleBank {
+        &self.samples
+    }
+
+    pub fn samples_mut(&mut self) -> &mut SampleBank {
+        &mut self.samples
     }
 
     pub fn sample_rate(&self) -> f32 {
@@ -314,6 +350,14 @@ impl Engine {
         }
     }
 
+    /// Point one of a module's sample slots at audio in the bank. Ignored by
+    /// modules that are not samplers, and by ids that no longer exist.
+    pub fn set_sample_slot(&mut self, id: ModuleId, slot: u32, sample: u32) {
+        if let Some(target) = self.slot_mut(id) {
+            target.module.set_sample_slot(slot, sample);
+        }
+    }
+
     /// Send a note to one module. Unknown ids are ignored rather than a panic —
     /// a note arriving for a module the host just deleted is a race, not a bug.
     pub fn note_on(&mut self, id: ModuleId, note: u8, velocity: f32) {
@@ -388,6 +432,7 @@ impl Engine {
     /// Allocation-free. Every buffer was sized in `add`.
     pub fn process(&mut self) {
         let ctx = ProcessContext {
+            samples: &self.samples,
             sample_rate: self.sample_rate,
             sample_time: 1.0 / self.sample_rate,
             frame: self.frame,

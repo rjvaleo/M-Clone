@@ -50,6 +50,9 @@ export const MODULE_KINDS: Readonly<Record<string, number>> = {
   "m.audio-compressor": 10,
   "m.audio-limiter": 11,
   "m.audio-bitcrusher": 12,
+  "m.percussion": 13,
+  "m.looper": 14,
+  "m.granular": 15,
 };
 
 /**
@@ -265,6 +268,40 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     level: 3,
     [AUDIO_MUTE_PARAM]: 4,
   },
+  // The three samplers. `asset-id` and `slots` are absent because they name
+  // *audio*, not a value: they reach the engine through `set_sample_slot`
+  // after the sample itself has been transferred. See sampleTransfer.ts.
+  "m.percussion": {
+    "pitch-semitones": 0,
+    "decay-seconds": 1,
+    [AUDIO_MIX_PARAM]: 2,
+    level: 3,
+    [AUDIO_MUTE_PARAM]: 4,
+  },
+  "m.looper": {
+    rate: 0,
+    "pitch-shift": 1,
+    "loop-start": 2,
+    "loop-end": 3,
+    loop: 4,
+    reverse: 5,
+    gate: 6,
+    [AUDIO_MIX_PARAM]: 7,
+    level: 8,
+    [AUDIO_MUTE_PARAM]: 9,
+  },
+  "m.granular": {
+    "grain-size": 0,
+    "grain-spacing": 1,
+    position: 2,
+    jitter: 3,
+    stretch: 4,
+    freeze: 5,
+    "free-run": 6,
+    [AUDIO_MIX_PARAM]: 7,
+    level: 8,
+    [AUDIO_MUTE_PARAM]: 9,
+  },
 };
 
 /**
@@ -285,10 +322,18 @@ const FADE_HANDLE: Readonly<Record<string, number | undefined>> = {
   "m.audio-compressor": PARAM_INDICES["m.audio-compressor"].level,
   "m.audio-limiter": PARAM_INDICES["m.audio-limiter"].level,
   "m.audio-bitcrusher": PARAM_INDICES["m.audio-bitcrusher"].level,
+  "m.percussion": PARAM_INDICES["m.percussion"].level,
+  "m.looper": PARAM_INDICES["m.looper"].level,
+  "m.granular": PARAM_INDICES["m.granular"].level,
 };
 
 /** Modules that take notes. Everything else inherits the trait's no-op. */
-const INSTRUMENTS: ReadonlySet<string> = new Set(["m.synth"]);
+const INSTRUMENTS: ReadonlySet<string> = new Set([
+  "m.synth",
+  "m.percussion",
+  "m.looper",
+  "m.granular",
+]);
 
 /**
  * Modules with an audio input, and therefore somewhere for the host feed to go.
@@ -328,6 +373,7 @@ export interface EngineExports {
   note_off(module: number, note: number): void;
   all_notes_off(module: number): void;
   set_modulation(module: number, source: number, dest: number, amount: number): void;
+  set_sample_slot(module: number, slot: number, sample: number): void;
   set_bypassed(module: number, bypassed: number): void;
   set_io(inputModule: number, outputModule: number): void;
   reset(): void;

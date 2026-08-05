@@ -30,6 +30,8 @@ use crate::dp4::{Dp4Algorithm, Dp4Reverb, NonLin, NonLinVariant, NONLIN_TAPS};
 use crate::dynamics::{DynamicsMode, EnvelopeFollower, GainComputer};
 use crate::fdn::{Fdn, MixMatrix};
 use crate::filter::{Biquad, BiquadKind, OnePole};
+use crate::grain::{GrainCloud, GrainSettings};
+use crate::sampler::{Sampler, SamplerSettings, NO_SAMPLE};
 use crate::reverb::Blackhole;
 use crate::voice::{
     AdsrSettings, LfoSettings, VoiceSettings, MAX_CUTOFF_HZ, MIN_CUTOFF_HZ, OSC_COUNT,
@@ -1448,6 +1450,343 @@ impl Module for BitcrusherModule {
     }
 }
 
+
+// ---- the samplers ----------------------------------------------------------
+//
+// The last three, and the ones that could not move until the engine had its
+// own memory for audio. All three are *instruments*: they take notes rather
+// than an audio input, and they read the bank `ProcessContext` lends them.
+//
+// Notes reach a sample through `set_sample_slot` rather than a parameter — a
+// percussion kit has sixteen assignments and none of them is a value anyone
+// turns. See `sampler.rs`.
+
+
+/// Notes waiting for the next `process`.
+///
+/// `Module::note_on` has no access to the sample bank — the bank is lent
+/// through `ProcessContext`, which only `process` receives — so a sampler
+/// cannot start a voice at the moment the note arrives. It records the note
+/// and starts it on the next sample instead.
+///
+/// That is at most one sample of latency, about 20 µs, which is four hundred
+/// times under the threshold where anything is audible and far less than the
+/// scheduling jitter the note already survived getting here. The alternative
+/// is widening the trait so every module carries a bank reference it does not
+/// want.
+#[derive(Clone, Copy, Default)]
+struct PendingNotes {
+    notes: [(u8, f32); 8],
+    count: usize,
+}
+
+impl PendingNotes {
+    fn push(&mut self, note: u8, velocity: f32) {
+        // A full queue drops the oldest rather than the newest: in a burst the
+        // most recent notes are the ones being played right now.
+        if self.count == self.notes.len() {
+            self.notes.copy_within(1.., 0);
+            self.count -= 1;
+        }
+        self.notes[self.count] = (note, velocity);
+        self.count += 1;
+    }
+
+    fn take(&mut self) -> ([(u8, f32); 8], usize) {
+        let taken = (self.notes, self.count);
+        self.count = 0;
+        taken
+    }
+}
+
+/// `m.percussion` — a kit, one sample per note.
+pub struct PercussionModule {
+    sampler: Sampler,
+    shell: Shell,
+    pending: PendingNotes,
+}
+
+impl PercussionModule {
+    pub const PITCH_SEMITONES: usize = 0;
+    pub const DECAY_SECONDS: usize = 1;
+    pub const MIX: usize = 2;
+    pub const LEVEL: usize = 3;
+    pub const MUTE: usize = 4;
+    pub const PARAM_COUNT: usize = 5;
+
+    pub fn new(sample_rate: f32) -> Self {
+        Self {
+            sampler: Sampler::new(sample_rate),
+            shell: Shell::new(1.0),
+            pending: PendingNotes::default(),
+        }
+    }
+
+    fn settings(&self, ports: &Ports) -> SamplerSettings {
+        SamplerSettings {
+            pitch_semitones: clamp(ports.param(Self::PITCH_SEMITONES), -24.0, 24.0),
+            decay_sec: clamp(ports.param(Self::DECAY_SECONDS), 0.02, 4.0),
+            // A hit runs to the end whatever the key does. That is what makes
+            // this a kit rather than a keyboard.
+            gate: false,
+            ..SamplerSettings::default()
+        }
+    }
+}
+
+impl Module for PercussionModule {
+    fn process(&mut self, ctx: &ProcessContext, ports: &mut Ports) {
+        let settings = self.settings(ports);
+        let (notes, count) = self.pending.take();
+        for &(note, velocity) in &notes[..count] {
+            self.sampler.note_on(ctx.samples, note, velocity, &settings);
+        }
+        let wet = self.sampler.process(ctx.samples, &settings);
+        // A source has no dry path — there is no input to blend against — so
+        // the shell sees silence as its dry signal and `mix` behaves as a
+        // straight wet level.
+        let out = self.shell.finish(ports, 0.0, wet, Self::MIX);
+        ports.output(0, out);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.sampler.set_sample_rate(sample_rate);
+        self.shell.set_sample_rate(sample_rate);
+    }
+
+    fn reset(&mut self) {
+        self.sampler.clear();
+        self.shell.reset();
+    }
+
+    fn set_sample_slot(&mut self, slot: u32, sample: u32) {
+        self.sampler.set_slot(slot, sample);
+    }
+
+    fn note_on(&mut self, note: u8, velocity: f32) {
+        self.pending.push(note, velocity);
+    }
+
+    fn note_off(&mut self, note: u8) {
+        // Ungated by design, so this only marks the voice released; the hit
+        // still runs to the end.
+        self.sampler.note_off(note, &SamplerSettings { gate: false, ..SamplerSettings::default() });
+    }
+
+    fn all_notes_off(&mut self) {
+        self.sampler.all_notes_off();
+    }
+
+    // Sources have no audio input.
+    fn input_count(&self) -> usize { 0 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::DECAY_SECONDS => 0.5,
+            Self::MIX => 1.0,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.looper` — one sample, with loop points and a rate.
+pub struct LooperModule {
+    sampler: Sampler,
+    shell: Shell,
+    pending: PendingNotes,
+    /// The gate flag as of the last `process`, so `note_off` releases with the
+    /// setting the voice was started under rather than a default.
+    gated: bool,
+}
+
+impl LooperModule {
+    pub const RATE: usize = 0;
+    pub const PITCH_SHIFT: usize = 1;
+    pub const LOOP_START: usize = 2;
+    pub const LOOP_END: usize = 3;
+    pub const LOOP: usize = 4;
+    pub const REVERSE: usize = 5;
+    pub const GATE: usize = 6;
+    pub const MIX: usize = 7;
+    pub const LEVEL: usize = 8;
+    pub const MUTE: usize = 9;
+    pub const PARAM_COUNT: usize = 10;
+
+    pub fn new(sample_rate: f32) -> Self {
+        Self {
+            sampler: Sampler::new(sample_rate),
+            shell: Shell::new(1.0),
+            pending: PendingNotes::default(),
+            gated: false,
+        }
+    }
+
+    fn settings(&self, ports: &Ports) -> SamplerSettings {
+        SamplerSettings {
+            rate: clamp(ports.param(Self::RATE), 0.05, 4.0),
+            pitch_semitones: clamp(ports.param(Self::PITCH_SHIFT), -24.0, 24.0),
+            looping: ports.param(Self::LOOP) >= 0.5,
+            loop_start: clamp(ports.param(Self::LOOP_START), 0.0, 1.0),
+            loop_end: clamp(ports.param(Self::LOOP_END), 0.0, 1.0),
+            reverse: ports.param(Self::REVERSE) >= 0.5,
+            gate: ports.param(Self::GATE) >= 0.5,
+            decay_sec: 0.02,
+        }
+    }
+}
+
+impl Module for LooperModule {
+    fn process(&mut self, ctx: &ProcessContext, ports: &mut Ports) {
+        let settings = self.settings(ports);
+        self.gated = settings.gate;
+        let (notes, count) = self.pending.take();
+        for &(note, velocity) in &notes[..count] {
+            self.sampler.note_on(ctx.samples, note, velocity, &settings);
+        }
+        let wet = self.sampler.process(ctx.samples, &settings);
+        let out = self.shell.finish(ports, 0.0, wet, Self::MIX);
+        ports.output(0, out);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.sampler.set_sample_rate(sample_rate);
+        self.shell.set_sample_rate(sample_rate);
+    }
+
+    fn reset(&mut self) {
+        self.sampler.clear();
+        self.shell.reset();
+    }
+
+    fn set_sample_slot(&mut self, slot: u32, sample: u32) {
+        self.sampler.set_slot(slot, sample);
+    }
+
+    fn note_on(&mut self, note: u8, velocity: f32) {
+        self.pending.push(note, velocity);
+    }
+
+    fn note_off(&mut self, note: u8) {
+        self.sampler.note_off(
+            note,
+            &SamplerSettings { gate: self.gated, ..SamplerSettings::default() },
+        );
+    }
+
+    fn all_notes_off(&mut self) {
+        self.sampler.all_notes_off();
+    }
+
+    fn input_count(&self) -> usize { 0 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::RATE => 1.0,
+            Self::LOOP_END => 1.0,
+            Self::LOOP => 1.0,
+            Self::MIX => 1.0,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.granular` — the grain cloud.
+pub struct GranularModule {
+    cloud: GrainCloud,
+    shell: Shell,
+    sample: u32,
+}
+
+impl GranularModule {
+    pub const GRAIN_SIZE: usize = 0;
+    pub const GRAIN_SPACING: usize = 1;
+    pub const POSITION: usize = 2;
+    pub const JITTER: usize = 3;
+    pub const STRETCH: usize = 4;
+    pub const FREEZE: usize = 5;
+    pub const FREE_RUN: usize = 6;
+    pub const MIX: usize = 7;
+    pub const LEVEL: usize = 8;
+    pub const MUTE: usize = 9;
+    pub const PARAM_COUNT: usize = 10;
+
+    pub fn new(sample_rate: f32) -> Self {
+        Self {
+            // A fixed seed rather than a random one: a granular patch has to
+            // sound the same every time a project opens.
+            cloud: GrainCloud::new(sample_rate, 0x5eed),
+            shell: Shell::new(1.0),
+            sample: NO_SAMPLE,
+        }
+    }
+}
+
+impl Module for GranularModule {
+    fn process(&mut self, ctx: &ProcessContext, ports: &mut Ports) {
+        if self.sample == NO_SAMPLE {
+            ports.output(0, 0.0);
+            return;
+        }
+        let settings = GrainSettings {
+            size_sec: clamp(ports.param(Self::GRAIN_SIZE), 0.005, 2.0),
+            spacing_sec: clamp(ports.param(Self::GRAIN_SPACING), 0.005, 1.0),
+            position: clamp(ports.param(Self::POSITION), 0.0, 1.0),
+            jitter: clamp(ports.param(Self::JITTER), 0.0, 1.0),
+            stretch: clamp(ports.param(Self::STRETCH), 0.05, 8.0),
+            freeze: ports.param(Self::FREEZE) >= 0.5,
+            rate: 1.0,
+        };
+        let wet = self.cloud.process(ctx.samples, self.sample, &settings);
+        let out = self.shell.finish(ports, 0.0, wet, Self::MIX);
+        ports.output(0, out);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.cloud.set_sample_rate(sample_rate);
+        self.shell.set_sample_rate(sample_rate);
+    }
+
+    fn reset(&mut self) {
+        self.cloud.clear();
+        self.shell.reset();
+    }
+
+    /// One source, so every slot names the same thing and the last one wins.
+    fn set_sample_slot(&mut self, _slot: u32, sample: u32) {
+        self.sample = sample;
+    }
+
+    /// A note restarts the scan unless the cloud is free-running, which is the
+    /// difference between playing it and letting it drift.
+    fn note_on(&mut self, _note: u8, _velocity: f32) {
+        self.cloud.retrigger(0.0);
+    }
+
+    fn all_notes_off(&mut self) {
+        self.cloud.clear();
+    }
+
+    fn input_count(&self) -> usize { 0 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::GRAIN_SIZE => 0.2,
+            Self::GRAIN_SPACING => 0.08,
+            Self::POSITION => 0.5,
+            Self::JITTER => 0.1,
+            Self::STRETCH => 1.0,
+            Self::MIX => 1.0,
+            _ => 0.0,
+        }
+    }
+}
+
 /// Every module the host can name, so the shim never matches on strings.
 ///
 /// The discriminants are part of the wire protocol between TypeScript and
@@ -1468,6 +1807,9 @@ pub enum ModuleKind {
     Compressor = 10,
     Limiter = 11,
     Bitcrusher = 12,
+    Percussion = 13,
+    Looper = 14,
+    Granular = 15,
 }
 
 impl ModuleKind {
@@ -1486,6 +1828,9 @@ impl ModuleKind {
             10 => Some(Self::Compressor),
             11 => Some(Self::Limiter),
             12 => Some(Self::Bitcrusher),
+            13 => Some(Self::Percussion),
+            14 => Some(Self::Looper),
+            15 => Some(Self::Granular),
             _ => None,
         }
     }
@@ -1528,6 +1873,9 @@ impl ModuleKind {
             Self::Compressor => Box::new(CompressorModule::new(sample_rate)),
             Self::Limiter => Box::new(LimiterModule::new(sample_rate)),
             Self::Bitcrusher => Box::new(BitcrusherModule::new(sample_rate)),
+            Self::Percussion => Box::new(PercussionModule::new(sample_rate)),
+            Self::Looper => Box::new(LooperModule::new(sample_rate)),
+            Self::Granular => Box::new(GranularModule::new(sample_rate)),
         }
     }
 
@@ -1755,6 +2103,139 @@ mod tests {
         settle(&mut engine);
         let boosted = steady(&mut engine, input, output, 0.5);
         assert!(boosted > flat, "a low shelf boost did nothing at DC");
+    }
+
+    /// A sampler wired to the output, with one second of DC loaded in slot 0
+    /// and every note pointed at it.
+    fn sampler_chain(kind: ModuleKind, level: usize) -> (Engine, u32, u32) {
+        let mut engine = Engine::new(RATE);
+        engine.samples_mut().allocate(0, 1, RATE as usize, RATE);
+        for slot in engine.samples_mut().get_mut(0).unwrap().data_mut() {
+            *slot = 1.0;
+        }
+        let player = engine.add(kind.build());
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: player, port: 0 }, PortRef { module: output, port: 0 });
+        engine.set_param(player, level, 1.0);
+        engine.set_sample_slot(player, 60, 0);
+        (engine, player, output)
+    }
+
+    fn render_peak(engine: &mut Engine, output: u32, samples: usize) -> f32 {
+        let mut peak = 0.0f32;
+        for _ in 0..samples {
+            engine.process();
+            peak = peak.max(engine.output_of(output, 0).abs());
+        }
+        peak
+    }
+
+    #[test]
+    fn every_sampler_is_reachable_by_its_wire_number() {
+        assert_eq!(ModuleKind::from_u32(13), Some(ModuleKind::Percussion));
+        assert_eq!(ModuleKind::from_u32(14), Some(ModuleKind::Looper));
+        assert_eq!(ModuleKind::from_u32(15), Some(ModuleKind::Granular));
+    }
+
+    #[test]
+    fn the_samplers_are_sources_with_no_audio_input() {
+        for kind in [ModuleKind::Percussion, ModuleKind::Looper, ModuleKind::Granular] {
+            let module = kind.build();
+            assert_eq!(module.input_count(), 0, "{kind:?} claimed an audio input");
+            assert_eq!(module.output_count(), 1);
+        }
+    }
+
+    #[test]
+    fn percussion_plays_the_sample_a_note_points_at() {
+        let (mut engine, _, output) = sampler_chain(ModuleKind::Percussion, PercussionModule::LEVEL);
+        engine.set_param(0, PercussionModule::MIX, 1.0);
+        settle(&mut engine);
+        assert!(render_peak(&mut engine, output, 100) < 1e-6, "it sounded before any note");
+        engine.note_on(0, 60, 1.0);
+        assert!(render_peak(&mut engine, output, 2_000) > 0.1, "the note never sounded");
+    }
+
+    #[test]
+    fn percussion_ignores_a_note_with_no_sample_behind_it() {
+        // Half a kit filled is normal; the empty slots must do nothing.
+        let (mut engine, _, output) = sampler_chain(ModuleKind::Percussion, PercussionModule::LEVEL);
+        engine.set_param(0, PercussionModule::MIX, 1.0);
+        settle(&mut engine);
+        engine.note_on(0, 61, 1.0);
+        assert!(render_peak(&mut engine, output, 2_000) < 1e-6);
+    }
+
+    #[test]
+    fn a_percussion_hit_survives_its_note_off() {
+        // The whole difference between a kit and a keyboard.
+        let (mut engine, _, output) = sampler_chain(ModuleKind::Percussion, PercussionModule::LEVEL);
+        engine.set_param(0, PercussionModule::MIX, 1.0);
+        settle(&mut engine);
+        engine.note_on(0, 60, 1.0);
+        render_peak(&mut engine, output, 100);
+        engine.note_off(0, 60);
+        assert!(render_peak(&mut engine, output, 2_000) > 0.1, "the hit was cut off");
+    }
+
+    #[test]
+    fn the_looper_loops_past_the_end_of_its_sample() {
+        let (mut engine, _, output) = sampler_chain(ModuleKind::Looper, LooperModule::LEVEL);
+        engine.set_param(0, LooperModule::MIX, 1.0);
+        engine.set_param(0, LooperModule::LOOP, 1.0);
+        engine.set_param(0, LooperModule::LOOP_END, 0.05);
+        engine.set_param(0, LooperModule::RATE, 1.0);
+        settle(&mut engine);
+        engine.note_on(0, 60, 1.0);
+        // Well past the 50 ms loop; a one-shot would have finished long ago.
+        render_peak(&mut engine, output, (RATE * 0.3) as usize);
+        assert!(render_peak(&mut engine, output, 2_000) > 0.1, "the loop ended");
+    }
+
+    #[test]
+    fn granular_needs_a_source_and_then_makes_a_cloud() {
+        let mut engine = Engine::new(RATE);
+        engine.samples_mut().allocate(0, 1, RATE as usize, RATE);
+        for slot in engine.samples_mut().get_mut(0).unwrap().data_mut() {
+            *slot = 1.0;
+        }
+        let cloud = engine.add(ModuleKind::Granular.build());
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: cloud, port: 0 }, PortRef { module: output, port: 0 });
+        engine.set_param(cloud, GranularModule::LEVEL, 1.0);
+        engine.set_param(cloud, GranularModule::MIX, 1.0);
+        settle(&mut engine);
+        // No source assigned yet: silence rather than a fault.
+        assert!(render_peak(&mut engine, output, 1_000) < 1e-6);
+
+        engine.set_sample_slot(cloud, 0, 0);
+        assert!(render_peak(&mut engine, output, (RATE * 0.3) as usize) > 0.1, "no grains");
+    }
+
+    #[test]
+    fn every_sampler_stays_finite_under_a_hostile_sweep() {
+        for (kind, level, count) in [
+            (ModuleKind::Percussion, PercussionModule::LEVEL, PercussionModule::PARAM_COUNT),
+            (ModuleKind::Looper, LooperModule::LEVEL, LooperModule::PARAM_COUNT),
+            (ModuleKind::Granular, GranularModule::LEVEL, GranularModule::PARAM_COUNT),
+        ] {
+            let (mut engine, player, output) = sampler_chain(kind, level);
+            engine.set_sample_slot(player, 0, 0);
+            for step in 0..=6 {
+                let t = step as f32 / 6.0;
+                for index in 0..count {
+                    engine.set_param(player, index, t * 4.0 - 2.0);
+                }
+                engine.set_param(player, level, 1.0);
+                engine.note_on(player, 60, 1.0);
+                for _ in 0..1_500 {
+                    engine.process();
+                    let out = engine.output_of(output, 0);
+                    assert!(out.is_finite(), "{kind:?} non-finite at step {step}");
+                    assert!(out.abs() < 50.0, "{kind:?} ran away at step {step}: {out}");
+                }
+            }
+        }
     }
 
     #[test]

@@ -82,6 +82,9 @@ class FakeEngine implements EngineExports {
   set_modulation(module: number, source: number, dest: number, amount: number): void {
     this.calls.push(`mod:${module}.${source}->${dest}=${amount}`);
   }
+  set_sample_slot(module: number, slot: number, sample: number): void {
+    this.calls.push(`slot:${module}.${slot}=${sample}`);
+  }
   set_bypassed(module: number, bypassed: number): void {
     this.calls.push(`bypass:${module}=${bypassed}`);
   }
@@ -340,20 +343,20 @@ describe("The plan-to-engine bridge", () => {
     // During the migration some modules are still Web Audio. A plan naming one
     // must leave the rest of the rack working rather than take it down.
     //
-    // `m.percussion` is the stand-in because it is genuinely unported — it
-    // needs the sample bank wired to a voice. This used to be `m.audio-reverb`
-    // until that landed in Rust, and the test failing was the correct signal.
+    // `m.stream` is the stand-in because it is genuinely unported. This has
+    // been `m.audio-reverb` and then `m.percussion`; each time one landed in
+    // Rust this test failed, which is exactly what it is for.
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update(
       plan(
-        [node("r", "m.percussion", {}), node("out", "m.audio-output", {})],
+        [node("r", "m.stream", {}), node("out", "m.audio-output", {})],
         [wire("r", "out")],
       ),
     );
     expect(rack.moduleIdOf("r")).toBeUndefined();
     expect(rack.moduleIdOf("out")).not.toBeUndefined();
-    expect(rack.unsupported).toEqual(["m.percussion"]);
+    expect(rack.unsupported).toEqual(["m.stream"]);
   });
 
   it("treats a refused module id as a failure rather than a negative id", () => {
@@ -373,7 +376,7 @@ describe("The plan-to-engine bridge", () => {
     const rack = new WasmRack(engine, 48000);
     rack.update(
       plan(
-        [node("r", "m.percussion", {}), node("out", "m.audio-output", {})],
+        [node("r", "m.stream", {}), node("out", "m.audio-output", {})],
         [wire("r", "out")],
       ),
     );
