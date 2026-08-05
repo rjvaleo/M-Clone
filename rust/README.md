@@ -5,7 +5,7 @@
 (aarch64-apple-darwin, Rust 1.97.1) and on `wasm32-unknown-unknown` — see
 [The WASM number](#the-wasm-number).
 
-Architecture and migration order: [`docs/ENGINE_ARCHITECTURE.md`](../docs/ENGINE_ARCHITECTURE.md).
+Architecture, wave order and gates: [`IDMLAB_MASTER_PLAN.md`](../IDMLAB_MASTER_PLAN.md).
 
 ```
 cargo test  --manifest-path rust/dsp-core/Cargo.toml
@@ -14,7 +14,7 @@ cargo clippy --manifest-path rust/dsp-core/Cargo.toml --all-targets
 
 ## Why this exists
 
-`docs/NATIVE_PLUGIN_SPEC.md` §10 says the browser's `AudioContext` and Web Audio
+`IDMLAB_MASTER_PLAN.md` §A.5 says the browser's `AudioContext` and Web Audio
 nodes "must not leak into the core protocol." The audio effects in
 `src/modular/audio/` were built as a graph of Web Audio nodes, which is the
 fastest way to make sound in a browser and cannot leave one. This crate is the

@@ -60,33 +60,12 @@ build for your own hosting), with `SHA256SUMS.txt`.
 These badges describe product targets and implementation candidates, not the
 current shipped stack. The exact resolved versions, architecture boundaries,
 build tools, and current/candidate distinction are in
-[`docs/TECH_STACK.md`](docs/TECH_STACK.md).
-The exact MIDI guarantees and remaining native work are defined in
-[`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md).
+[`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md).
 
-The current visual-consistency analysis, reference-by-reference delta, menu
-ownership audit, and channel-theme architecture are in
-[`docs/VISUAL_AUDIT_AND_THEMING.md`](docs/VISUAL_AUDIT_AND_THEMING.md).
-The dedicated editor is documented in
-[`docs/CYCLIC_EDITOR.md`](docs/CYCLIC_EDITOR.md).
-The manual-derived Phrasing/Legato behavior is documented in
-[`docs/PHRASING.md`](docs/PHRASING.md).
-The four-stream diagnostic tracker is documented in
-[`docs/MIDI_VIEW.md`](docs/MIDI_VIEW.md).
-Movie capture and deterministic Standard MIDI File export are documented in
-[`docs/MOVIES_AND_MIDI.md`](docs/MOVIES_AND_MIDI.md).
-The manual/reference parity audit for Patterns, Transport, and Conductor is in
-[`docs/PATTERNS_TRANSPORT_AUDIT.md`](docs/PATTERNS_TRANSPORT_AUDIT.md).
-The executable 180-capability M 2.7 audit—163 implemented behaviors, 17 explicit
-exceptions, and no remaining red work queues—is in
-[`docs/MANUAL_CONFORMANCE.md`](docs/MANUAL_CONFORMANCE.md).
-The configurable click-safe Web Audio monitor is documented in
-[`docs/BUILT_IN_SYNTH.md`](docs/BUILT_IN_SYNTH.md).
-The authoritative MIDI timing, transport, lifecycle, verification, and known-
-limits specification is
-[`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md).
-The technical-completion sequence for the next session is in
-[`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md).
+Behavioural specifications inherited from the M 2.7 manual — pattern commands,
+phrasing and legato, movie capture and SMF export, conducting, and the timing
+and MIDI invariants — are in Appendix A of
+[`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md).
 
 Current verified checkpoint (**0.8.0-alpha**): **758 passing tests across 62
 files**, **100%**
@@ -103,88 +82,22 @@ Projects save as `.mclone` files. Their payload is readable, versioned JSON,
 but it represents the complete musical project—not merely a graph. Legacy
 `.mclone.json` and `.json` project files remain importable.
 
-## Documentation index
+## Documentation
 
-### Project direction and current state
+**[`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md) is the only plan.** It holds
+the complete build — every feature, the shared primitives they reuse, the wave
+order, the gates, and the decisions of record. The many separate roadmap,
+status, spec and next-steps documents that used to live here were folded into it
+on 2026-08-05 and removed; they remain in git history.
 
-- [`CHANGELOG.md`](CHANGELOG.md) — released versions, per-release scope,
-  exclusions, known limitations, and the verification recorded at each tag.
-- [`docs/STATUS.md`](docs/STATUS.md) — authoritative implemented-feature
-  scorecard, verification checkpoint, and roadmap status.
-- [`docs/TODO.md`](docs/TODO.md) — current open backlog and deferred decisions.
-- [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md) — ordered technical-completion plan
-  with acceptance gates.
-- [`docs/MANUAL_CONFORMANCE.md`](docs/MANUAL_CONFORMANCE.md) — exhaustive
-  manual capability inventory, behavioral evidence, and explicit exceptions.
-- [`docs/HANDOFF.md`](docs/HANDOFF.md) — implementation handoff, working rules,
-  architectural decisions, and known development gotchas.
-- [`docs/TECH_STACK.md`](docs/TECH_STACK.md) — canonical current dependencies,
-  resolved tool versions, architecture boundaries, and roadmap candidates.
-- [`docs/M-Clone_Build_Plan.md`](docs/M-Clone_Build_Plan.md) — product vision,
-  architecture, technology choices, phased build plan, and native direction.
-- [`docs/PRODUCT_RELEASE_ROADMAP.md`](docs/PRODUCT_RELEASE_ROADMAP.md) —
-  authoritative Classic/Studio/idMLab editions, browser/desktop/mobile stages,
-  free/invite/paid progression, monetization principles, and release gates.
-
-### Audio products and native integration
-
-- [`docs/AUDIO_ENGINE_SPEC.md`](docs/AUDIO_ENGINE_SPEC.md) — four lightweight
-  web engines; seven Studio instruments; RJ Vallejo source-library, mixer,
-  granular glitch, Smooth Crusher, Spatial Enhancer, and delay specifications.
-- [`docs/NATIVE_PLUGIN_SPEC.md`](docs/NATIVE_PLUGIN_SPEC.md) — standalone clock,
-  VST3/Audio Unit host synchronization, eight/ten stereo buses, real-time safety,
-  host certification, packaging, and native release gates.
-- [`docs/BUILT_IN_SYNTH.md`](docs/BUILT_IN_SYNTH.md) — implemented four-stream
-  Web Audio monitor, control surface, click correction, and state boundary.
-
-### MIDI, timing, and conducting
-
-- [`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md) — canonical
-  MIDI timing, transport, event lifecycle, synchronization, limitations, and
-  verification specification.
-- [`docs/MIDI_VIEW.md`](docs/MIDI_VIEW.md) — four-Voice diagnostic tracker,
-  capture semantics, display behavior, and tests.
-- [`docs/MOVIES_AND_MIDI.md`](docs/MOVIES_AND_MIDI.md) — manual-derived Movie
-  capture, timestamp model, deterministic SMF export, and the import-scope
-  decision.
-- [`docs/PATTERNS_TRANSPORT_AUDIT.md`](docs/PATTERNS_TRANSPORT_AUDIT.md) —
-  corrected Pattern/transport/conductor parity and dependency-bound gaps.
-- [`docs/CONDUCTING_WINDOW.md`](docs/CONDUCTING_WINDOW.md) — Conducting Window
-  dependency map, transport controls, Baton, tempo, Robot, and implementation
-  history.
-
-### Musical editors and commands
-
-- [`docs/CYCLIC_EDITOR.md`](docs/CYCLIC_EDITOR.md) — Classic and Modern Cyclic
-  Editor models, positions, values, lengths, interactions, and layout.
-- [`docs/CYCLIC_RANDOM_COMMANDS.md`](docs/CYCLIC_RANDOM_COMMANDS.md) —
-  Pattern-owned Cyclic Random material, command semantics, invariants, and test
-  requirements.
-
-### Interface, layout, and visual system
-
-- [`docs/VISUAL_AUDIT_AND_THEMING.md`](docs/VISUAL_AUDIT_AND_THEMING.md) —
-  reference-by-reference visual audit, theme architecture, menu ownership, and
-  deferred fidelity work.
-- [`docs/WORKSPACE_SCALING.md`](docs/WORKSPACE_SCALING.md) — 640×480 logical
-  workspace, application scaling, coordinates, dragging, and persistence.
-- [`docs/FONT_SIZE_INVENTORY.md`](docs/FONT_SIZE_INVENTORY.md) — rendered
-  typography inventory, normalization rules, and verification notes.
-
-### Source references
-
-- [`reference/README.md`](reference/README.md) — inventory and provenance of the
-  manual, screenshots, mockups, and other reference assets.
-
-**A clean-room reconstruction of the classic interactive composing instrument
-*M*, rebuilt screen by screen from the manual.**
-
-A modern, browser-first recreation of **M** (David Zicarelli / Joel Chadabe,
-Intelligent Music → Cycling '74), extended into an all-in-one generative studio.
-Nothing is taken from M's original code — the engine is reverse-engineered from
-the manual and by ear, and each window is redrawn as vector UI from the manual's
-figures and screenshots. See [`docs/M-Clone_Build_Plan.md`](./docs/M-Clone_Build_Plan.md)
-for the full design and roadmap.
+- [`CHANGELOG.md`](CHANGELOG.md) — released versions and what each one included.
+- [`reference/README.md`](reference/README.md) — provenance of the manual,
+  screenshots and mockups.
+- [`reference/panels/CATALOG.md`](reference/panels/CATALOG.md) — the hardware
+  panel catalogue and its layout grammar.
+- [`fonts/CATALOG.md`](fonts/CATALOG.md) — per-file font licence findings.
+- [`rust/README.md`](rust/README.md) — the DSP crate's real-time
+  non-negotiables.
 
 ## Status
 

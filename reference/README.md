@@ -59,7 +59,7 @@ be recovered. `src/engine/variables.ts` records that distinction.
 ## Implementation notes
 
 Every current image is covered by the delta table in
-[`docs/VISUAL_AUDIT_AND_THEMING.md`](../docs/VISUAL_AUDIT_AND_THEMING.md).
+[`IDMLAB_MASTER_PLAN.md`](../IDMLAB_MASTER_PLAN.md).
 Time Distortion is implemented as an audible piecewise-linear map with pinned
 corners; its original rubber-band draw-from-scratch gesture remains unbuilt.
 The Conducting Window and Classic Cyclic Editor are implemented, though their
