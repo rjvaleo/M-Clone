@@ -38,12 +38,19 @@ pub struct VoiceBank {
     slots: Vec<Slot>,
     settings: VoiceSettings,
     next_serial: u64,
+    /// How many slots `claim` may hand out, of the ones allocated.
+    ///
+    /// Separate from `slots.len()` so polyphony can be a knob. Shrinking the
+    /// pool by reallocating would mean allocating on the audio thread the
+    /// moment someone drags the control, which is the one thing a real-time
+    /// callback must never do; the slots above the limit simply go unused.
+    limit: usize,
 }
 
 impl VoiceBank {
     pub fn new(sample_rate: f32, capacity: usize, seed: u32) -> Self {
         let capacity = capacity.clamp(MIN_POLYPHONY, MAX_POLYPHONY);
-        let slots = (0..capacity)
+        let slots: Vec<Slot> = (0..capacity)
             .map(|index| Slot {
                 // A different seed per voice, so the `Random` matrix source
                 // does not hand every voice in a chord the same value.
@@ -51,11 +58,21 @@ impl VoiceBank {
                 started: 0,
             })
             .collect();
-        Self { slots, settings: VoiceSettings::default(), next_serial: 1 }
+        let limit = slots.len();
+        Self { slots, settings: VoiceSettings::default(), next_serial: 1, limit }
     }
 
     pub fn capacity(&self) -> usize {
-        self.slots.len()
+        self.limit
+    }
+
+    /// Set the polyphony, within what was allocated.
+    ///
+    /// Voices already sounding above the new limit are left to finish rather
+    /// than cut off: lowering the control mid-chord should thin what comes
+    /// next, not silence what is already ringing.
+    pub fn set_capacity(&mut self, voices: usize) {
+        self.limit = voices.clamp(MIN_POLYPHONY, self.slots.len());
     }
 
     /// Voices currently producing sound, including those in their release.
@@ -97,18 +114,20 @@ impl VoiceBank {
     /// for, because a silently dropped note is far harder to diagnose than a
     /// stolen one.
     fn claim(&mut self, note: u8) -> usize {
-        if let Some(index) = self
-            .slots
+        // Every search is over `..limit` rather than the whole pool, which is
+        // what makes the limit real: a voice above it can be finishing a note
+        // from before the control moved, but it can never take a new one.
+        let live = &self.slots[..self.limit];
+        if let Some(index) = live
             .iter()
             .position(|slot| slot.voice.note() == Some(note) && slot.voice.is_active())
         {
             return index;
         }
-        if let Some(index) = self.slots.iter().position(|slot| !slot.voice.is_active()) {
+        if let Some(index) = live.iter().position(|slot| !slot.voice.is_active()) {
             return index;
         }
-        self.slots
-            .iter()
+        live.iter()
             .enumerate()
             .min_by_key(|(_, slot)| slot.started)
             .map(|(index, _)| index)
@@ -208,6 +227,44 @@ mod tests {
 
     fn peak(samples: &[StereoSample]) -> f32 {
         samples.iter().fold(0.0f32, |acc, s| acc.max(s.left.abs()).max(s.right.abs()))
+    }
+
+    #[test]
+    fn polyphony_can_be_lowered_without_reallocating() {
+        // The knob has to be real, and it has to be free: reallocating the pool
+        // when someone drags the control would allocate on the audio thread at
+        // the exact moment they are listening.
+        let mut bank = new_bank(16);
+        bank.set_capacity(2);
+        assert_eq!(bank.capacity(), 2);
+
+        for note in [60, 62, 64, 65] {
+            bank.note_on(note, 1.0, 0.0);
+        }
+        assert!(bank.active_count() <= 2, "more voices sounded than the limit allows");
+    }
+
+    #[test]
+    fn polyphony_is_clamped_to_what_was_allocated() {
+        // Asking for more than the pool holds must not index past it.
+        let mut bank = new_bank(4);
+        bank.set_capacity(999);
+        assert_eq!(bank.capacity(), 4);
+        bank.set_capacity(0);
+        assert_eq!(bank.capacity(), MIN_POLYPHONY);
+    }
+
+    #[test]
+    fn lowering_polyphony_lets_sounding_notes_finish() {
+        // Thinning what comes next is the intent; cutting off what is already
+        // ringing would make the control unusable during a performance.
+        let mut bank = new_bank(8);
+        for note in [60, 64, 67] {
+            bank.note_on(note, 1.0, 0.0);
+        }
+        let before = bank.active_count();
+        bank.set_capacity(1);
+        assert_eq!(bank.active_count(), before);
     }
 
     #[test]

@@ -73,12 +73,19 @@ const STRUCTURAL_VARIANTS: Readonly<Record<string, readonly string[]>> = {
   // Order is the wire protocol; it matches `Dp4Algorithm` in Rust.
   "m.audio-dp4-reverb": ["small-plate", "large-plate", "small-room", "large-room", "hall"],
   "m.audio-dp4-nonlin": ["non-lin-1", "non-lin-2", "non-lin-3"],
+  // Not a name but a flag, and it reads a little oddly in a list of
+  // algorithms. It belongs here all the same: `time-stretch` chooses between
+  // two engines — plain playback, where pitch follows rate, and a grain cloud,
+  // where it does not — and choosing an engine is topology. `String(false)`
+  // and `String(true)` are what the structure field holds.
+  "m.looper": ["false", "true"],
 };
 
 /** Which structural field carries the variant for a given module. */
 const VARIANT_FIELD: Readonly<Record<string, string>> = {
   "m.audio-dp4-reverb": "algorithm",
   "m.audio-dp4-nonlin": "variant",
+  "m.looper": "time-stretch",
 };
 
 /** The variant number for a spec, or 0 where the module has none. */
@@ -103,8 +110,11 @@ const oscParams = (index: number): Record<string, number> => {
   const n = index + 1;
   return {
     [`osc${n}-wave`]: base + 0,
+    // The engine keeps semitones and cents apart; the face offers one knob in
+    // cents, and `synthPlayer.ts` reads it the same way. The semitone slot has
+    // no control yet and holds its default of zero.
     [`osc${n}-semitones`]: base + 1,
-    [`osc${n}-cents`]: base + 2,
+    [`osc${n}-detune`]: base + 2,
     [`osc${n}-level`]: base + 3,
     [`osc${n}-width`]: base + 4,
   };
@@ -132,15 +142,21 @@ const lfoParams = (index: number): Record<string, number> => {
  */
 export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, number>>>> = {
   "m.audio-gain": { gain: 0, level: 1, [AUDIO_MUTE_PARAM]: 2 },
-  "m.audio-output": { level: 0 },
+  // The descriptor calls it `volume`; `AudioOutput` in Rust calls the field
+  // `level`. The document's name is the one that has to appear here.
+  "m.audio-output": { volume: 0 },
   "m.synth": {
     level: 0,
     ...oscParams(0),
     ...oscParams(1),
     ...oscParams(2),
-    "filter-cutoff": 16,
-    "filter-resonance": 17,
-    "filter-env-octaves": 18,
+    // These three carry the descriptor's names, not the Rust struct's. They
+    // used to carry the struct's, which meant the document said `cutoff`, the
+    // table said `filter-cutoff`, nothing matched, and the entire filter
+    // section of the synth was inert on this backend.
+    cutoff: 16,
+    resonance: 17,
+    "filter-amount": 18,
     "key-follow": 19,
     "amp-attack": 20,
     "amp-decay": 21,
@@ -155,6 +171,7 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     pan: 38,
     volume: 39,
     "mod-wheel": 40,
+    "max-voices": 41,
   },
   // Mirrors `BlackholeVerb` in rust/dsp-core/src/modules.rs. `line-count` is
   // absent on purpose: it is a structural parameter, so changing it rebuilds
@@ -359,6 +376,103 @@ const TAKES_AUDIO_INPUT: ReadonlySet<string> = new Set([
   "m.audio-compressor",
   "m.audio-limiter",
   "m.audio-bitcrusher",
+]);
+
+/**
+ * Audio modules the engine cannot build yet, so a reader does not have to
+ * derive the gap by diffing two tables.
+ *
+ * These are skipped by `update` and render silence on this backend while
+ * working on Web Audio. Allowed during the migration; not allowed to be a
+ * surprise. `engineBridge.test.ts` fails if this list stops matching reality
+ * in either direction.
+ */
+export const NOT_YET_IN_RUST: readonly string[] = [
+  // The four-unit DP/4 itself, as opposed to `m.audio-dp4-reverb` and
+  // `m.audio-dp4-nonlin`, which are ported. Four ins, four outs and a routing
+  // matrix, where every other module in the engine is mono in and mono out —
+  // so it needs multi-port support before it needs DSP.
+  "m.audio-dp4",
+];
+
+/**
+ * Descriptor parameters that deliberately have no index, and why.
+ *
+ * The two sides of `PARAM_INDICES` are string maps, so a name that matches
+ * nothing is silent: the knob turns, the document records the value, and the
+ * engine never hears it. That is not hypothetical — the synth's whole filter
+ * section was inert on this path for three commits because the descriptor said
+ * `cutoff` and the table said `filter-cutoff`.
+ *
+ * So the contract is total. Every parameter of every audio module is either in
+ * `PARAM_INDICES` or listed here with a reason, and `engineBridge.test.ts`
+ * fails if one is in neither. Adding a knob to a descriptor now forces a
+ * decision about what the engine does with it.
+ */
+export const PARAMS_HANDLED_ELSEWHERE: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "m.audio-output": { mute: "structural; becomes the spec's bypass" },
+  "m.audio-gain": { mute: "structural; becomes the spec's bypass" },
+  "m.audio-delay": {
+    "max-delay-seconds":
+      "structural; the Rust delay line is sized once at its maximum and reads " +
+      "a shorter tap, so there is nothing to set",
+  },
+  "m.audio-reverb": {
+    "impulse-seed":
+      "structural, and now inert: this reverb is an FDN rather than a " +
+      "convolver, so there is no impulse to seed. Kept in the descriptor so " +
+      "existing documents still load",
+  },
+  "m.audio-blackhole": {
+    "line-count": "structural; the Rust tank sizes its own network",
+  },
+  "m.audio-dp4-reverb": { algorithm: "structural; rides in on add_module_variant" },
+  "m.audio-dp4-nonlin": { variant: "structural; rides in on add_module_variant" },
+  "m.percussion": { slots: "audio, not a value; reaches the engine via set_sample_slot" },
+  "m.looper": {
+    "asset-id": "audio, not a value; reaches the engine via set_sample_slot",
+    "time-stretch":
+      "structural; chooses between two engines, so it rides in on " +
+      "add_module_variant rather than moving a value",
+  },
+  "m.granular": { "asset-id": "audio, not a value; reaches the engine via set_sample_slot" },
+  "m.synth": {
+    mute: "structural; becomes the spec's bypass",
+    matrix: "96 cells; reaches the engine one at a time via set_modulation",
+    "preset-values": "editor state, not a value the voice reads",
+    "active-position": "editor state, not a value the voice reads",
+  },
+};
+
+/**
+ * Indices the engine has that no descriptor names yet.
+ *
+ * The other direction of the same contract, and mostly the shell: `mix` and
+ * `level` exist on every module in Rust whether or not a face exposes them.
+ * The interesting entries are the synth's, which are capability the UI has not
+ * caught up with — the Rust voice has two LFOs and a per-oscillator semitone
+ * offset that nothing can currently turn.
+ */
+export const ENGINE_ONLY_PARAMS: ReadonlySet<string> = new Set([
+  AUDIO_MIX_PARAM,
+  AUDIO_MUTE_PARAM,
+  "level",
+  // The Rust synth is ahead of its face here; see §4 of RUST_PORT_STATUS.md.
+  "osc1-semitones",
+  "osc2-semitones",
+  "osc3-semitones",
+  "lfo1-shape",
+  "lfo1-trigger",
+  "lfo1-rate",
+  "lfo1-depth",
+  "lfo1-phase",
+  "lfo2-shape",
+  "lfo2-trigger",
+  "lfo2-rate",
+  "lfo2-depth",
+  "lfo2-phase",
+  "volume",
+  "mod-wheel",
 ]);
 
 /** Every audio port on these modules is port 0; that changes with the DP/4. */

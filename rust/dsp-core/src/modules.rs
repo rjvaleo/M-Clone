@@ -20,7 +20,7 @@
 //! it, so the ramp is a property of the module rather than of everyone who
 //! remembers to call the right setter.
 
-use crate::bank::{VoiceBank, DEFAULT_POLYPHONY};
+use crate::bank::{VoiceBank, DEFAULT_POLYPHONY, MAX_POLYPHONY};
 use crate::engine::{Module, Ports, ProcessContext};
 use crate::lfo::{LfoShape, LfoTrigger};
 use crate::modmatrix::{ModDest, ModSource};
@@ -31,7 +31,7 @@ use crate::dynamics::{DynamicsMode, EnvelopeFollower, GainComputer};
 use crate::fdn::{Fdn, MixMatrix};
 use crate::filter::{Biquad, BiquadKind, OnePole};
 use crate::grain::{GrainCloud, GrainSettings};
-use crate::sampler::{Sampler, SamplerSettings, NO_SAMPLE};
+use crate::sampler::{semitone_ratio, Sampler, SamplerSettings, NO_SAMPLE};
 use crate::reverb::Blackhole;
 use crate::voice::{
     AdsrSettings, LfoSettings, VoiceSettings, MAX_CUTOFF_HZ, MIN_CUTOFF_HZ, OSC_COUNT,
@@ -290,12 +290,18 @@ impl Synth {
     pub const PAN: usize = 38;
     pub const VOLUME: usize = 39;
     pub const MOD_WHEEL: usize = 40;
+    /// Polyphony. A knob rather than a construction argument because the bank
+    /// allocates its whole pool up front and only limits how much of it
+    /// `claim` may use — see `set_capacity` in `bank.rs`.
+    pub const MAX_VOICES: usize = 41;
 
-    pub const PARAM_COUNT: usize = 41;
+    pub const PARAM_COUNT: usize = 42;
 
     pub fn new(sample_rate: f32) -> Self {
         Self {
-            bank: VoiceBank::new(sample_rate, DEFAULT_POLYPHONY, 0x1D_1AB),
+            // Allocated at the maximum and limited by the parameter, so that
+            // turning polyphony up mid-performance never allocates.
+            bank: VoiceBank::new(sample_rate, MAX_POLYPHONY, 0x1D_1AB),
             level: Tracked::new(0.0),
             settings: VoiceSettings::default(),
         }
@@ -362,6 +368,11 @@ impl Module for Synth {
         self.settings.matrix = matrix;
         self.bank.set_settings(self.settings.clone());
         self.bank.set_mod_wheel(ports.param(Self::MOD_WHEEL));
+        // Clamped and rounded here rather than trusted: the value arrives as
+        // an f32 over the ABI and a NaN would otherwise reach a `usize` cast.
+        let voices = ports.param(Self::MAX_VOICES);
+        self.bank
+            .set_capacity(if voices.is_finite() { voices.round().max(0.0) as usize } else { DEFAULT_POLYPHONY });
 
         let level = self.level.follow(clamp(ports.param(Self::LEVEL), 0.0, 1.0));
         let sample = self.bank.next();
@@ -438,6 +449,7 @@ impl Module for Synth {
         match index {
             // Built silent, like every other module — the adapter fades it in.
             Self::LEVEL => 0.0,
+            Self::MAX_VOICES => DEFAULT_POLYPHONY as f32,
             Self::CUTOFF => defaults.cutoff_hz,
             Self::RESONANCE => defaults.resonance,
             Self::FILTER_ENV_OCTAVES => defaults.filter_env_octaves,
@@ -1593,8 +1605,27 @@ impl Module for PercussionModule {
 }
 
 /// `m.looper` — one sample, with loop points and a rate.
+///
+/// # Two engines behind one control
+///
+/// Plain playback changes pitch with rate, the way tape does. Time-stretch
+/// re-emits overlapping grains at a fixed pitch while the scan moves at the
+/// rate, so speed and pitch come apart — which is the whole reason the mode
+/// exists. `GrainCloud` already separates the two: `stretch` moves the scan
+/// and `rate` sets the pitch.
+///
+/// It is a structural variant rather than a parameter because it decides which
+/// engine runs, and swapping engines mid-note would cut the sound. The
+/// document already treats `time-stretch` as structural, so changing it
+/// rebuilds the node behind the usual crossfade.
 pub struct LooperModule {
     sampler: Sampler,
+    cloud: GrainCloud,
+    /// Which engine this instance was built with. Fixed for its lifetime.
+    stretching: bool,
+    /// The sample to scan, for the stretch engine. The plain engine reaches
+    /// its audio through the sampler's own note-to-slot table.
+    sample: u32,
     shell: Shell,
     pending: PendingNotes,
     /// The gate flag as of the last `process`, so `note_off` releases with the
@@ -1616,11 +1647,40 @@ impl LooperModule {
     pub const PARAM_COUNT: usize = 10;
 
     pub fn new(sample_rate: f32) -> Self {
+        Self::new_variant(sample_rate, 0)
+    }
+
+    /// Variant 0 plays; variant 1 time-stretches. See the type's docs.
+    pub fn new_variant(sample_rate: f32, variant: u32) -> Self {
         Self {
             sampler: Sampler::new(sample_rate),
+            // Both engines are built either way. A `GrainCloud` is a fixed
+            // array of grains and costs a few kilobytes, and holding one
+            // unconditionally is cheaper than the branch it would take to
+            // avoid it — and keeps every instance the same shape.
+            cloud: GrainCloud::new(sample_rate, 0x100_9e5),
+            stretching: variant == 1,
+            sample: NO_SAMPLE,
             shell: Shell::new(1.0),
             pending: PendingNotes::default(),
             gated: false,
+        }
+    }
+
+    /// What the stretch engine reads from the same controls.
+    ///
+    /// `stretch` takes the rate, so speed is the rate; `rate` takes the pitch
+    /// shift, so pitch is only what the pitch control asks for. That is the
+    /// separation the mode exists to provide.
+    fn grain_settings(&self, ports: &Ports) -> GrainSettings {
+        GrainSettings {
+            size_sec: 0.08,
+            spacing_sec: 0.02,
+            position: clamp(ports.param(Self::LOOP_START), 0.0, 1.0),
+            jitter: 0.0,
+            stretch: clamp(ports.param(Self::RATE), 0.05, 4.0),
+            freeze: false,
+            rate: semitone_ratio(clamp(ports.param(Self::PITCH_SHIFT), -24.0, 24.0)),
         }
     }
 
@@ -1643,26 +1703,45 @@ impl Module for LooperModule {
         let settings = self.settings(ports);
         self.gated = settings.gate;
         let (notes, count) = self.pending.take();
-        for &(note, velocity, detune_cents) in &notes[..count] {
-            self.sampler.note_on(ctx.samples, note, velocity, detune_cents, &settings);
-        }
-        let wet = self.sampler.process(ctx.samples, &settings);
+
+        let wet = if self.stretching {
+            // A note restarts the scan; the cloud then runs on by itself.
+            if count > 0 {
+                self.cloud.retrigger(clamp(ports.param(Self::LOOP_START), 0.0, 1.0));
+            }
+            if self.sample == NO_SAMPLE {
+                0.0
+            } else {
+                self.cloud.process(ctx.samples, self.sample, &self.grain_settings(ports))
+            }
+        } else {
+            for &(note, velocity, detune_cents) in &notes[..count] {
+                self.sampler.note_on(ctx.samples, note, velocity, detune_cents, &settings);
+            }
+            self.sampler.process(ctx.samples, &settings)
+        };
+
         let out = self.shell.finish(ports, 0.0, wet, Self::MIX);
         ports.output(0, out);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
         self.sampler.set_sample_rate(sample_rate);
+        self.cloud.set_sample_rate(sample_rate);
         self.shell.set_sample_rate(sample_rate);
     }
 
     fn reset(&mut self) {
         self.sampler.clear();
+        self.cloud.clear();
         self.shell.reset();
     }
 
     fn set_sample_slot(&mut self, slot: u32, sample: u32) {
         self.sampler.set_slot(slot, sample);
+        // One source, whichever engine is running: the stretch path scans a
+        // sample rather than looking one up per note, so it needs the id here.
+        self.sample = sample;
     }
 
     fn note_on(&mut self, note: u8, velocity: f32, detune_cents: f32) {
@@ -1875,7 +1954,7 @@ impl ModuleKind {
             Self::Limiter => Box::new(LimiterModule::new(sample_rate)),
             Self::Bitcrusher => Box::new(BitcrusherModule::new(sample_rate)),
             Self::Percussion => Box::new(PercussionModule::new(sample_rate)),
-            Self::Looper => Box::new(LooperModule::new(sample_rate)),
+            Self::Looper => Box::new(LooperModule::new_variant(sample_rate, variant)),
             Self::Granular => Box::new(GranularModule::new(sample_rate)),
         }
     }
@@ -2191,6 +2270,72 @@ mod tests {
         // Well past the 50 ms loop; a one-shot would have finished long ago.
         render_peak(&mut engine, output, (RATE * 0.3) as usize);
         assert!(render_peak(&mut engine, output, 2_000) > 0.1, "the loop ended");
+    }
+
+    /// The looper built in its time-stretch variant, otherwise as above.
+    fn stretch_chain() -> (Engine, u32, u32) {
+        let mut engine = Engine::new(RATE);
+        engine.samples_mut().allocate(0, 1, RATE as usize, RATE);
+        for slot in engine.samples_mut().get_mut(0).unwrap().data_mut() {
+            *slot = 1.0;
+        }
+        let player = engine.add(ModuleKind::Looper.build_variant_at(1, RATE));
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: player, port: 0 }, PortRef { module: output, port: 0 });
+        engine.set_param(player, LooperModule::LEVEL, 1.0);
+        engine.set_param(player, LooperModule::MIX, 1.0);
+        engine.set_sample_slot(player, 60, 0);
+        (engine, player, output)
+    }
+
+    #[test]
+    fn the_time_stretch_looper_sounds() {
+        // Variant 1 runs a grain cloud instead of the sampler. Before this it
+        // ran the sampler either way, so the mode was a control that did
+        // nothing on this backend while working on the other.
+        let (mut engine, _, output) = stretch_chain();
+        settle(&mut engine);
+        engine.note_on(0, 60, 1.0, 0.0);
+        assert!(render_peak(&mut engine, output, (RATE * 0.2) as usize) > 0.05);
+    }
+
+    #[test]
+    fn the_time_stretch_looper_is_silent_without_a_sample() {
+        let mut engine = Engine::new(RATE);
+        let player = engine.add(ModuleKind::Looper.build_variant_at(1, RATE));
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: player, port: 0 }, PortRef { module: output, port: 0 });
+        engine.set_param(player, LooperModule::LEVEL, 1.0);
+        engine.set_param(player, LooperModule::MIX, 1.0);
+        settle(&mut engine);
+        engine.note_on(0, 60, 1.0, 0.0);
+        assert_eq!(render_peak(&mut engine, output, 2_000), 0.0);
+    }
+
+    #[test]
+    fn the_two_looper_engines_are_genuinely_different() {
+        // Both make sound from the same DC sample, so the cheap assertion is
+        // that they are not the same object twice: the plain engine plays one
+        // continuous read, the cloud overlaps windowed grains, so their output
+        // over the same span cannot match sample for sample.
+        let (mut plain, _, plain_out) = sampler_chain(ModuleKind::Looper, LooperModule::LEVEL);
+        plain.set_param(0, LooperModule::MIX, 1.0);
+        settle(&mut plain);
+        plain.note_on(0, 60, 1.0, 0.0);
+
+        let (mut stretched, _, stretch_out) = stretch_chain();
+        settle(&mut stretched);
+        stretched.note_on(0, 60, 1.0, 0.0);
+
+        let mut differed = false;
+        for _ in 0..4_000 {
+            plain.process();
+            stretched.process();
+            if (plain.output_of(plain_out, 0) - stretched.output_of(stretch_out, 0)).abs() > 1e-4 {
+                differed = true;
+            }
+        }
+        assert!(differed, "the stretch variant rendered the same as the plain one");
     }
 
     #[test]
@@ -2624,6 +2769,60 @@ mod tests {
         single.note_on(one, 60, 0.8, 0.0);
         let alone = loudest(&play(&mut single, out, 0.1));
         assert!(chord > alone, "three notes were no louder than one");
+    }
+
+    #[test]
+    fn the_filter_parameters_change_the_sound_at_the_indices_the_host_sends() {
+        // The other half of a bug worth naming. The host's table said
+        // `filter-cutoff` where the document said `cutoff`, so the whole filter
+        // section was inert on this backend — and nothing here could see it,
+        // because no test asserted that these *indices* do anything.
+        //
+        // `engineBridge.test.ts` now pins the name to the index; this pins the
+        // index to the sound. Neither half is enough on its own.
+        let render = |cutoff: f32| {
+            let (mut engine, synth, output) = synth_rack();
+            engine.set_param(synth, Synth::CUTOFF, cutoff);
+            engine.note_on(synth, 60, 1.0, 0.0);
+            play(&mut engine, output, 0.2)
+        };
+        let dark = crate::testutil::brightness(&render(300.0));
+        let bright = crate::testutil::brightness(&render(12_000.0));
+        assert!(bright > dark * 1.5, "cutoff did not open the filter: {dark} → {bright}");
+    }
+
+    #[test]
+    fn resonance_changes_the_sound_at_the_index_the_host_sends() {
+        let peak_at = |resonance: f32| {
+            let (mut engine, synth, output) = synth_rack();
+            engine.set_param(synth, Synth::CUTOFF, 800.0);
+            engine.set_param(synth, Synth::RESONANCE, resonance);
+            engine.note_on(synth, 60, 1.0, 0.0);
+            loudest(&play(&mut engine, output, 0.2))
+        };
+        let flat = peak_at(0.0);
+        let peaky = peak_at(0.9);
+        assert!((peaky - flat).abs() > 1e-3, "resonance did nothing: {flat} vs {peaky}");
+    }
+
+    #[test]
+    fn polyphony_at_the_hosts_index_limits_the_voices() {
+        // `max-voices` had no index at all, so the control was inert.
+        // Rendered once before the notes: every parameter is read inside
+        // `process`, so a limit set and then immediately played against would
+        // still be the previous one.
+        let chord_peak = |voices: f32| {
+            let (mut engine, synth, output) = synth_rack();
+            engine.set_param(synth, Synth::MAX_VOICES, voices);
+            play(&mut engine, output, 0.01);
+            for note in [60, 64, 67] {
+                engine.note_on(synth, note, 1.0, 0.0);
+            }
+            loudest(&play(&mut engine, output, 0.1))
+        };
+        let one = chord_peak(1.0);
+        let three = chord_peak(16.0);
+        assert!(three > one, "a chord limited to one voice was no quieter: {one} vs {three}");
     }
 
     #[test]
