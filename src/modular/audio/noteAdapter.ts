@@ -82,7 +82,7 @@ export class PlayerNoteAdapter implements OutputAdapter {
       // the alternative is a silent gap whenever a scheduling wake runs late,
       // and a few milliseconds early is far less noticeable than a missing hit.
       const when = Math.max(this.options.audioNow(), at);
-      if (event.type === "note-on") target.noteOn(event.note, event.velocity, when);
+      if (event.type === "note-on") target.noteOn(event.note, event.velocity, when, event.detuneCents);
       else target.noteOff(event.note, when);
       this.touched.add(target);
       this.delivered += 1;

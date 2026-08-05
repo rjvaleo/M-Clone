@@ -22,6 +22,7 @@ const event = (
   portId: "out",
   channel: 1,
   note: 60,
+  detuneCents: 0,
   velocity: 100,
   program: 0,
   controller: 0,
