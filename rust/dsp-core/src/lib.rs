@@ -48,6 +48,7 @@ pub(crate) mod testutil {
 
 pub mod bank;
 pub mod delay;
+pub mod dp4;
 pub mod engine;
 pub mod envelope;
 pub mod dynamics;
