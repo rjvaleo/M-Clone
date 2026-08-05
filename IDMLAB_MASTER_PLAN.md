@@ -121,6 +121,49 @@ not before, and not for performance.
 **The document, registry, compiler and `.mmod`/`.mmodpack` formats stay.** They
 are platform-independent already and are the project's most valuable asset.
 
+### 1.1 The application shell — an open decision
+
+`ModularAudio_FuncSpec_v11` §3 describes a shell that idMLab does not have, and
+it is not a detail. The spec's application is **column-based and zoned**:
+
+```
+┌── Transport bar ─────────────────────────────── fixed, full width ──┐
+├── Column headers — sources live here ────────── fixed, anchored ────┤
+│  PLAYER    PLAYER    PLAYER    FX BUS   CHANNEL │  G │             │
+│  Looper    Granular  Synth              live in │  L │  M          │
+├─────────────────────────────────────────────────│  O │  A          │
+│                                                 │  B │  S          │
+│      effects canvas — the only fluid zone       │  A │  T          │
+│      node graphs hang below each column         │  L │  E          │
+│      and flow downward · scroll · zoom          │    │  R          │
+├── Mixer — one strip per column ──────────────── fixed, bottom ──────┤
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+Sources at the top, effects in the middle, console at the bottom, master at the
+right. Four column types (Player · FX Bus · Channel · Master), four Player
+engines (Looper · Granular · Percussion · Synth). The visual language is
+deliberately Amiga tracker — OctaMED, ProTracker — because the tracker's column
+structure *is* the signal flow, not decoration.
+
+idMLab today is a free-floating node canvas with no zones, no columns, and no
+mixer. Both are coherent designs. They are not the same application.
+
+**This plan does not decide it.** Every feature the spec describes is captured
+below and every one of them can be built in either shell — a column is a
+subgraph with a fixed layout policy, which P6 already gives us. But the shell
+choice changes Wave 3 substantially and it belongs to the product, not to me.
+Until it is decided, build features shell-agnostically: no feature below may
+assume columns, and none may assume their absence.
+
+Three options, for when it is decided:
+
+| | Consequence |
+|---|---|
+| **Adopt the column shell** | Matches the spec exactly; the mixer, sends, master strip and Performance View all get a natural home; loses free node placement |
+| **Keep the free canvas** | Keeps what exists and what users have learned; the mixer and global panel become panels rather than zones; column colour becomes group colour |
+| **Both — a view toggle** | The document stays one graph; "column view" is a layout projection over it. Most work, most flexibility, and the only option that needs deciding *before* Wave 3 rather than during it |
+
 ---
 
 ## 2. The shared spine
@@ -175,6 +218,10 @@ wave that builds it is the wave its first consumer needs it.
 | P9 | **FFT** (`rustfft`, the crate's first dependency) | 4 | spectral freeze · shimmer · pitch shift with formants · spectrum analyzer · auto-tune |
 | P10 | **Offline transport** — run the sample loop with no device attached | 7 | bounce · stems · deterministic render · render-from-data · regression audio fixtures |
 | P11 | **UMP event layer** — MIDI 1.0 as one encoding, not the native form | 6 | MIDI in · MPE · per-note expression · MIDI 2.0 · host events |
+| P12 | **Play-State stack + trigger engine** — a source holds N states; a trigger source fires one according to a mode | 3 | Looper · Granular · Percussion players · velocity layers · round robin · weighted sequential · flams |
+| P13 | **Per-source transport and sync** — sync mode, start offset in bars, phase offset, retrigger, mute/solo | 3 | polyrhythmic entry · the whole §26 phase system · per-player scrub |
+| P14 | **Step-sequencer core** — five step types, per-step length, probability, repeat | 3 | Mono Note Sequencer · pattern modules · any future arpeggiator |
+| P15 | **Global choke bus** — 16 session-wide groups, cross-source | 3 | drum realism · hi-hat behaviour. **Does not exist in Rust at all** |
 
 **P4 is the keystone.** Snapshots, macros, the Performance View, automation
 lanes, the timeline, MIDI learn, conducting and host automation are not seven
@@ -186,6 +233,17 @@ engine. Built once in Wave 2, each of them afterwards is a face and a policy.
 ## 3. The complete feature catalogue
 
 Everything, grouped by what it is. The wave column is where it gets built.
+
+### 3.0 Three product modes, one tool
+
+The funcspec opens with three use cases the plan must not narrow to one. Each is
+the same engine with a different entry point.
+
+| Mode | What it is |
+|---|---|
+| **Automated Visualization** | Drop a finished track on a channel, pick a visual preset, hit render. The system analyses the audio and generates a synchronised visual composition with no performance at all. Wave 8. |
+| **Composed AV Performance** | Build inside the environment, perform it, capture it, refine it, render it. Waves 2–7. |
+| **Live Performance Tool** | External audio in via the interface, a visual preset per channel, AV output projected or streamed live. Waves 1 and 5. |
 
 ### 3.1 Audio — effects
 
@@ -213,12 +271,43 @@ Everything, grouped by what it is. The wave column is where it gets built.
 | **Spectrum Analyzer** — passes audio unchanged | 5 | needs P9 + P7 |
 | **Convolution reverb** | 4 | needs P9. *Previously withdrawn; back in scope for the complete build* |
 
+Parameter detail the funcspec pins down and the plan must honour:
+
+- **Reverb** carries an **Algorithm switch — algorithmic or convolution in one
+  module**, not two modules. Plus room size, RT60, pre-delay, damping, diffusion.
+- **Delay**: absolute ms *or* tempo-synced divisions, feedback, **mono / stereo /
+  ping-pong mode**, **low-cut and high-cut on the feedback path**, sync toggle.
+- **Parametric EQ**: four bands minimum, **per-band filter type** — bell, shelf,
+  high-pass, low-pass, notch — with frequency, gain and Q each.
+- **Compressor/Limiter** is one module with a **Mode switch**, plus knee, and
+  wet/dry for parallel compression.
+- **Bit Crusher / Decimator**: bit depth 16→4, sample-rate reduction, **noise
+  floor**, **dither toggle**, output level, wet/dry for parallel crushing.
+- **Spectrum Analyzer**: display range in dB, frequency range/zoom, **average
+  mode — instantaneous, peak hold, or averaged**. No audio processing; present
+  in the master column by default.
+- **Stereo Widener**: width, **mid/side balance**, **bass-mono crossover
+  frequency**.
+- **Spectral Freeze**: freeze toggle, shimmer amount, **shimmer interval**
+  (octave, fifth…), blur.
+- **Granular Processor**: grain size, density, scatter, pitch spread, position,
+  freeze.
+
 ### 3.2 Audio — instruments
 
 | Feature | Wave | Notes |
 |---|---|---|
 | Synth (3 osc, filter, 2 ADSR, 2 LFO, 8×12 matrix), Percussion, Looper, Granular | ✅ done | in Rust |
 | **Synth: expose LFO 1/2, osc semitones, mod wheel, pan on the face** | 1 | already in the engine, unreachable from the UI |
+| **Synth: mono/poly switch, 4-voice poly**, legato, retrigger, **glide time + curve**, voice-stealing mode | 4 | today it is 16-voice poly with no mono mode and no glide |
+| **OSC 2 hard sync** and **ring modulation** against OSC 1, independently toggleable and combinable | 4 | |
+| Oscillator **start phase** (0–360°) and **noise waveform (white / pink)** | 4 | |
+| **Filter drive** — pre-filter saturation interacting with resonance | 4 | |
+| Filter types: LP12, **LP24**, HP, BP, **Notch** | 4 | |
+| Filter envelope **amount is bipolar with an explicit polarity** control | 4 | |
+| Amp envelope **velocity sensitivity** | 4 | |
+| LFO waveforms incl. **Sample and Hold** and **Smooth Random**; tempo-sync; phase; trigger free / note / **one-shot** | 4 | |
+| Synth face as tabs — OSC · FILTER · ENV · LFO · MOD · VOICE — active tab fully visible, no scrolling | 4 | sequencer stays visible below regardless of tab |
 | **Modulation-matrix editor face** — all 96 cells | 2 | reuses P4's address model |
 | **Role instruments: bass, lead, chord/pad** | 4 | §9.1 items 3–5; presets over the existing synth where possible |
 | **12-pad drum sampler** — per-pad sample/level/pan/tune/start/end/attack/hold/decay/filter/drive/velocity/mute/solo/out, layers, round-robin, ≥4 choke groups | 5 | supersedes Percussion |
@@ -231,6 +320,59 @@ Everything, grouped by what it is. The wave column is where it gets built.
 | **Pad sample engine** — keymaps, velocity layers, loop/crossfade, reverse, chord/octave modes | 5 | macros: Source, Blur, Color, Motion, Attack, Release, Width, Space |
 | **Granular instrument** — position, scan, drift, size, density, spray, pitch variation, window, freeze, spread, bounded feedback | 5 | macros: Focus, Scatter, Cloud, Drift, Freeze, Motion, Width, Distance |
 | **Sample library** with stable IDs, metadata, clearance, root note, velocity layers, loop points, choke eligibility, peak/RMS | 5 | web gets a reduced compressed subset |
+
+### 3.2a Play States and the trigger system — P12
+
+The spec's central performance idea, and entirely absent from idMLab. A Player
+is not one sample: it is a **stack of Play States**, each a sample plus a
+complete settings set, shown as tabs with waveform thumbnails. A trigger source
+fires the Player; a trigger mode decides which state sounds.
+
+| Feature | Wave |
+|---|---|
+| Play State tabs — add, duplicate, reorder, delete; minimum one | 3 |
+| Per-state: envelope, loop mode, loop in/out, crossfade width + curve (linear / equal-power / log) | 3 |
+| Per-state: playback speed 25–400 %, **time-stretch or varispeed** | 3 |
+| Per-state: **playback offset in ms** — flams, humanisation, rhythmic displacement | 3 |
+| Per-state: bit depth, sample-rate reduction, **noise floor**, **dither** | 4 |
+| Per-state: pitch, level, pan, reverse | 3 |
+| **Trigger sources**: global clock (beat/bar/subdivision) · MIDI note (notes address states directly) · manual button · combined | 3 / 6 |
+| **Trigger modes**: Sequential · Weighted Sequential · Random (with per-state weights) · Round Robin · Velocity Layered · Manual | 3 |
+| Weighted Sequential pattern editor — per-state play counts, cycle length | 3 |
+| Percussion: velocity sensitivity per target (level / pitch / cutoff), retrigger cut-or-layer | 3 |
+| **16 global choke groups**, cross-column, auto-assigned per column, group 0 = none | 3 |
+| Granular: **soft crossfade between states** (10 ms–seconds), grains decay naturally, states overlap | 3 |
+| Granular: position + **auto-scan LFO** (rate + direction), manual scrub, **stretch 1×–1000×**, scatter, pitch spread, freeze, stereo spread | 3 |
+| Bit crush at two independent levels — per state and as a graph node — compounding | 4 |
+| Per-source transport: play · pause · stop · return to start · **scrub on the waveform** | 3 |
+| Per-source sync: Free · ½ · 1 · 2 · 3 · 4 bars · custom | 3 |
+| **Start offset in bars** and **phase offset within the bar** | 3 |
+| Retrigger to the next sync boundary; mute (keeps running in sync, re-enters cleanly); solo | 3 |
+| Sources collapsible to a compact strip; user-nameable | 3 |
+
+### 3.2b The Mono Note Sequencer — P14
+
+Ships by default on every Synth; optional on sample players. Mono only. Notes
+are quantised to **true scale pitches**, not rounded to 12-TET.
+
+| Feature | Wave |
+|---|---|
+| **Five step types**: NOTE · REST · **PAUSE** (own duration, so phrases breathe off-grid) · TIE · **SKIP** (takes no time at all) | 3 |
+| NOTE step: scale degree, octave, velocity, gate length, **note length independent of step length**, probability, **repeat 1–4**, **per-step step length** | 3 |
+| Global: 1–64 steps, direction (forward / reverse / ping-pong / random / **random walk**), scale, transpose, swing, sync | 3 |
+| **Root pitch user-definable in Hz** — not locked to A=440 | 3 |
+| Per-step velocity routes into the synth mod matrix as the Velocity source | 3 |
+| **108 scales in 8 categories** — the library currently holds 81 | 3 |
+| Degrees displayed with **exact Hz and cent offset**; click any degree to audition | 3 |
+| **88-note keyboard display** showing which keys fall in the selected scale at the current root | 3 |
+
+The 27 scales to add: Partch 43-tone · La Monte Young Well-Tuned Piano ·
+Ptolemy's Intense Diatonic · Five-limit and Seven-limit JI · harmonic series
+1–16 · quarter-comma meantone · Werckmeister III · Kirnberger III · Vallotti ·
+19-, 31-, 53-EDO · 17-, 22-, 72-EDO · Wendy Carlos Alpha/Beta/Gamma ·
+Bohlen-Pierce · Makam Ussak · Chahargah · Segah · 22-Shruti · Pelog Selisir ·
+Insen · Chinese Gong/Yu · Mongolian pentatonic · Thai Ranat · Gamelan Degung ·
+Sanfen Sunyi.
 
 ### 3.3 Event modules — the 29 that render and do nothing
 
@@ -289,7 +431,88 @@ driven by a pointer — it is a consumer of P4, not a separate mechanism.
 | **Stream 2 playback visualisation** — reverb decay/RT60, compressor GR and threshold crossings, grain positions and scatter, frozen spectrum, pitch-shifter voice positions on a pitch grid | 5 |
 | Detachable Visualizer surface | 8 |
 | Preset-driven visual composition engine | 8 |
+| **Signal flow on the wires** — amplitude glow (default) · **waveform scrolling along the wire** · frequency colour shift; combinable | 5 |
+| Per-module visualisation *character* — reverb tail, delay steps, EQ curve over live spectrum, compressor squashing on transients, Lissajous for width, grain scatter dots, frozen spectrum, quantisation staircase | 5 |
+| Viz points: column input · node · bank · column output · master output | 5 |
+| Bypassed nodes visualise the dry passthrough; viz is never toggleable off | 5 |
+| **Global audio analysis**: amplitude, band levels, transients, **spectral centroid, onset detection, pitch tracking, stereo width** | 5 |
+| Visualizer **recomposes, never re-renders** — same data, no chrome, zero extra cost | 8 |
+| Master preset layer: composition rules · effect stack (blur, kaleidoscope, feedback, colour mapping, particles, waveform draw, geometric, glitch) · audio mappings · exposed parameters | 8 |
+| **Preset library and subscription model** — new preset sets on a cadence; presets exportable to other applications; the subscription adds, never gates | 8 |
+| Fullscreen; output at 1080p / 4K / custom | 8 |
 | Video capture / render integration | 8 |
+
+### 3.6a Banks and the patch bay
+
+A bank groups instances of one module type side by side, with its own routing
+mode. Named in the plan before; specified in full here.
+
+| Feature | Wave |
+|---|---|
+| Bank container, label, mode toggle, bypass, **wet/dry defaulting to 50/50** | 3 |
+| Serial mode — in → A → B → C → out | 3 |
+| Parallel mode — in splits to all slots | 3 |
+| **Per-node output routing**: Collapse to Master · Individual Out · Individual + Master | 3 |
+| Bank dry reference is the signal **as it arrived at the bank input**, before any node | 3 |
+| Collapsible patch bay panel (chevron, right edge; indicator when connections exist) | 3 |
+| Patch-bay ports: Master In · Master Out · **Dry Tap** · **Wet Tap** (post-processing, pre-blend) · per-slot In · per-slot Out | 3 |
+| Free patch routing inside a bank — any out to any in, hybrid serial/parallel | 3 |
+| External signals patchable into individual slots; slot outs patchable out of the bank | 3 |
+| Cables colour-coded **by source node**; feedback connections warn and require confirmation | 3 |
+| Node wet/dry default **100 % wet**; bank default 50 % | 1 |
+
+### 3.6b The shell, views, and the flag system
+
+Depends on §1.1 being decided. Everything here is shell-agnostic except where
+marked.
+
+| Feature | Wave |
+|---|---|
+| **The flag system** — every parameter is Default · Performance · Always-On, set by right-click | 2 |
+| Performance-flagged parameters change to the accent colour in Edit View and render **larger** in Performance View | 2 |
+| Always-On elements cannot be flagged off: transport, BPM, master level and metering, mixer faders and mutes, CPU meter, global panel | 2 |
+| Edit View ↔ Performance View, instant, single button, no state change | 2 |
+| Macro strip at the top of Performance View; clicking it opens the Timeline | 2 |
+| **Global Panel** — right edge, full height, always visible in both views; snapshots live here. Design reference: M by Intelligent Music | 2 |
+| Column/group identity colour propagating to header, cables, mixer strip, timeline lanes and viz borders | 3 |
+| *(shell)* Fixed zones: transport top · headers · global panel right · mixer bottom · master strip | 3 |
+| *(shell)* Fluid effects canvas — the only zone that scrolls and zooms | 3 |
+| *(shell)* Four column types and right-click instantiation with an engine submenu | 3 |
+| *(shell)* Default rack on new FX Bus / Channel: **Limiter → EQ → Compressor**, all active, all removable | 3 |
+| *(shell)* Column reorder by dragging headers; remove with confirmation when non-empty | 3 |
+| **VAST preset** shipped in the node browser — giant algorithmic reverb, tempo-synced dripping delay, chorus/flanger with depth and width | 4 |
+| Amiga-tracker visual language — deep charcoal ground, monospace, uppercase headers, grid discipline, colour as signal identity | 3 |
+
+### 3.6c Mixer, transport, and export
+
+| Feature | Wave |
+|---|---|
+| Channel strip: label · **one send knob per FX Bus, appearing automatically** · pan · mute · solo · peak meter · fader | 1 |
+| Sends selectable **pre- or post-fader**, per send | 1 |
+| Channel source: interface input · another column's output · **combined** | 1 |
+| Column-into-column: **Mute from Main Mix** vs **Keep in Main Mix** (parallel processing at column level) | 1 |
+| Master strip: output viz · fader · **peak and RMS meters** · limiting indicator · graph access | 1 |
+| Master default chain: Compressor → Limiter (−0.1 dBFS) → Spectrum Analyzer; cannot be removed, individually bypassable | 1 |
+| **Play resets the clock to Bar 1 Beat 1**; offset columns wait silently then enter | 3 |
+| **Stop is musical** — tails decay naturally. **Pause is surgical** — instant, no tails | 3 |
+| Transport bar: BPM (click to edit, scroll to nudge) · tap tempo · time signature · position · master sync toggle · **CPU meter** · view switchers | 3 |
+| **Export lives in the master strip, never a dialog**: REC MODE (DATA / DATA+AUDIO / RENDER) · WRITE MODE (OVERDUB / OVERWRITE, warning colour) · Record · Render · format/depth/rate (WAV / AIFF / MP3) · **video toggle** | 7 |
+
+### 3.6d Preferences, sessions, and windows
+
+| Feature | Wave |
+|---|---|
+| Audio output and input device selection; **sample rate 44.1 / 48 / 96 kHz**; buffer size showing samples *and* resulting latency | 1 |
+| Input and output channel assignment to columns | 1 |
+| Device disconnect → warning and fallback to the system default | 1 |
+| Preferences: default session location · **autosave interval** · **undo depth (default 30)** · theme · MIDI device | 3 |
+| **Undo: 30 levels, per window**, with a dismissible warning at exhaustion. Not undoable: captured audio, file operations, preferences | 3 |
+| Undoable: every parameter, node/bank create-delete-move, connections, column ops, routing, Play State changes, snapshots, **flag assignments** | 3 |
+| **Session folder** — session file + `audio/` + `captures/`, referenced by relative path; the folder is the portable unit | 3 |
+| Every file copied in on first save; missing file → indicator on the Play State and a locate-or-replace dialog | 3 |
+| Pool Manager modal — waveform previews, metadata, audition, add without assigning, remove only if unassigned, **replace a file without disturbing the states that use it** | 3 |
+| **Multi-window sessions**: each session its own window, any number open, **only the foreground window makes sound**, no auto-resume on refocus | 8 |
+| Save · Save As (copy becomes active, previous goes to background) · Load and New (open in a new foreground window) | 8 |
 
 ### 3.7 Canvas, interaction, accessibility
 
@@ -357,6 +580,10 @@ Delete the second audio engine.
 5. Add the `assert_no_alloc` gate to `dsp-core`.
 6. Expose the synth's existing LFOs, oscillator semitones, mod wheel and pan on
    its face — they are implemented in Rust and unreachable.
+7. **Do not regress choke groups.** They exist only in the Web Audio `voices.ts`
+   this wave deletes, and `sampler.rs` has none. Either port a minimal choke to
+   the Rust sampler in this wave or accept a named, tracked gap until P15 —
+   silently losing it is not an option (D1).
 
 **Gate:** the word "web-audio" appears nowhere in `src/modular/audio/` except in
 the comment explaining why the context still exists. A patch with a synth, three
@@ -374,6 +601,10 @@ chain of mono boxes.
 3. Multi-port modules: arbitrary in/out counts with per-port signal type.
 4. Summing bus, Mixer, Send, Return, Utility, Feedback module.
 5. DP/4+ four-unit with its routing matrix — the first consumer of P2.
+
+6. Mixer strips, sends (pre/post fader), master strip with peak and RMS meters,
+   the default master chain, and the audio device / sample rate / buffer
+   preferences.
 
 **Gate:** a patch with two instruments into a mixer, one send to a shared
 reverb, panned hard left and right, sounds correct in both ears; the DP/4+
@@ -394,14 +625,26 @@ P4 and P5. The keystone.
 8. The modulation-matrix editor face, over the same address model.
 9. Delta-stream *format* (the UI is Wave 7), so capture can begin recording
    before the timeline exists to edit it.
+10. **The flag system** — Default / Performance / Always-On per parameter, set
+    by right-click. It is a field on the parameter address, which is why it
+    lands here rather than in the canvas wave.
 
 **Gate:** recall a snapshot mid-performance and hear a click-free morph; a macro
 moves twelve parameters at once; the baton conducts tempo and three variables
 simultaneously; snapshots round-trip through `.mmod` exactly.
 
-### Wave 3 — The event side, and the canvas
+### Wave 3 — The performance model, the event side, and the canvas
 
-The app becomes complete as an instrument.
+The app becomes complete as an instrument. This is the largest wave and it grew
+again when the funcspec was ingested, so it runs as **two halves that can be
+taken in either order**:
+
+- **3A — the performance model.** P12, P13, P14, P15, banks, the sequencer, the
+  scales. This is what the funcspec is mostly about, and none of it exists.
+- **3B — the event side and the shell.** The 29 inert modules, the canvas
+  interaction work, persistence, and whatever §1.1 decides.
+
+Splitting them is allowed. Skipping the gate is not.
 
 1. Pattern Editor with a real processor and an expand command; Note Editor;
    Pattern Recorder; Pattern Commands (ReScramble, Original→Scrambled, Swap —
@@ -412,13 +655,25 @@ The app becomes complete as an instrument.
 4. Event Splitter, Event Merger, Step Gate, Stream processor.
 5. P6 — generalise `m.stream`'s compound into a reusable nested subgraph.
 6. Movie capture and deterministic SMF format-1 export (§A.3).
-7. Canvas: multi-select, marquee, grouping, searchable menu, compatible-port
-   highlighting, keyboard patching, low-zoom non-interactive threshold.
-8. Autosave and crash recovery; unknown-module preservation.
+7. **P12 — Play States and the trigger engine**; **P13 — per-source sync and
+   offset**; **P14 — the step-sequencer core** and the Mono Note Sequencer;
+   **P15 — the global choke bus**. These four are the spec's performance model
+   and the largest single gap it exposed.
+8. **P6 consumers**: Banks, their routing modes, per-node output routing, and
+   the patch bay with its dry and wet taps.
+9. The 27 additional scales, the exact-Hz/cent degree display, and the 88-note
+   keyboard view.
+10. Canvas: multi-select, marquee, grouping, searchable menu, compatible-port
+    highlighting, keyboard patching, low-zoom non-interactive threshold.
+11. Autosave and crash recovery; unknown-module preservation; undo bounded to 30
+    and no longer cleared on save (D7).
+12. Whatever §1.1 decides about the shell.
 
-**Gate:** every module in the registry does something when patched. A complete
-piece can be built, played, saved, recovered after a forced reload, and exported
-as a MIDI file.
+**Gate:** every module in the registry does something when patched. Four sources
+with different sync modes and start offsets enter at their own bars and drift
+into a new phase relationship from one Play press. A hi-hat in choke group 3
+cuts another column's open hat. A complete piece can be built, played, saved,
+recovered after a forced reload, and exported as a MIDI file.
 
 ### Wave 4 — The effect rack, completed
 
@@ -520,6 +775,24 @@ Continuous, not scheduled. Every wave carries them.
   as the work — never a separate cleanup pass.
 
 ---
+
+## 5a. Divergences between the funcspec and the build
+
+Found by reading the spec against the code. Each needs a decision, and each is
+cheap now and expensive after something depends on it.
+
+| # | The spec says | The build has | Call |
+|---|---|---|---|
+| D1 | **16 global choke groups**, cross-column | **Nothing.** Choke lived in `voices.ts` (Web Audio) and Wave 0 deletes it; `sampler.rs` has no choke at all | Wave 0 must not ship a choke regression. Build P15 in Wave 3, or hold the deletion of that one behaviour |
+| D2 | Mod sources: LFO 1/2, Filter Env, Amp Env, Velocity, **Key Follow**, Mod Wheel, **Aftertouch** | LFO 1/2, Amp Env, Filter Env, Velocity, **Note**, Mod Wheel, **Random** | `Note` *is* key follow under another name — rename. `Random` is ours and worth keeping. Aftertouch needs MIDI in, so the matrix goes to 9 sources or Random yields |
+| D3 | Mod destinations include **OSC 1 PWM, OSC 2 PWM, Amp Level** | Has **LFO 1 Rate, LFO 2 Rate, Volume** instead | PWM destinations are the bigger musical win — PWM is the reason the Fourier generator exists. Widen to 15 destinations rather than trade |
+| D4 | **108 scales** in 8 named categories | 81 | Add the 27 named in §3.2b |
+| D5 | Synth is **mono or 4-voice poly**, with glide | 16-voice poly, no mono mode, no glide | Add mono + glide; keep the higher poly ceiling as ours |
+| D6 | Sessions are **folders** — session file + `audio/` + `captures/`, relative paths | Single-file `.mmod` plus `.mmodpack` bundle | Both are right for different targets. Browser keeps the bundle; native gets folders. Do not force one |
+| D7 | Undo is **30 levels, per window**, survives everything except file ops | Unbounded stack, **cleared on every New / Open / Save** | The clearing is a defect, not a policy. Fix in Wave 3 |
+| D8 | Reverb has an **algorithm/convolution switch** in one module | Two separate ideas | One module, structural variant — the mechanism already exists |
+| D9 | Play States, trigger modes, per-source sync | Percussion has note→sample slots only | P12 and P13. The single largest gap the spec exposed |
+| D10 | **Only the foreground window makes sound** | Single window, no rule | Wave 8, with the multi-window model |
 
 ## 6. Decisions of record
 
@@ -689,6 +962,13 @@ These are not lost — they are the reference implementations for Waves 2, 3 and
 ---
 
 ## Appendix B — What was deleted, and why
+
+**Sources fully ingested into this plan:**
+`ModularAudio_FuncSpec_v11 (1).docx` — 33 sections, ~99 KB, read in full on
+2026-08-05. It is the origin document for the AV product and had never been read
+directly by this repository's plans, only summarised secondhand. Everything in
+it is captured above; §5a records the ten places where it disagrees with what is
+built.
 
 The following were removed on 2026-08-05 when this plan replaced them. All are
 recoverable from git history; their content is folded in above.
