@@ -19,6 +19,8 @@ import type { RuntimeEvent } from "./eventqueue";
 import type { MessageBus, PortInbox, StreamMessage } from "./messages";
 import { randomUnit, streamKey } from "./rng";
 import { PPQN, stepTicks, type Tick, type TempoMap } from "./time";
+import { findScale, scaleById, type Scale } from "../tuning/scales";
+import { snapToChord, snapToScale, type ChordShape, type SnapDirection } from "../tuning/quantize";
 
 export type ProcessWindow = {
   /** Inclusive start of the window in ticks. */
@@ -814,6 +816,165 @@ export class PlayEnableProcessor extends BaseProcessor {
 /**
  * Pitch-domain shaper with semitone and scale-degree modes.
  */
+/** Pitch-class index for the twelve root names the harmony faces offer. */
+const ROOT_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+const rootPitchClass = (name: unknown): number => {
+  const index = ROOT_NAMES.indexOf(String(name));
+  return index < 0 ? 0 : index;
+};
+
+/** The scale every harmony module falls back to. */
+const DEFAULT_SCALE = scaleById("ionian-major");
+
+/**
+ * The scale a harmony module is set to.
+ *
+ * An unknown id resolves to the default rather than throwing. The value comes
+ * from a saved document, so a scale renamed or removed between releases would
+ * otherwise throw once per window on the note-scheduling path — turning a
+ * cosmetic library change into silence. `findScale` is the non-throwing
+ * lookup that exists for exactly this.
+ */
+const scaleParam = (parameters: ParameterBag): Scale =>
+  findScale(String(parameters.raw("scale") ?? "")) ?? DEFAULT_SCALE;
+
+/**
+ * How a scale's degrees are described on a face.
+ *
+ * Note names where the degrees are semitones and cents where they are not.
+ * Printing "C D E F G A B" for 31-EDO would be a plain lie — none of those
+ * degrees is any letter — and the whole reason for this module is the scales
+ * that do not fit the twelve.
+ */
+function describeDegrees(scale: Scale, root: number): string {
+  const semitonal = scale.cents.every((cents) => Number.isInteger(cents / 100));
+  if (semitonal) {
+    return scale.cents.map((cents) => ROOT_NAMES[(root + cents / 100) % 12]).join(" ");
+  }
+  return scale.cents.map((cents) => `${Math.round(cents)}¢`).join(" ");
+}
+
+/**
+ * The shared key other harmony modules read.
+ *
+ * Only the *root* travels the cable, not the scale. An index signal carries
+ * one number, and Transposition already reads this port as a root offset in
+ * `0..11` — encoding a scale id into the same number would silently break it.
+ * So the scale stays a parameter on each module and the key is what is shared,
+ * which is also the thing a player actually changes mid-performance.
+ */
+export class ScaleContextProcessor extends BaseProcessor {
+  private notes = "";
+  private scaleName = "";
+
+  constructor(build: ProcessorBuild) {
+    super(build, "scale-context");
+  }
+
+  process(_window: ProcessWindow): void {
+    const scale = scaleParam(this.parameters);
+    const root = rootPitchClass(this.parameters.raw("root"));
+    this.scaleName = scale.name;
+    this.notes = describeDegrees(scale, root);
+
+    const message = this.bus.acquire();
+    if (!message) return;
+    message.kind = "control";
+    message.controlValue = root;
+    this.bus.publish("scale-out", message);
+  }
+
+  status(): Readonly<Record<string, string>> {
+    return { notes: this.notes, scale: this.scaleName };
+  }
+}
+
+/** Classic Scale Snap, on eighty-one scales instead of eight. */
+export class ScaleQuantizerProcessor extends BaseProcessor {
+  private readonly rootMatcher = new TickControlMatcher();
+  private moved = 0;
+  private seen = 0;
+
+  constructor(build: ProcessorBuild) {
+    super(build, "scale-quantizer");
+  }
+
+  process(window: ProcessWindow): void {
+    this.rootMatcher.ingest(inbox(this.bus, this.nodeId, "scale-in"));
+    const enabled = this.parameters.raw("enabled") !== false;
+    const scale = scaleParam(this.parameters);
+    const baseRoot = rootPitchClass(this.parameters.raw("root"));
+    const raw = String(this.parameters.raw("direction") ?? "nearest");
+    const direction: SnapDirection = raw === "down" || raw === "up" ? raw : "nearest";
+
+    const notes = inbox(this.bus, this.nodeId, "notes-in");
+    this.moved = 0;
+    this.seen = notes.count;
+    for (let i = 0; i < notes.count; i++) {
+      const source = notes.items[i];
+      const message = this.bus.acquire();
+      if (!message) return;
+      copyNote(message, source);
+      if (enabled) {
+        const root = clampInt(Math.round(this.rootMatcher.valueAt(source.atTick, baseRoot)), 0, 11);
+        const snapped = snapToScale(source.note, scale, root, direction);
+        if (snapped.note !== source.note || snapped.detuneCents !== source.detuneCents) this.moved += 1;
+        message.note = snapped.note;
+        message.detuneCents = snapped.detuneCents;
+      }
+      this.bus.publish("notes-out", message);
+    }
+    this.rootMatcher.prune(window.startTick - CONTROL_MATCH_GRACE_TICKS);
+  }
+
+  status(): Readonly<Record<string, string>> {
+    return { snapped: `${this.moved} of ${this.seen}` };
+  }
+}
+
+/** Classic Chord Tones: the same snap, restricted to the chord's degrees. */
+export class ChordQuantizerProcessor extends BaseProcessor {
+  private readonly rootMatcher = new TickControlMatcher();
+  private moved = 0;
+  private seen = 0;
+
+  constructor(build: ProcessorBuild) {
+    super(build, "chord-quantizer");
+  }
+
+  process(window: ProcessWindow): void {
+    this.rootMatcher.ingest(inbox(this.bus, this.nodeId, "scale-in"));
+    const enabled = this.parameters.raw("enabled") !== false;
+    const scale = scaleParam(this.parameters);
+    const baseRoot = rootPitchClass(this.parameters.raw("root"));
+    const shape = String(this.parameters.raw("chord") ?? "triad") as ChordShape;
+
+    const notes = inbox(this.bus, this.nodeId, "notes-in");
+    this.moved = 0;
+    this.seen = notes.count;
+    for (let i = 0; i < notes.count; i++) {
+      const source = notes.items[i];
+      const message = this.bus.acquire();
+      if (!message) return;
+      copyNote(message, source);
+      if (enabled) {
+        const root = clampInt(Math.round(this.rootMatcher.valueAt(source.atTick, baseRoot)), 0, 11);
+        const snapped = snapToChord(source.note, scale, root, shape);
+        if (snapped.note !== source.note || snapped.detuneCents !== source.detuneCents) this.moved += 1;
+        message.note = snapped.note;
+        message.detuneCents = snapped.detuneCents;
+      }
+      this.bus.publish("notes-out", message);
+    }
+    this.rootMatcher.prune(window.startTick - CONTROL_MATCH_GRACE_TICKS);
+  }
+
+  status(): Readonly<Record<string, string>> {
+    return { snapped: `${this.moved} of ${this.seen}` };
+  }
+}
+
 export class TranspositionProcessor extends BaseProcessor {
   private readonly transposeMatcher = new TickControlMatcher();
   private readonly scaleContextMatcher = new TickControlMatcher();
@@ -901,6 +1062,10 @@ export class MidiOutputProcessor extends BaseProcessor {
       on.portId = this.nodeId;
       on.channel = channel;
       on.note = note.note;
+      // The microtonal half of the pitch. An adapter that cannot bend ignores
+      // it; the synth applies it. Without this the quantiser's whole point is
+      // discarded at the last hop before the instrument.
+      on.detuneCents = note.detuneCents;
       on.velocity = note.velocity;
       on.noteId = noteId;
       on.sequence = this.sequence++;
@@ -912,6 +1077,7 @@ export class MidiOutputProcessor extends BaseProcessor {
       off.portId = this.nodeId;
       off.channel = channel;
       off.note = note.note;
+      off.detuneCents = note.detuneCents;
       off.velocity = 0;
       off.noteId = noteId;
       off.sequence = this.sequence++;
@@ -1097,6 +1263,9 @@ export const PROCESSOR_FACTORIES: Record<
   "m.legato-processor": (build) => new LegatoProcessor(build),
   "m.play-enable": (build) => new PlayEnableProcessor(build),
   "m.transposition": (build) => new TranspositionProcessor(build),
+  "m.scale-context": (build) => new ScaleContextProcessor(build),
+  "m.scale-quantizer": (build) => new ScaleQuantizerProcessor(build),
+  "m.chord-quantizer": (build) => new ChordQuantizerProcessor(build),
   "m.midi-output": (build) => new MidiOutputProcessor(build),
   // The players schedule exactly as a MIDI Output does — the difference is
   // entirely on the other side of the scheduler, where one adapter writes bytes

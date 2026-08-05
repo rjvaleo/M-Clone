@@ -49,7 +49,13 @@ export type PlayerRuntime = {
 /** The surface the note adapter uses. Deliberately tiny. */
 export interface NotePlayer {
   readonly nodeId: string;
-  noteOn(note: number, velocity: number, atSec: number): void;
+  /**
+   * `detuneCents` is the microtonal remainder a scale quantiser produced —
+   * see `tuning/quantize.ts`. Optional because a sampler that only has a
+   * playback rate can reasonably ignore it, and every existing caller
+   * predates it.
+   */
+  noteOn(note: number, velocity: number, atSec: number, detuneCents?: number): void;
   noteOff(note: number, atSec: number): void;
   /** Silence everything sounding, without a click. */
   silence(atSec: number): void;
