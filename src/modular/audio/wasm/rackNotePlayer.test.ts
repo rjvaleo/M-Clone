@@ -19,7 +19,7 @@ describe("RackNotePlayer", () => {
   it("schedules note on for the moment the score asked for", () => {
     const rack = sink();
     new RackNotePlayer("n1", rack).noteOn(60, 0.8, 12.5);
-    expect(rack.schedule).toHaveBeenCalledWith(12.5, [
+    expect(rack.schedule).toHaveBeenCalledWith("n1", 12.5, [
       { type: "note-on", note: 60, velocity: 0.8, detuneCents: 0 },
     ]);
   });
@@ -30,7 +30,7 @@ describe("RackNotePlayer", () => {
     // quantiser upstream reported that it had worked.
     const rack = sink();
     new RackNotePlayer("n1", rack).noteOn(60, 0.8, 12.5, -33.4);
-    expect(rack.schedule).toHaveBeenCalledWith(12.5, [
+    expect(rack.schedule).toHaveBeenCalledWith("n1", 12.5, [
       { type: "note-on", note: 60, velocity: 0.8, detuneCents: -33.4 },
     ]);
   });
@@ -38,13 +38,13 @@ describe("RackNotePlayer", () => {
   it("schedules note off for its own moment", () => {
     const rack = sink();
     new RackNotePlayer("n1", rack).noteOff(60, 12.5);
-    expect(rack.schedule).toHaveBeenCalledWith(12.5, [{ type: "note-off", note: 60 }]);
+    expect(rack.schedule).toHaveBeenCalledWith("n1", 12.5, [{ type: "note-off", note: 60 }]);
   });
 
   it("schedules silence rather than taking effect immediately", () => {
     const rack = sink();
     new RackNotePlayer("n1", rack).silence(12.5);
-    expect(rack.schedule).toHaveBeenCalledWith(12.5, [{ type: "all-notes-off" }]);
+    expect(rack.schedule).toHaveBeenCalledWith("n1", 12.5, [{ type: "all-notes-off" }]);
   });
 
   it("keeps two notes apart when they were asked for at different times", () => {
@@ -56,7 +56,7 @@ describe("RackNotePlayer", () => {
     const player = new RackNotePlayer("n1", rack);
     player.noteOn(60, 1, 1.0);
     player.noteOn(62, 1, 1.5);
-    expect(rack.schedule.mock.calls[0][0]).toBe(1.0);
-    expect(rack.schedule.mock.calls[1][0]).toBe(1.5);
+    expect(rack.schedule.mock.calls[0][1]).toBe(1.0);
+    expect(rack.schedule.mock.calls[1][1]).toBe(1.5);
   });
 });

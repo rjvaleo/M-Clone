@@ -119,9 +119,9 @@ export class WasmRackNode {
    * messages gives them three chances to be handled in different quanta, and
    * the whole point of a time is that it removes that.
    */
-  schedule(atSec: number, events: ScheduledEvent[]): void {
+  schedule(nodeId: string, atSec: number, events: ScheduledEvent[]): void {
     if (this.disposed || events.length === 0) return;
-    this.node.port.postMessage({ type: "schedule", atSec, events });
+    this.node.port.postMessage({ type: "schedule", nodeId, atSec, events });
   }
 
   noteOff(note: number): void {

@@ -20,7 +20,7 @@ import type { ScheduledEvent } from "./rackProtocol";
 
 /** The part of `WasmRackNode` a note player uses. */
 export interface RackNoteSink {
-  schedule(atSec: number, events: ScheduledEvent[]): void;
+  schedule(nodeId: string, atSec: number, events: ScheduledEvent[]): void;
 }
 
 export class RackNotePlayer implements NotePlayer {
@@ -30,14 +30,14 @@ export class RackNotePlayer implements NotePlayer {
   ) {}
 
   noteOn(note: number, velocity: number, atSec: number, detuneCents = 0): void {
-    this.rack.schedule(atSec, [{ type: "note-on", note, velocity, detuneCents }]);
+    this.rack.schedule(this.nodeId, atSec, [{ type: "note-on", note, velocity, detuneCents }]);
   }
 
   noteOff(note: number, atSec: number): void {
-    this.rack.schedule(atSec, [{ type: "note-off", note }]);
+    this.rack.schedule(this.nodeId, atSec, [{ type: "note-off", note }]);
   }
 
   silence(atSec: number): void {
-    this.rack.schedule(atSec, [{ type: "all-notes-off" }]);
+    this.rack.schedule(this.nodeId, atSec, [{ type: "all-notes-off" }]);
   }
 }

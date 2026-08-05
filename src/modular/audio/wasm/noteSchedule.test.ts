@@ -3,6 +3,7 @@ import { NoteSchedule, MAX_SCHEDULED_NOTES, type ScheduledNote } from "./noteSch
 
 const on = (frame: number, note: number): ScheduledNote => ({
   frame,
+  nodeId: "n1",
   event: { type: "note-on", note, velocity: 1, detuneCents: 0 },
 });
 
@@ -74,8 +75,8 @@ describe("NoteSchedule", () => {
     // Stability matters most here: reordering these turns a note into a
     // permanently stuck one.
     const schedule = new NoteSchedule();
-    schedule.push({ frame: 100, event: { type: "note-on", note: 60, velocity: 1, detuneCents: 0 } });
-    schedule.push({ frame: 100, event: { type: "note-off", note: 60 } });
+    schedule.push({ frame: 100, nodeId: "n1", event: { type: "note-on", note: 60, velocity: 1, detuneCents: 0 } });
+    schedule.push({ frame: 100, nodeId: "n1", event: { type: "note-off", note: 60 } });
     const drained = schedule.drainThrough(100);
     expect(drained.map((entry) => entry.event.type)).toEqual(["note-on", "note-off"]);
   });

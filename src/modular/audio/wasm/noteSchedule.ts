@@ -27,6 +27,15 @@ export type { ScheduledEvent };
 export interface ScheduledNote {
   /** Absolute frame on the audio clock, the same one `currentFrame` counts. */
   frame: number;
+  /**
+   * The instrument this was addressed to.
+   *
+   * Required, because the note adapter has already resolved the target on the
+   * main thread and dropping it here is what made every instrument in a patch
+   * play every note. Broadcast is a separate, immediate path — see `noteOn` in
+   * `engineBridge.ts` — rather than an absent id here.
+   */
+  nodeId: string;
   event: ScheduledEvent;
 }
 
