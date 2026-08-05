@@ -319,6 +319,16 @@ export class FakeAudioContext implements EffectContext, EngineContext {
   async decodeAudioData(data: ArrayBuffer): Promise<AudioBufferLike> {
     const bytes = new Uint8Array(data);
     if (bytes.length < 4) throw new Error("Unrecognised audio format");
+    // Chromium ships no AIFF decoder, and refuses these with exactly this
+    // message. Modelled here rather than glossed over, because the fallback in
+    // `decode.ts` only exists for this case and a fake that decoded everything
+    // would let it rot untested.
+    const isAiff =
+      String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) === "FORM";
+    if (isAiff) {
+      structuredClone(data, { transfer: [data] });
+      throw new Error("Unable to decode audio data");
+    }
     const frames = Math.max(1, bytes.length);
     const buffer = new FakeBuffer(1, frames, this.sampleRate);
     const channel = buffer.getChannelData(0);

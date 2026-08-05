@@ -12,6 +12,7 @@
 // handed a copy it may destroy.
 
 import { assetIdForBytes, type AssetRecord } from "./assets";
+import { decodeAiff } from "./aiff";
 import { computePeaks } from "./waveform";
 import type { AudioBufferLike, SampleContext } from "./nodes";
 
@@ -56,10 +57,33 @@ export async function decodeAsset(
   try {
     buffer = await context.decodeAudioData(copy);
   } catch (error) {
-    return {
-      ok: false,
-      failure: { name, reason: error instanceof Error ? error.message : "Could not decode audio" },
-    };
+    // The browser first, us second. `decodeAudioData` is native and handles
+    // the compressed formats nobody wants to reimplement — but Chromium ships
+    // no AIFF decoder at all, and a real sample library is mostly AIFF. So a
+    // refusal is a question rather than an answer: ask our own reader before
+    // reporting failure.
+    //
+    // `bytes` rather than `copy`, because `decodeAudioData` detached `copy` on
+    // its way to rejecting — the same trap this file's header warns about, one
+    // step further along.
+    const aiff = decodeAiff(bytes);
+    if (!aiff) {
+      return {
+        ok: false,
+        failure: {
+          name,
+          reason: error instanceof Error ? error.message : "Could not decode audio",
+        },
+      };
+    }
+    buffer = context.createBuffer(
+      aiff.channels.length,
+      aiff.channels[0].length,
+      aiff.sampleRate,
+    );
+    for (let channel = 0; channel < aiff.channels.length; channel += 1) {
+      buffer.getChannelData(channel).set(aiff.channels[channel]);
+    }
   }
 
   return {
