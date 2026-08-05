@@ -11,7 +11,7 @@
 // from putting message traffic on the audio path.
 
 import type { AudioPlan } from "../audioPlan";
-import type { RackMessage } from "./rackProtocol";
+import type { RackMessage, ScheduledEvent } from "./rackProtocol";
 import type { SampleSource } from "./sampleTransfer";
 
 /** Which audio backend a session runs on. */
@@ -89,6 +89,18 @@ export class WasmRackNode {
   noteOn(note: number, velocity: number, detuneCents: number): void {
     if (this.disposed) return;
     this.node.port.postMessage({ type: "note-on", note, velocity, detuneCents });
+  }
+
+  /**
+   * Play these events at `atSec` on the audio clock rather than on arrival.
+   *
+   * A batch because a chord is one moment: sending three notes as three
+   * messages gives them three chances to be handled in different quanta, and
+   * the whole point of a time is that it removes that.
+   */
+  schedule(atSec: number, events: ScheduledEvent[]): void {
+    if (this.disposed || events.length === 0) return;
+    this.node.port.postMessage({ type: "schedule", atSec, events });
   }
 
   noteOff(note: number): void {

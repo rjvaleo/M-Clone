@@ -18,6 +18,27 @@ import type { AudioPlan } from "../audioPlan";
 export const RACK_PROCESSOR_NAME = "idmlab-rack";
 
 /**
+ * Something that happens to a note, as opposed to something the rack *is*.
+ *
+ * Named as its own union because these three are exactly what can be given a
+ * time and held: a plan or a sample cannot meaningfully wait for a frame, and
+ * a schedule that accepted one would be a queue with a rebuild in it.
+ */
+export type ScheduledEvent =
+  /**
+   * `detuneCents` is the part of the pitch a MIDI note number cannot say.
+   *
+   * Required rather than optional, so that a caller with a tuning system
+   * behind it cannot silently omit it: the scale quantisers split every pitch
+   * into a note plus this remainder, and a message shape that made the
+   * remainder easy to forget is exactly how all eighty-one scales in the
+   * library ended up sounding like 12-TET on this path.
+   */
+  | { type: "note-on"; note: number; velocity: number; detuneCents: number }
+  | { type: "note-off"; note: number }
+  | { type: "all-notes-off" };
+
+/**
  * What the main thread sends in.
  *
  * Notes are messages rather than plan edits on purpose. A plan describes what
@@ -27,6 +48,7 @@ export const RACK_PROCESSOR_NAME = "idmlab-rack";
  * rebuild, everything else does not.
  */
 export type RackMessage =
+  | ScheduledEvent
   | { type: "plan"; plan: AudioPlan }
   /**
    * Decoded audio, on its way into the engine's bank.
@@ -41,15 +63,17 @@ export type RackMessage =
   | { type: "sample-map"; map: Record<string, number> }
   | { type: "reset" }
   /**
-   * `detuneCents` is the part of the pitch a MIDI note number cannot say.
+   * Play these events at a moment on the audio clock rather than on arrival.
    *
-   * Required rather than optional, so that a caller with a tuning system
-   * behind it cannot silently omit it: the scale quantisers split every pitch
-   * into a note plus this remainder, and a message shape that made the
-   * remainder easy to forget is exactly how all eighty-one scales in the
-   * library ended up sounding like 12-TET on this path.
+   * `atSec` is `AudioContext.currentTime`, the clock the worklet's own
+   * `currentTime` counts in, so the conversion to a frame happens on the audio
+   * thread where the two are already in step. Without this a note sounds
+   * whenever its message is handled — the main thread's schedule, not the
+   * score's, and several quanta of jitter under load.
+   *
+   * A batch rather than one message per note: a chord is one moment, and
+   * sending it as three messages would be three chances to land in different
+   * quanta.
    */
-  | { type: "note-on"; note: number; velocity: number; detuneCents: number }
-  | { type: "note-off"; note: number }
-  | { type: "all-notes-off" }
+  | { type: "schedule"; atSec: number; events: ScheduledEvent[] }
   | { type: "modulation"; nodeId: string; source: number; dest: number; amount: number };
