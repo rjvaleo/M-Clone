@@ -1322,6 +1322,89 @@ outputs and interconnections are software-defined.
 | R-DP4-37 | Non-Lin algorithms MUST carry no feedback path, matching the hardware. |
 | R-DP4-38 | Every unit MUST hold ≤ 5 % of one CPU core, so four units and the rest of a patch coexist. |
 
+
+### 16.5 Algorithm parameters
+
+Extracted from the Reference Manual v2.0 and committed as
+[`reference/dp4/parameters.json`](reference/dp4/parameters.json) — 510 parameters
+across 43 algorithms, machine-readable so a descriptor can be generated rather
+than transcribed.
+
+Every parameter keeps the manual's index, name and range. Index 01 is always
+Mix and 02 always Volume, per R-DP4-10.
+
+| Algorithm | p. | Units | Params | State |
+|---|---|---|---|---|
+| 3.3 SEC DDL | 35 | 2 | — | **needs manual entry** |
+| 8 VOICE CHORUS | 37 | 1 | — | **needs manual entry** |
+| DE-ESSER | 39 | 1 | — | **needs manual entry** |
+| DIGITAL TUBE AMP | 41 | 1 | — | **needs manual entry** |
+| DUAL DELAY | 43 | 1 | 15 | extracted |
+| DUCKER / GATE | 45 | 1 | — | **needs manual entry** |
+| DYNAMIC TUBE AMP | 47 | 1 | — | **needs manual entry** |
+| EQ - CHORUS - DDL | 49 | 1 | — | **needs manual entry** |
+| EQ - COMPRESSOR | 51 | 1 | — | **needs manual entry** |
+| EQ - DDL - WITH LFO | 53 | 1 | 15 | extracted |
+| EQ - FLANGER - DDL | 55 | 1 | 4 | extracted |
+| EQ - PANNER - DDL | 57 | 1 | 15 | extracted |
+| EQ - TREMOLO - DDL | 59 | 1 | 15 | extracted |
+| EQ - VIBRATO - DDL | 61 | 1 | 15 | extracted |
+| EXPANDER | 63 | 1 | 13 | extracted |
+| FAST PITCH SHIFT | 65 | 1 | 8 | extracted, **verify** |
+| FLANGER | 66 | 1 | 18 | extracted |
+| GATED REVERB | 67 | 1 | 13 | extracted |
+| GUITAR AMP 1 | 70 | 1 | 19 | extracted |
+| GUITAR AMP 2 | 70 | 1 | 19 | extracted |
+| GUITAR AMP 3 | 72 | 1 | 20 | extracted |
+| GUITAR AMP 4 | 74 | 1 | 20 | extracted |
+| GUITAR TUNER | 76 | 2 | 5 | extracted, **verify** |
+| HALL REVERB | 77 | 1 | 17 | **ported** · extracted |
+| INVERSE EXPANDER | 80 | 1 | 20 | extracted |
+| KEYED EXPANDER | 82 | 1 | 14 | extracted |
+| LARGE PLATE | 84 | 1 | 8 | **ported** · extracted |
+| LARGE ROOM REV | 86 | 1 | 17 | **ported** · extracted |
+| MULTI TAP DELAY | 89 | 1 | 14 | extracted |
+| NO EFFECT | 90 | 1 | 14 | extracted |
+| NON LIN REVERB 1 | 91 | 1 | 12 | **ported** · extracted |
+| NON LIN REVERB 2 | 91 | 1 | — | **ported** · **needs manual entry** |
+| NON LIN REVERB 3 | 91 | 1 | — | **ported** · **needs manual entry** |
+| PARAMETRIC EQ | 94 | 1 | 8 | extracted |
+| PHASER - DDL | 95 | 1 | 10 | extracted |
+| PITCH SHIFT 2U | 97 | 2 | 10 | extracted, **verify** |
+| PITCHSHIFT - DDL | 99 | 1 | 13 | extracted |
+| PITCH SHIFTER | 101 | 1 | 10 | extracted, **verify** |
+| REVERSE REVERB 1 | 103 | 1 | 10 | extracted |
+| REVERSE REVERB 2 | 105 | 1 | 10 | extracted |
+| ROTATING SPEAKER | 107 | 1 | 8 | extracted |
+| RUMBLE FILTER | 109 | 1 | 3 | extracted |
+| SINE/NOISE GEN | 110 | 1 | 8 | extracted |
+| SMALL PLATE | 111 | 1 | 8 | **ported** · extracted |
+| SMALL ROOM REV | 113 | 1 | 17 | **ported** · extracted |
+| SPEAKER CABINET | 116 | 1 | 8 | extracted |
+| TEMPO DELAY | 117 | 1 | 8 | extracted |
+| TUNABLE SPEAKER | 118 | 1 | 9 | extracted |
+| TUNABLE SPEAKER 2 | 119 | 1 | — | **needs manual entry** |
+| VAN DER POL FILTER | 121 | 1 | 3 | extracted |
+| VCF - DISTORT 1 | 122 | 1 | 12 | extracted |
+| VCF - DISTORT 2 | 124 | 1 | 12 | extracted |
+| VOCAL REMOVER | 126 | 1 | 9 | extracted |
+| VOCODER | 128 | 2 | 4 | extracted, **verify** |
+
+**43 of 54 extracted.** The 11 below need entry by hand from the named page; their sections defeated the extractor because the page's signal-routing diagram sits between the heading and the parameter list:
+
+  3.3 SEC DDL (p.35) · 8 VOICE CHORUS (p.37) · DE-ESSER (p.39) · DIGITAL TUBE AMP (p.41) · DUCKER / GATE (p.45) · DYNAMIC TUBE AMP (p.47) · EQ - CHORUS - DDL (p.49) · EQ - COMPRESSOR (p.51) · NON LIN REVERB 2 (p.91) · NON LIN REVERB 3 (p.91) · TUNABLE SPEAKER 2 (p.119)
+
+Five extracted tables are marked **verify**: the pitch-shift family and the
+Vocoder sit next to config-routing text that the extractor pulled in. Check
+those against the manual before generating descriptors from them.
+
+| ID | Requirement |
+|---|---|
+| R-DP4-40 | Every algorithm's descriptor MUST carry the manual's parameter index, name and range. |
+| R-DP4-41 | Descriptors MUST be generated from `reference/dp4/parameters.json` rather than transcribed. |
+| R-DP4-42 | An algorithm marked **verify** or **needs manual entry** MUST be checked against the manual before it ships. |
+| R-DP4-43 | Index 01 MUST be Mix and index 02 MUST be Volume on every algorithm. |
+
 ### 16.4 What the clone changes on purpose
 
 | Change | Reason |
