@@ -40,7 +40,7 @@ silently and says so.
 Build artifacts: `npm run build:engine` → `public/idmlab-engine.wasm` +
 `public/idmlab-rack.js`. Both gitignored.
 
-**Test counts at last green run:** 2068 TS, 291 Rust, coverage gate at 100 %,
+**Test counts at last green run:** 2127 TS, 300 Rust, coverage gate at 100 %,
 `npm run verify:wasm` passing, `npm run build` clean.
 
 ---
@@ -131,13 +131,26 @@ Note what is **not** deleted, because it is not the Web Audio *path*: the
 `audition`, `decode`, `waveform`, `kit`, `assets`. Those stay whatever the
 renderer is.
 
-### 4b. Meters, now that there is something to draw them from
+### 4b. The parameter contract is now total — keep it that way
+
+`PARAMS_HANDLED_ELSEWHERE` and `ENGINE_ONLY_PARAMS` in `engineBridge.ts` make
+every audio parameter either reach the engine or carry a written reason why
+not, and `engineBridge.test.ts` fails otherwise. This was added after an audit
+found seven dead knobs, including the synth's entire filter section — the
+descriptor said `cutoff`, the table said `filter-cutoff`, and nothing matched.
+
+`NOT_YET_IN_RUST` does the same for whole modules. It currently holds one:
+`m.audio-dp4`, the four-unit box. Four ins, four outs and a routing matrix,
+where every other module in the engine is mono in and mono out — it needs
+multi-port support before it needs DSP.
+
+### 4c. Meters, now that there is something to draw them from
 
 `RackReport.peak` is measured and delivered and nothing draws it. The status
 bar shows module and sample counts only. Per-node voice counts need one more
 ABI call — the engine knows `active_count` per bank but does not export it.
 
-### 4c. The event side
+### 4d. The event side
 
 See §7. 28 modules render, appear in the menu, can be patched, and do nothing.
 That is now a bigger gap than anything left in the audio layer.
