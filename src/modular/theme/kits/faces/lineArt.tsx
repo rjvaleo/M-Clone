@@ -15,6 +15,7 @@
 
 import { knobAngle, normalize, polarToCartesian, sliderPosition, stepperStep, tickAngles } from "../geometry";
 import type { ButtonProps, JackProps, KitFace, KnobFaceProps, LedProps, SliderFaceProps, StepperProps, ToggleProps } from "../types";
+import { makeParts } from "./parts";
 
 const INK = "var(--mm-text, #111)";
 const PAPER = "var(--mm-surface, #fff)";
@@ -152,4 +153,28 @@ function stepper(props: StepperProps) {
   );
 }
 
-export const lineArtFace: KitFace = { knob, slider, toggle, button, jack, led, stepper };
+// The one kit that sets `filled: false`. Every part that other kits fill is
+// drawn as an outline instead — a lit meter segment is a stroked box, not a
+// solid one, and a selected pad is a heavier border rather than a block of
+// colour. `accent` and `warn` are both plain ink on purpose: this face is a
+// technical drawing, and a drawing that suddenly went red somewhere would
+// stop being one. That is also why it is the only kit a theme cannot
+// recolour — see the note at the top of this file.
+const parts = makeParts({
+  radius: 0,
+  filled: false,
+  readoutFont: '500 12px/1 ui-monospace, "SF Mono", Menlo, monospace',
+  labelFont: '500 9.5px/1.2 ui-monospace, "SF Mono", Menlo, monospace',
+  ink: INK,
+  accent: INK,
+  dim: "rgba(17,17,17,.45)",
+  surface: PAPER,
+  border: INK,
+  onAccent: PAPER,
+  warn: INK,
+  meterGap: 2.5,
+  handleHeight: 14,
+  monochrome: true,
+});
+
+export const lineArtFace: KitFace = { knob, slider, toggle, button, jack, led, stepper, ...parts };

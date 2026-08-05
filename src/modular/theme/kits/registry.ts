@@ -28,8 +28,24 @@ export function faceFor(kit: KitId): KitFace {
   return KIT_FACES[kit];
 }
 
-/** The seven controls every kit's face is required to implement. */
-export const CONTROL_NAMES = ["knob", "slider", "toggle", "button", "jack", "led", "stepper"] as const;
+/** The fourteen controls every kit's face is required to implement — the
+ * vocabulary settled in `reference/panels/CATALOG.md`'s closing section. */
+export const CONTROL_NAMES = [
+  "knob",
+  "slider",
+  "fader",
+  "toggle",
+  "button",
+  "pad",
+  "selector",
+  "stepper",
+  "jack",
+  "led",
+  "meter",
+  "display",
+  "envelope",
+  "waveform",
+] as const;
 
 /**
  * True only if every registered kit implements every control as an actual

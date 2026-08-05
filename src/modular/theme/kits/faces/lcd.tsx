@@ -17,6 +17,7 @@
 
 import { normalize, sliderPosition, stepperStep } from "../geometry";
 import type { ButtonProps, JackProps, KitFace, KnobFaceProps, LedProps, SliderFaceProps, StepperProps, ToggleProps } from "../types";
+import { makeParts } from "./parts";
 
 const INK = "var(--mm-accent, #1b3a8a)";
 const SCREEN = "var(--mm-surface, #d8e4f2)";
@@ -176,4 +177,27 @@ function stepper(props: StepperProps) {
   );
 }
 
-export const lcdFace: KitFace = { knob, slider, toggle, button, jack, led, stepper };
+// The only kit that sets `quantise`: a monochrome LCD has one ink and a
+// coarse pixel grid, so its envelope corners land on 2px boundaries and its
+// waveform steps in fifths rather than describing a smooth curve the panel
+// could not actually display. Hard corners, no second colour — `warn` is the
+// same ink as everything else, because a one-colour display cannot turn red.
+const parts = makeParts({
+  radius: 0,
+  filled: true,
+  readoutFont: '700 13px/1 ui-monospace, "SF Mono", Menlo, monospace',
+  labelFont: '700 9px/1.2 ui-monospace, "SF Mono", Menlo, monospace',
+  ink: INK,
+  accent: INK,
+  dim: "rgba(27,58,138,.5)",
+  surface: SCREEN,
+  border: "rgba(27,58,138,.4)",
+  onAccent: SCREEN,
+  warn: INK,
+  meterGap: 1,
+  handleHeight: 12,
+  quantise: 2,
+  monochrome: true,
+});
+
+export const lcdFace: KitFace = { knob, slider, toggle, button, jack, led, stepper, ...parts };

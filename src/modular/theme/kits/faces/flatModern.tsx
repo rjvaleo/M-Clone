@@ -13,6 +13,7 @@
 
 import { knobAngle, normalize, polarToCartesian, sliderPosition, stepperStep } from "../geometry";
 import type { ButtonProps, JackProps, KitFace, KnobFaceProps, LedProps, SliderFaceProps, StepperProps, ToggleProps } from "../types";
+import { makeParts } from "./parts";
 
 const ACCENT = "var(--mm-accent, #e0983c)";
 const TRACK = "rgba(255,255,255,.10)";
@@ -136,4 +137,22 @@ function stepper(props: StepperProps) {
   );
 }
 
-export const flatModernFace: KitFace = { knob, slider, toggle, button, jack, led, stepper };
+// Engineering-flat: tight corners, thin segments, mono everywhere. The
+// smallest handle and gap of the six, so a dense rack still reads.
+const parts = makeParts({
+  radius: 3,
+  filled: true,
+  readoutFont: '500 12px/1 ui-monospace, "SF Mono", Menlo, monospace',
+  labelFont: '500 9.5px/1.2 ui-monospace, "SF Mono", Menlo, monospace',
+  ink: INK,
+  accent: ACCENT,
+  dim: "rgba(215,210,200,.5)",
+  surface: "var(--mm-surface-2, #1c1a17)",
+  border: TRACK,
+  onAccent: "var(--mm-on-accent, #17130c)",
+  warn: "var(--status-blocked-text, #e4574b)",
+  meterGap: 1,
+  handleHeight: 12,
+});
+
+export const flatModernFace: KitFace = { knob, slider, toggle, button, jack, led, stepper, ...parts };

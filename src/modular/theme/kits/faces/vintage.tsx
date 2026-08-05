@@ -15,6 +15,7 @@
 import type { CSSProperties } from "react";
 import { knobAngle, normalize, polarToCartesian, sliderPosition, stepperStep, tickAngles } from "../geometry";
 import type { ButtonProps, JackProps, KitFace, KnobFaceProps, LedProps, SliderFaceProps, StepperProps, ToggleProps } from "../types";
+import { makeParts } from "./parts";
 
 const ACCENT = "var(--mm-accent, #d98a3d)";
 const INK = "var(--mm-text, #f1e9df)";
@@ -167,4 +168,22 @@ function stepper(props: StepperProps) {
   );
 }
 
-export const vintageFace: KitFace = { knob, slider, toggle, button, jack, led, stepper };
+// Warm, softly-cornered, and everything is filled — a panel of moulded
+// plastic and painted metal has no unfilled shapes on it.
+const parts = makeParts({
+  radius: 4,
+  filled: true,
+  readoutFont: '600 12px/1 ui-monospace, "SF Mono", Menlo, monospace',
+  labelFont: '600 10px/1.2 ui-sans-serif, system-ui, sans-serif',
+  ink: INK,
+  accent: ACCENT,
+  dim: "rgba(241,233,223,.52)",
+  surface: "var(--mm-surface-2, #2b221a)",
+  border: "rgba(255,255,255,.2)",
+  onAccent: "var(--mm-on-accent, #2a1808)",
+  warn: "var(--status-blocked-text, #e4574b)",
+  meterGap: 2,
+  handleHeight: 16,
+});
+
+export const vintageFace: KitFace = { knob, slider, toggle, button, jack, led, stepper, ...parts };
