@@ -141,6 +141,23 @@ and become **objects on** it:
 | The tracker's time grid | A sequencer module whose *face* is columns × rows. Vertical is time, which is what a tracker is actually for |
 | Global panel · transport · CPU meter | Minimal app chrome, because they are Always-On in the flag system's sense and belong to no node |
 
+**Three things get called "view" and should not share a word:**
+
+| Term | What it is | How many at once |
+|---|---|---|
+| **Mode** | Edit or Performance (§1.2) | One. It is a filter, not a layout |
+| **Editor** | Pattern grid, step sequencer, mod matrix, slot editor | Opens over the canvas; belongs to a node |
+| **Face tabs** | The Synth's OSC · FILTER · ENV · LFO · MOD · VOICE | Local to one module face |
+
+The tracker is an *editor*. Performance is a *mode*. Neither is a layout, which
+is why one canvas is enough.
+
+**The tracker module is the one unproven piece, and this framing is what makes
+that safe.** It was the part of the spec worth being hopeful about and it may
+not survive contact with real use. As a face it can be built, tried and deleted
+in an afternoon; as a shell it would have had the whole application resting on
+it. Nothing else in the plan depends on it existing.
+
 This is why it is the right answer rather than a compromise:
 
 - **One document, one layout, one truth.** No projection to keep honest, no
@@ -149,8 +166,14 @@ This is why it is the right answer rather than a compromise:
   OctaMED is the time grid — rows are time, columns are streams. That is a
   *face*, and faces are already a solved problem here.
 - **The spec's column is linear signal flow**, and a cable already expresses
-  that. The column bought visual discipline, which the kit and theme system
-  can supply without imposing a layout.
+  that. Audio routing is mostly linear — source, effects, out — which is why a
+  column reads so well; the spec's own bank patch bay exists precisely because
+  the remainder needs a graph. A canvas handles both cases with one mechanism
+  instead of two. The column bought visual discipline, which the kit and theme
+  system can supply without imposing a layout.
+- **The event side is genuinely a graph** and never was a column: transport into
+  time base into phase into note order into density into transposition, with
+  cyclic modules feeding sideways into several consumers at once.
 
 ### 1.2 Two modes, and the flag system that makes them work
 
@@ -663,7 +686,9 @@ taken in either order**:
 - **3B — the event side and the canvas.** The 29 inert modules, the canvas
   interaction work, persistence, and the tracker module.
 
-Splitting them is allowed. Skipping the gate is not.
+Splitting them is allowed. Skipping the gate is not. **If the wave has to shed
+scope, 3B's canvas polish goes first** — multi-select, marquee, grouping and the
+searchable menu are the only items in either half that nothing else depends on.
 
 1. Pattern Editor with a real processor and an expand command; Note Editor;
    Pattern Recorder; Pattern Commands (ReScramble, Original→Scrambled, Swap —
