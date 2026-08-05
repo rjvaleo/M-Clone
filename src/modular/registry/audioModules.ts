@@ -241,14 +241,20 @@ const AUDIO_LIMITER = defineModule({
   parameters: [
     numberParam("ceiling-db", "Ceiling", -0.1, -24, 0, 0.1, "dB"),
     numberParam("release-seconds", "Release", 0.1, 0.01, 1, 0.005, "s"),
+    // Fully wet by default, which is what a safety limiter wants — but a real
+    // control, because parallel limiting is a technique rather than a mistake:
+    // blending a crushed copy under the dry one is how a lot of drum busses
+    // are built.
+    mixParam(1),
     muteParam(),
   ],
-  // Knee, ratio and attack are fixed at brick-wall values inside the topology:
-  // a limiter with a soft knee and a slow attack is a compressor wearing the
-  // wrong name, and this module has a job to do.
+  // Knee, ratio and attack stay fixed at brick-wall values inside the
+  // topology: a limiter with a soft knee starts limiting below its ceiling,
+  // which is exactly what a ceiling is supposed to not do.
   face: [section("limit", "Limit", [
     param("ceiling-db"),
     param("release-seconds"),
+    param(AUDIO_MIX_PARAM),
     param(AUDIO_MUTE_PARAM),
   ])],
 });

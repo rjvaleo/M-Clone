@@ -1223,7 +1223,7 @@ impl CompressorModule {
         follower.set_times(0.01, 0.1, rate);
         Self {
             follower,
-            computer: GainComputer { threshold_db: -18.0, ratio: 4.0, mode: DynamicsMode::Compress },
+            computer: GainComputer { threshold_db: -24.0, ratio: 12.0, mode: DynamicsMode::Compress, knee_db: 30.0 },
             shell: Shell::new(1.0),
             sample_rate: rate,
             seen: [f32::NAN; 5],
@@ -1239,15 +1239,14 @@ impl Module for CompressorModule {
         }
         if raw != self.seen {
             self.seen = raw;
-            // `KNEE_DB` keeps its slot so the parameter indices line up with
-            // the descriptor, but `GainComputer` is hard-knee — the DP/4's
-            // dynamics section models one continuous signed slope rather than a
-            // soft corner. Honouring the knee means adding it there, not
-            // faking it here.
             self.computer = GainComputer {
                 threshold_db: clamp(raw[Self::THRESHOLD_DB], -60.0, 0.0),
                 ratio: clamp(raw[Self::RATIO], 1.0, 20.0),
                 mode: DynamicsMode::Compress,
+                // 40 dB, matching the descriptor's own range — a clamp
+                // narrower than the control it serves is a knob whose top end
+                // silently does nothing.
+                knee_db: clamp(raw[Self::KNEE_DB], 0.0, 40.0),
             };
             self.follower.set_times(
                 clamp(raw[Self::ATTACK_SECONDS], 0.0001, 1.0),
@@ -1281,11 +1280,11 @@ impl Module for CompressorModule {
 
     fn param_default(&self, index: usize) -> f32 {
         match index {
-            Self::THRESHOLD_DB => -18.0,
-            Self::KNEE_DB => 6.0,
-            Self::RATIO => 4.0,
-            Self::ATTACK_SECONDS => 0.01,
-            Self::RELEASE_SECONDS => 0.1,
+            Self::THRESHOLD_DB => -24.0,
+            Self::KNEE_DB => 30.0,
+            Self::RATIO => 12.0,
+            Self::ATTACK_SECONDS => 0.003,
+            Self::RELEASE_SECONDS => 0.25,
             Self::MAKEUP_GAIN => 1.0,
             Self::MIX => 1.0,
             _ => 0.0,
@@ -1293,10 +1292,11 @@ impl Module for CompressorModule {
     }
 }
 
-/// `m.audio-limiter` — a brick wall, not an effect.
+/// `m.audio-limiter` — a brick wall.
 ///
-/// Mix is fixed fully wet and not exposed: a limiter blended half dry is not a
-/// limiter, and this is the module people put last to be safe.
+/// Mix defaults fully wet, which is what a safety limiter wants, but it is a
+/// real control: parallel limiting is a technique, not a mistake, and blending
+/// a crushed copy under the dry one is how a lot of drum busses are built.
 pub struct LimiterModule {
     follower: EnvelopeFollower,
     computer: GainComputer,
@@ -1319,7 +1319,7 @@ impl LimiterModule {
         follower.set_times(0.0005, 0.05, rate);
         Self {
             follower,
-            computer: GainComputer { threshold_db: -1.0, ratio: 1.0e6, mode: DynamicsMode::Compress },
+            computer: GainComputer { threshold_db: -1.0, ratio: 1.0e6, mode: DynamicsMode::Compress, knee_db: 0.0 },
             shell: Shell::new(1.0),
             sample_rate: rate,
             seen: [f32::NAN; 2],
@@ -1338,6 +1338,10 @@ impl Module for LimiterModule {
                 threshold_db: clamp(raw[0], -24.0, 0.0),
                 ratio: 1.0e6,
                 mode: DynamicsMode::Compress,
+                // Hard knee, and that is the point: a brick wall with a soft
+                // corner starts limiting below its ceiling, which is exactly
+                // what a ceiling is supposed to not do.
+                knee_db: 0.0,
             };
             // A fixed, very fast attack: a limiter that let a transient through
             // while it ramped would not be one.
