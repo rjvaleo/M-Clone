@@ -115,8 +115,10 @@ describe("Notes", () => {
   it("posts a note-on with the note and velocity", () => {
     const node = new FakeNode();
     const rack = new WasmRackNode(node);
-    rack.noteOn(60, 0.8);
-    expect(node.port.sent).toEqual([{ type: "note-on", note: 60, velocity: 0.8 }]);
+    rack.noteOn(60, 0.8, 0);
+    expect(node.port.sent).toEqual([
+      { type: "note-on", note: 60, velocity: 0.8, detuneCents: 0 },
+    ]);
   });
 
   it("posts a note-off with the note", () => {
@@ -140,11 +142,11 @@ describe("Notes", () => {
     // would break a repeated note.
     const node = new FakeNode();
     const rack = new WasmRackNode(node);
-    rack.noteOn(60, 1);
-    rack.noteOn(60, 1);
+    rack.noteOn(60, 1, 0);
+    rack.noteOn(60, 1, 0);
     expect(node.port.sent).toEqual([
-      { type: "note-on", note: 60, velocity: 1 },
-      { type: "note-on", note: 60, velocity: 1 },
+      { type: "note-on", note: 60, velocity: 1, detuneCents: 0 },
+      { type: "note-on", note: 60, velocity: 1, detuneCents: 0 },
     ]);
   });
 
@@ -162,7 +164,7 @@ describe("Notes", () => {
     const rack = new WasmRackNode(node);
     rack.dispose();
 
-    rack.noteOn(60, 1);
+    rack.noteOn(60, 1, 0);
     rack.noteOff(60);
     rack.allNotesOff();
     rack.setModulation("synth-1", 0, 6, 0.6);

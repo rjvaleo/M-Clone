@@ -86,9 +86,9 @@ export class WasmRackNode {
    * Play a note. Unlike `update`, never deduplicated: two identical
    * `noteOn(60, 1)` calls are two notes, not one plan sent twice.
    */
-  noteOn(note: number, velocity: number): void {
+  noteOn(note: number, velocity: number, detuneCents: number): void {
     if (this.disposed) return;
-    this.node.port.postMessage({ type: "note-on", note, velocity });
+    this.node.port.postMessage({ type: "note-on", note, velocity, detuneCents });
   }
 
   noteOff(note: number): void {

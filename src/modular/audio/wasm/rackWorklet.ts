@@ -70,7 +70,7 @@ class RackProcessor extends AudioWorkletProcessor {
           this.rack.reset();
           break;
         case "note-on":
-          this.rack.noteOn(message.note, message.velocity);
+          this.rack.noteOn(message.note, message.velocity, message.detuneCents);
           break;
         case "note-off":
           this.rack.noteOff(message.note);

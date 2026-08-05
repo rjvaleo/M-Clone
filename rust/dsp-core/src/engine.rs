@@ -201,7 +201,10 @@ pub trait Module: Send {
     /// most modules are not samplers.
     fn set_sample_slot(&mut self, _slot: u32, _sample: u32) {}
 
-    fn note_on(&mut self, _note: u8, _velocity: f32) {}
+    /// `detune_cents` is the part of the pitch MIDI cannot say — a required
+    /// argument rather than an optional one, so that a module which grows the
+    /// ability to bend cannot quietly keep ignoring it.
+    fn note_on(&mut self, _note: u8, _velocity: f32, _detune_cents: f32) {}
     fn note_off(&mut self, _note: u8) {}
     fn all_notes_off(&mut self) {}
 
@@ -360,9 +363,9 @@ impl Engine {
 
     /// Send a note to one module. Unknown ids are ignored rather than a panic —
     /// a note arriving for a module the host just deleted is a race, not a bug.
-    pub fn note_on(&mut self, id: ModuleId, note: u8, velocity: f32) {
+    pub fn note_on(&mut self, id: ModuleId, note: u8, velocity: f32, detune_cents: f32) {
         if let Some(slot) = self.slot_mut(id) {
-            slot.module.note_on(note, velocity);
+            slot.module.note_on(note, velocity, detune_cents);
         }
     }
 

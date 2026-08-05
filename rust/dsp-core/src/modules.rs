@@ -379,8 +379,8 @@ impl Module for Synth {
         self.bank.panic();
     }
 
-    fn note_on(&mut self, note: u8, velocity: f32) {
-        self.bank.note_on(note, velocity);
+    fn note_on(&mut self, note: u8, velocity: f32, detune_cents: f32) {
+        self.bank.note_on(note, velocity, detune_cents);
     }
 
     fn note_off(&mut self, note: u8) {
@@ -1476,23 +1476,24 @@ impl Module for BitcrusherModule {
 /// want.
 #[derive(Clone, Copy, Default)]
 struct PendingNotes {
-    notes: [(u8, f32); 8],
+    /// Note, velocity, detune in cents.
+    notes: [(u8, f32, f32); 8],
     count: usize,
 }
 
 impl PendingNotes {
-    fn push(&mut self, note: u8, velocity: f32) {
+    fn push(&mut self, note: u8, velocity: f32, detune_cents: f32) {
         // A full queue drops the oldest rather than the newest: in a burst the
         // most recent notes are the ones being played right now.
         if self.count == self.notes.len() {
             self.notes.copy_within(1.., 0);
             self.count -= 1;
         }
-        self.notes[self.count] = (note, velocity);
+        self.notes[self.count] = (note, velocity, detune_cents);
         self.count += 1;
     }
 
-    fn take(&mut self) -> ([(u8, f32); 8], usize) {
+    fn take(&mut self) -> ([(u8, f32, f32); 8], usize) {
         let taken = (self.notes, self.count);
         self.count = 0;
         taken
@@ -1538,8 +1539,8 @@ impl Module for PercussionModule {
     fn process(&mut self, ctx: &ProcessContext, ports: &mut Ports) {
         let settings = self.settings(ports);
         let (notes, count) = self.pending.take();
-        for &(note, velocity) in &notes[..count] {
-            self.sampler.note_on(ctx.samples, note, velocity, &settings);
+        for &(note, velocity, detune_cents) in &notes[..count] {
+            self.sampler.note_on(ctx.samples, note, velocity, detune_cents, &settings);
         }
         let wet = self.sampler.process(ctx.samples, &settings);
         // A source has no dry path — there is no input to blend against — so
@@ -1563,8 +1564,8 @@ impl Module for PercussionModule {
         self.sampler.set_slot(slot, sample);
     }
 
-    fn note_on(&mut self, note: u8, velocity: f32) {
-        self.pending.push(note, velocity);
+    fn note_on(&mut self, note: u8, velocity: f32, detune_cents: f32) {
+        self.pending.push(note, velocity, detune_cents);
     }
 
     fn note_off(&mut self, note: u8) {
@@ -1642,8 +1643,8 @@ impl Module for LooperModule {
         let settings = self.settings(ports);
         self.gated = settings.gate;
         let (notes, count) = self.pending.take();
-        for &(note, velocity) in &notes[..count] {
-            self.sampler.note_on(ctx.samples, note, velocity, &settings);
+        for &(note, velocity, detune_cents) in &notes[..count] {
+            self.sampler.note_on(ctx.samples, note, velocity, detune_cents, &settings);
         }
         let wet = self.sampler.process(ctx.samples, &settings);
         let out = self.shell.finish(ports, 0.0, wet, Self::MIX);
@@ -1664,8 +1665,8 @@ impl Module for LooperModule {
         self.sampler.set_slot(slot, sample);
     }
 
-    fn note_on(&mut self, note: u8, velocity: f32) {
-        self.pending.push(note, velocity);
+    fn note_on(&mut self, note: u8, velocity: f32, detune_cents: f32) {
+        self.pending.push(note, velocity, detune_cents);
     }
 
     fn note_off(&mut self, note: u8) {
@@ -1762,7 +1763,7 @@ impl Module for GranularModule {
 
     /// A note restarts the scan unless the cloud is free-running, which is the
     /// difference between playing it and letting it drift.
-    fn note_on(&mut self, _note: u8, _velocity: f32) {
+    fn note_on(&mut self, _note: u8, _velocity: f32, _detune_cents: f32) {
         self.cloud.retrigger(0.0);
     }
 
@@ -2152,7 +2153,7 @@ mod tests {
         engine.set_param(0, PercussionModule::MIX, 1.0);
         settle(&mut engine);
         assert!(render_peak(&mut engine, output, 100) < 1e-6, "it sounded before any note");
-        engine.note_on(0, 60, 1.0);
+        engine.note_on(0, 60, 1.0, 0.0);
         assert!(render_peak(&mut engine, output, 2_000) > 0.1, "the note never sounded");
     }
 
@@ -2162,7 +2163,7 @@ mod tests {
         let (mut engine, _, output) = sampler_chain(ModuleKind::Percussion, PercussionModule::LEVEL);
         engine.set_param(0, PercussionModule::MIX, 1.0);
         settle(&mut engine);
-        engine.note_on(0, 61, 1.0);
+        engine.note_on(0, 61, 1.0, 0.0);
         assert!(render_peak(&mut engine, output, 2_000) < 1e-6);
     }
 
@@ -2172,7 +2173,7 @@ mod tests {
         let (mut engine, _, output) = sampler_chain(ModuleKind::Percussion, PercussionModule::LEVEL);
         engine.set_param(0, PercussionModule::MIX, 1.0);
         settle(&mut engine);
-        engine.note_on(0, 60, 1.0);
+        engine.note_on(0, 60, 1.0, 0.0);
         render_peak(&mut engine, output, 100);
         engine.note_off(0, 60);
         assert!(render_peak(&mut engine, output, 2_000) > 0.1, "the hit was cut off");
@@ -2186,7 +2187,7 @@ mod tests {
         engine.set_param(0, LooperModule::LOOP_END, 0.05);
         engine.set_param(0, LooperModule::RATE, 1.0);
         settle(&mut engine);
-        engine.note_on(0, 60, 1.0);
+        engine.note_on(0, 60, 1.0, 0.0);
         // Well past the 50 ms loop; a one-shot would have finished long ago.
         render_peak(&mut engine, output, (RATE * 0.3) as usize);
         assert!(render_peak(&mut engine, output, 2_000) > 0.1, "the loop ended");
@@ -2227,7 +2228,7 @@ mod tests {
                     engine.set_param(player, index, t * 4.0 - 2.0);
                 }
                 engine.set_param(player, level, 1.0);
-                engine.note_on(player, 60, 1.0);
+                engine.note_on(player, 60, 1.0, 0.0);
                 for _ in 0..1_500 {
                     engine.process();
                     let out = engine.output_of(output, 0);
@@ -2514,7 +2515,7 @@ mod tests {
         // Notes travel by module id rather than down a cable: an event is not a
         // signal, and giving it a port would mean a second kind of cable.
         let (mut engine, synth, output) = synth_rack();
-        engine.note_on(synth, 60, 1.0);
+        engine.note_on(synth, 60, 1.0, 0.0);
         assert!(loudest(&play(&mut engine, output, 0.1)) > 0.01);
     }
 
@@ -2522,7 +2523,7 @@ mod tests {
     fn releasing_the_note_eventually_silences_it() {
         let (mut engine, synth, output) = synth_rack();
         engine.set_param(synth, Synth::AMP_RELEASE, 0.05);
-        engine.note_on(synth, 60, 1.0);
+        engine.note_on(synth, 60, 1.0, 0.0);
         play(&mut engine, output, 0.1);
         engine.note_off(synth, 60);
         play(&mut engine, output, 0.3);
@@ -2534,7 +2535,7 @@ mod tests {
         // A note arriving for a module the host just deleted is a race, not a
         // bug, and must not take down the audio callback.
         let (mut engine, _, output) = synth_rack();
-        engine.note_on(9_999, 60, 1.0);
+        engine.note_on(9_999, 60, 1.0, 0.0);
         engine.note_off(9_999, 60);
         engine.all_notes_off(9_999);
         engine.set_modulation(9_999, 0, 0, 1.0);
@@ -2550,7 +2551,7 @@ mod tests {
 
         let (mut engine, synth, _) = synth_rack();
         engine.set_param(synth, Synth::PAN, -1.0);
-        engine.note_on(synth, 60, 1.0);
+        engine.note_on(synth, 60, 1.0, 0.0);
         let mut left = 0.0f32;
         let mut right = 0.0f32;
         for _ in 0..(RATE * 0.1) as usize {
@@ -2567,7 +2568,7 @@ mod tests {
         let synth = engine.add(ModuleKind::Synth.build_at(RATE));
         let output = engine.add(ModuleKind::AudioOutput.build());
         engine.connect(PortRef { module: synth, port: 0 }, PortRef { module: output, port: 0 });
-        engine.note_on(synth, 60, 1.0);
+        engine.note_on(synth, 60, 1.0, 0.0);
         assert_eq!(loudest(&play(&mut engine, output, 0.05)), 0.0);
     }
 
@@ -2594,7 +2595,7 @@ mod tests {
         let (mut engine, synth, output) = synth_rack();
         engine.set_param(synth, Synth::LFO_BASE + Synth::LFO_RATE, 8.0);
         engine.set_modulation(synth, ModSource::Lfo1 as u32, ModDest::Volume as u32, 1.0);
-        engine.note_on(synth, 60, 1.0);
+        engine.note_on(synth, 60, 1.0, 0.0);
         let samples = play(&mut engine, output, 0.4);
 
         let chunk = (RATE / 8.0 / 4.0) as usize;
@@ -2607,7 +2608,7 @@ mod tests {
     fn an_unknown_modulation_route_is_dropped_rather_than_thrown_on() {
         let (mut engine, synth, output) = synth_rack();
         engine.set_modulation(synth, 99, 99, 1.0);
-        engine.note_on(synth, 60, 1.0);
+        engine.note_on(synth, 60, 1.0, 0.0);
         assert!(play(&mut engine, output, 0.05).iter().all(|v| v.is_finite()));
     }
 
@@ -2615,14 +2616,33 @@ mod tests {
     fn the_synth_plays_a_chord() {
         let (mut engine, synth, output) = synth_rack();
         for note in [60, 64, 67] {
-            engine.note_on(synth, note, 0.8);
+            engine.note_on(synth, note, 0.8, 0.0);
         }
         let chord = loudest(&play(&mut engine, output, 0.1));
 
         let (mut single, one, out) = synth_rack();
-        single.note_on(one, 60, 0.8);
+        single.note_on(one, 60, 0.8, 0.0);
         let alone = loudest(&play(&mut single, out, 0.1));
         assert!(chord > alone, "three notes were no louder than one");
+    }
+
+    #[test]
+    fn a_notes_detune_reaches_the_oscillator_through_the_engine() {
+        // The end of the wire the scale quantisers feed. Every microtonal scale
+        // in the library arrives as a MIDI note plus a remainder, and if the
+        // remainder stops anywhere between the ABI and the oscillator, all
+        // eighty-one of them sound like 12-TET.
+        let crossings = |cents: f32| {
+            let (mut engine, synth, output) = synth_rack();
+            engine.note_on(synth, 60, 1.0, cents);
+            let rendered = play(&mut engine, output, 0.3);
+            rendered.windows(2).filter(|p| p[0] <= 0.0 && p[1] > 0.0).count()
+        };
+        let plain = crossings(0.0);
+        let octave_up = crossings(1200.0);
+        assert!(plain > 0, "the plain note made no sound to compare against");
+        let ratio = octave_up as f32 / plain as f32;
+        assert!((ratio - 2.0).abs() < 0.2, "expected 2x, got {ratio}");
     }
 
     #[test]
@@ -2630,7 +2650,7 @@ mod tests {
         let (mut engine, synth, output) = synth_rack();
         engine.set_param(synth, Synth::AMP_RELEASE, 0.02);
         for note in [60, 64, 67] {
-            engine.note_on(synth, note, 1.0);
+            engine.note_on(synth, note, 1.0, 0.0);
         }
         play(&mut engine, output, 0.05);
         engine.all_notes_off(synth);
@@ -2644,7 +2664,7 @@ mod tests {
         // build must not silence the instrument.
         let (mut engine, synth, output) = synth_rack();
         engine.set_param(synth, Synth::OSC_BASE + Synth::OSC_WAVE, 99.0);
-        engine.note_on(synth, 60, 1.0);
+        engine.note_on(synth, 60, 1.0, 0.0);
         assert!(loudest(&play(&mut engine, output, 0.1)) > 0.01);
     }
 

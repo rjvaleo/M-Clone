@@ -18,7 +18,7 @@ import type { NotePlayer } from "../players";
 
 /** The part of `WasmRackNode` a note player uses. */
 export interface RackNoteSink {
-  noteOn(note: number, velocity: number): void;
+  noteOn(note: number, velocity: number, detuneCents: number): void;
   noteOff(note: number): void;
   allNotesOff(): void;
 }
@@ -29,8 +29,8 @@ export class RackNotePlayer implements NotePlayer {
     private readonly rack: RackNoteSink,
   ) {}
 
-  noteOn(note: number, velocity: number, _atSec: number): void {
-    this.rack.noteOn(note, velocity);
+  noteOn(note: number, velocity: number, _atSec: number, detuneCents = 0): void {
+    this.rack.noteOn(note, velocity, detuneCents);
   }
 
   noteOff(note: number, _atSec: number): void {

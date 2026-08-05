@@ -148,17 +148,26 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
 
   check("silent before any note", run(4) === 0);
 
-  api.note_on(synth, 60, 1.0);
+  api.note_on(synth, 60, 1.0, 0.0);
   check("a note over the ABI makes sound", run(16) > 0.01);
 
   api.note_off(synth, 60);
   run(200);
   check("note off eventually silences it", run(8) === 0);
 
+  // The tuning library's far end. That the detune *moves the pitch* is proved
+  // in `modules.rs`; what only this can prove is that a fourth argument
+  // crosses the real ABI without poisoning the frequency, which would show up
+  // as silence rather than as a wrong note.
+  api.note_on(synth, 60, 1.0, -33.4);
+  check("a detuned note over the ABI makes sound", run(16) > 0.01);
+  api.all_notes_off(synth);
+  run(400);
+
   // The stage's headline, at the boundary the browser actually calls.
   api.set_param(synth, SYNTH_PARAM.LFO1_RATE, 8);
   api.set_modulation(synth, MOD.LFO1, MOD.VOLUME, 1.0);
-  api.note_on(synth, 60, 1.0);
+  api.note_on(synth, 60, 1.0, 0.0);
   const windows = [];
   for (let w = 0; w < 6; w++) windows.push(run(6));
   const spread = Math.max(...windows) - Math.min(...windows);
@@ -169,8 +178,9 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   check("all notes off reaches the bank", run(8) === 0);
 
   // Nonsense must not take down the callback.
-  api.note_on(synth, 9999, 1.0);
-  api.note_on(synth, 60, Number.NaN);
+  api.note_on(synth, 9999, 1.0, 0.0);
+  api.note_on(synth, 60, Number.NaN, 0.0);
+  api.note_on(synth, 60, 1.0, Number.NaN);
   api.set_modulation(synth, 99, 99, 1.0);
   api.set_modulation(synth, 0, 0, Number.NaN);
   check("bad note and routing data is refused, not fatal", Number.isFinite(run(4)));

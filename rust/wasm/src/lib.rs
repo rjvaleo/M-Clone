@@ -141,12 +141,16 @@ pub extern "C" fn set_param(module: u32, index: u32, value: f32) {
 /// to know about it. Only instruments implement these; everything else inherits
 /// a no-op from the trait.
 #[no_mangle]
-pub extern "C" fn note_on(module: u32, note: u32, velocity: f32) {
+pub extern "C" fn note_on(module: u32, note: u32, velocity: f32, detune_cents: f32) {
     if !velocity.is_finite() || note > 127 {
         return;
     }
+    // Unlike velocity, a non-finite detune is dropped to zero rather than
+    // dropping the note: the pitch is a refinement of a note that was already
+    // asked for, and silence is the worse of the two failures.
+    let cents = if detune_cents.is_finite() { detune_cents } else { 0.0 };
     if let Some(engine) = engine() {
-        engine.note_on(module, note as u8, velocity);
+        engine.note_on(module, note as u8, velocity, cents);
     }
 }
 

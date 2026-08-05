@@ -115,12 +115,18 @@ impl VoiceBank {
             .unwrap_or(0)
     }
 
-    pub fn note_on(&mut self, note: u8, velocity: f32) {
+    /// `detune_cents` is the microtonal remainder; see `Voice::start`.
+    ///
+    /// It deliberately plays no part in `claim`, which still matches on the
+    /// MIDI note alone: two notes a few cents apart are the same key being
+    /// re-struck, and giving each its own voice would let a slow scale sweep
+    /// exhaust the bank.
+    pub fn note_on(&mut self, note: u8, velocity: f32, detune_cents: f32) {
         let index = self.claim(note);
         let serial = self.next_serial;
         self.next_serial += 1;
         let settings = &self.settings;
-        self.slots[index].voice.start(note, velocity, settings);
+        self.slots[index].voice.start(note, velocity, detune_cents, settings);
         self.slots[index].started = serial;
     }
 
@@ -221,7 +227,7 @@ mod tests {
     #[test]
     fn a_note_sounds_and_occupies_one_voice() {
         let mut bank = new_bank(8);
-        bank.note_on(60, 1.0);
+        bank.note_on(60, 1.0, 0.0);
         assert_eq!(bank.active_count(), 1);
         assert!(peak(&render(&mut bank, 0.1)) > 0.01);
     }
@@ -230,7 +236,7 @@ mod tests {
     fn a_chord_uses_one_voice_per_note() {
         let mut bank = new_bank(8);
         for note in [60, 64, 67, 72] {
-            bank.note_on(note, 1.0);
+            bank.note_on(note, 1.0, 0.0);
         }
         assert_eq!(bank.active_count(), 4);
     }
@@ -241,7 +247,7 @@ mod tests {
         // the release stage entirely.
         let mut bank = new_bank(8);
         bank.settings_mut().amp.release = 0.3;
-        bank.note_on(60, 1.0);
+        bank.note_on(60, 1.0, 0.0);
         render(&mut bank, 0.1);
 
         bank.note_off(60);
@@ -260,13 +266,13 @@ mod tests {
         // bank never has to guess when a tail has finished.
         let mut bank = new_bank(2);
         bank.settings_mut().amp.release = 0.05;
-        bank.note_on(60, 1.0);
+        bank.note_on(60, 1.0, 0.0);
         bank.note_off(60);
         render(&mut bank, 0.2);
         assert_eq!(bank.active_count(), 0);
 
         // And the freed slot is genuinely reusable.
-        bank.note_on(72, 1.0);
+        bank.note_on(72, 1.0, 0.0);
         assert_eq!(bank.active_count(), 1);
     }
 
@@ -276,10 +282,10 @@ mod tests {
         // the bank fills with copies of one note, and the oldest *other* note
         // is stolen — so holding a chord and repeating one note silences it.
         let mut bank = new_bank(4);
-        bank.note_on(60, 1.0);
-        bank.note_on(64, 1.0);
+        bank.note_on(60, 1.0, 0.0);
+        bank.note_on(64, 1.0, 0.0);
         for _ in 0..20 {
-            bank.note_on(60, 1.0);
+            bank.note_on(60, 1.0, 0.0);
             render(&mut bank, 0.005);
         }
         assert_eq!(bank.active_count(), 2, "a trill consumed the whole bank");
@@ -290,12 +296,12 @@ mod tests {
         let mut bank = new_bank(3);
         bank.settings_mut().amp.release = 2.0;
         for note in [60, 62, 64] {
-            bank.note_on(note, 1.0);
+            bank.note_on(note, 1.0, 0.0);
             render(&mut bank, 0.01);
         }
         assert_eq!(bank.active_count(), 3);
 
-        bank.note_on(67, 1.0);
+        bank.note_on(67, 1.0, 0.0);
         // Still three, and the first note is the one that went.
         assert_eq!(bank.active_count(), 3);
         assert_eq!(bank.slots.iter().filter(|s| s.voice.note() == Some(60)).count(), 0);
@@ -310,7 +316,7 @@ mod tests {
         let mut bank = new_bank(2);
         bank.settings_mut().amp.release = 5.0;
         for note in 40..80u8 {
-            bank.note_on(note, 1.0);
+            bank.note_on(note, 1.0, 0.0);
             assert!(
                 bank.slots.iter().any(|s| s.voice.note() == Some(note)),
                 "note {note} was dropped"
@@ -324,10 +330,10 @@ mod tests {
         // only the first would strand the other until it was stolen in turn.
         let mut bank = new_bank(2);
         bank.settings_mut().amp.release = 1.0;
-        bank.note_on(60, 1.0);
+        bank.note_on(60, 1.0, 0.0);
         render(&mut bank, 0.01);
         bank.note_off(60);
-        bank.note_on(60, 1.0);
+        bank.note_on(60, 1.0, 0.0);
         render(&mut bank, 0.01);
         bank.note_off(60);
         render(&mut bank, 2.0);
@@ -339,7 +345,7 @@ mod tests {
         let mut bank = new_bank(8);
         bank.settings_mut().amp.release = 0.1;
         for note in [60, 64, 67] {
-            bank.note_on(note, 1.0);
+            bank.note_on(note, 1.0, 0.0);
         }
         bank.all_notes_off();
         assert!(bank.active_count() > 0, "cut the tails instead of releasing");
@@ -352,7 +358,7 @@ mod tests {
         let mut bank = new_bank(8);
         bank.settings_mut().amp.release = 10.0;
         for note in [60, 64, 67] {
-            bank.note_on(note, 1.0);
+            bank.note_on(note, 1.0, 0.0);
         }
         render(&mut bank, 0.05);
         bank.panic();
@@ -367,12 +373,12 @@ mod tests {
         // *could* play sixteen, and the player just turns up to compensate.
         let one_of_two = {
             let mut bank = new_bank(2);
-            bank.note_on(60, 1.0);
+            bank.note_on(60, 1.0, 0.0);
             peak(&render(&mut bank, 0.1))
         };
         let one_of_many = {
             let mut bank = new_bank(32);
-            bank.note_on(60, 1.0);
+            bank.note_on(60, 1.0, 0.0);
             peak(&render(&mut bank, 0.1))
         };
         assert!((one_of_two - one_of_many).abs() < 1e-6);
@@ -384,7 +390,7 @@ mod tests {
         // dense chord. Not-a-number is not.
         let mut bank = new_bank(16);
         for note in 48..64u8 {
-            bank.note_on(note, 1.0);
+            bank.note_on(note, 1.0, 0.0);
         }
         for sample in render(&mut bank, 0.2) {
             assert!(sample.left.is_finite() && sample.right.is_finite());
@@ -396,7 +402,7 @@ mod tests {
         // Editing a knob mid-chord has to be heard, or the face lies.
         let mut bank = new_bank(4);
         bank.settings_mut().cutoff_hz = 12_000.0;
-        bank.note_on(48, 1.0);
+        bank.note_on(48, 1.0, 0.0);
         render(&mut bank, 0.05);
         let bright = brightness(&mono(&render(&mut bank, 0.1)));
 
@@ -414,14 +420,14 @@ mod tests {
         bank.settings_mut().matrix.set(ModSource::Random, ModDest::Osc1Pitch, 1.0);
         bank.settings_mut().lfo[0].shape = LfoShape::Sine;
         for note in [60, 60, 60, 60] {
-            bank.note_on(note, 1.0);
+            bank.note_on(note, 1.0, 0.0);
         }
         // Four identical notes, each detuned by its own random value: if they
         // were all seeded alike the sum would be exactly four times one voice.
         let together = peak(&render(&mut bank, 0.1));
         let single = {
             let mut one = bank_with_random(1);
-            one.note_on(60, 1.0);
+            one.note_on(60, 1.0, 0.0);
             peak(&render(&mut one, 0.1))
         };
         assert!(together < single * 4.0 * 0.99, "voices moved in lockstep");
@@ -440,7 +446,7 @@ mod tests {
             let mut bank = VoiceBank::new(RATE, 8, 3);
             let mut out = Vec::new();
             for (index, note) in [60u8, 64, 67, 72].iter().enumerate() {
-                bank.note_on(*note, 0.8);
+                bank.note_on(*note, 0.8, 0.0);
                 out.extend(render(&mut bank, 0.02));
                 if index == 1 {
                     bank.note_off(60);
@@ -463,13 +469,13 @@ mod tests {
     fn the_mod_wheel_reaches_every_voice() {
         let mut bank = new_bank(4);
         bank.settings_mut().matrix.set(ModSource::ModWheel, ModDest::Volume, -1.0);
-        bank.note_on(60, 1.0);
+        bank.note_on(60, 1.0, 0.0);
         let open = peak(&render(&mut bank, 0.1));
 
         let mut closed_bank = new_bank(4);
         closed_bank.settings_mut().matrix.set(ModSource::ModWheel, ModDest::Volume, -1.0);
         closed_bank.set_mod_wheel(1.0);
-        closed_bank.note_on(60, 1.0);
+        closed_bank.note_on(60, 1.0, 0.0);
         let closed = peak(&render(&mut closed_bank, 0.1));
         assert!(closed < open * 0.5, "the mod wheel did nothing: {closed} vs {open}");
     }
