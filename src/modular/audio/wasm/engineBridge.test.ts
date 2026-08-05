@@ -633,7 +633,7 @@ describe("The plan-to-engine bridge", () => {
     expect(engine.ranges).toEqual(["0+32", "32+64", "96+32"]);
   });
 
-  it("plays an overdue note at the start of the quantum rather than dropping it", () => {
+  it("plays an overdue note at the start of the quantum rather than dropping it [R-TIME-03]", () => {
     // A note the host was slow to deliver is late; a note that never sounds is
     // a hole in the piece.
     const engine = new FakeEngine();
@@ -645,7 +645,7 @@ describe("The plan-to-engine bridge", () => {
     expect(engine.of("noteon")).toHaveLength(1);
   });
 
-  it("plays a note landing exactly on a quantum boundary in that quantum", () => {
+  it("plays a note landing exactly on a quantum boundary in that quantum [R-TIME-02]", () => {
     // The off-by-one that would make every on-the-beat note a quantum late.
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
@@ -696,7 +696,7 @@ describe("The plan-to-engine bridge", () => {
     expect(engine.of("noteon")).toEqual([`noteon:${rack.moduleIdOf("kick")}.36@1+0`]);
   });
 
-  it("sounds nothing for a node that is no longer in the plan", () => {
+  it("sounds nothing for a node that is no longer in the plan [R-PROTO-06]", () => {
     // The id names a node that has been deleted or rebuilt. Falling back to a
     // broadcast would put the note on an instrument nobody addressed.
     const engine = new FakeEngine();
@@ -721,7 +721,7 @@ describe("The plan-to-engine bridge", () => {
     expect(engine.of("noteon")).toHaveLength(2);
   });
 
-  it("says nothing until a report is due", () => {
+  it("says nothing until a report is due [R-PROTO-07]", () => {
     // The audio thread must not spend its budget describing itself: at 48 kHz
     // a report per quantum would be four hundred messages a second.
     const engine = new FakeEngine();
@@ -757,7 +757,7 @@ describe("The plan-to-engine bridge", () => {
     expect(rack.takeReport()?.peak).toBeCloseTo(0.5);
   });
 
-  it("starts the peak over each interval rather than keeping a high-water mark", () => {
+  it("starts the peak over each interval rather than keeping a high-water mark [R-PROTO-08]", () => {
     // A running maximum only ever climbs, so a meter drawn from it would stick
     // at the loudest moment of the session and never fall.
     const engine = new FakeEngine();
@@ -932,7 +932,7 @@ describe("The descriptor-to-engine parameter contract", () => {
   });
 
   it.each(audioModules.map((d) => [d.type, d] as const))(
-    "%s: every parameter either reaches the engine or says why not",
+    "%s: every parameter either reaches the engine or says why not [R-PARAM-05]",
     (type, descriptor) => {
       const indices = PARAM_INDICES[type] ?? {};
       const excused = PARAMS_HANDLED_ELSEWHERE[type] ?? {};
@@ -944,7 +944,7 @@ describe("The descriptor-to-engine parameter contract", () => {
   );
 
   it.each(audioModules.map((d) => [d.type, d] as const))(
-    "%s: every engine index names a real parameter",
+    "%s: every engine index names a real parameter [R-PARAM-06]",
     (type, descriptor) => {
       // The other direction. An index for a parameter no descriptor declares
       // is either a typo or capability nothing can reach, and both are worth

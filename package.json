@@ -18,7 +18,9 @@
     "test": "vitest run",
     "test:manual": "vitest run --config vitest.manual.config.ts",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "spec:audit": "node scripts/spec-audit.mjs",
+    "spec:strict": "node scripts/spec-audit.mjs --strict"
   },
   "dependencies": {
     "react": "^18.3.1",

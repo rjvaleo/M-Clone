@@ -71,7 +71,7 @@ describe("NoteSchedule", () => {
     expect(notes(schedule.drainThrough(100))).toEqual([60, 64, 67]);
   });
 
-  it("keeps a note-off after the note-on it belongs to at the same frame", () => {
+  it("keeps a note-off after the note-on it belongs to at the same frame [R-TIME-04]", () => {
     // Stability matters most here: reordering these turns a note into a
     // permanently stuck one.
     const schedule = new NoteSchedule();
@@ -81,7 +81,7 @@ describe("NoteSchedule", () => {
     expect(drained.map((entry) => entry.event.type)).toEqual(["note-on", "note-off"]);
   });
 
-  it("drops the furthest-future note when it is full", () => {
+  it("drops the furthest-future note when it is full [R-TIME-05]", () => {
     // A bounded queue on the audio thread has to shed something. It sheds the
     // note that is furthest away, because the imminent ones are the ones a
     // listener is about to notice missing — and because the far-future note
@@ -116,7 +116,7 @@ describe("NoteSchedule", () => {
     expect(schedule.nextFrame()).toBeUndefined();
   });
 
-  it("ignores a note scheduled for a frame that is not a number", () => {
+  it("ignores a note scheduled for a frame that is not a number [R-TIME-08]", () => {
     // A NaN frame would sort unpredictably and could never be drained, so it
     // would sit in a bounded queue forever displacing real notes.
     const schedule = new NoteSchedule();

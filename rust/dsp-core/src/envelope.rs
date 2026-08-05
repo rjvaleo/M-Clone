@@ -193,6 +193,7 @@ impl Adsr {
 
 #[cfg(test)]
 mod tests {
+    // R-DSP-65 — release lands exactly on zero
     use super::*;
 
     const RATE: f32 = 48_000.0;

@@ -36,7 +36,7 @@ const aiffBytes = (samples: number[]): Uint8Array => {
 };
 
 describe("Decoding a dropped file", () => {
-  it("hashes the caller's bytes before handing the decoder a copy", async () => {
+  it("hashes the caller's bytes before handing the decoder a copy [R-HOST-05]", async () => {
     // `decodeAudioData` detaches what it is given. Hashing afterwards would see
     // an empty buffer, so every file in the pool would share one id — and one
     // sample would silently stand in for all of them.
