@@ -166,7 +166,7 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
 
   outBuf2.fill(7);
   api.process_range(0, QUANTUM + 1);
-  check("a range past the end of the buffer renders nothing", outBuf2.every((v) => v === 7));
+  check("a range past the end of the buffer renders nothing [R-ABI-03]", outBuf2.every((v) => v === 7));
   api.all_notes_off(synth);
   run(400);
 
@@ -198,7 +198,7 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   api.note_on(synth, 60, 1.0, Number.NaN);
   api.set_modulation(synth, 99, 99, 1.0);
   api.set_modulation(synth, 0, 0, Number.NaN);
-  check("bad note and routing data is refused, not fatal", Number.isFinite(run(4)));
+  check("bad note and routing data is refused, not fatal [R-ABI-04]", Number.isFinite(run(4)));
   api.all_notes_off(synth);
 }
 

@@ -2806,6 +2806,7 @@ mod tests {
     }
 
     #[test]
+    // R-DSP-69
     fn polyphony_at_the_hosts_index_limits_the_voices() {
         // `max-voices` had no index at all, so the control was inert.
         // Rendered once before the notes: every parameter is read inside
@@ -2826,6 +2827,7 @@ mod tests {
     }
 
     #[test]
+    // R-DSP-86
     fn a_notes_detune_reaches_the_oscillator_through_the_engine() {
         // The end of the wire the scale quantisers feed. Every microtonal scale
         // in the library arrives as a MIDI note plus a remainder, and if the
