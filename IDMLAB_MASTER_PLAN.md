@@ -256,6 +256,7 @@ wave that builds it is the wave its first consumer needs it.
 | P14 | **Step-sequencer core** — five step types, per-step length, probability, repeat | 3 | Mono Note Sequencer · pattern modules · any future arpeggiator |
 | P15 | **Global choke bus** — 16 session-wide groups, cross-source | 3 | drum realism · hi-hat behaviour. **Does not exist in Rust at all** |
 | P16 | **Two-rendering faces** — every face draws in Edit mode and Performance mode, driven by per-parameter flags | 2 | Performance mode · arbitrarily large modules · the mixer and tracker as canvas objects |
+| P17 | **Self-contained instrument shell** — transport in, internal sequencer, voice, effects, presets, audio out | 3 | every instrument playable on drop · the tune-synth · bass · lead · chord · drums · pad · grain |
 
 **P4 is the keystone.** Snapshots, macros, the Performance View, automation
 lanes, the timeline, MIDI learn, conducting and host automation are not seven
@@ -328,6 +329,13 @@ Parameter detail the funcspec pins down and the plan must honour:
   freeze.
 
 ### 3.2 Audio — instruments
+
+**Instruments are playable without patching (P17).** A module needing six
+cables before it makes a sound is a component. Each entry below accepts
+transport, carries its own sequencer, quantises to true scale pitches, ships
+sixteen useful presets, and flags a performance subset of eight controls — so
+dropping one on the canvas and pressing play produces music. Specified at
+`IDMLAB_TECH_SPEC.md` §15.
 
 | Feature | Wave | Notes |
 |---|---|---|
@@ -723,6 +731,10 @@ recovered after a forced reload, and exported as a MIDI file.
 
 ### Wave 4 — The effect rack, completed
 
+Also here: the **remaining 38 DP/4+ algorithms**. Eight of forty-six are ported;
+the roster, the four-unit config model, serial/parallel/feedback routing and the
+100 presets are specified at `IDMLAB_TECH_SPEC.md` §16.
+
 P8 and P9 arrive here.
 
 1. History buffer (P8) and FFT (P9).
@@ -806,6 +818,19 @@ matrix; the composer thread.
 own matrix passes.
 
 ---
+
+## 4a. Latency, visualisation and the constraints register
+
+Three areas the plan named without quantifying, now specified:
+
+- **Latency** — `IDMLAB_TECH_SPEC.md` §13. A control-to-sound budget of 10 ms
+  excluding device output, a render callback ceiling of 50 % of budget, and the
+  rule that scheduling absorbs message jitter rather than passing it on.
+- **AV visualisation** — §14. Two streams per module, the global analyser, the
+  connection modes, and the Visualizer's recompose-only contract.
+- **The constraints register** — Appendix C. Sixty-four constraints in one
+  table, each with the requirement id that verifies it, plus seven accepted
+  costs to confirm rather than test.
 
 ## 5. Standing tracks
 

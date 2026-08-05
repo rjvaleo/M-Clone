@@ -1026,3 +1026,421 @@ Defects invisible to a green suite, and the reason this step is binding:
 players with no processor, a rack rendering silence because the host input was
 never wired, a gallery that could not scroll, a detached `ArrayBuffer`, a synth
 filter section wired to nothing.
+
+---
+
+## 13. Latency and responsiveness
+
+This is a real-time performance instrument. Latency is a conformance
+requirement with numbers, measured rather than felt.
+
+### 13.1 The budget
+
+Control-to-sound at a 128-frame buffer, 48 kHz. Each stage has a ceiling; the
+total is what a performer experiences.
+
+| Stage | Ceiling | Notes |
+|---|---|---|
+| Pointer or key event → main thread handler | 4 ms | one frame at 240 Hz input |
+| Handler → `postMessage` posted | 1 ms | encoding only |
+| Message → worklet receipt | 3 ms | one render callback of jitter |
+| Worklet receipt → first affected sample | 2.7 ms | one quantum |
+| Engine → device | 10 ms | browser output latency, reported by `AudioContext.outputLatency` |
+| **Total control-to-sound** | **≤ 20 ms** | |
+| **Total, excluding device output** | **≤ 10 ms** | the part we control |
+
+| ID | Requirement |
+|---|---|
+| R-LAT-01 | Control-to-sound excluding device output MUST NOT exceed 10 ms at a 128-frame buffer. |
+| R-LAT-02 | A scheduled note MUST sound at its exact frame regardless of message latency. Scheduling MUST absorb jitter rather than pass it on. |
+| R-LAT-03 | A parameter change MUST become audible within one quantum plus its declared smoothing window. |
+| R-LAT-04 | MIDI-in to sound MUST NOT exceed 15 ms including device and driver. |
+| R-LAT-05 | The engine MUST report measured output latency and MUST offset scheduling by it. |
+| R-LAT-06 | Reported latency MUST be accurate within ±1 ms, verified against a loopback measurement. |
+| R-LAT-07 | Buffer size MUST be user-selectable where the platform allows, and the resulting latency MUST be displayed in milliseconds. |
+
+### 13.2 Never block the audio thread
+
+| ID | Requirement |
+|---|---|
+| R-LAT-10 | A render callback MUST complete within 50 % of its wall-clock budget at the target patch size — 1.33 ms of a 2.67 ms quantum. |
+| R-LAT-11 | Callback overrun MUST be counted and reported, never hidden. |
+| R-LAT-12 | Sustained overrun MUST degrade gracefully: shed voices before dropping buffers. |
+| R-LAT-13 | Patch compilation, asset decoding and document work MUST occur off the audio thread. |
+| R-LAT-14 | A patch swap MUST NOT drop a buffer. |
+| R-LAT-15 | The CPU meter MUST show the real callback load as a percentage of budget. |
+
+### 13.3 UI responsiveness
+
+| ID | Requirement |
+|---|---|
+| R-LAT-20 | A control MUST show its new value within one animation frame of the gesture. |
+| R-LAT-21 | UI redraw MUST NOT gate audio. Rendering with the UI thread saturated MUST produce identical audio. |
+| R-LAT-22 | Telemetry-driven displays MUST run at ≤ 30 Hz and MUST coalesce. |
+| R-LAT-23 | A patch of 100 modules MUST maintain 60 fps canvas interaction on the reference machine. |
+| R-LAT-24 | Meters and playheads MUST be timestamped to match audible output, compensating for output latency. |
+
+**Tests** — a loopback harness renders a click at a known frame, captures the
+device output and measures the offset; assert against R-LAT-01 and R-LAT-06.
+Callback timing is sampled inside the worklet and reported in `RackReport`.
+
+---
+
+## 14. AV visualisation
+
+The spec's third pillar. The engine already computes everything the image
+needs; visualisation costs the transport, not the analysis.
+
+### 14.1 Two streams
+
+| Stream | Contents |
+|---|---|
+| **1 — Signal** | The audio itself: waveform, spectrum, correlation. One-to-one with what is heard. |
+| **2 — Playback data** | The control and state data already driving the DSP. |
+
+Stream 2 payload per module, published through `Module::telemetry`:
+
+| Module | Payload |
+|---|---|
+| Reverb | decay curve, RT60, pre-delay position, diffusion density |
+| Delay | repeat positions, feedback level, ping-pong L/R position |
+| Chorus · Flanger · Phaser | LFO shape and phase, modulation depth |
+| EQ | per-band gain, full curve shape |
+| Compressor · Limiter | gain reduction over time, threshold crossings, attack/release arcs |
+| Pitch shifter | shift amount, voice positions on a pitch grid |
+| Saturation | drive curve, harmonic distribution |
+| Stereo widener | width, L/R correlation coefficient |
+| Granular | grain positions, density, scatter, freeze state, source position |
+| Spectral freeze | frozen spectrum, shimmer interval, blur |
+| Bit crusher | bit depth, rate reduction, noise floor |
+| Analyzer | band levels: sub, low, mid, high, air |
+| Synth | per-voice envelope stage, filter cutoff, LFO phase, active voice count |
+| Sampler | playhead position, active voices, choke events |
+
+| ID | Requirement |
+|---|---|
+| R-AV-01 | Every module MUST publish its declared Stream 2 payload. |
+| R-AV-02 | Telemetry MUST NOT alter audio. Rendering with telemetry drained and undrained MUST be bit-identical. |
+| R-AV-03 | Telemetry MUST be published from a preallocated ring, dropping oldest on overflow. |
+| R-AV-04 | Visualisation MUST reflect current wet/dry and bypass state. A bypassed node MUST show its dry passthrough. |
+| R-AV-05 | A module without a payload MUST publish length zero rather than absent data. |
+
+### 14.2 Global analysis
+
+Computed once from the master output and shared.
+
+| ID | Requirement |
+|---|---|
+| R-AV-10 | The global analyser MUST publish amplitude, band levels, transient flags, spectral centroid, onset detection, pitch tracking and stereo width. |
+| R-AV-11 | Onset detection MUST report within 20 ms of the transient. |
+| R-AV-12 | Pitch tracking MUST be accurate within ±10 cents for a monophonic source above −30 dBFS. |
+| R-AV-13 | Spectral centroid MUST be accurate within ±2 % against a reference computation. |
+| R-AV-14 | Analysis MUST run once per frame at most and MUST be shared by every consumer. |
+
+### 14.3 Connection visualisation
+
+| ID | Requirement |
+|---|---|
+| R-AV-20 | Modes MUST include amplitude glow (default), waveform-on-wire and frequency colour shift, and MUST be combinable. |
+| R-AV-21 | A silent connection MUST be visually distinct from an active one. |
+| R-AV-22 | Connection rendering MUST be frame-budgeted and MUST degrade to amplitude glow when the budget is exceeded. |
+
+### 14.4 The Visualizer window
+
+| ID | Requirement |
+|---|---|
+| R-AV-30 | The Visualizer MUST recompose already-computed streams and MUST perform no independent analysis. |
+| R-AV-31 | Opening the Visualizer MUST NOT change audio output, asserted bit-identically. |
+| R-AV-32 | A preset MUST declare composition rules, an effect stack, audio mappings and its exposed parameters. |
+| R-AV-33 | The effect stack MUST support blur, kaleidoscope, feedback, colour mapping, particles, waveform draw, geometric and glitch. |
+| R-AV-34 | Output MUST support 1080p, 4K and custom, and MUST hold 60 fps at 1080p on the reference machine. |
+| R-AV-35 | Dropping below 30 fps MUST reduce visual quality and MUST never introduce audio back-pressure. |
+| R-AV-36 | A preset MUST be exportable and re-importable, round-tripping exactly. |
+| R-AV-37 | Rendered video MUST stay frame-locked to the audio timeline within ±1 frame over 10 minutes. |
+
+---
+
+## 15. Instrument modules — playable without patching
+
+A module that needs six cables before it makes a sound is a component. An
+instrument makes sound on its own. Every module in the `instrument` family
+satisfies the contract below, so dropping one on the canvas and pressing play
+produces music.
+
+### 15.1 The self-contained instrument contract
+
+```
+transport in ──► [ sequencer ─► voice ─► effects ] ──► audio out
+                       ▲            ▲
+                  scale/tuning   preset
+```
+
+| ID | Requirement |
+|---|---|
+| R-INST-01 | An instrument MUST accept transport: clock, start, stop, continue, song position. |
+| R-INST-02 | An instrument MUST make sound with no cable other than its audio output. |
+| R-INST-03 | An instrument MUST carry an internal sequencer per P14, enabled by default. |
+| R-INST-04 | An instrument MUST start on transport start and MUST stop on transport stop, honouring its sync mode and start offset per P13. |
+| R-INST-05 | An instrument MUST accept external notes, which MUST override the internal sequencer for as long as they arrive. |
+| R-INST-06 | An instrument MUST carry a scale and root, and MUST quantise to true cents per R-DSP-81. |
+| R-INST-07 | An instrument MUST ship ≥ 16 presets that are musically useful on load. |
+| R-INST-08 | An instrument MUST expose a performance subset of ≤ 8 controls flagged by default, so it is playable in Performance mode with no configuration. |
+| R-INST-09 | An instrument MUST carry its own output level, pan and mute. |
+| R-INST-10 | An instrument's internal sequencer MUST be bypassable, leaving a plain note-driven voice. |
+| R-INST-11 | An instrument MUST report its active voice count and current step as telemetry. |
+
+### 15.2 The roster
+
+Each is one module, complete, playable on drop.
+
+| Module | Voice | Sequencer | Wave |
+|---|---|---|---|
+| `m.inst-tunesynth` | 3-osc subtractive, filter, 2 ADSR, 2 LFO, 8×12 matrix | mono note sequencer, 108 scales | 3 |
+| `m.inst-bass` | 4-osc subtractive, mono priority, glide, sub | mono, gate/accent/slide per step | 4 |
+| `m.inst-lead` | oscillator/sample hybrid, pitch-envelope blips | mono, ratchet and probability | 4 |
+| `m.inst-chord` | 4-op FM, curated algorithms | chord sequencer, scale-aware voicings | 5 |
+| `m.inst-poly` | virtual-analog, detune, unison, chorus | chord sequencer | 5 |
+| `m.inst-drums` | 12-pad sampler, choke groups, per-pad shaping | 16-step × 12-lane grid, per-step probability and variation | 5 |
+| `m.inst-pad` | keymapped sampler, layers, slow envelopes | held-chord sequencer with slow morph | 5 |
+| `m.inst-grain` | granular engine, scan, spray, freeze | position sequencer | 5 |
+
+| ID | Requirement |
+|---|---|
+| R-INST-20 | Every roster entry MUST satisfy §15.1 in full. |
+| R-INST-21 | Each MUST be reachable from the module menu in one action. |
+| R-INST-22 | Each MUST hold ≤ 20 % of one CPU core at 8-voice polyphony on the reference machine. |
+| R-INST-23 | Instruments MUST reuse the shared primitives rather than carrying private copies of oscillators, filters, envelopes or sequencers. |
+
+### 15.3 Transport contract
+
+| ID | Requirement |
+|---|---|
+| R-INST-30 | Clock MUST be accepted from the internal transport, external MIDI clock or a host. |
+| R-INST-31 | Start MUST reset the internal sequencer to step 1. |
+| R-INST-32 | Continue MUST resume from the stored position. |
+| R-INST-33 | Song position MUST relocate the sequencer to the corresponding step. |
+| R-INST-34 | Tempo change MUST take effect at the next step boundary without dropping or duplicating a step. |
+| R-INST-35 | Stop MUST release every sounding note through its release stage. |
+
+---
+
+## 16. DP/4+ conformance
+
+Our DP/4+ clone reproduces the ENSONIQ DP/4+ (Reference Manual v2.0, 199 pages)
+as a module family. Ported today: five reverb algorithms and three Non-Lin
+variants — 8 of 46.
+
+### 16.1 The unit and config model
+
+The hardware is four independent processors (units A, B, C, D) whose inputs,
+outputs and interconnections are software-defined.
+
+| ID | Requirement |
+|---|---|
+| R-DP4-01 | The module MUST present four units, each independently loadable with any algorithm. |
+| R-DP4-02 | Source configuration MUST support 1, 2, 3 and 4 sources. |
+| R-DP4-03 | Each source MUST be selectable mono or stereo where its configuration allows. |
+| R-DP4-04 | Units MUST be connectable in serial, parallel and feedback routing. |
+| R-DP4-05 | Feedback routing MUST be bounded per R-GRAPH-03. |
+| R-DP4-06 | Any unit MUST be bypassable individually; all four MUST be bypassable together. |
+| R-DP4-07 | A Config preset MUST store every algorithm, all routing and all mixing, and MUST recall them exactly. |
+| R-DP4-08 | 50 ROM presets MUST ship read-only; 50 RAM slots MUST be user-writable. |
+| R-DP4-09 | An algorithm MAY claim 1, 2 or 4 units. Loading a multi-unit algorithm MUST consume its neighbours and MUST report what it displaced. |
+| R-DP4-10 | Every unit MUST carry Mix and Volume as its first two parameters, matching the hardware's parameter 01 and 02. |
+
+### 16.2 Modulation
+
+| ID | Requirement |
+|---|---|
+| R-DP4-20 | Each algorithm MUST expose its modulatable parameters to the modulation system. |
+| R-DP4-21 | Modulation sources MUST include CV pedal, MIDI controller, note-on velocity, LFO and envelope follower. |
+| R-DP4-22 | A CV pedal source MUST map to a parameter with independent min, max and polarity. |
+| R-DP4-23 | Crossfading between two units' outputs MUST be available as a modulation destination. |
+
+### 16.3 The algorithm roster
+
+46 algorithms. Status against the current build.
+
+| Algorithm | Units | State |
+|---|---|---|
+| SMALL PLATE | 1 | **ported** |
+| LARGE PLATE | 1 | **ported** |
+| SMALL ROOM REV | 1 | **ported** |
+| LARGE ROOM REV | 1 | **ported** |
+| HALL REVERB | 1 | **ported** |
+| NON LIN REVERB 1 · 2 · 3 | 1 | **ported** |
+| NO EFFECT (BYPASS) | 1 | to build |
+| 3.3 SEC DDL | 2 | to build |
+| DUAL DELAY | 1 | to build |
+| MULTI TAP DELAY | 1 | to build |
+| TEMPO DELAY | 1 | to build |
+| 8 VOICE CHORUS | 1 | to build |
+| FLANGER | 1 | to build |
+| PHASER-DDL | 1 | to build |
+| EQ-CHORUS-DDL | 1 | to build |
+| EQ-DDL-WITH LFO | 1 | to build |
+| EQ-FLANGER-DDL | 1 | to build |
+| EQ-PANNER-DDL | 1 | to build |
+| EQ-TREMOLO-DDL | 1 | to build |
+| EQ-VIBRATO-DDL | 1 | to build |
+| EQ-COMPRESSOR | 1 | to build |
+| PARAMETRIC EQ | 1 | to build |
+| RUMBLE FILTER | 1 | to build |
+| VAN DER POL FILTER | 1 | to build |
+| VCF-DISTORT 1 · 2 | 1 | to build |
+| DE-ESSER | 1 | to build |
+| EXPANDER | 1 | to build |
+| INVERSE EXPANDER | 1 | to build |
+| KEYED EXPANDER | 1 | to build |
+| DUCKER / GATE | 1 | to build |
+| GATED REVERB | 1 | to build |
+| REVERSE REVERB 1 · 2 | 1 | to build |
+| DIGITAL TUBE AMP | 1 | to build |
+| DYNAMIC TUBE AMP | 1 | to build |
+| GUITAR AMP 1 · 2 · 3 · 4 | 1 | to build |
+| SPEAKER CABINET | 1 | to build |
+| ROTATING SPEAKER | 1 | to build |
+| TUNABLE SPEAKER 1 · 2 | 1 | to build |
+| PITCH SHIFTER | 1 | to build |
+| FAST PITCH SHIFT | 1 | to build |
+| PITCHSHIFT-DDL | 1 | to build |
+| PITCH SHIFT | 2 | to build |
+| VOCAL REMOVER | 1 | to build |
+| VOCODER | 2 | to build |
+| SINE/NOISE GEN | 1 | to build |
+| GUITAR TUNER | 2 | to build |
+
+| ID | Requirement |
+|---|---|
+| R-DP4-30 | Every algorithm above MUST exist as a structural variant of the DP/4+ module. |
+| R-DP4-31 | Each MUST carry its complete parameter set from the manual, with the manual's ranges and units. |
+| R-DP4-32 | Each MUST arrive with its parameter table in §9.9.4, per R-CAT-42. |
+| R-DP4-33 | Multi-unit algorithms MUST declare their unit count and MUST refuse to load where insufficient units are free. |
+| R-DP4-34 | Each MUST carry a golden audio fixture per R-VERIFY-01. |
+| R-DP4-35 | Reverb algorithms MUST satisfy §9.3; dynamics algorithms §9.2; filter algorithms §9.1. |
+| R-DP4-36 | Decay Definition MUST be applied inside the tank once `Fdn` gains an allpass hook. Current divergence: it is applied to the tank's feed, which is close at moderate settings and thinner at extremes. |
+| R-DP4-37 | Non-Lin algorithms MUST carry no feedback path, matching the hardware. |
+| R-DP4-38 | Every unit MUST hold ≤ 5 % of one CPU core, so four units and the rest of a patch coexist. |
+
+### 16.4 What the clone changes on purpose
+
+| Change | Reason |
+|---|---|
+| Cables carry one sample rather than a 20 ms block | The hardware's units are physically wired; a one-sample cable is closer to it than a render quantum |
+| Any number of DP/4+ instances | The hardware is one box; the constraint is not musical |
+| Tempo Delay syncs to the app transport | The hardware has no host clock |
+| Parameters are automatable per §8.1 | The hardware has a pedal and MIDI CC |
+
+---
+
+## Appendix C — Constraints register
+
+Every constraint established across this project, in one place, each with the
+means to verify it. This is the list to check a build against.
+
+### C.1 Architectural — settled, verify by inspection
+
+| # | Constraint | Verify |
+|---|---|---|
+| C-01 | All audio DSP is Rust compiled to WASM, in one AudioWorklet | R-GLOBAL-08 source scan |
+| C-02 | One audio backend. No fallback, no flag, no conditional path | grep for `engine=` and backend branches |
+| C-03 | Web Audio is used for context lifecycle, `decodeAudioData`, and one output connection | R-HOST-01 |
+| C-04 | The free-form canvas is the shell. Mixer and tracker are modules on it | plan §1.1 |
+| C-05 | Two modes: Edit and Performance. No second layout | R-P16-01…07 |
+| C-06 | The musical runtime stays in TypeScript on the main thread | by inspection |
+| C-07 | The document is the truth; every view is a projection | R-P16-03 |
+| C-08 | Runs from a URL. No install, no `SharedArrayBuffer`, no COOP/COEP | build and deploy |
+| C-09 | One `ParameterAddress` for every value, used by every subsystem | R-ID-01 |
+| C-10 | Structure rebuilds, parameters ramp; declared, never inferred | R-PARAM-01…03 |
+
+### C.2 Real-time — measurable
+
+| # | Constraint | Verify |
+|---|---|---|
+| C-11 | No allocation on the audio thread | R-GLOBAL-01, `assert_no_alloc` |
+| C-12 | No locks, no blocking, no wall-clock reads on the audio thread | R-GLOBAL-02, R-GLOBAL-03 |
+| C-13 | Control-to-sound ≤ 10 ms excluding device output | R-LAT-01 |
+| C-14 | Render callback ≤ 50 % of budget at target patch size | R-LAT-10 |
+| C-15 | Notes are sample-accurate regardless of message jitter | R-TIME-01, R-LAT-02 |
+| C-16 | A patch swap drops no buffer | R-LAT-14 |
+| C-17 | Telemetry never alters audio | R-AV-02 |
+| C-18 | UI load never affects audio | R-LAT-21 |
+| C-19 | Denormals flushed below 1e-20 | R-GLOBAL-07 |
+| C-20 | Every sample leaving any module is finite | R-GLOBAL-06 |
+
+### C.3 Determinism
+
+| # | Constraint | Verify |
+|---|---|---|
+| C-21 | Same document + seed + tempo map + input → bit-identical output | R-GLOBAL-05 |
+| C-22 | Every random value comes from a seeded PRNG stored in the document | R-GLOBAL-04 |
+| C-23 | Offline render matches real time within ±1e-6 | R-P10-03 |
+| C-24 | Rendering a capture twice is byte-identical | R-P5-07, R-P10-02 |
+| C-25 | Randomness in one stream never affects another | R-TIME-17 |
+| C-26 | Compilation is deterministic including ordering | R-GRAPH-04 |
+
+### C.4 Audio safety
+
+| # | Constraint | Verify |
+|---|---|---|
+| C-27 | The master limiter is always on and not patchable | R-DSP-15 |
+| C-28 | No graph edit can produce unbounded gain or feedback | R-GRAPH-03 |
+| C-29 | Feedback requires an explicit bounded module | R-GRAPH-02 |
+| C-30 | Bypass is a mute; `mix = 0` is the pass-through | R-MOD-07, R-MOD-08 |
+| C-31 | Wet at zero keeps DSP running | R-MOD-07 |
+| C-32 | Every parameter write is smoothed by the receiving module | R-GLOBAL-09 |
+| C-33 | Chokes and notes are scheduled on the audio clock | R-P15-03 |
+| C-34 | Panic is asserted against the sounding-note shadow | R-TRANS-05 |
+
+### C.5 Contracts
+
+| # | Constraint | Verify |
+|---|---|---|
+| C-35 | Every parameter reaches the engine or carries a written reason | R-PARAM-05 |
+| C-36 | Every engine index names a declared parameter or is listed engine-only | R-PARAM-06 |
+| C-37 | Every audio module has a wire number; numbering is append-only | R-CAT-20 |
+| C-38 | Effects carry mix · level · mute as their last three indices | R-MOD-06 |
+| C-39 | Every mapping between two vocabularies is total both ways | R-GLOBAL-10 |
+| C-40 | Every module ships with the ten items in §9.9.1 | R-CAT-01…10 |
+| C-41 | An instrument is playable with only its audio output patched | R-INST-02 |
+
+### C.6 Data
+
+| # | Constraint | Verify |
+|---|---|---|
+| C-42 | Asset identity is a content hash | R-ID-03 |
+| C-43 | The document stores the manifest, never the audio | R-DOC-03 |
+| C-44 | `.mmodpack` carries audio for travel | R-DOC-04 |
+| C-45 | Save → load → save is byte-identical | R-DOC-02 |
+| C-46 | Every released schema version keeps a fixture and a migration test | R-DOC-01 |
+| C-47 | Workspace preferences stay out of the portable document | R-DOC-06 |
+| C-48 | Unknown modules survive load and save, and are reported | R-GRAPH-05 |
+| C-49 | Undo is 30 levels, per window, surviving save | R-UI-30, R-UI-31 |
+| C-50 | Node ids survive rebuilds | R-ID-02 |
+
+### C.7 Process
+
+| # | Constraint | Verify |
+|---|---|---|
+| C-51 | Tests first | review |
+| C-52 | 100 % statements, lines, functions on `.ts` | `npm run coverage` |
+| C-53 | Every requirement here is cited by a test | `npm run spec:audit` |
+| C-54 | Browser verification before a wave closes | commit record |
+| C-55 | Every module has a golden audio fixture | R-VERIFY-01 |
+| C-56 | Fixtures regenerate only alongside an explaining commit | R-VERIFY-02 |
+| C-57 | Commit messages explain why, and state divergences plainly | review |
+
+### C.8 Accepted costs
+
+Consequences taken deliberately. Confirm they still hold rather than testing
+them.
+
+| # | Cost | Accepted because |
+|---|---|---|
+| C-58 | A browser without AudioWorklet or WASM gets a named error and silence | Both are baseline; two implementations cost more than they protect |
+| C-59 | v8 coverage cannot see into WASM; Rust carries its own gate | Two gates, both green, neither replacing the other |
+| C-60 | Two toolchains in CI | The engine requires it |
+| C-61 | A bad sample in Rust is not a DevTools breakpoint | Offset by the fake-context discipline ported into the crate |
+| C-62 | Fonts are catalogued, not shipped | Licensing |
+| C-63 | DP/4+ Decay Definition currently sits outside the tank | `Fdn` lacks the hook; close at moderate settings, thinner at extremes |
+| C-64 | Choke groups are absent from the Rust engine today | Wave 0 must not ship this as a silent regression |
