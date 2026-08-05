@@ -927,6 +927,11 @@ function copyNote(target: StreamMessage, source: StreamMessage): void {
   target.durationTicks = source.durationTicks;
   target.stepIndex = source.stepIndex;
   target.note = source.note;
+  // Carried like the note itself, and for the same reason: a message comes
+  // out of the pool reset, so a transform that forgot this would silently
+  // drop a quantised note back to 12-TET on its way through. The detune is
+  // part of the pitch, not decoration on it.
+  target.detuneCents = source.detuneCents;
   target.velocity = source.velocity;
   target.channel = source.channel;
   target.gate = source.gate;

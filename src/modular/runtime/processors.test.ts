@@ -932,6 +932,24 @@ describe("Transposition processor", () => {
     expect(read().map((note) => note.note)).toEqual([72, 64]);
   });
 
+  it("carries a note's detune through untouched", () => {
+    // A note quantised onto a microtonal scale upstream arrives here with its
+    // pitch split between `note` and `detuneCents`. Messages come out of the
+    // pool reset, so a transform that copies only the note silently drops the
+    // note back to 12-TET — which would make every scale in the library sound
+    // like the twelve it was trying not to be.
+    const { bus, read, processor } = transposition({ mode: "semitone", semitones: 12 });
+    feed(bus, "tr", "notes-in", [
+      { kind: "note-event", atTick: 0, durationTicks: 120, note: 60, velocity: 90, channel: 1, detuneCents: -50 },
+      { kind: "note-event", atTick: 240, durationTicks: 120, note: 64, velocity: 90, channel: 1, detuneCents: 33 },
+    ]);
+    bus.beginNode("tr", 64);
+    processor.process(window(0, 500));
+    const out = read();
+    expect(out.map((note) => note.note)).toEqual([72, 76]);
+    expect(out.map((note) => note.detuneCents)).toEqual([-50, 33]);
+  });
+
   it("applies scale-degree transposition", () => {
     const { bus, read, processor } = transposition({ mode: "scale-degree", degrees: 1, "scale-root": 0, "scale-mode": "major" });
     feed(bus, "tr", "notes-in", [
