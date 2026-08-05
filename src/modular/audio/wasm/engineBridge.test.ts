@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { REPORT_INTERVAL_QUANTA } from "./rackProtocol";
-import { WasmRack, MODULE_KINDS, PARAM_INDICES, NO_MODULE, variantOf, type EngineExports } from "./engineBridge";
+import { moduleRegistry } from "../../registry/registry";
+import { WasmRack, MODULE_KINDS, PARAMS_HANDLED_ELSEWHERE, ENGINE_ONLY_PARAMS, NOT_YET_IN_RUST, PARAM_INDICES, NO_MODULE, variantOf, type EngineExports } from "./engineBridge";
 import type { AudioPlan, AudioNodeSpec } from "../audioPlan";
 
 /**
@@ -249,6 +250,16 @@ describe("variantOf", () => {
     expect(variantOf("m.audio-dp4-reverb", { algorithm: "small-plate" })).toBe(0);
     expect(variantOf("m.audio-dp4-reverb", { algorithm: "hall" })).toBe(4);
     expect(variantOf("m.audio-dp4-nonlin", { variant: "non-lin-2" })).toBe(1);
+  });
+
+  it("reads the looper's time-stretch flag as a variant", () => {
+    // A boolean rather than a name, because the two engines behind it have no
+    // names — but choosing one is still topology, so it goes through the same
+    // door as the DP/4's algorithms.
+    expect(variantOf("m.looper", { "time-stretch": false })).toBe(0);
+    expect(variantOf("m.looper", { "time-stretch": true })).toBe(1);
+    // A document that predates the control plays rather than stretches.
+    expect(variantOf("m.looper", {})).toBe(0);
   });
 
   it("builds the default for a name this build does not know", () => {
@@ -858,8 +869,9 @@ describe("The plan-to-engine bridge", () => {
     // wiring bug in the DSP rather than a typo in a table.
     const indices = Object.values(PARAM_INDICES["m.synth"]);
     expect(new Set(indices).size).toBe(indices.length);
-    // And none of them stray past what the Rust module declares.
-    expect(Math.max(...indices)).toBeLessThan(41);
+    // And none of them stray past what the Rust module declares: `Synth` in
+    // modules.rs has PARAM_COUNT = 42, so 41 is the last valid index.
+    expect(Math.max(...indices)).toBeLessThan(42);
   });
 
   it("every module kind it claims to support has parameter indices", () => {
@@ -868,5 +880,106 @@ describe("The plan-to-engine bridge", () => {
     for (const moduleType of Object.keys(MODULE_KINDS)) {
       expect(PARAM_INDICES[moduleType], moduleType).toBeDefined();
     }
+  });
+});
+
+describe("Building the looper's two engines", () => {
+  it("builds the stretch engine when the document asks for it", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(
+      plan([node("l", "m.looper", {}, { structure: { "time-stretch": true } as never })]),
+    );
+    expect(engine.variants.get(rack.moduleIdOf("l")!)).toBe(1);
+  });
+
+  it("rebuilds the node when the mode changes, rather than ramping it", () => {
+    // Swapping engines mid-note would cut the sound, which is why this is
+    // structure: the plan removes and re-adds behind the usual crossfade.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("l", "m.looper", {}, { structure: { "time-stretch": false } as never })]));
+    const first = rack.moduleIdOf("l")!;
+
+    rack.update(
+      plan([node("l", "m.looper", {}, { structure: { "time-stretch": true } as never })], [], 2),
+    );
+    expect(engine.of("remove")).toContain(`remove:${first}`);
+    expect(engine.variants.get(rack.moduleIdOf("l")!)).toBe(1);
+  });
+});
+
+describe("The descriptor-to-engine parameter contract", () => {
+  /**
+   * Both halves of `PARAM_INDICES` are string maps, so a name that matches
+   * nothing fails silently: the knob turns, the document records the value,
+   * and the engine never hears it. The synth's entire filter section was inert
+   * on this path because the descriptor said `cutoff` and the table said
+   * `filter-cutoff`, and no test could see it.
+   *
+   * These make the contract total in both directions. A new knob on an audio
+   * module now has to say what the engine does with it.
+   */
+  const audioModules = [...moduleRegistry.values()].filter(
+    (descriptor) =>
+      MODULE_KINDS[descriptor.type] !== undefined &&
+      descriptor.ports.some((port) => port.signal.kind === "audio"),
+  );
+
+  it("covers every audio module the engine can build", () => {
+    // Guards the list below against being empty or accidentally narrowed.
+    expect(audioModules.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it.each(audioModules.map((d) => [d.type, d] as const))(
+    "%s: every parameter either reaches the engine or says why not",
+    (type, descriptor) => {
+      const indices = PARAM_INDICES[type] ?? {};
+      const excused = PARAMS_HANDLED_ELSEWHERE[type] ?? {};
+      const orphans = descriptor.parameters
+        .map((parameter) => parameter.id)
+        .filter((id) => indices[id] === undefined && excused[id] === undefined);
+      expect(orphans).toEqual([]);
+    },
+  );
+
+  it.each(audioModules.map((d) => [d.type, d] as const))(
+    "%s: every engine index names a real parameter",
+    (type, descriptor) => {
+      // The other direction. An index for a parameter no descriptor declares
+      // is either a typo or capability nothing can reach, and both are worth
+      // saying out loud rather than leaving in a table.
+      const declared = new Set(descriptor.parameters.map((parameter) => parameter.id));
+      const strays = Object.keys(PARAM_INDICES[type] ?? {}).filter(
+        (id) => !declared.has(id) && !ENGINE_ONLY_PARAMS.has(id),
+      );
+      expect(strays).toEqual([]);
+    },
+  );
+
+  it("excuses only parameters that actually exist", () => {
+    // A reason attached to a parameter that has since been renamed or removed
+    // is a licence for the real one to go missing.
+    const stale: string[] = [];
+    for (const [type, excuses] of Object.entries(PARAMS_HANDLED_ELSEWHERE)) {
+      const descriptor = moduleRegistry.get(type);
+      const declared = new Set(descriptor?.parameters.map((parameter) => parameter.id) ?? []);
+      for (const id of Object.keys(excuses)) {
+        if (!declared.has(id)) stale.push(`${type}.${id}`);
+      }
+    }
+    expect(stale).toEqual([]);
+  });
+
+  it("names every audio module the engine cannot build at all", () => {
+    // A module with an audio port and no `ModuleKind` is skipped by `update`
+    // and renders silence on this backend while working on the other. That is
+    // allowed during the migration, but it has to be a listed decision rather
+    // than something a reader has to derive by diffing two tables.
+    const unbuildable = [...moduleRegistry.values()]
+      .filter((descriptor) => descriptor.ports.some((port) => port.signal.kind === "audio"))
+      .map((descriptor) => descriptor.type)
+      .filter((type) => MODULE_KINDS[type] === undefined);
+    expect(unbuildable).toEqual(NOT_YET_IN_RUST);
   });
 });
