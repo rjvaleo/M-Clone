@@ -196,13 +196,14 @@ describe("Notes", () => {
   it("posts a scheduled batch with the time the score asked for", () => {
     const node = new FakeNode();
     const rack = new WasmRackNode(node);
-    rack.schedule(12.5, [
+    rack.schedule("n1", 12.5, [
       { type: "note-on", note: 60, velocity: 1, detuneCents: 0 },
       { type: "note-on", note: 64, velocity: 1, detuneCents: 0 },
     ]);
     expect(node.port.sent).toEqual([
       {
         type: "schedule",
+        nodeId: "n1",
         atSec: 12.5,
         events: [
           { type: "note-on", note: 60, velocity: 1, detuneCents: 0 },
@@ -216,7 +217,7 @@ describe("Notes", () => {
     // The adapter can call with nothing to send; a message per empty tick is
     // pure traffic on the path this whole migration exists to keep clear.
     const node = new FakeNode();
-    new WasmRackNode(node).schedule(12.5, []);
+    new WasmRackNode(node).schedule("n1", 12.5, []);
     expect(node.port.sent).toHaveLength(0);
   });
 
@@ -224,7 +225,7 @@ describe("Notes", () => {
     const node = new FakeNode();
     const rack = new WasmRackNode(node);
     rack.dispose();
-    rack.schedule(12.5, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.schedule("n1", 12.5, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
     expect(node.port.sent).toHaveLength(0);
   });
 

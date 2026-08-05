@@ -108,7 +108,10 @@ export type RackMessage =
    *
    * A batch rather than one message per note: a chord is one moment, and
    * sending it as three messages would be three chances to land in different
-   * quanta.
+   * quanta. One `nodeId` for the batch, because a batch comes from one
+   * player — the note adapter has already resolved which instrument the event
+   * was addressed to, and carrying that across is what keeps a four-part kit
+   * from playing every part on every note.
    */
-  | { type: "schedule"; atSec: number; events: ScheduledEvent[] }
+  | { type: "schedule"; nodeId: string; atSec: number; events: ScheduledEvent[] }
   | { type: "modulation"; nodeId: string; source: number; dest: number; amount: number };

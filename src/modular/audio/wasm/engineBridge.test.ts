@@ -579,7 +579,7 @@ describe("The plan-to-engine bridge", () => {
     const rack = new WasmRack(engine, 48000);
     rack.update(plan([node("s", "m.synth")]));
     // Frame 1050 is 26 frames into the quantum starting at 1024.
-    rack.schedule(1050 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.schedule("s", 1050 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
     rack.process(1024);
 
     expect(engine.ranges).toEqual(["0+26", "26+102"]);
@@ -590,7 +590,7 @@ describe("The plan-to-engine bridge", () => {
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update(plan([node("s", "m.synth")]));
-    rack.schedule(5000 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.schedule("s", 5000 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
 
     rack.process(0);
     expect(engine.of("noteon")).toEqual([]);
@@ -602,7 +602,7 @@ describe("The plan-to-engine bridge", () => {
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update(plan([node("s", "m.synth")]));
-    rack.schedule(64 / 48000, [
+    rack.schedule("s", 64 / 48000, [
       { type: "note-on", note: 60, velocity: 1, detuneCents: 0 },
       { type: "note-on", note: 64, velocity: 1, detuneCents: 0 },
       { type: "note-on", note: 67, velocity: 1, detuneCents: 0 },
@@ -616,8 +616,8 @@ describe("The plan-to-engine bridge", () => {
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update(plan([node("s", "m.synth")]));
-    rack.schedule(32 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
-    rack.schedule(96 / 48000, [{ type: "note-off", note: 60 }]);
+    rack.schedule("s", 32 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.schedule("s", 96 / 48000, [{ type: "note-off", note: 60 }]);
     rack.process(0);
     expect(engine.ranges).toEqual(["0+32", "32+64", "96+32"]);
   });
@@ -628,7 +628,7 @@ describe("The plan-to-engine bridge", () => {
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update(plan([node("s", "m.synth")]));
-    rack.schedule(10 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.schedule("s", 10 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
     rack.process(4096);
     expect(engine.ranges).toEqual(["0+128"]);
     expect(engine.of("noteon")).toHaveLength(1);
@@ -639,7 +639,7 @@ describe("The plan-to-engine bridge", () => {
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update(plan([node("s", "m.synth")]));
-    rack.schedule(128 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.schedule("s", 128 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
 
     rack.process(0);
     expect(engine.of("noteon")).toEqual([]);
@@ -651,7 +651,7 @@ describe("The plan-to-engine bridge", () => {
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update(plan([node("s", "m.synth")]));
-    rack.schedule(0, [{ type: "note-off", note: 60 }, { type: "all-notes-off" }]);
+    rack.schedule("s", 0, [{ type: "note-off", note: 60 }, { type: "all-notes-off" }]);
     rack.process(0);
     const synth = rack.moduleIdOf("s");
     expect(engine.of("noteoff")).toEqual([`noteoff:${synth}.60`]);
@@ -663,11 +663,51 @@ describe("The plan-to-engine bridge", () => {
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update(plan([node("s", "m.synth")]));
-    rack.schedule(64 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.schedule("s", 64 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
     rack.reset();
     rack.process(0);
     expect(engine.of("noteon")).toEqual([]);
     expect(engine.ranges).toEqual(["0+128"]);
+  });
+
+  it("plays a scheduled note only on the instrument it was addressed to", () => {
+    // The note adapter resolves an event's target on the main thread, and for
+    // a while the message shape then threw that away: every instrument in the
+    // patch played every note, so a four-part kit played all four parts on
+    // each hit.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("kick", "m.percussion"), node("lead", "m.synth")]));
+
+    rack.schedule("kick", 0, [{ type: "note-on", note: 36, velocity: 1, detuneCents: 0 }]);
+    rack.process(0);
+
+    expect(engine.of("noteon")).toEqual([`noteon:${rack.moduleIdOf("kick")}.36@1+0`]);
+  });
+
+  it("sounds nothing for a node that is no longer in the plan", () => {
+    // The id names a node that has been deleted or rebuilt. Falling back to a
+    // broadcast would put the note on an instrument nobody addressed.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+
+    rack.schedule("gone", 0, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.process(0);
+
+    expect(engine.of("noteon")).toEqual([]);
+  });
+
+  it("still broadcasts an unaddressed note, for the bench and MIDI thru", () => {
+    // No id at all is a different case from an id that does not resolve: there
+    // is no document routing to consult, so every instrument is the intent.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("a", "m.synth"), node("b", "m.percussion")]));
+
+    rack.noteOn(60, 1, 0);
+
+    expect(engine.of("noteon")).toHaveLength(2);
   });
 
   it("says nothing until a report is due", () => {

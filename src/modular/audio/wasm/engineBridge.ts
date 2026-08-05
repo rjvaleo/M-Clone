@@ -535,10 +535,10 @@ export class WasmRack {
   /**
    * Play a note on every instrument in the plan.
    *
-   * Broadcast rather than addressed, because the plan carries no routing from
-   * a keyboard to an instrument — in the app that job belongs to the runtime's
-   * note adapter, which already resolves an event's target by port. This is
-   * what the bench and a MIDI-thru path need in the meantime.
+   * Broadcast *and* immediate, which makes it the odd one out: everything the
+   * app plays goes through `schedule`, which names its instrument and waits
+   * for its frame. This is for the bench and a MIDI-thru path, where there is
+   * no document routing to resolve against and no score to be early for.
    */
   noteOn(note: number, velocity: number, detuneCents: number): void {
     for (const nodeId of this.instruments) {
@@ -603,9 +603,9 @@ export class WasmRack {
    * clock; sending a frame number would mean the two had to agree about a
    * conversion neither owns.
    */
-  schedule(atSec: number, events: ScheduledEvent[]): void {
+  schedule(nodeId: string, atSec: number, events: ScheduledEvent[]): void {
     const frame = Math.round(atSec * this.sampleRate);
-    for (const event of events) this.pending.push({ frame, event });
+    for (const event of events) this.pending.push({ frame, nodeId, event });
   }
 
   /**
@@ -626,7 +626,7 @@ export class WasmRack {
       // Everything due at the frame about to be rendered, including anything
       // overdue — a late note still sounds.
       for (const entry of this.pending.drainThrough(startFrame + offset)) {
-        this.dispatch(entry.event);
+        this.dispatch(entry.event, entry.nodeId);
       }
       // The drain leaves nothing at or before this frame, so the next entry is
       // strictly later and the loop always advances.
@@ -677,17 +677,26 @@ export class WasmRack {
     return report;
   }
 
-  /** Play one scheduled event now. */
-  private dispatch(event: ScheduledEvent): void {
+  /**
+   * Play one scheduled event now, on the instrument it was addressed to.
+   *
+   * An unknown `nodeId` sounds nothing rather than falling back to broadcast.
+   * The id names a node that has been deleted or rebuilt, and the safe reading
+   * of "play this on a thing that is not there" is silence — guessing would
+   * put a note on an instrument nobody asked for.
+   */
+  private dispatch(event: ScheduledEvent, nodeId: string): void {
+    const moduleId = this.moduleIdOf(nodeId);
+    if (moduleId === undefined) return;
     switch (event.type) {
       case "note-on":
-        this.noteOn(event.note, event.velocity, event.detuneCents);
+        this.engine.note_on(moduleId, event.note, event.velocity, event.detuneCents);
         break;
       case "note-off":
-        this.noteOff(event.note);
+        this.engine.note_off(moduleId, event.note);
         break;
       case "all-notes-off":
-        this.allNotesOff();
+        this.engine.all_notes_off(moduleId);
         break;
     }
   }
