@@ -18,6 +18,7 @@
 import { normalize, sliderPosition, stepperStep } from "../geometry";
 import type { ButtonProps, JackProps, KitFace, KnobFaceProps, LedProps, SliderFaceProps, StepperProps, ToggleProps } from "../types";
 import { makeParts } from "./parts";
+import { BITMAP_STACK, SEGMENT_STACK } from "./fonts";
 
 const INK = "var(--mm-accent, #1b3a8a)";
 const SCREEN = "var(--mm-surface, #d8e4f2)";
@@ -185,8 +186,11 @@ function stepper(props: StepperProps) {
 const parts = makeParts({
   radius: 0,
   filled: true,
-  readoutFont: '700 13px/1 ui-monospace, "SF Mono", Menlo, monospace',
-  labelFont: '700 9px/1.2 ui-monospace, "SF Mono", Menlo, monospace',
+  // The one kit whose reference hardware genuinely has segment numerals —
+  // K.O. II's `19.3` and Nepheton's recessed LCD boxes. See faces/fonts.ts
+  // for why this is a stack ending in monospace rather than a bundled font.
+  readoutFont: `700 13px/1 ${SEGMENT_STACK}`,
+  labelFont: `700 9px/1.2 ${BITMAP_STACK}`,
   ink: INK,
   accent: INK,
   dim: "rgba(27,58,138,.5)",

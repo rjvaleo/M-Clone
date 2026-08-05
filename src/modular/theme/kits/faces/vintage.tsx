@@ -16,6 +16,7 @@ import type { CSSProperties } from "react";
 import { knobAngle, normalize, polarToCartesian, sliderPosition, stepperStep, tickAngles } from "../geometry";
 import type { ButtonProps, JackProps, KitFace, KnobFaceProps, LedProps, SliderFaceProps, StepperProps, ToggleProps } from "../types";
 import { makeParts } from "./parts";
+import { SEGMENT_STACK } from "./fonts";
 
 const ACCENT = "var(--mm-accent, #d98a3d)";
 const INK = "var(--mm-text, #f1e9df)";
@@ -173,7 +174,9 @@ function stepper(props: StepperProps) {
 const parts = makeParts({
   radius: 4,
   filled: true,
-  readoutFont: '600 12px/1 ui-monospace, "SF Mono", Menlo, monospace',
+  // A vintage panel's numeric readout is an LED counter, so it takes the
+  // segment stack too — a step behind the LCD kit, which is all readout.
+  readoutFont: `600 12px/1 ${SEGMENT_STACK}`,
   labelFont: '600 10px/1.2 ui-sans-serif, system-ui, sans-serif',
   ink: INK,
   accent: ACCENT,
