@@ -12,6 +12,7 @@
 
 import type { AudioPlan } from "../audioPlan";
 import type { RackMessage } from "./rackProtocol";
+import type { SampleSource } from "./sampleTransfer";
 
 /** Which audio backend a session runs on. */
 export type RackEngineChoice = "web-audio" | "rust";
@@ -31,7 +32,9 @@ export const preferredEngine = (search: string): RackEngineChoice => {
 
 /** Just enough of `AudioWorkletNode` to talk to, so this stays testable. */
 export interface RackNodeLike {
-  readonly port: { postMessage(message: RackMessage): void };
+  readonly port: {
+    postMessage(message: RackMessage, transfer?: Transferable[]): void;
+  };
   disconnect(): void;
 }
 
@@ -47,6 +50,31 @@ export class WasmRackNode {
     if (plan.generation === this.lastGeneration) return;
     this.lastGeneration = plan.generation;
     this.node.port.postMessage({ type: "plan", plan });
+  }
+
+  /**
+   * Send one decoded sample into the engine's bank.
+   *
+   * The channel buffers are *transferred*, not copied: a two-minute stereo
+   * file is forty megabytes, and structured-cloning that per sample would
+   * stall the main thread visibly. Transferring detaches the arrays here,
+   * which is why the caller hands over copies it does not intend to keep —
+   * `AudioBuffer.getChannelData` returns a live view, so the copy is made at
+   * the call site rather than here where the intent would be invisible.
+   */
+  loadSample(slot: number, source: SampleSource): void {
+    if (this.disposed) return;
+    const channels = [...source.channels];
+    this.node.port.postMessage(
+      { type: "sample", slot, channels, sampleRate: source.sampleRate },
+      channels.map((channel) => channel.buffer),
+    );
+  }
+
+  /** Tell the worklet which asset hash is which slot. */
+  setSampleMap(map: Record<string, number>): void {
+    if (this.disposed) return;
+    this.node.port.postMessage({ type: "sample-map", map });
   }
 
   reset(): void {

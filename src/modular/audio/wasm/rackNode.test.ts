@@ -15,8 +15,10 @@ import type { AudioPlan } from "../audioPlan";
 
 class FakePort {
   readonly sent: RackMessage[] = [];
-  postMessage(message: RackMessage): void {
+  readonly transferred: Transferable[][] = [];
+  postMessage(message: RackMessage, transfer?: Transferable[]): void {
     this.sent.push(message);
+    if (transfer) this.transferred.push(transfer);
   }
 }
 
@@ -165,6 +167,43 @@ describe("Notes", () => {
     rack.allNotesOff();
     rack.setModulation("synth-1", 0, 6, 0.6);
 
+    expect(node.port.sent).toHaveLength(0);
+  });
+});
+
+describe("Loading samples", () => {
+  it("sends a sample's audio with its rate", () => {
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    rack.loadSample(2, { channels: [Float32Array.from([1, 2])], sampleRate: 44100 });
+    expect(node.port.sent[0]).toMatchObject({ type: "sample", slot: 2, sampleRate: 44100 });
+  });
+
+  it("transfers the buffers rather than copying them", () => {
+    // A two-minute stereo file is forty megabytes; structured-cloning that per
+    // sample stalls the main thread visibly.
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    const channel = Float32Array.from([1, 2, 3]);
+    rack.loadSample(0, { channels: [channel], sampleRate: 48000 });
+    expect(node.port.transferred[0]).toEqual([channel.buffer]);
+  });
+
+  it("sends the asset-to-slot table", () => {
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    rack.setSampleMap({ kick: 0 });
+    expect(node.port.sent[0]).toEqual({ type: "sample-map", map: { kick: 0 } });
+  });
+
+  it("sends nothing at all once disposed", () => {
+    // Posting into a disposed node's port is a message nobody reads, and for
+    // a sample it is a transferred buffer nobody frees.
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    rack.dispose();
+    rack.loadSample(0, { channels: [Float32Array.from([1])], sampleRate: 48000 });
+    rack.setSampleMap({ kick: 0 });
     expect(node.port.sent).toHaveLength(0);
   });
 });

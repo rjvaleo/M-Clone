@@ -126,6 +126,45 @@ describe("Audio engine on the Rust rack", () => {
     expect(reach.rackPlayerFor("out")).toBe(reach.rackPlayerFor("out"));
   });
 
+  it("sends a sampler's audio before the plan that names it", async () => {
+    // Order matters: a plan naming a sample the engine does not hold yet
+    // points the sampler at nothing, and it stays silent until something
+    // unrelated happens to recompile the graph.
+    const { engine, posted, attach } = rustRig();
+    await attach();
+    const document = emptyGraph();
+    document.nodes.perc = createNode("m.percussion", "perc", { x: 0, y: 0 });
+    engine.update(document);
+    const kinds = posted.map((message) => message.type);
+    const firstSample = kinds.indexOf("sample");
+    const lastPlan = kinds.lastIndexOf("plan");
+    expect(firstSample).toBeGreaterThanOrEqual(0);
+    expect(firstSample).toBeLessThan(lastPlan);
+  });
+
+  it("sends the asset-to-slot table alongside the audio", async () => {
+    const { engine, posted, attach } = rustRig();
+    await attach();
+    const document = emptyGraph();
+    document.nodes.perc = createNode("m.percussion", "perc", { x: 0, y: 0 });
+    engine.update(document);
+    expect(posted.some((message) => message.type === "sample-map")).toBe(true);
+  });
+
+  it("does not resend audio it has already transferred", async () => {
+    // The buffers are transferred, so sending one twice is both wasted work
+    // and a copy the pool no longer owns.
+    const { engine, posted, attach } = rustRig();
+    await attach();
+    const document = emptyGraph();
+    document.nodes.perc = createNode("m.percussion", "perc", { x: 0, y: 0 });
+    engine.update(document);
+    const first = posted.filter((message) => message.type === "sample").length;
+    engine.update(document);
+    expect(posted.filter((message) => message.type === "sample").length).toBe(first);
+    expect(first).toBeGreaterThan(0);
+  });
+
   it("drops the rack on dispose", async () => {
     const { engine, attach } = rustRig();
     await attach();

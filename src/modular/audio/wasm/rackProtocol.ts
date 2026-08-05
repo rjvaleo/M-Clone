@@ -28,6 +28,17 @@ export const RACK_PROCESSOR_NAME = "idmlab-rack";
  */
 export type RackMessage =
   | { type: "plan"; plan: AudioPlan }
+  /**
+   * Decoded audio, on its way into the engine's bank.
+   *
+   * Sent separately from the plan and *before* it, because a plan naming a
+   * sample the engine does not hold yet would assign a slot to nothing. The
+   * channel buffers are transferred rather than copied — see
+   * `WasmRackNode.loadSample`.
+   */
+  | { type: "sample"; slot: number; channels: Float32Array[]; sampleRate: number }
+  /** Asset hashes to slot numbers, so the worklet can resolve a plan. */
+  | { type: "sample-map"; map: Record<string, number> }
   | { type: "reset" }
   | { type: "note-on"; note: number; velocity: number }
   | { type: "note-off"; note: number }
