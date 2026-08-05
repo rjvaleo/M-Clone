@@ -11,7 +11,7 @@
 // from putting message traffic on the audio path.
 
 import type { AudioPlan } from "../audioPlan";
-import type { RackMessage } from "./rackWorklet";
+import type { RackMessage } from "./rackProtocol";
 
 /** Which audio backend a session runs on. */
 export type RackEngineChoice = "web-audio" | "rust";

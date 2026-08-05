@@ -12,6 +12,7 @@ import { isDragSurface, menuPlacement, placeNode, visibleRegion } from "./nodePl
 import { moduleMenuGroups } from "./moduleMenu";
 import { parameterControlKind, selectorVariant } from "./parameterControl";
 import { isLiveStatus, statusLevel } from "./nodeStatus";
+import { preferredEngine, type RackEngineChoice } from "../audio/wasm/rackNode";
 import { KitContext } from "../theme/kits/KitContext";
 import { KIT_IDS, KIT_META, type KitId } from "../theme/kits/types";
 import { Knob } from "../theme/kits/controls/Knob";
@@ -1105,6 +1106,8 @@ export function ModularApp() {
   /** Which kit draws the controls. The theme's other half — see the picker
    * beside the theme picker, and `theme/kits/` for what a kit is. */
   const [kitId, setKitId] = useState<KitId>("thinRing");
+  /** Which audio backend is actually rendering, for the status bar. */
+  const [engineKind, setEngineKind] = useState<RackEngineChoice>("web-audio");
   const [message, setMessage] = useState("idMLab graph ready");
   const [menu, setMenu] = useState<{ x: number; y: number; graphX: number; graphY: number } | null>(null);
   /** Every port with a cable on it, as `"nodeId:portId"`. Built once per edge
@@ -1885,8 +1888,21 @@ export function ModularApp() {
     // resolved last — so turning audio on after building a patch produced an
     // engine with nothing in it, while turning it on first worked. One effect
     // owns synchronisation now, and it runs on both triggers.
-    void engine.start().then(() => {
+    void engine.start().then(async () => {
       refreshAssets();
+      // The Rust rack is opt-in via `?engine=rust` and deliberately not
+      // persisted: someone who lands on a broken build gets the working
+      // backend back by removing a parameter rather than by finding a
+      // setting. Attached after `start()` because a worklet node on a
+      // suspended context never pulls.
+      if (preferredEngine(window.location.search) === "rust") {
+        const attached = await engine.useRustEngine();
+        setEngineKind(engine.engineKind);
+        setMessage(attached
+          ? "Audio running · Rust engine"
+          : "Audio running · Rust engine unavailable, using Web Audio");
+        return;
+      }
       setMessage("Audio running");
     });
     return engine;
@@ -2175,7 +2191,7 @@ export function ModularApp() {
       onRemove={removeAsset}
       onClose={() => setPoolOpen(false)}
     /> : null}
-    <footer className="mm-status-bar"><span>{message}</span><span>{Object.keys(graph.nodes).length} nodes · {Object.keys(graph.edges).length} cable{audioOn ? ` · ${audioNodes} audio` : ""}</span></footer>
+    <footer className="mm-status-bar"><span>{message}</span><span>{Object.keys(graph.nodes).length} nodes · {Object.keys(graph.edges).length} cable{audioOn ? ` · ${audioNodes} audio · ${engineKind === "rust" ? "Rust" : "Web Audio"}` : ""}</span></footer>
   </main>
   </KitContext.Provider>
   </SoundPoolContext.Provider>;

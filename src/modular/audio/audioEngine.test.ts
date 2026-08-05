@@ -26,6 +26,114 @@ const rig = () => {
   return { context, scheduler, engine };
 };
 
+/** A rig whose context can host a worklet, with the rack node faked out. */
+const rustRig = () => {
+  const { context, scheduler, engine } = rig();
+  const posted: { type: string }[] = [];
+  const node = {
+    port: { postMessage: (message: { type: string }) => posted.push(message) },
+    connect: () => {},
+    disconnect: () => {},
+  };
+  (context as unknown as { audioWorklet: unknown }).audioWorklet = {
+    addModule: async () => {},
+  };
+  const attach = () =>
+    engine.useRustEngine({
+      compileModule: async () => ({}) as WebAssembly.Module,
+      createNode: () => node,
+    });
+  return { context, scheduler, engine, posted, attach };
+};
+
+describe("Audio engine on the Rust rack", () => {
+  it("stays on Web Audio when the platform cannot host a worklet", async () => {
+    // The fallback is the path that always works, so an absent worklet is a
+    // false rather than a throw — the session keeps making sound.
+    const { engine } = rig();
+    await expect(engine.useRustEngine()).resolves.toBe(false);
+    expect(engine.engineKind).toBe("web-audio");
+  });
+
+  it("stays on Web Audio when the engine artifact cannot be compiled", async () => {
+    const { engine, context } = rig();
+    (context as unknown as { audioWorklet: unknown }).audioWorklet = { addModule: async () => {} };
+    const attached = await engine.useRustEngine({
+      compileModule: async () => {
+        throw new Error("404");
+      },
+    });
+    expect(attached).toBe(false);
+    expect(engine.engineKind).toBe("web-audio");
+  });
+
+  it("moves rendering onto the rack and tears the Web Audio graph down", async () => {
+    // Both backends holding the same patch would render it twice, so the
+    // adapter is disposed as the rack takes over.
+    const { engine, attach } = rustRig();
+    engine.update(patch());
+    expect(engine.liveNodeCount).toBe(2);
+    await expect(attach()).resolves.toBe(true);
+    expect(engine.engineKind).toBe("rust");
+    expect(engine.liveNodeCount).toBe(0);
+  });
+
+  it("hands the rack the plan it already had, so a built patch survives the switch", async () => {
+    const { engine, posted, attach } = rustRig();
+    engine.update(patch());
+    await attach();
+    expect(posted.filter((message) => message.type === "plan")).toHaveLength(1);
+  });
+
+  it("sends later updates to the rack rather than rebuilding Web Audio nodes", async () => {
+    const { engine, posted, attach } = rustRig();
+    await attach();
+    engine.update(patch());
+    expect(posted.filter((message) => message.type === "plan")).toHaveLength(1);
+    expect(engine.liveNodeCount).toBe(0);
+  });
+
+  it("attaches only once", async () => {
+    const { engine, attach } = rustRig();
+    await expect(attach()).resolves.toBe(true);
+    await expect(attach()).resolves.toBe(true);
+    expect(engine.engineKind).toBe("rust");
+  });
+
+  it("silences the rack on panic", async () => {
+    const { engine, posted, attach } = rustRig();
+    await attach();
+    engine.panic();
+    expect(posted.some((message) => message.type === "all-notes-off")).toBe(true);
+  });
+
+  it("routes note destinations to the rack once attached", async () => {
+    const { engine, attach } = rustRig();
+    engine.update(patch());
+    await attach();
+    // The adapter finds players through the engine's lookup; with a rack
+    // attached every node id has to resolve to a rack-backed player, or the
+    // notes are counted as dropped and nothing sounds.
+    const lookup = (engine as unknown as { rackPlayerFor(id: string): unknown }).rackPlayerFor("out");
+    expect(lookup).toBeDefined();
+    expect((lookup as { nodeId: string }).nodeId).toBe("out");
+  });
+
+  it("reuses one player per node rather than building one per event", async () => {
+    const { engine, attach } = rustRig();
+    await attach();
+    const reach = engine as unknown as { rackPlayerFor(id: string): unknown };
+    expect(reach.rackPlayerFor("out")).toBe(reach.rackPlayerFor("out"));
+  });
+
+  it("drops the rack on dispose", async () => {
+    const { engine, attach } = rustRig();
+    await attach();
+    engine.dispose();
+    expect(engine.engineKind).toBe("web-audio");
+  });
+});
+
 describe("Audio engine", () => {
   it("resumes the context before it is asked to make sound", async () => {
     // A suspended context's clock does not advance, so every ramp scheduled

@@ -17,28 +17,13 @@
 // it lives in `engineBridge.ts` next door, which is fully covered.
 
 import { WasmRack, type EngineExports } from "./engineBridge";
-import type { AudioPlan } from "../audioPlan";
+// The name and the message shape live in rackProtocol.ts so the main thread can
+// import them without importing this file, which registers a processor the
+// moment it loads and only exists inside an AudioWorkletGlobalScope.
+import { RACK_PROCESSOR_NAME, type RackMessage } from "./rackProtocol";
 
-/** Named on both sides of `addModule`. */
-export const RACK_PROCESSOR_NAME = "idmlab-rack";
-
-/** What the main thread sends in. */
-/**
- * What the main thread sends in.
- *
- * Notes are messages rather than plan edits on purpose. A plan describes what
- * the rack *is*; a note is something that happens. Folding note-on into a plan
- * update would mean recompiling a graph to press a key, and would lose the
- * distinction the whole audio layer is built around — structure changes rebuild,
- * everything else does not.
- */
-export type RackMessage =
-  | { type: "plan"; plan: AudioPlan }
-  | { type: "reset" }
-  | { type: "note-on"; note: number; velocity: number }
-  | { type: "note-off"; note: number }
-  | { type: "all-notes-off" }
-  | { type: "modulation"; nodeId: string; source: number; dest: number; amount: number };
+export { RACK_PROCESSOR_NAME };
+export type { RackMessage };
 
 declare const sampleRate: number;
 declare const AudioWorkletProcessor: {
