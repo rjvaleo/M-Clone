@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDefaultProject } from "./project";
 import { MRuntime } from "./runtime";
 import type { ClockDriver, SchedulerDriver } from "./scheduler";
+import { neutralTimeMap } from "./timemap";
+import type { Pattern, ProjectState, VoiceState } from "./types";
 
 class FakeAudioContext {
   currentTime = 0;
@@ -17,6 +19,76 @@ class FakeAudioContext {
     return { contextTime: this.currentTime, performanceTime: this.currentTime * 1000 };
   }
   resume = vi.fn(async () => undefined);
+}
+
+const PULSE_MS_240_BPM = 60_000 / (240 * 24);
+
+function quarterProject(): ProjectState {
+  const pattern: Pattern = {
+    id: "p",
+    steps: [{ pitches: [60] }, { pitches: [62] }, { pitches: [64] }, { pitches: [65] }],
+    scrambledSteps: [{ pitches: [60] }, { pitches: [62] }, { pitches: [64] }, { pitches: [65] }],
+    scrambleGeneration: 0,
+    outputLength: 4,
+    maxSize: 100,
+    chordMode: "single",
+    insertMode: "insert",
+    drumMachine: false,
+    timeBaseNumerator: 1,
+    timeBaseDenominator: 4,
+    phase: 0,
+  };
+  const voice: VoiceState = {
+    patternIndex: 0,
+    playEnabled: true,
+    transposition: 0,
+    noteOrderMix: { original: 100, cyclic: 0, utterly: 0 },
+    density: 1,
+    velocityRange: { low: 100, high: 100 },
+    timeBaseNumerator: 1,
+    timeBaseDenominator: 4,
+    phase: 0,
+    timeDistort: neutralTimeMap(),
+    legato: 0.9,
+    channel: 1,
+    outputChannels: [1],
+    program: 0,
+    sourceChannel: "all",
+    inputUse: "disabled",
+    echoInput: false,
+    mouseAdvance: false,
+  };
+  return {
+    tempo: 120,
+    patterns: [pattern],
+    voices: [voice],
+    root: 0,
+    scale: "chromatic",
+    scaleSnap: false,
+    seed: 1,
+    diatonicTranspose: false,
+    secondOrderTranspose: false,
+    chordTones: false,
+    midiAssignments: {
+      inputs: Array.from({ length: 16 }, (_, i) => ({ deviceId: null, channel: i + 1 })),
+      outputs: Array.from({ length: 16 }, (_, i) => ({ deviceId: null, channel: i + 1 })),
+      programBase: 0,
+      latencyMs: 0,
+      conductXController: 16,
+      conductYController: 17,
+    },
+    echoMapChannels: [],
+    cyclic: {
+      accent: [Array(16).fill(2)],
+      legato: [Array(16).fill(2)],
+      rhythm: [Array(16).fill(2)],
+    },
+    cyclicLengths: { accent: [16], legato: [16], rhythm: [16] },
+    cyclicValues: {
+      legato: [6, 25, 50, 75, 100],
+      rhythm: [0.5, 0.75, 1, 1.5, 2],
+    },
+  };
 }
 
 afterEach(() => {
@@ -157,5 +229,112 @@ describe("browser runtime transport", () => {
     now = 5;
     wake!();
     expect(runtime.schedulingDiagnostics().recoveries).toBe(1);
+  });
+
+  it("drives transport and diagnostics from external MIDI clock input", async () => {
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    let wake: (() => void) | null = null;
+    let now = 0;
+    let perfMs = 0;
+    const transport: string[] = [];
+    const diagnostics: Array<{ clockStatus: string; inferredBpm: number }> = [];
+    const scheduler: SchedulerDriver = {
+      repeat: (callback) => (wake = callback, callback),
+      once: (callback) => callback,
+      cancel: vi.fn(),
+    };
+    const runtime = new MRuntime(() => createDefaultProject(), null, {
+      scheduler,
+      clock: { nowSec: () => now },
+      performanceClockMs: () => perfMs,
+      getPerformanceSettings: () => ({
+        useMetronome: false,
+        sendClock: false,
+        syncRatio: 4,
+        syncRatioDirection: "in",
+        externalClockEnabled: true,
+      }),
+      onClockTransport: (event) => transport.push(event),
+      onClockDiagnostics: (snapshot) => diagnostics.push(snapshot),
+    });
+    runtime.setSynthEnabled(false);
+
+    await runtime.onClockInput(0xfa, 0);
+    expect(transport).toEqual(["start"]);
+    await runtime.onClockInput(0xfa, 1);
+    expect(transport).toEqual(["start"]);
+
+    perfMs = PULSE_MS_240_BPM;
+    await runtime.onClockInput(0xf8, perfMs);
+    perfMs += PULSE_MS_240_BPM;
+    await runtime.onClockInput(0xf8, perfMs);
+    expect(diagnostics[diagnostics.length - 1]).toMatchObject({ clockStatus: "locked" });
+    expect(diagnostics[diagnostics.length - 1]?.inferredBpm).toBeCloseTo(240, 6);
+
+    now = 0.5;
+    perfMs = 500;
+    wake!();
+    expect(diagnostics[diagnostics.length - 1]).toMatchObject({ clockStatus: "lost" });
+
+    await runtime.onClockInput(0xfc, 510);
+    expect(transport[transport.length - 1]).toBe("stop");
+    await runtime.onClockInput(0xfb, 520);
+    expect(transport[transport.length - 1]).toBe("continue");
+  });
+
+  it("applies external tempo changes at the next unscheduled boundary only", async () => {
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    let wake: (() => void) | null = null;
+    let now = 0;
+    let perfMs = 0;
+    const scheduler: SchedulerDriver = {
+      repeat: (callback) => (wake = callback, callback),
+      once: (callback) => callback,
+      cancel: vi.fn(),
+    };
+    const state = quarterProject();
+    const starts: number[] = [];
+    const runtime = new MRuntime(
+      () => state,
+      (notes) => starts.push(...notes.filter((note) => note.voice === 0).map((note) => note.startSec)),
+      {
+        scheduler,
+        clock: { nowSec: () => now },
+        performanceClockMs: () => perfMs,
+        getPerformanceSettings: () => ({
+          useMetronome: false,
+          sendClock: false,
+          syncRatio: 4,
+          syncRatioDirection: "in",
+          externalClockEnabled: true,
+        }),
+      },
+    );
+    runtime.setSynthEnabled(false);
+
+    await runtime.start();
+    wake!();
+
+    const pumpClock = async (untilMs: number) => {
+      if (perfMs === 0) await runtime.onClockInput(0xf8, perfMs);
+      while (perfMs + PULSE_MS_240_BPM <= untilMs) {
+        perfMs += PULSE_MS_240_BPM;
+        await runtime.onClockInput(0xf8, perfMs);
+      }
+    };
+
+    await pumpClock(440);
+    now = 0.45;
+    wake!();
+    await pumpClock(690);
+    now = 0.7;
+    wake!();
+    await pumpClock(940);
+    now = 0.95;
+    wake!();
+
+    expect(starts[0]).toBeCloseTo(0.06, 9);
+    expect(starts[1]).toBeGreaterThanOrEqual(0.45);
+    expect(starts[2] - starts[1]).toBeCloseTo(0.25, 9);
   });
 });
