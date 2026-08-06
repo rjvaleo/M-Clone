@@ -4,6 +4,7 @@
 import { MRuntime } from "../engine/runtime";
 import { useM } from "../state/store";
 import { decodeMidiMessage, mapAssignedInputChannel } from "../engine/midiinput";
+import { decodeClockInputMessage } from "../engine/clockinput";
 
 let runtime: MRuntime | null = null;
 
@@ -15,8 +16,26 @@ export function getRuntime(): MRuntime {
       {
         onCyclicReset: (voices) => useM.getState().signalCyclicReset(voices),
         onPlannedSteps: (steps) => useM.getState().followDrumMachine(steps),
+        onClockDiagnostics: (diagnostics) => useM.getState().setClockInputDiagnostics(diagnostics),
+        onClockTransport: (transport) => {
+          if (transport === "stop") {
+            useM.getState().setPaused(false);
+            useM.getState().setPlaying(false);
+            return;
+          }
+          useM.getState().setPaused(false);
+          useM.getState().setPlaying(true);
+        },
         onMidiMessage: (event) => {
           if (!event.data) return;
+          const realtime = decodeClockInputMessage(event.data);
+          if (realtime) {
+            const performanceMs = typeof (event as MIDIMessageEvent & { receivedTime?: number }).receivedTime === "number"
+              ? (event as MIDIMessageEvent & { receivedTime?: number }).receivedTime!
+              : performance.now();
+            void runtime?.onClockInput(realtime, performanceMs);
+            return;
+          }
           const message = decodeMidiMessage(event.data);
           if (!message) return;
           const deviceId = (event.currentTarget as MIDIInput | null)?.id ?? null;
@@ -55,6 +74,7 @@ export function getRuntime(): MRuntime {
             sendClock: state.options.sendClock,
             syncRatio: state.syncRatio,
             syncRatioDirection: state.syncRatioDirection,
+            externalClockEnabled: state.externalClockEnabled,
           };
         },
       },
