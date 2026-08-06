@@ -96,7 +96,7 @@ export class ClockInput {
   }
 
   observeTimeout(performanceMs: number, settings: ClockInputSettings): ClockInputUpdate | null {
-    if (!settings.enabled) return this.disable();
+    if (!settings.enabled) return null;
     if (this.lastPulseMs === null) return null;
     const timeoutMs = Math.max(1, settings.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     if (performanceMs - this.lastPulseMs <= timeoutMs || this.status !== "locked") return null;
