@@ -1413,6 +1413,14 @@ describe("the Options menu in the store", () => {
     expect(g().clockStatus).toBe("lost");
     g().setClockInputDiagnostics({ inferredBpm: 123.4, clockJitter: 1.25, clockStatus: "locked" });
     expect(g()).toMatchObject({ inferredBpm: 123.4, clockJitter: 1.25, clockStatus: "locked" });
+    g().setOption("externalClock", false);
+    expect(g()).toMatchObject({
+      externalClockEnabled: false,
+      inferredBpm: 0,
+      clockJitter: 0,
+      clockStatus: "disabled",
+    });
+    g().setOption("externalClock", true);
     g().setSyncRatioDirection("out");
     expect(g().clockStatus).toBe("disabled");
   });
