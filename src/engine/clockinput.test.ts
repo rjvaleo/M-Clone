@@ -48,6 +48,9 @@ describe("external MIDI clock input", () => {
 
   it("handles Start, Stop, Continue, and repeated Start idempotently", () => {
     const clock = new ClockInput();
+    expect(clock.handle(0xfb, 0, CLOCK_SETTINGS).transport).toBe("continue");
+    expect(clock.handle(0xfc, 0.5, CLOCK_SETTINGS).transport).toBe("stop");
+    expect(clock.handle(0xfc, 0.75, CLOCK_SETTINGS).transport).toBeUndefined();
     expect(clock.handle(0xfa, 0, CLOCK_SETTINGS).transport).toBe("start");
     expect(clock.handle(0xfa, 1, CLOCK_SETTINGS).transport).toBeUndefined();
     expect(clock.handle(0xfc, 2, CLOCK_SETTINGS).transport).toBe("stop");
