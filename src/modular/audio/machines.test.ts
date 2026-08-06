@@ -36,6 +36,7 @@ import {
   lfDecayScale,
   NONLIN_TAPS,
 } from "./dp4";
+import { createFeedbackNetwork, createResonantShelf } from "./reverbTank";
 
 const spec = (moduleType: string, overrides: Partial<AudioNodeSpec> = {}): AudioNodeSpec => ({
   nodeId: "n1",
@@ -381,5 +382,143 @@ describe("The DP/4+ machine", () => {
     expect(oscillators.length).toBeGreaterThan(0);
     module.dispose();
     for (const osc of oscillators) expect(osc.stops.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Stereo audio effect modules - edge cases and fallback behaviour", () => {
+  it("covers try-catch on osc.stop during dispose and default setParameter in Blackhole", () => {
+    const { context, module } = build("m.audio-blackhole");
+    
+    // Cover default parameter case in Blackhole
+    expect(() => module.setParameter("unknown-param", 0.5, 0)).not.toThrow();
+
+    // Hijack oscillators to throw on stop to cover the catch block in reverbTank.ts (invoked via blackhole's network dispose)
+    const oscillators = context.created.filter((node): node is FakeOscillator =>
+      node instanceof FakeOscillator,
+    );
+    expect(oscillators.length).toBeGreaterThan(0);
+    for (const osc of oscillators) {
+      osc.stop = () => {
+        throw new Error("mock stop error");
+      };
+    }
+    
+    // Dispose module which should trigger the hijacked stop() and hit the catch block safely
+    expect(() => module.dispose()).not.toThrow();
+  });
+
+  it("covers density-2, default parameter cases, fallback variant, and dispose for Non Lin", () => {
+    // Build with invalid fallback variant
+    const { module } = build("m.audio-dp4-nonlin", {
+      structure: { variant: "invalid-non-lin-variant" }
+    });
+
+    // Cover all parameter cases for Non Lin
+    const params = [
+      "hf-bandwidth",
+      "hf-damping",
+      "diffusion-1",
+      "diffusion-2",
+      "density-1",
+      "density-2",
+      "unknown-param",
+    ];
+    for (const p of params) {
+      expect(() => module.setParameter(p, 0.5, 0)).not.toThrow();
+    }
+
+    // Cover dispose
+    expect(() => module.dispose()).not.toThrow();
+  });
+
+  it("covers FDN damping clamp limits in reverbTank.ts", () => {
+    const context = new FakeAudioContext();
+    const network = createFeedbackNetwork(context, {
+      lineCount: 4,
+      sizeScale: 1,
+      decaySeconds: 2,
+      dampingHz: 8000,
+      modRateHz: 0.5,
+      modDepthSeconds: 0,
+    }, 0);
+
+    // Call setDamping with values outside clamp range [200, 20000]
+    expect(() => network.setDamping(100, 0)).not.toThrow();
+    expect(() => network.setDamping(30000, 0)).not.toThrow();
+
+    // Clean up network
+    expect(() => network.dispose()).not.toThrow();
+  });
+
+  it("covers resonant shelf in reverbTank.ts", () => {
+    const context = new FakeAudioContext();
+    const shelf = createResonantShelf(context, "lowshelf", 400, 0);
+    
+    const shelfNode = shelf.owned[0] as any;
+    const peakNode = shelf.owned[1] as any;
+
+    shelf.setResonance(0.5, 0);
+    
+    shelf.setGainDb(0, 0);
+    expect(shelfNode.gain.value).toBe(0);
+    expect(peakNode.gain.value).toBe(0); // direction is 0
+
+    shelf.setGainDb(6, 0);
+    expect(shelfNode.gain.value).toBe(6);
+    expect(peakNode.gain.value).toBe(4.5); // direction * resonance * 9 = 1 * 0.5 * 9 = 4.5
+    expect(peakNode.Q.value).toBe(3.7); // 0.7 + resonance * 6 = 0.7 + 0.5 * 6 = 3.7
+
+    shelf.setGainDb(-6, 0);
+    expect(shelfNode.gain.value).toBe(-6);
+    expect(peakNode.gain.value).toBe(-4.5); // direction * resonance * 9 = -1 * 0.5 * 9 = -4.5
+  });
+
+  it("covers all parameters and fallback algorithm in DP/4 Reverb (plate and hall profiles)", () => {
+    // 1. Build DP/4 Reverb with default plate profile
+    const plate = build("m.audio-dp4-reverb");
+    
+    // Set parameters on plate profile (includes early-refs, which doesn't exist on hall)
+    const plateParams = [
+      "decay-seconds",
+      "pre-delay-seconds",
+      "lf-decay",
+      "hf-damping",
+      "hf-bandwidth",
+      "diffusion-1",
+      "diffusion-2",
+      "decay-definition",
+      "detune-rate",
+      "detune-depth",
+      "primary-send",
+      "early-refs",
+      "unknown-param"
+    ];
+    for (const p of plateParams) {
+      expect(() => plate.module.setParameter(p, 0.5, 0)).not.toThrow();
+    }
+    plate.module.dispose();
+
+    // 2. Build DP/4 Reverb with hall profile (which supports preEchoes)
+    const hall = build("m.audio-dp4-reverb", {
+      structure: { algorithm: "hall" }
+    });
+
+    // Set parameters on hall profile (includes ref-1-level, ref-1-send, ref-2-level, ref-2-send)
+    const hallParams = [
+      "ref-1-level",
+      "ref-1-send",
+      "ref-2-level",
+      "ref-2-send"
+    ];
+    for (const p of hallParams) {
+      expect(() => hall.module.setParameter(p, 0.5, 0)).not.toThrow();
+    }
+    hall.module.dispose();
+
+    // 3. Build DP/4 Reverb with invalid algorithm for fallback coverage
+    const fallback = build("m.audio-dp4-reverb", {
+      structure: { algorithm: "invalid-algorithm" }
+    });
+    fallback.module.dispose();
   });
 });
