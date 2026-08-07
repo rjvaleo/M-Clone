@@ -1,4 +1,36 @@
-# Font reference — ingested 2026-08-04
+# Font reference — ingested 2026-08-04, revisited 2026-08-06
+
+> **Revisit, 2026-08-06.** Three fonts were added: HomeVideo (Regular and
+> Bold), basis33, and micrenc. HomeVideo settles the problem this document
+> ends on — it is **public domain**, per the EULA sitting beside it, for
+> personal *and* commercial use, freely distributable and modifiable. It is
+> also genuinely monospaced and is a VHS/CRT face by design, which is what a
+> readout wants.
+>
+> Every face here was then measured rather than guessed at, across all 95
+> printable ASCII characters:
+>
+> | Font | Monospaced | Cell at 20px |
+> |---|:-:|---|
+> | HomeVideo Regular / Bold | ✓ | 12px |
+> | basis33 | ✓ | 8.75px |
+> | digital-7 (mono) | ✓ | 9.09px |
+> | BitMap | ✗ | space 7.5px, everything else 17.5px |
+> | micrenc | ✗ | 22 distinct widths — MICR cheque encoding |
+> | all others | ✗ | proportional |
+>
+> **BitMap is not monospaced**, despite the name. Its space is a different
+> width from every other glyph, so columns drift on every gap. An earlier
+> measurement that omitted the space character said otherwise.
+>
+> digital-7 measures as monospaced but is a seven-segment clock face: it
+> renders `C#4` as `[#4` and `#061` as `#06 |`. Fine for digits, unusable for
+> a readout carrying note names and words.
+>
+> **HomeVideo Regular is now used for the MIDI readout**, committed to
+> `public/fonts/` with its licence. Its Bold cut draws a filled block behind
+> each glyph — an inverted highlight rather than a heavier weight — which
+> suits a playhead row and nothing else.
 
 Twenty files, ten typeface families, all of them display faces of two kinds:
 **segment/LCD numerals** and **bitmap/pixel type**. Both kinds are exactly
