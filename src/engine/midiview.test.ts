@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   beatOfTick,
   eventsForPlannedNotes,
+  formatDurationCell,
   groupMidiViewRows,
   mergeMidiViewEvents,
 } from "./midiview";
+import { PPQN } from "./planner";
 
 describe("Midi View event conversion", () => {
   it("creates one Note On and one Note Off from the actual planned note", () => {
@@ -160,5 +162,44 @@ describe("musical position on the readout", () => {
     expect(beatOfTick(0)).toBe(0);
     expect(beatOfTick(960)).toBe(1);
     expect(beatOfTick(480)).toBe(0.5);
+  });
+})
+
+describe("the three-character duration cell", () => {
+  it("is always exactly three characters, so columns cannot drift", () => {
+    // The whole point of the fixed cell. A readout that sometimes renders two
+    // characters and sometimes four stops being a grid.
+    for (const beats of [0, 0.01, 0.125, 0.25, 0.5, 0.75, 1, 1.5, 2, 3.75, 9, 9.9, 10, 64, 999]) {
+      expect(formatDurationCell(beats * PPQN), `at ${beats} beats`).toHaveLength(3);
+    }
+  });
+
+  it("shows a whole beat as one point zero", () => {
+    expect(formatDurationCell(PPQN)).toBe("1.0");
+    expect(formatDurationCell(PPQN * 2)).toBe("2.0");
+    expect(formatDurationCell(PPQN * 1.5)).toBe("1.5");
+  });
+
+  it("drops the leading zero below a beat, to keep two digits of detail", () => {
+    // ".25" carries more than "0.2" in the same three characters.
+    expect(formatDurationCell(PPQN * 0.25)).toBe(".25");
+    expect(formatDurationCell(PPQN * 0.5)).toBe(".50");
+    expect(formatDurationCell(PPQN * 0.125)).toBe(".13");
+  });
+
+  it("marks anything ten beats or longer as over", () => {
+    // Three characters cannot hold both digits and a decimal, and the exact
+    // length of a very long note is not what the readout is for.
+    expect(formatDurationCell(PPQN * 10)).toBe("10+");
+    expect(formatDurationCell(PPQN * 64)).toBe("10+");
+  });
+
+  it("renders a note-off, which has no length, as blank rather than zero", () => {
+    // A note-off is an instant. "0.0" would read as a note of no length.
+    expect(formatDurationCell(0)).toBe("   ");
+  });
+
+  it("never renders a negative length", () => {
+    expect(formatDurationCell(-960)).toBe("   ");
   });
 })
