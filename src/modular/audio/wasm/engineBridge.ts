@@ -298,6 +298,7 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     [AUDIO_MIX_PARAM]: 2,
     level: 3,
     [AUDIO_MUTE_PARAM]: 4,
+    pan: 5,
   },
   "m.looper": {
     rate: 0,
@@ -310,6 +311,7 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     [AUDIO_MIX_PARAM]: 7,
     level: 8,
     [AUDIO_MUTE_PARAM]: 9,
+    pan: 10,
   },
   "m.granular": {
     "grain-size": 0,
@@ -322,6 +324,7 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     [AUDIO_MIX_PARAM]: 7,
     level: 8,
     [AUDIO_MUTE_PARAM]: 9,
+    pan: 10,
   },
 };
 
@@ -393,6 +396,11 @@ export const NOT_YET_IN_RUST: readonly string[] = [
   // matrix, where every other module in the engine is mono in and mono out —
   // so it needs multi-port support before it needs DSP.
   "m.audio-dp4",
+  // The stereo widener and the mixer, added with the true-stereo FDN work on
+  // the branch that had no Rust bridge to register them with. Both run on Web
+  // Audio today; neither has a Rust module yet.
+  "m.audio-widener",
+  "m.audio-mixer",
 ];
 
 /**

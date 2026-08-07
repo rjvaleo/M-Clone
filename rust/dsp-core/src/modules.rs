@@ -38,6 +38,17 @@ use crate::voice::{
 };
 use crate::{clamp, Smoothed};
 
+/// Split a mono signal across two ears.
+///
+/// Equal power, the same law `voice.rs` applies inside a synth voice, so a pan
+/// sweep holds its loudness through the centre rather than dipping. Sources
+/// that compute pan per voice do it there; the samplers pan the summed signal,
+/// which is the same thing for a module whose voices all share one position.
+fn equal_power_pan(mono: f32, pan: f32) -> (f32, f32) {
+    let angle = (clamp(pan, -1.0, 1.0) + 1.0) * 0.25 * core::f32::consts::PI;
+    (mono * angle.cos(), mono * angle.sin())
+}
+
 /// How long a parameter takes to reach a new value.
 ///
 /// Five milliseconds is under the ~10 ms where a level change starts to be
@@ -1529,7 +1540,8 @@ impl PercussionModule {
     pub const MIX: usize = 2;
     pub const LEVEL: usize = 3;
     pub const MUTE: usize = 4;
-    pub const PARAM_COUNT: usize = 5;
+    pub const PAN: usize = 5;
+    pub const PARAM_COUNT: usize = 6;
 
     pub fn new(sample_rate: f32) -> Self {
         Self {
@@ -1563,7 +1575,9 @@ impl Module for PercussionModule {
         // the shell sees silence as its dry signal and `mix` behaves as a
         // straight wet level.
         let out = self.shell.finish(ports, 0.0, wet, Self::MIX);
-        ports.output(0, out);
+        let (left, right) = equal_power_pan(out, ports.param(Self::PAN));
+        ports.output(0, left);
+        ports.output(1, right);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -1594,9 +1608,9 @@ impl Module for PercussionModule {
         self.sampler.all_notes_off();
     }
 
-    // Sources have no audio input.
+    // Sources have no audio input; two outputs, because each carries a pan.
     fn input_count(&self) -> usize { 0 }
-    fn output_count(&self) -> usize { 1 }
+    fn output_count(&self) -> usize { 2 }
     fn param_count(&self) -> usize { Self::PARAM_COUNT }
 
     fn param_default(&self, index: usize) -> f32 {
@@ -1648,7 +1662,8 @@ impl LooperModule {
     pub const MIX: usize = 7;
     pub const LEVEL: usize = 8;
     pub const MUTE: usize = 9;
-    pub const PARAM_COUNT: usize = 10;
+    pub const PAN: usize = 10;
+    pub const PARAM_COUNT: usize = 11;
 
     pub fn new(sample_rate: f32) -> Self {
         Self::new_variant(sample_rate, 0)
@@ -1726,7 +1741,9 @@ impl Module for LooperModule {
         };
 
         let out = self.shell.finish(ports, 0.0, wet, Self::MIX);
-        ports.output(0, out);
+        let (left, right) = equal_power_pan(out, ports.param(Self::PAN));
+        ports.output(0, left);
+        ports.output(1, right);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -1764,7 +1781,8 @@ impl Module for LooperModule {
     }
 
     fn input_count(&self) -> usize { 0 }
-    fn output_count(&self) -> usize { 1 }
+    // Two outputs, because each carries a pan.
+    fn output_count(&self) -> usize { 2 }
     fn param_count(&self) -> usize { Self::PARAM_COUNT }
 
     fn param_default(&self, index: usize) -> f32 {
@@ -1796,7 +1814,8 @@ impl GranularModule {
     pub const MIX: usize = 7;
     pub const LEVEL: usize = 8;
     pub const MUTE: usize = 9;
-    pub const PARAM_COUNT: usize = 10;
+    pub const PAN: usize = 10;
+    pub const PARAM_COUNT: usize = 11;
 
     pub fn new(sample_rate: f32) -> Self {
         Self {
@@ -1813,6 +1832,7 @@ impl Module for GranularModule {
     fn process(&mut self, ctx: &ProcessContext, ports: &mut Ports) {
         if self.sample == NO_SAMPLE {
             ports.output(0, 0.0);
+            ports.output(1, 0.0);
             return;
         }
         let settings = GrainSettings {
@@ -1826,7 +1846,9 @@ impl Module for GranularModule {
         };
         let wet = self.cloud.process(ctx.samples, self.sample, &settings);
         let out = self.shell.finish(ports, 0.0, wet, Self::MIX);
-        ports.output(0, out);
+        let (left, right) = equal_power_pan(out, ports.param(Self::PAN));
+        ports.output(0, left);
+        ports.output(1, right);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -1855,7 +1877,8 @@ impl Module for GranularModule {
     }
 
     fn input_count(&self) -> usize { 0 }
-    fn output_count(&self) -> usize { 1 }
+    // Two outputs, because each carries a pan.
+    fn output_count(&self) -> usize { 2 }
     fn param_count(&self) -> usize { Self::PARAM_COUNT }
 
     fn param_default(&self, index: usize) -> f32 {
@@ -2222,12 +2245,70 @@ mod tests {
     }
 
     #[test]
-    fn the_samplers_are_sources_with_no_audio_input() {
+    fn the_samplers_are_stereo_sources_with_no_audio_input() {
+        // Two outputs, because each carries a pan. The TypeScript bridge has
+        // listed all three in its STEREO set since the engine went stereo, and
+        // a one-port module there would leave the right cable landing nowhere.
         for kind in [ModuleKind::Percussion, ModuleKind::Looper, ModuleKind::Granular] {
             let module = kind.build();
             assert_eq!(module.input_count(), 0, "{kind:?} claimed an audio input");
-            assert_eq!(module.output_count(), 1);
+            assert_eq!(module.output_count(), 2, "{kind:?} is not stereo");
         }
+    }
+
+    #[test]
+    fn a_panned_sampler_reaches_two_ears_differently() {
+        let peak_of = |kind: ModuleKind, level: usize, mix: usize, pan_index: usize, pan: f32, port: usize| {
+            let (mut engine, player, output) = sampler_chain(kind, level);
+            // The right cable too, or the second ear never arrives.
+            engine.connect(PortRef { module: player, port: 1 }, PortRef { module: output, port: 1 });
+            engine.set_param(player, mix, 1.0);
+            engine.set_param(player, pan_index, pan);
+            settle(&mut engine);
+            engine.note_on(player, 60, 1.0, 0.0);
+            let mut peak = 0.0f32;
+            for _ in 0..2_000 {
+                engine.process();
+                peak = peak.max(engine.output_of(output, port).abs());
+            }
+            peak
+        };
+        let cases = [
+            (ModuleKind::Percussion, PercussionModule::LEVEL, PercussionModule::MIX, PercussionModule::PAN),
+            (ModuleKind::Looper, LooperModule::LEVEL, LooperModule::MIX, LooperModule::PAN),
+            (ModuleKind::Granular, GranularModule::LEVEL, GranularModule::MIX, GranularModule::PAN),
+        ];
+        for (kind, level, mix, pan) in cases {
+            let left = peak_of(kind, level, mix, pan, -1.0, 0);
+            let right = peak_of(kind, level, mix, pan, -1.0, 1);
+            assert!(left > right * 4.0, "{kind:?} pan never reached the ears: L {left} R {right}");
+        }
+    }
+
+    #[test]
+    fn a_centred_sampler_holds_its_loudness() {
+        // Equal power, the same law the synth voice uses: centre must not be a
+        // dip relative to hard left, or every existing patch gets quieter the
+        // moment pan exists.
+        let peak_of = |pan: f32, port: usize| {
+            let (mut engine, player, output) =
+                sampler_chain(ModuleKind::Percussion, PercussionModule::LEVEL);
+            engine.connect(PortRef { module: player, port: 1 }, PortRef { module: output, port: 1 });
+            engine.set_param(player, PercussionModule::MIX, 1.0);
+            engine.set_param(player, PercussionModule::PAN, pan);
+            settle(&mut engine);
+            engine.note_on(player, 60, 1.0, 0.0);
+            let mut peak = 0.0f32;
+            for _ in 0..2_000 {
+                engine.process();
+                peak = peak.max(engine.output_of(output, port).abs());
+            }
+            peak
+        };
+        let centre = (peak_of(0.0, 0).powi(2) + peak_of(0.0, 1).powi(2)).sqrt();
+        let hard_left = (peak_of(-1.0, 0).powi(2) + peak_of(-1.0, 1).powi(2)).sqrt();
+        assert!((centre / hard_left - 1.0).abs() < 0.1,
+            "panning changed the loudness: centre {centre} vs hard left {hard_left}");
     }
 
     #[test]
