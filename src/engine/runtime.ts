@@ -32,6 +32,11 @@ import {
 } from "./synth";
 import { cyclicResetVoices } from "./cyclicreset";
 import { clockPulseInterval, metronomeInterval } from "./clockoutput";
+import {
+  clockContinue, clockSongPosition, clockStart, clockStop, clockTick,
+  createClockFollower, followerTempo, isClockStale, type ClockFollower,
+} from "./clockinput";
+import type { DecodedMidiMessage } from "./midiinput";
 
 const LOOKAHEAD_SEC = 0.12;
 const TICK_MS = 25;
@@ -63,8 +68,10 @@ export class MRuntime {
   private onPlannedSteps: ((steps: readonly import("./planner").PlannedStep[]) => void) | null;
   private onMidiMessage: ((event: MIDIMessageEvent) => void) | null;
   private getPerformanceSettings: () => {
-    useMetronome: boolean; sendClock: boolean; syncRatio: number; syncRatioDirection: "out" | "in";
+    useMetronome: boolean; sendClock: boolean; externalClock: boolean;
+    syncRatio: number; syncRatioDirection: "out" | "in";
   };
+  private follower: ClockFollower = createClockFollower();
   private nextClockAt = 0;
   private nextMetronomeAt = 0;
 
@@ -78,7 +85,8 @@ export class MRuntime {
       onMidiMessage?: (event: MIDIMessageEvent) => void;
       onPlannedSteps?: (steps: readonly import("./planner").PlannedStep[]) => void;
       getPerformanceSettings?: () => {
-        useMetronome: boolean; sendClock: boolean; syncRatio: number; syncRatioDirection: "out" | "in";
+        useMetronome: boolean; sendClock: boolean; externalClock: boolean;
+    syncRatio: number; syncRatioDirection: "out" | "in";
       };
     } = {},
   ) {
@@ -90,7 +98,8 @@ export class MRuntime {
     this.onMidiMessage = options.onMidiMessage ?? null;
     this.onPlannedSteps = options.onPlannedSteps ?? null;
     this.getPerformanceSettings = options.getPerformanceSettings ?? (() => ({
-      useMetronome: false, sendClock: false, syncRatio: 4, syncRatioDirection: "out",
+      useMetronome: false, sendClock: false, externalClock: false,
+      syncRatio: 4, syncRatioDirection: "out",
     }));
   }
 
@@ -359,12 +368,16 @@ export class MRuntime {
     );
     this.expectedWakeSec = now + TICK_MS / 1000;
     if (decision.recover) this.recoverFromStall(now);
-    const state = this.getState();
+    let state = this.getState();
     const timing = timingFingerprints(state);
     this.cursors = rebaseChangedTimelines(this.cursors, this.timing, timing);
     this.timing = timing;
     const windowEnd = now + decision.lookaheadSec;
-    this.scheduleClockOutputs(state.tempo, windowEnd);
+    // One tempo for the whole tick: the planner and the clock output must not
+    // disagree about how fast the music is going.
+    const tempo = this.effectiveTempo(state.tempo, now);
+    if (tempo !== state.tempo) state = { ...state, tempo };
+    this.scheduleClockOutputs(tempo, windowEnd);
     this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? now);
     const previousCyclic = this.cursors.map((cursor) => cursor.cyclicPos);
     const { notes, cursors, steps } = planWindow(state, this.cursors, this.rngs, now, windowEnd);
@@ -382,16 +395,49 @@ export class MRuntime {
     if (resets.length > 0) this.onCyclicReset?.(resets);
   }
 
+  /**
+   * Take a decoded system message from a MIDI input port.
+   *
+   * Always accepted, whatever the sync direction: the follower is cheap to
+   * keep current, and a source that was already running should be locked on
+   * the moment External Clock is switched on rather than a beat later.
+   */
+  ingestClockMessage(message: DecodedMidiMessage, atSec: number): void {
+    if (message.type === "clock") this.follower = clockTick(this.follower, atSec);
+    else if (message.type === "start") this.follower = clockStart(this.follower);
+    else if (message.type === "continue") this.follower = clockContinue(this.follower);
+    else if (message.type === "stop") this.follower = clockStop(this.follower);
+    else if (message.type === "song-position") {
+      this.follower = clockSongPosition(this.follower, message.sixteenths);
+    }
+  }
+
+  /** True when an external source is actually driving, rather than merely selected. */
+  private isFollowingClock(nowSec: number): boolean {
+    const settings = this.getPerformanceSettings();
+    return settings.syncRatioDirection === "in"
+      && settings.externalClock
+      && !isClockStale(this.follower, nowSec, settings.syncRatio);
+  }
+
+  /**
+   * The tempo to plan against.
+   *
+   * The document's own tempo unless a source is driving, and back to it the
+   * moment that source goes quiet — a clock that stops must not leave the
+   * transport frozen at a tempo nobody is sending.
+   */
+  private effectiveTempo(documentTempo: number, nowSec: number): number {
+    if (!this.isFollowingClock(nowSec)) return documentTempo;
+    return followerTempo(this.follower, this.getPerformanceSettings().syncRatio)
+      ?? documentTempo;
+  }
+
   private scheduleClockOutputs(tempo: number, windowEnd: number): void {
     const settings = this.getPerformanceSettings();
-    if (settings.syncRatioDirection !== "out") return;
-    if (settings.sendClock) {
-      const interval = clockPulseInterval(tempo, settings.syncRatio);
-      while (this.nextClockAt < windowEnd) {
-        if (this.nextClockAt >= this.nowSec()) this.midi?.sendRealtime(0xf8, this.nextClockAt);
-        this.nextClockAt += interval;
-      }
-    } else this.nextClockAt = windowEnd;
+    // The metronome is a local click and has nothing to do with which way
+    // clock flows, so it is handled before the direction gate. It used to sit
+    // below it, which meant choosing sync-in silently switched it off.
     if (settings.useMetronome) {
       const interval = metronomeInterval(tempo, settings.syncRatio);
       while (this.nextMetronomeAt < windowEnd) {
@@ -399,6 +445,20 @@ export class MRuntime {
         this.nextMetronomeAt += interval;
       }
     } else this.nextMetronomeAt = windowEnd;
+
+    if (settings.syncRatioDirection !== "out") {
+      // Not the master: nothing to send, and the send cursor must not be left
+      // in the past or it would burst on switching back.
+      this.nextClockAt = windowEnd;
+      return;
+    }
+    if (settings.sendClock) {
+      const interval = clockPulseInterval(tempo, settings.syncRatio);
+      while (this.nextClockAt < windowEnd) {
+        if (this.nextClockAt >= this.nowSec()) this.midi?.sendRealtime(0xf8, this.nextClockAt);
+        this.nextClockAt += interval;
+      }
+    } else this.nextClockAt = windowEnd;
   }
 
   private submitEvents(windowEnd: number): void {
