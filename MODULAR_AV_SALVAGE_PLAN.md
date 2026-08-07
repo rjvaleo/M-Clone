@@ -319,6 +319,20 @@ already scheduled.
 
 **Status: complete (2026-08-03), folded into Stage C.** See above.
 
+### Stage H — Stereo
+
+**Status: complete.** Not in the original port plan, because the prototype this
+salvaged from was mono and the gap was inherited rather than introduced: one
+`createStereoPanner` caller, no splitter, no merger, and reverb tanks that summed
+every delay line into a single output.
+
+`MODULAR_IMPLEMENTATION_PLAN.md` never treated stereo as a milestone — §9.1 says
+"start with stereo only" and §3.3 defers anything *beyond* stereo — so this was
+finishing Phase 6 rather than extending scope. Pan on every source, per-pad pan
+on Percussion, a decorrelating output matrix on the FDN, the tier-5 Stereo
+Widener, and the Phase 6 Mixer. Details in
+[MODULAR_STATUS.md](MODULAR_STATUS.md).
+
 ---
 
 ## Relationship to the other plans

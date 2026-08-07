@@ -35,6 +35,9 @@ import {
   dp4PairsAreLinked,
   lfDecayScale,
   NONLIN_TAPS,
+  NONLIN_VARIANTS,
+  createDp4ReverbCore,
+  createNonLinCore,
 } from "./dp4";
 
 const spec = (moduleType: string, overrides: Partial<AudioNodeSpec> = {}): AudioNodeSpec => ({
@@ -381,5 +384,181 @@ describe("The DP/4+ machine", () => {
     expect(oscillators.length).toBeGreaterThan(0);
     module.dispose();
     for (const osc of oscillators) expect(osc.stops.length).toBeGreaterThan(0);
+  });
+});
+
+/*
+ * The control surfaces, exhaustively.
+ *
+ * These two `setParameter` switches are where a machine's front panel actually
+ * lives — every documented knob resolves to one case — and until now only one
+ * case of one of them was reached by any test. The rest built correctly and
+ * were never asked to move, which is the failure mode the players already
+ * taught this project once: every layer clean, nothing wired.
+ *
+ * Asserting *that the right node moved* rather than merely calling the setter,
+ * because a switch that silently falls through to `default` is exactly the bug
+ * a call-and-don't-look test cannot see.
+ */
+describe("Every DP/4 tank control", () => {
+  const tank = (algorithm: string) => {
+    const context = new FakeAudioContext();
+    const core = createDp4ReverbCore(context, spec("m.audio-dp4-reverb", {
+      structure: { algorithm },
+    }), 0);
+    return { context, core };
+  };
+
+  /** Every scheduled write in the context, so a test can prove one happened. */
+  const moveCount = (context: FakeAudioContext): number =>
+    context.created.reduce((total, node) => {
+      const params = Object.values(node as unknown as Record<string, unknown>);
+      return total + params.reduce((sum: number, value) => {
+        const param = value as { moves?: () => unknown[] };
+        return sum + (typeof param?.moves === "function" ? param.moves().length : 0);
+      }, 0);
+    }, 0);
+
+  /** Present on every algorithm. */
+  const SHARED = [
+    "decay-seconds", "pre-delay-seconds", "lf-decay", "hf-damping", "hf-bandwidth",
+    "diffusion-1", "diffusion-2", "decay-definition", "primary-send",
+  ];
+  /** `[DOC]` rooms and halls have detune and the two-tap pre-echo section. */
+  const TANK_ONLY = [
+    "detune-rate", "detune-depth",
+    "ref-1-level", "ref-1-send", "ref-2-level", "ref-2-send",
+  ];
+  /** `[DOC]` "Early Ref Level 1–4 … Plates only" — exclusive with the above. */
+  const PLATE_ONLY = ["early-refs"];
+
+  it("moves something for every control a hall actually has", () => {
+    for (const id of [...SHARED, ...TANK_ONLY]) {
+      const { context, core } = tank("hall");
+      const before = moveCount(context);
+      core.setParameter(id, 0.5, 1);
+      expect(moveCount(context), id).toBeGreaterThan(before);
+    }
+  });
+
+  it("moves something for every control a plate actually has", () => {
+    for (const id of [...SHARED, ...PLATE_ONLY]) {
+      const { context, core } = tank("large-plate");
+      const before = moveCount(context);
+      core.setParameter(id, 0.5, 1);
+      expect(moveCount(context), id).toBeGreaterThan(before);
+    }
+  });
+
+  it("alternates the sign of the four plate taps", () => {
+    // One knob, four bipolar taps: the sign flip is the audible half of the
+    // control and would be invisible in a test that only counted movement.
+    const { context, core } = tank("small-plate");
+    core.setParameter("early-refs", 1, 1);
+    const values = context.created
+      .filter((node): node is FakeGain => node instanceof FakeGain)
+      .map((gain) => gain.gain.value);
+    expect(values.some((value) => value > 0.5)).toBe(true);
+    expect(values.some((value) => value < -0.5)).toBe(true);
+  });
+
+  it("ignores a control it does not have", () => {
+    const { context, core } = tank("hall");
+    const before = moveCount(context);
+    core.setParameter("nonsense", 1, 1);
+    expect(moveCount(context)).toBe(before);
+  });
+
+  it("silently skips detune and pre-echo controls on a plate, which has neither", () => {
+    // `[DOC]` plates have no pre-echo section and no detune. The controls still
+    // exist on the face, so they must be harmless rather than throwing.
+    const { context, core } = tank("large-plate");
+    const before = moveCount(context);
+    for (const id of TANK_ONLY) core.setParameter(id, 0.5, 1);
+    expect(moveCount(context)).toBe(before);
+  });
+
+  it("silently skips the plate taps on a hall, which has none", () => {
+    const { context, core } = tank("hall");
+    const before = moveCount(context);
+    for (const id of PLATE_ONLY) core.setParameter(id, 0.5, 1);
+    expect(moveCount(context)).toBe(before);
+  });
+
+  it("takes the low-frequency decay multiplier only below zero", () => {
+    // `lfDecay > 0` leaves the master decay alone; below it, the scale applies.
+    const { context, core } = tank("hall");
+    core.setParameter("lf-decay", -1, 1);
+    const damped = moveCount(context);
+    core.setParameter("lf-decay", 1, 2);
+    expect(moveCount(context)).toBeGreaterThan(damped);
+    expect(lfDecayScale(-1)).toBeLessThan(1);
+  });
+
+  it("clamps decay to its algorithm's published ceiling", () => {
+    const { core } = tank("large-plate");
+    // Asking for more than the profile allows must not throw or wrap.
+    expect(() => core.setParameter("decay-seconds", 10_000, 1)).not.toThrow();
+  });
+});
+
+describe("Every Non Lin control", () => {
+  const nonLin = (variant: string) => {
+    const context = new FakeAudioContext();
+    const core = createNonLinCore(context, spec("m.audio-dp4-nonlin", {
+      structure: { variant },
+    }), 0);
+    return { context, core };
+  };
+
+  it("moves a tap for each envelope segment, and ignores one past the end", () => {
+    const { context, core } = nonLin("non-lin-1");
+    const gains = context.created.filter((node): node is FakeGain => node instanceof FakeGain);
+    const before = gains.map((gain) => gain.gain.moves().length);
+    for (let i = 1; i <= NONLIN_TAPS; i++) core.setParameter(`envelope-${i}`, 0.5, 1);
+    const moved = gains.filter((gain, i) => gain.gain.moves().length > before[i]);
+    expect(moved.length).toBe(NONLIN_TAPS);
+
+    // One past the last tap is a document that outlived its module version.
+    const settled = gains.map((gain) => gain.gain.moves().length);
+    core.setParameter(`envelope-${NONLIN_TAPS + 1}`, 0.5, 2);
+    expect(gains.map((gain) => gain.gain.moves().length)).toEqual(settled);
+  });
+
+  it("moves something for every named control", () => {
+    for (const id of ["hf-bandwidth", "hf-damping", "diffusion-1", "diffusion-2", "density-1", "density-2"]) {
+      const { context, core } = nonLin("non-lin-2");
+      const before = context.created.reduce(
+        (n, node) => n + ((node as unknown as { frequency?: { moves(): unknown[] } }).frequency?.moves().length ?? 0)
+          + ((node as unknown as { gain?: { moves(): unknown[] } }).gain?.moves().length ?? 0), 0);
+      core.setParameter(id, 0.5, 1);
+      const after = context.created.reduce(
+        (n, node) => n + ((node as unknown as { frequency?: { moves(): unknown[] } }).frequency?.moves().length ?? 0)
+          + ((node as unknown as { gain?: { moves(): unknown[] } }).gain?.moves().length ?? 0), 0);
+      expect(after, id).toBeGreaterThan(before);
+    }
+  });
+
+  it("ignores a control it does not have", () => {
+    const { core } = nonLin("non-lin-3");
+    expect(() => core.setParameter("nonsense", 1, 1)).not.toThrow();
+  });
+
+  it("disposes without anything to stop, because it has no oscillator", () => {
+    // The empty `dispose` is deliberate and worth pinning: a Non Lin is a pure
+    // feed-forward tap delay, so there is no loop and no LFO to shut down. If
+    // that ever stops being true this test is where it will be noticed.
+    for (const variant of NONLIN_VARIANTS) {
+      const { context, core } = nonLin(variant);
+      expect(context.created.some((node) => node instanceof FakeOscillator)).toBe(false);
+      expect(() => core.dispose()).not.toThrow();
+    }
+  });
+});
+
+describe("A Blackhole control it does not have", () => {
+  it("is ignored rather than throwing", () => {
+    const { module } = build("m.audio-blackhole");
+    expect(() => module.setParameter("nonsense", 1, 1)).not.toThrow();
   });
 });

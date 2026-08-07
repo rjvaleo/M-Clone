@@ -9,6 +9,7 @@ import { executeGraphCommand, type GraphCommand } from "../model/commands";
 import { expandStreamNode } from "../model/stream";
 import { CANVAS_SIZE, canvasExtent, centeringOffset, clampZoom, scrollToCenter, stageSize, clampFramePixels, easeZoom, wheelDeltaPixels, zoomByWheel, zoomScrollPosition } from "./viewport";
 import { isDragSurface, menuPlacement, placeNode, visibleRegion } from "./nodePlacement";
+import { buildMenu, soleMatch } from "./moduleMenu";
 import {
   centreOn, EMPTY_VIEW, openingScrollTop, ROLL_PITCH_COUNT, viewWindow, type RollView,
 } from "./noteRoll";
@@ -1018,6 +1019,14 @@ export function ModularApp() {
   const [themeId, setThemeId] = useState<ThemeId>(() => readStoredTheme());
   const [message, setMessage] = useState("idMLab graph ready");
   const [menu, setMenu] = useState<{ x: number; y: number; graphX: number; graphY: number } | null>(null);
+  // The menu opens empty every time: a remembered query is a menu that
+  // silently hides most of itself the next time it is opened.
+  const [menuQuery, setMenuQuery] = useState("");
+  const menuGroups = useMemo(() => buildMenu({
+    modules: [...moduleRegistry.values()],
+    groups: MODULE_GROUPS,
+    query: menuQuery,
+  }), [menuQuery]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [pendingConnection, setPendingConnection] = useState<PortRef | null>(null);
@@ -1998,6 +2007,7 @@ export function ModularApp() {
       const bounds = event.currentTarget.getBoundingClientRect();
       const x = event.clientX - bounds.left + event.currentTarget.scrollLeft;
       const y = event.clientY - bounds.top + event.currentTarget.scrollTop;
+      setMenuQuery("");
       setMenu({ x, y, graphX: x / zoom, graphY: y / zoom });
     }}>
       <div className="mm-canvas-stage"
@@ -2048,17 +2058,27 @@ export function ModularApp() {
       {menu && <div ref={menuRef} className="mm-module-menu" style={{ left: menu.x, top: menu.y }}
         onClick={(event) => event.stopPropagation()}>
         <b>Add module</b>
-        {MODULE_GROUPS.map((group) => {
-          const items = [...moduleRegistry.values()]
-            .filter((descriptor) => descriptor.family === group.family)
-            .sort((a, b) => a.label.localeCompare(b.label));
-          if (items.length === 0) return null;
-          return <div key={group.family} className="mm-module-menu__group">
+        <input
+          className="mm-module-menu__search"
+          type="search"
+          autoFocus
+          placeholder="Search modules…"
+          value={menuQuery}
+          onChange={(event) => setMenuQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            // Only when the query means one thing; see `soleMatch`.
+            const only = soleMatch(menuGroups);
+            if (only) addNode(only.type);
+          }}
+        />
+        {menuGroups.length === 0
+          ? <p className="mm-module-menu__empty">No module matches “{menuQuery}”.</p>
+          : menuGroups.map((group) => <div key={group.family} className="mm-module-menu__group">
             <b>{group.label}</b>
-            {items.map((descriptor) => <button type="button"
+            {group.items.map((descriptor) => <button type="button"
               key={descriptor.type} onClick={() => addNode(descriptor.type)}>{descriptor.label}</button>)}
-          </div>;
-        })}
+          </div>)}
       </div>}
     </div>
     {poolOpen ? <SoundPool

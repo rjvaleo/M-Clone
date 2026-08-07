@@ -1,0 +1,432 @@
+
+
+=== [p1] ===
+DIGITAL IMPLEMENTATION OF  
+ARTIFICIAL REVERBERATION ALGORITHMS 
+ 
+Irina DORNEAN, Marina ŢOPA, Botond Sandor KIREI 
+Faculty of Electronics, Telecommunications and Information Technology, Technical University of Cluj-Napoca  
+Str. G. Bariţiu nr. 26-28,400020 Cluj-Napoca, Romania, Tel: +40264401470;  Fax: +40264591340 
+Irina.Dornean@bel.utcluj.ro 
+Erwin.Szopos@bel.utcluj.ro 
+ 
+Abstract 
+ 
+The paper presents the digital implementation of 
+signal processing algorithms that simulate natural concert 
+hall reverberation. It deals with the complete artificial 
+reverberators proposed by Schroeder, Moorer and 
+Gardner. 
+For 
+each 
+reverberation 
+algorithm 
+the 
+implementation was done in two steps: 1. the algorithm is 
+checked using a model in Matlab Simulink; 2. the Verilog 
+code is written and tested. The results prove that the 
+Verilog design is feasible and can be further developed for 
+acoustic improvements of rooms. 
+ 
+Keywords: artificial reverberators, FPGA 
+ 
+1 INTRODUCTION 
+Natural reverberation is the combined effect of 
+multiple sound reflections within a room [1], [4]. It 
+might be described by the impulse response of the 
+room, obtained as room’s time response to a very short 
+burst. A typical impulse response in a reverberating 
+room is shown in Figure 1.  
+ 
+ 
+Figure 1 The impulse response of a room  
+ 
+The reverberation time is the amount of time it 
+takes for the sound to die away to 60 dB of its original 
+value. The first reflection time is the amount of time 
+separating the direct sound from the first reflection. 
+Natural reverberation typically follows a quasi-
+exponential curve that reaches a peak and decays more 
+or less slowly. Artificial reverberation is generated, 
+manipulated and combined in order to get a stereo high 
+quality sound recording that looks natural. This effect 
+spatializes sounds, thus leading to the illusion of 
+sounds emerging from imaginary environments. From a 
+signal processing point of view, an artificial 
+reverberator is a filter with an impulse response that 
+resembles the impulse response of a concert hall, 
+cathedral, etc. [2].  
+The 
+digital 
+approach 
+of 
+the 
+reverberation 
+phenomena plays the most important role in the audio 
+signal processors domain [5]. The scope of the digital 
+reverberators is to delay certain frequencies, which will 
+make the sounds reach the listener in different 
+moments of time, adding life and sense of space.  
+ 
+2 ARTIFICIAL REVERBERATORS 
+The modern technologies bring several solutions for 
+the reverberation problem. Nowadays, the new 
+computers and digital signal processors allow a 
+complicated 
+digital 
+simulation 
+of 
+a 
+natural 
+reverberation.  
+ 
+Schroeder (I) reverberator 
+The first digital solution of the reverberation was 
+founded by Manfred Schroeder in 1961 and it is based 
+on the comb filter (Figure 2).  It consists of a delay cell 
+with an output redirected to the input. 
+ 
+Out
+1
+Integer Delay
+ -1
+Z   
+Gain
+-K-
+Add
+In
+1
+ 
+Figure 2 Comb filter 
+ 
+Schroeder noticed that the structure of a comb filter 
+can be modified to get an all-pass filter as shown in 
+Figure 3. Such a filter has a smooth frequency 
+response.  
+ 
+Out
+1
+Integer Delay
+ -1
+Z   
+Gain2
+-K-
+Gain1
+-K-
+Add2
+Add1
+In
+1
+ 
+Figure 3 All-Pass filter 
+ 
+Schroeder proposed a reverberator composed of 
+parallel comb filters, series connected with all pass 
+filters, as depicted in Figure 4.  
+
+
+=== [p2] ===
+ 
+Output
+1
+Input
+Comb filter 4
+In
+Out
+Comb filter 3
+In
+Out
+Comb filter 2
+In
+Out
+Comb filter 1
+In
+Out
+All-pass 2
+In
+Out
+All-pass 1
+In
+Out
+Add
+ 
+ 
+Figure 4 Schroeder first reverberator 
+ 
+The comb filters produce a long reverberant decrease 
+and the all pass filters multiply the number of echoes 
+from the output of the comb filters.   
+  
+Schroeder (II) reverberator 
+This structure consists of a chain of 5 allpass filters 
+with different delays, as depicted in Figure 5. 
+ 
+Output
+1
+Input
+All-pass 5
+In
+Out
+All-pass 4
+In
+Out
+All-pass 3
+In
+Out
+All-pass 2
+In
+Out
+All-pass 1
+In
+Out
+ 
+ 
+Figure 5 Schroeder second reverberator 
+ 
+Moorer reverberator 
+Moorer started with the Schroeder reverberator and 
+made serious improvements (Figure 6). The first 
+change was the increase of the comb filters from four 
+to six. It caused longer reverberation times and kept 
+unmodified the modal density. The second change was 
+the introduction of a low pass filter (LPF) in the 
+reaction of the comb filter. The cutoff frequencies of 
+the LPF were based on physical considerations about 
+the air sound absorbtion. By adding a LPF, the 
+reverberation time decreases at high frequencies and 
+the sound looked more real.  
+ 
+Gardner reverberator 
+It is based on nested all-pass filters, where the delay 
+is replaced by a series connection of a delay and 
+another all-pass filter. Gardner suggested three 
+structures for different size rooms [3]. In Figure 7 the 
+structure of the medium room reverberator is depicted. 
+ 
+ 
+3 IMPLEMENTATION 
+This 
+paper 
+approaches 
+two 
+different 
+implementations: one using the Matlab-Simulink 
+environment and the other using the Verilog hardware 
+description language. The first design represents the 
+preparation step for the second one.  
+Output
+1
+Input
+Comb filter 6
+In
+Out
+Comb filter 5
+In
+Out
+Comb filter 4
+In
+Out
+Comb filter 3
+In
+Out
+Comb filter 2
+In
+Out
+Comb filter 1
+In
+Out
+All-pass 2
+In
+Out
+All-pass 1
+In
+Out
+Add
+ 
+ 
+Figure 6 Moorer reverberator 
+ 
+Both implementations use the same input signal: a 
+Matlab 
+modeled 
+impulse. 
+For 
+the 
+Verilog 
+implementation the input data provided by Matlab was 
+transformed into specific files through a special 
+conceived system. These files contain binary data, 
+which characterize the signal at every clock cycle. It 
+must be specified that the input signal was scaled by 
+1024 because in the digital domain integer calculations 
+were done.  
+For all the four types of reverberation algorithms, 
+the simulations were run for 4 μs, the necessary time to 
+visualize the results.  
+The hardware design implied the implementation of 
+the comb, all-pass or low-pass filters with all the 
+specific components at register level.  The global 
+signals were: the clock ‘clk’, working at 50 MHz 
+frequency and the reset ‘rst’, the system being able to 
+stop in every moment.  
+For the verification of the conceived system, special 
+Verilog test modules were designed as: a ‘clock 
+generator’, a ‘test bench’ (it gives the input signals and 
+simulates different situations that can occur), a 
+‘dump_out’ (it takes the output signal and transforms it 
+into a .data file) and a ‘top_level’ (it instantiates all the 
+modules). The compilation and simulation of the test 
+modules were visualized in ModelSim environment. 
+The main advantage of the digital implementation 
+of these reverberators is that they can be downloaded 
+on development boards having field programmable 
+gate arrays (FPGA) components and used for acoustic 
+signal processing. The FPGAs offer higher processing 
+speed than the common methods involving digital 
+signal processors. Future developments imply the use 
+of floating-point processing types of signals for a 
+superior accuracy. 
+ 
+ 
+
+
+=== [p3] ===
+Out1
+1
+LPF
+In
+Out
+Integer Delay3
+ -1
+Z   
+Integer Delay2
+ -1
+Z   
+Integer Delay1
+ -1
+Z   
+Integer Delay
+ -1
+Z   
+Input.
+Input
+Gain5
+-K-
+Gain4
+-K
+Gain3
+-K-
+Gain1
+-1
+Gain
+-K-
+Double AP1
+In Out
+Add3
+Add2
+Add1
+Add
+AP2
+In Out
+AP1
+In Out
+ 
+ 
+Figure 7 Gardner reberberator
+ 
+ 
+3 EXPERIMENTAL RESULTS 
+For each artificial reverberator both a Simulink and a 
+Verilog implementations were achieved. The common 
+element is the input signal, a modeled impulse, with the 
+difference that for the digital design it was scaled by 
+1024 for a better visualisation of the output signal. The 
+digital computations were done with integer numbers, 
+not as in Simulink, where the floating point 
+calculations offered a better precision. 
+In the Figures 8-11 the output signals obtained for the 
+reverberators 
+in 
+both 
+Simulink 
+and 
+Verilog 
+implementations are presented. The results are almost 
+identical and prove the correctness of the Verilog 
+design.  
+ 
+  
+ 
+ 
+Figure 8 Schroeder I output signal a) Simulink simulation b) Verilog simulation
+ 
+   
+ 
+ 
+Figure 9 Schroeder II output signal a) Simulink simulation b) Verilog simulation
+ 
+
+
+=== [p4] ===
+  
+  
+ 
+Figure 10 Moorer output signal a) Simulink simulation b) Verilog simulation
+ 
+   
+ 
+Figure 11 Gardner output signal a) Simulink simulation b) Verilog simulation
+ 
+ 
+ 
+4 CONCLUSIONS 
+The novelty offered by this paper was the digital 
+implementation of four types of artificial reverberators: 
+Schroeder I, Schroeder II, Gardner and Moorer. The 
+first step was the study of the acoustical reverberation 
+phenomen and its parameters. The second step was the 
+description 
+of 
+the 
+blocks 
+in 
+Matlab-Simulink 
+environment, followed by the simulation wih an 
+impulse input. The digital design was implemented on 
+Verilog hardware description language and its 
+verification was realized on ModelSim PE 6.2 Student 
+Edition platform. The same input was applied as in the 
+previous design and the appropriate simulation run. 
+The obtained results in the two different designs were 
+compared with respect to shape and value.  The  
+conclusion was that the Verilog implementation is 
+feasible and can be further used for acoustic signal 
+processing for the improvement of acoustic properties 
+of rooms. The code can be the source for a large area of 
+applications because the modern FPGAs contain many 
+resources that support DSP applications, which are 
+optimized for high performance and low power 
+consumption.  
+ 
+5 REFERENCES 
+ 
+1.  Marina Dana Ţopa, Norbert Toma, Victor Popescu, Vasile 
+Ţopa, “Evaluation of All-Pass Reverberators”, Proceedings of 
+14th IEEE International Conference on Electronics, Circuits 
+and Systems ICECS 2007, Marrakech, Morocco 
+2. Hector Perez-Meana, ‘Advances in Audio and Speech Signal 
+Processing: Technologies and Applications’, Idea Group 
+Publishing, Hershey, ISBN 978-1-59904-134-6,Digital Filters 
+for Digital Audio Effects, Jovanovic Dolecek & Fernandez 
+Vazquez, pp.23-24 
+3 Rocchesso, D., Smith, J.O., “Circulant and Elliptic Feedback 
+Delay Networks for Artificial Reverberation”, IEEE Trans. 
+Speech and Audio Proc, 5(1):51-63, 1997. 
+4. A. Farina, P. Martignon, A. Capra, S. Fontana, “Measuring 
+impulse responses containing complete spatial information”, 
+22nd AES-UK Conference 2007, Cambridge, UK  
+5. John S. Bradley, “Using ISO 3382 measures, and their 
+extensions, to evaluate acoustical conditions in concert halls”, 
+Acoustical Science and Technology, 2005, ISSN: 1346-3969, 
+pp.170-178  
+ 
