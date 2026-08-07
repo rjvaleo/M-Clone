@@ -31,9 +31,6 @@ export function ClassicView({ onExit, themeId, onSelectTheme, kitId, onSelectKit
   return (
     <App
       onExitToPatch={onExit}
-      // idMLab's themes carry their own light and dark, so M's toggle stands
-      // down rather than overriding them with its hardcoded dark block.
-      themeManaged
       // The same two pickers the patch view carries. Without them you could
       // reach the classic interface and then have no way to re-skin it, which
       // is the one thing the theme engine is here to do.

@@ -116,24 +116,11 @@ function useElementSize() {
  * Absent — which is how M-Clone's own entry point mounts this — nothing about
  * the app changes.
  */
-export function App({ onExitToPatch, extraControls, themeManaged }: {
+export function App({ onExitToPatch, extraControls }: {
   onExitToPatch?: () => void;
   /** Rendered at the right of the menu bar. idMLab puts its theme and kit
    *  pickers here, so the classic view can be re-skinned from inside itself. */
   extraControls?: React.ReactNode;
-  /**
-   * Hand light and dark to whoever is hosting this app.
-   *
-   * M's own dark mode is 256 hardcoded colours. Those beat the palette
-   * variables, so with an idMLab theme chosen the two fight and M's block
-   * wins — the theme's surfaces survive but its text colours do not. Rather
-   * than half-convert that block, the host says "I own this": the
-   * `theme-dark` class is never applied and the Light/Dark controls come out,
-   * leaving the theme's own light and dark tokens to do the whole job.
-   *
-   * Left off — M-Clone standalone — nothing changes.
-   */
-  themeManaged?: boolean;
 } = {}) {
   const lastNumerical = useRef<number | null>(null);
   const [workspaceZoom, setWorkspaceZoom] = useState(() => {
@@ -196,7 +183,7 @@ export function App({ onExitToPatch, extraControls, themeManaged }: {
   const [fileActionAfterSave, setFileActionAfterSave] = useState<"new" | "open" | null>(null);
 
   useEffect(() => {
-    document.body.classList.toggle("dark-bg", !themeManaged && theme === "dark");
+    document.body.classList.toggle("dark-bg", theme === "dark");
     try {
       localStorage.setItem("mclone.theme", theme);
     } catch {
@@ -339,10 +326,8 @@ export function App({ onExitToPatch, extraControls, themeManaged }: {
     { label: "Zoom In", run: () => setWorkspaceZoom((v) => clampWorkspaceZoom(v + 10)) },
     { label: "Actual Size", run: () => setWorkspaceZoom(100) },
     "separator",
-    ...(themeManaged ? [] : [
-      { label: "Light Theme", checked: theme === "light", run: () => setTheme("light") },
-      { label: "Dark Theme", checked: theme === "dark", run: () => setTheme("dark") },
-    ]),
+    { label: "Light Theme", checked: theme === "light", run: () => setTheme("light") },
+    { label: "Dark Theme", checked: theme === "dark", run: () => setTheme("dark") },
     ...(onExitToPatch
       ? ["separator" as const, { label: "Return to Patch", run: onExitToPatch }]
       : []),
@@ -352,7 +337,7 @@ export function App({ onExitToPatch, extraControls, themeManaged }: {
   const layout = workspaceLayout(viewport.width, viewport.height, workspaceZoom);
 
   return (
-    <div className={"app" + (!themeManaged && theme === "dark" ? " theme-dark" : "")}
+    <div className={"app" + (theme === "dark" ? " theme-dark" : "")}
       onInputCapture={(event) => {
         const input = event.target as HTMLInputElement;
         if (input.tagName === "INPUT" && input.type === "number"
@@ -437,10 +422,7 @@ export function App({ onExitToPatch, extraControls, themeManaged }: {
                 onChange={(event) => setChannelColor(index, event.target.value)} />
             ))}
           </div>
-          {/* Absent when the host owns light and dark — two competing dark
-              switches is worse than either one alone. */}
-          {!themeManaged && <>
-            <button
+          <button
               className={"vtab" + (theme === "light" ? " vtab--on" : "")}
               onClick={() => setTheme("light")}
             >
@@ -450,9 +432,8 @@ export function App({ onExitToPatch, extraControls, themeManaged }: {
               className={"vtab" + (theme === "dark" ? " vtab--on" : "")}
               onClick={() => setTheme("dark")}
             >
-              Dark
-            </button>
-          </>}
+            Dark
+          </button>
         </div>
       </nav>
 
