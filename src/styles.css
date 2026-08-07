@@ -1748,11 +1748,17 @@ body {
 /* ===========================================================================
    DARK THEME — identical Unified interface, dark palette. Scoped to .theme-dark.
    =========================================================================== */
-body.dark-bg { background: #191919; }
+/* Dark mode does the heavy lifting — it inverts the whole interface, all 250-odd
+   surfaces, and it already works. The only thing it should not decide for
+   itself is the colour of the desktop behind the windows: that comes from the
+   chosen theme, so picking a theme tints the app while dark mode keeps
+   everything on top of it legible. Falls back to the original #191919 when no
+   theme is applied. */
+body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
 
 .theme-dark {
   color: #e8e8e8;
-  background: #191919;
+  background: rgb(var(--s-body, 25 25 25));
   min-height: 100vh;
 }
 .theme-dark .app__doc { opacity: 0.7; }
