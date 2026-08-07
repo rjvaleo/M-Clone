@@ -257,7 +257,7 @@ scheduler as transport, including cancellation of outstanding one-shot wakes.
 | MIDI input/controller assignment | Implemented | 16-row device/channel matrix, routing/store tests |
 | MIDI file export | Implemented | deterministic Movie/SMF tests |
 | MIDI file import / imported Sequence | Deliberately excluded | no product workflow |
-| MIDI clock output/input | Output implemented; input excluded | realtime Start/Clock/Stop at 24 PPQN and Sync Ratio; manual excludes External Clock |
+| MIDI clock output/input | Implemented with browser-only external-clock limits | realtime Start/Clock/Stop at 24 PPQN and Sync Ratio; external input follows 0xfa/0xfb/0xfc and 24-PPQN clock with bounded tempo smoothing, 200 ms loss fallback, and future-only tempo rebasing |
 | Controller-aware panic | Implemented | CC 64 / 121 / 123 on all channels |
 | Generated general CC, Bank Select, Pitch Bend, Channel Pressure | Not implemented | later I/O/instrument phase; live sustain input and panic CCs are implemented |
 | Native MIDI adapters | Not implemented | native milestone |
@@ -294,6 +294,7 @@ Relevant suites:
 | `midiinput.test.ts` | normalized live messages and device/channel routing helpers |
 | `inputcontrol.test.ts` | Appendix B command lookup and value handling |
 | `clockoutput.test.ts` | 24-PPQN Start/Clock/Stop scheduling at Sync Ratio |
+| `clockinput.test.ts` | realtime decode, quarter-note pulse counting, tempo inference, jitter tolerance, loss/recovery, and Sync Ratio input mapping |
 
 Browser-only adapters remain excluded from the global coverage percentage, but
 their behavior is exercised with fake clocks, AudioContext objects, timers, and
@@ -317,6 +318,12 @@ Use Chromium on `localhost` or HTTPS; Web MIDI is unavailable from the standalon
 9. Change programs during playback; verify Program Change precedes the next note.
 10. Disconnect one of multiple selected devices. The remaining destination must
     continue; reconnecting the same port ID must restore its selection.
+11. Enable External Clock with Sync Ratio direction set to In, feed 24-PPQN MIDI
+    clock from a DAW or hardware sequencer, and verify inferred BPM tracks the
+    source within ±5% once locked.
+12. Change the external tempo while playback is running; verify already-submitted
+    notes stay put, the next unscheduled transport boundary becomes the new
+    timing anchor, and clock status falls back to lost within 200 ms if pulses stop.
 
 For quantitative jitter measurement, loop MIDI output to a timestamp recorder or
 capture audio transients from the destination. Report median, p95, p99, maximum,
@@ -343,8 +350,10 @@ The following must remain true after every MIDI change:
 Browser Phase 3 is implemented: injected clock/scheduler drivers, unified
 audition wakes, diagnostics, explicit late-event/stall policy, bounded adaptive
 lookahead, retained device lifecycle, multi-port routing, suspension recovery,
-controller-aware panic, versioned native event batches, and forced-stall / loss /
-100,000-wake conformance tests.
+controller-aware panic, versioned native event batches, forced-stall / loss /
+100,000-wake conformance tests, and browser external MIDI clock input with
+bounded tempo smoothing, Start/Stop/Continue transport control, 24-PPQN pulse
+counting, and 200 ms loss detection.
 
 Still open for later product phases:
 
@@ -354,8 +363,9 @@ Still open for later product phases:
 3. generated musical Control Change, Bank Select, sustain ownership, Pitch
    Bend, and Channel Pressure semantics;
 4. platform-specific background/sleep certification and recovery telemetry;
-5. physical live-input and MIDI Clock-output certification in the browser/device
-   matrix; external clock input, SysEx, and MIDI 2.0 remain outside this phase.
+5. physical live-input and MIDI clock certification in the browser/device
+   matrix, plus long-session telemetry on loss/recovery behavior;
+6. SysEx and MIDI 2.0 remain outside this phase.
 
 The browser build must not be described as “zero jitter.” The implemented claim
 is narrower: deterministic musical planning, equal batch timestamps, bounded
