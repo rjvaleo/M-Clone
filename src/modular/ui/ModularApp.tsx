@@ -62,6 +62,11 @@ import { createNode, moduleRegistry } from "../registry/registry";
 import { applyTheme, DEFAULT_THEME_ID, themeMeta, type ThemeId } from "../theme/themes";
 import { ThemePicker } from "./ThemePicker";
 import { MenuBar, type MenuActions } from "./MenuBar";
+import { lazy, Suspense } from "react";
+
+/** Loaded on demand: M's shell and its stylesheet are dead weight until asked for. */
+const ClassicView = lazy(() => import("./ClassicView")
+  .then((module) => ({ default: module.ClassicView })));
 import { CyclicGrid } from "./CyclicGrid";
 import { executeRuntimeCommand, queueRuntimeParameter } from "./runtimebridge";
 import {
@@ -1127,6 +1132,8 @@ export function ModularApp() {
   /** Which audio backend is actually rendering, for the status bar. */
   const [engineKind, setEngineKind] = useState<RackEngineChoice>("web-audio");
   const [message, setMessage] = useState("idMLab graph ready");
+  /** Classic M takes the whole surface; it is a mode, not a panel. */
+  const [classic, setClassic] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; graphX: number; graphY: number } | null>(null);
   // The menu opens empty every time: a remembered query is a menu that
   // silently hides most of itself the next time it is opened.
@@ -2131,9 +2138,16 @@ export function ModularApp() {
     zoomReset: { run: () => setZoom(1) },
     hand: { run: () => setHandMode((value) => !value), checked: handMode },
     sounds: { run: () => setPoolOpen((value) => !value), checked: poolOpen },
+    classicView: { run: () => setClassic(true) },
   };
 
   useEffect(() => () => runtimeRef.current?.stop(), []);
+  if (classic) {
+    return <Suspense fallback={<div className="mm-classic-loading">Loading classic M…</div>}>
+      <ClassicView onExit={() => setClassic(false)} />
+    </Suspense>;
+  }
+
   return <SoundPoolContext.Provider value={{ assets, preview: playAsset }}>
   <KitContext.Provider value={kitId}>
   <main className="mm-app" onClick={() => setMenu(null)}>

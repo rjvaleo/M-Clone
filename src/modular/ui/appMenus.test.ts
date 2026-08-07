@@ -55,6 +55,7 @@ describe("what each menu holds", () => {
   it("puts the view controls under View", () => {
     expect(items("View")).toEqual([
       "Zoom In", "Zoom Out", "Actual Size", "Hand Tool", "Sound Pool",
+      "Classic M",
     ]);
   });
 
@@ -81,6 +82,13 @@ describe("nothing the old project bar could do was dropped", () => {
     for (const id of required) {
       expect(all.has(id), `${id} has no home in the menu bar`).toBe(true);
     }
+  });
+
+  it("offers the classic M interface as a view", () => {
+    // M-Clone's own shell, mounted whole rather than reimplemented. Leaving it
+    // again is its own View menu's job, not this one's.
+    const all = APP_MENUS.flatMap((menu) => menuIds(menu.items));
+    expect(all).toContain("classicView");
   });
 
   it("adds a module command the bar never had", () => {

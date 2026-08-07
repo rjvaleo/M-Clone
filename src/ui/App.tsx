@@ -110,7 +110,13 @@ function useElementSize() {
   return [ref, size] as const;
 }
 
-export function App() {
+/**
+ * `onExitToPatch` is the one concession to living inside idMLab: when it is
+ * supplied a "Return to Patch" item appears at the foot of the View menu.
+ * Absent — which is how M-Clone's own entry point mounts this — nothing about
+ * the app changes.
+ */
+export function App({ onExitToPatch }: { onExitToPatch?: () => void } = {}) {
   const lastNumerical = useRef<number | null>(null);
   const [workspaceZoom, setWorkspaceZoom] = useState(() => {
     try {
@@ -317,6 +323,9 @@ export function App() {
     "separator",
     { label: "Light Theme", checked: theme === "light", run: () => setTheme("light") },
     { label: "Dark Theme", checked: theme === "dark", run: () => setTheme("dark") },
+    ...(onExitToPatch
+      ? ["separator" as const, { label: "Return to Patch", run: onExitToPatch }]
+      : []),
   ];
 
   const [viewportRef, viewport] = useElementSize();
