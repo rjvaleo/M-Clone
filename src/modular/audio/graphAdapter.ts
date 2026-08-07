@@ -24,9 +24,15 @@ import {
 } from "./audioPlan";
 import { crossfadeSchedule, CROSSFADE_SEC, type TransitionScheduler } from "./transitions";
 
-/** The slice of `AudioNode` used here. */
+/**
+ * The slice of `AudioNode` used here.
+ *
+ * `output` and `input` address a specific channel on a splitter or a merger.
+ * They are optional and every existing caller omits them, so the ordinary
+ * one-in-one-out wiring reads exactly as it did before stereo arrived.
+ */
 export interface AudioNodeLike {
-  connect(destination: AudioNodeLike): void;
+  connect(destination: AudioNodeLike, output?: number, input?: number): void;
   disconnect(destination?: AudioNodeLike): void;
 }
 
