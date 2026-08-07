@@ -399,7 +399,7 @@ body {
 /* group tabs */
 .ugroup { display: flex; gap: 2px; margin-bottom: 4px; }
 .utab {
-  width: 20px; height: 18px; border: 1px solid #000; background: #fff; cursor: pointer;
+  width: 20px; height: 18px; border: 1px solid #000; background: var(--panel); cursor: pointer;
 }
 .utab--on { background: #000; color: #fff; }
 
@@ -412,7 +412,7 @@ body {
 .utable__sel { background: var(--m-sel); }
 .ustepcell { padding: 1px !important; }
 .ustep {
-  width: 18px; height: 16px; border: 1px solid #999; background: #fff; padding: 0; cursor: pointer; display: block;
+  width: 18px; height: 16px; border: 1px solid #999; background: var(--panel); padding: 0; cursor: pointer; display: block;
 }
 .ustep--beat { border-left: 2px solid #000; }
 .ustep--on { background: #000; }
@@ -437,7 +437,7 @@ body {
 /* transport */
 .utransport { display: flex; gap: 4px; margin-bottom: 6px; }
 .ubtn {
-  border: 1px solid #000; background: #fff; padding: 4px 8px; font-weight: 700; cursor: pointer;
+  border: 1px solid #000; background: var(--panel); padding: 4px 8px; font-weight: 700; cursor: pointer;
 }
 .ubtn--on { background: #000; color: #fff; }
 .ubtn--wide { flex: 1; }
@@ -515,7 +515,7 @@ body {
   position: relative;
   margin-right: -1px;
   border: 1px solid #000;
-  background: #fff;
+  background: var(--panel);
   color: #000;
   font-size: 21px;
   font-weight: 900;
@@ -557,7 +557,7 @@ body {
   touch-action: none;
   cursor: crosshair;
   overflow: hidden;
-  background-color: #fff;
+  background-color: var(--panel);
   background-image:
     radial-gradient(circle at 1px 1px, #000 0 0.8px, transparent 1.2px),
     radial-gradient(circle at 1px 1px, #000 0 0.8px, transparent 1.2px);
@@ -599,11 +599,11 @@ body {
 }
 .uconduct__range input::-webkit-slider-thumb {
   appearance: none; width: 8px; height: 22px;
-  border: 1px solid #000; background: #fff; pointer-events: auto; cursor: ew-resize;
+  border: 1px solid #000; background: var(--panel); pointer-events: auto; cursor: ew-resize;
 }
 .uconduct__range input::-moz-range-thumb {
   width: 8px; height: 22px;
-  border: 1px solid #000; border-radius: 0; background: #fff;
+  border: 1px solid #000; border-radius: 0; background: var(--panel);
   pointer-events: auto; cursor: ew-resize;
 }
 .uconduct__tempo-mark {
@@ -618,19 +618,19 @@ body {
 .uconduct__tempo-readout input {
   box-sizing: border-box; width: var(--conductor-tempo-numerical); height: 24px; padding: 0 1px;
   border: 0; border-left: 1px solid #000; border-right: 1px solid #000;
-  background: #fff; color: #000; font: 800 15px/24px var(--mono);
+  background: var(--panel); color: #000; font: 800 15px/24px var(--mono);
   text-align: center;
   appearance: textfield;
 }
 .uconduct__tempo-readout input::-webkit-inner-spin-button,
 .uconduct__tempo-readout input::-webkit-outer-spin-button { appearance: none; margin: 0; }
 .uconduct__ratio-dir, .uconduct__robot {
-  background: #fff; color: #000; font-size: 14px; font-weight: 800; cursor: pointer;
+  background: var(--panel); color: #000; font-size: 14px; font-weight: 800; cursor: pointer;
 }
 .uconduct__ratio, .uconduct__robot-time {
   box-sizing: border-box; appearance: none; padding: 0 2px; text-align: center;
   text-align-last: center; line-height: 1;
-  background: #fff; color: #000; font-weight: 800; cursor: pointer;
+  background: var(--panel); color: #000; font-weight: 800; cursor: pointer;
 }
 .uconduct__robot { font-size: 23px; }
 .uconduct__robot svg {
@@ -678,10 +678,10 @@ body {
   flex-direction: column;
   width: max-content;
   border: 1px solid #000;
-  background: #fff;
+  background: var(--panel);
   color: #000;
 }
-.usnapwin button { background: #fff; color: #000; }
+.usnapwin button { background: var(--panel); color: #000; }
 .usnapwin__holddo {
   display: flex;
   align-items: flex-end;
@@ -793,7 +793,7 @@ body {
   flex: none;
   padding: 0;
   border: 2px solid #000;
-  background: #fff;
+  background: var(--panel);
   color: #000;
   cursor: pointer;
   display: grid;
@@ -817,7 +817,7 @@ body {
   padding: 2px;
   border: none;
   border-right: 1px solid #000;
-  background: #fff;
+  background: var(--panel);
   color: #000;
   cursor: pointer;
 }
@@ -869,7 +869,7 @@ body {
   padding: 0;
   border: none;
   border-right: 1px solid #000;
-  background: #fff;
+  background: var(--panel);
   cursor: pointer;
 }
 .uposcell:last-child { border-right: none; }
@@ -881,7 +881,7 @@ body {
   padding: 0;
   line-height: 1;
   border: 1px solid #000;
-  background: #fff;
+  background: var(--panel);
   cursor: pointer;
   font-weight: 700;
 }
@@ -918,7 +918,7 @@ body {
 .uorch__channel {
   height: 25px;
   border: 1px solid #000;
-  background: #fff;
+  background: var(--panel);
   cursor: pointer;
 }
 .uorch__channel--on { background: #000; color: #fff; }
@@ -963,7 +963,7 @@ body {
   height: 26px;
   padding: 0;
   border: 2px solid #000;
-  background: #fff;
+  background: var(--panel);
   cursor: ew-resize;
   touch-action: none;
   transform: translateX(-50%);
@@ -993,7 +993,7 @@ body {
   height: 26px;
   padding: 0;
   border: 2px solid #000;
-  background: #fff;
+  background: var(--panel);
   font: inherit;
   font-weight: 700;
   text-align: center;
@@ -1053,7 +1053,7 @@ body {
   height: 26px;
   padding: 0;
   border: 2px solid #000;
-  background: #fff;
+  background: var(--panel);
   font: inherit;
   font-weight: 700;
   text-align: center;
@@ -1097,7 +1097,7 @@ body {
   margin-top: -2px;
   border: 1px solid #000;
   border-radius: 50%;
-  background: #fff;
+  background: var(--panel);
 }
 .udens__bar {
   position: absolute;
@@ -1138,7 +1138,7 @@ body {
   min-width: 190px;
   padding: 2px 0;
   border: 1px solid #000;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 3px 3px 0 rgb(0 0 0 / 35%);
 }
 .umenu__item {
@@ -1178,7 +1178,7 @@ body {
 .utr__num {
   height: 22px;
   padding: 0;
-  background: #fff;
+  background: var(--panel);
   color: #000;
   font: inherit;
   font-size: 13px;
@@ -1203,18 +1203,18 @@ body {
 .utd__voices { display: flex; gap: 2px; }
 .utd__voice {
   width: 20px; height: 20px; padding: 0;
-  border: 1px solid #000; background: #fff; color: #000;
+  border: 1px solid #000; background: var(--panel); color: #000;
   font: inherit; font-weight: 700; cursor: pointer;
 }
 .utd__voice--on { outline: 1px solid #000; outline-offset: 1px; }
 .utd__clear {
   height: 20px; padding: 0 8px; margin-left: 6px;
-  border: 1px solid #000; background: #fff; color: #000;
+  border: 1px solid #000; background: var(--panel); color: #000;
   font: inherit; font-weight: 700; cursor: pointer;
 }
 .utd__len {
   width: 42px; height: 20px; padding: 0; text-align: center;
-  border: 1px solid #000; background: #fff; font: inherit; font-weight: 700;
+  border: 1px solid #000; background: var(--panel); font: inherit; font-weight: 700;
   -moz-appearance: textfield;
 }
 .utd__len::-webkit-inner-spin-button,
@@ -1254,7 +1254,7 @@ body {
   --pe-rule: #000;
   --pe-dot: #9a9a9a;
   border: 1px solid #000;
-  background: #fff;
+  background: var(--panel);
   color: #000;
   width: max-content;
 }
@@ -1262,7 +1262,7 @@ body {
 .petool {
   width: 24px; height: 20px; padding: 0; cursor: pointer;
   border: 1px solid #000; border-right: none; border-top: none; border-bottom: none;
-  background: #fff; color: #000; display: grid; place-items: center;
+  background: var(--panel); color: #000; display: grid; place-items: center;
 }
 .petool:last-child { border-right: 1px solid #000; }
 .petool--on { background: #000; color: #fff; --pe-paper: #000; }
@@ -1275,7 +1275,7 @@ body {
 .perow--foot { height: 18px; border-top: 1px solid #000; align-items: stretch; }
 
 .peoct, .pearrow {
-  flex: none; padding: 0; cursor: pointer; color: #000; background: #fff;
+  flex: none; padding: 0; cursor: pointer; color: #000; background: var(--panel);
   border: none; border-right: 1px solid #000;
   display: grid; place-items: center;
 }
@@ -1284,7 +1284,7 @@ body {
 
 /* --- row 1: the step ruler, which is also where the tools operate --- */
 .peruler {
-  position: relative; height: 100%; background: #fff;
+  position: relative; height: 100%; background: var(--panel);
   border-right: 1px solid #000; overflow: hidden; cursor: crosshair;
 }
 .peruler--erase, .peruler--plunge, .peruler--scissor { cursor: cell; }
@@ -1318,7 +1318,7 @@ body {
 .penote {
   position: absolute; z-index: 2; top: 0; left: 0; padding: 0 2px;
   font-size: 9px; font-family: var(--mono); font-weight: 700;
-  background: #fff; color: #000;
+  background: var(--panel); color: #000;
 }
 /* Reference Keyboards. Each chromatic pitch is one row so the keys stay locked
    to the Editing Grid, and the keyboard reads as a keyboard by drawing the
@@ -1328,7 +1328,7 @@ body {
 .pekeys { display: flex; flex-direction: column; --pe-blackdepth: 72%; }
 .pekeys--left { width: 100%; }
 .pekeys--right { width: var(--pe-keyw); flex: none; border-right: 1px solid #000; }
-.pekey { display: block; width: 100%; padding: 0; border: none; background: #fff; cursor: pointer; }
+.pekey { display: block; width: 100%; padding: 0; border: none; background: var(--panel); cursor: pointer; }
 .pekeys--left .pekey--black {
   background: linear-gradient(90deg, #000 0 var(--pe-blackdepth), #fff var(--pe-blackdepth));
 }
@@ -1343,7 +1343,7 @@ body {
 
 .pegrid {
   position: relative; overflow: hidden;
-  background-color: #fff;
+  background-color: var(--panel);
   background-image: radial-gradient(circle at 1px 1px, var(--pe-dot) 0.5px, transparent 0.9px);
   background-size: var(--pe-cell-w) var(--pe-cell-h);
 }
@@ -1381,7 +1381,7 @@ body {
 .pemodes__row > * {
   width: 100%; height: 18px; padding: 0; border: none;
   box-shadow: inset -1px -1px 0 #000;
-  background: #fff; color: #000;
+  background: var(--panel); color: #000;
 }
 .peview__num { cursor: pointer; font-weight: 700; font-size: 10px; }
 .peview__num--on { box-shadow: inset -1px -1px 0 #000, inset 0 0 0 2px #000; }
@@ -1393,7 +1393,7 @@ body {
 }
 .pevel {
   width: 44px; height: 100%; padding: 0; border: none;
-  border-right: 1px solid #000; background: #fff; color: #000;
+  border-right: 1px solid #000; background: var(--panel); color: #000;
 }
 .pesize__num::-webkit-inner-spin-button,
 .pesize__num::-webkit-outer-spin-button,
@@ -1402,7 +1402,7 @@ body {
 
 /* --- row 3: MIDI Edit Range Bar, All / Ctr, Editor Sound Velocity --- */
 .perange {
-  position: relative; height: 100%; background: #fff;
+  position: relative; height: 100%; background: var(--panel);
   border-right: 1px solid #000; overflow: hidden; cursor: pointer;
 }
 .perange__bar { position: absolute; top: 4px; height: 6px; background: #000; }
@@ -1412,14 +1412,14 @@ body {
 }
 .pebtn {
   min-width: 30px; padding: 0 5px; border: none; border-right: 1px solid #000;
-  background: #fff; color: #000; font-size: 10px; font-weight: 700; cursor: pointer;
+  background: var(--panel); color: #000; font-size: 10px; font-weight: 700; cursor: pointer;
 }
 .perow--range .pevel { border: none; border-right: 1px solid #000; height: 100%; }
 
 /* --- row 4: scroll bar, Editor Sound Enable, Size Box --- */
 .pescrollbtn {
   width: 24px; flex: none; padding: 0; border: none; border-right: 1px solid #000;
-  background: #fff; color: #000; cursor: pointer; display: grid; place-items: center;
+  background: var(--panel); color: #000; cursor: pointer; display: grid; place-items: center;
 }
 .pescrollbtn:disabled { opacity: 0.35; cursor: default; }
 .pescroll {
@@ -1428,12 +1428,12 @@ body {
 }
 .pescroll__thumb {
   position: absolute; top: 0; bottom: 0; min-width: 14px; box-sizing: border-box;
-  background: #fff; border-left: 1px solid #000; border-right: 1px solid #000;
+  background: var(--panel); border-left: 1px solid #000; border-right: 1px solid #000;
   cursor: grab; touch-action: none;
 }
 .pesound, .pesizebox {
   width: 28px; flex: none; padding: 0; border: none; border-left: 1px solid #000;
-  background: #fff; color: #000; cursor: pointer; display: grid; place-items: center;
+  background: var(--panel); color: #000; cursor: pointer; display: grid; place-items: center;
 }
 .pesound--on { background: #000; color: #fff; --pe-paper: #000; }
 .pesizebox { cursor: nwse-resize; touch-action: none; }
@@ -1451,7 +1451,7 @@ body {
   height: 22px;
   overflow: hidden;
   border: 1px solid #000;
-  background: #fff;
+  background: var(--panel);
 }
 .unoteorder__bar > span { height: 100%; }
 .unoteorder__original { background: #000; }
@@ -1462,7 +1462,7 @@ body {
   );
 }
 .unoteorder__utterly {
-  background-color: #fff;
+  background-color: var(--panel);
   background-image: radial-gradient(#222 1px, transparent 1.2px);
   background-size: 5px 5px;
 }
@@ -1482,7 +1482,7 @@ body {
   height: 28px;
   padding: 0;
   border: 2px solid #000;
-  background: #fff;
+  background: var(--panel);
   cursor: ew-resize;
   touch-action: none;
 }
@@ -1516,8 +1516,8 @@ body {
 .ucyc__row { display: flex; align-items: center; gap: 3px; margin-bottom: 2px; }
 .ucyc__lab { width: 8px; font-size: 9px; font-weight: 700; }
 .ucyc__cells { display: flex; gap: 1px; }
-.ucyccell { width: 9px; height: 12px; border: 1px solid #bbb; background: #fff; padding: 0; cursor: pointer; }
-.ucyccell--level-0 { background: #fff; }
+.ucyccell { width: 9px; height: 12px; border: 1px solid #bbb; background: var(--panel); padding: 0; cursor: pointer; }
+.ucyccell--level-0 { background: var(--panel); }
 .ucyccell--level-1 { background: #c8c8c8; }
 .ucyccell--level-2 { background: #8d8d8d; }
 .ucyccell--level-3 { background: #4c4c4c; }
@@ -1526,14 +1526,14 @@ body {
 .ucycpos {
   display: grid; grid-template-columns: 14px repeat(4, 1fr); align-items: center;
   width: 100%; height: 22px; padding: 1px 2px; border: 1px solid #000;
-  margin-top: -1px; background: #fff; color: #000; cursor: pointer;
+  margin-top: -1px; background: var(--panel); color: #000; cursor: pointer;
 }
 .ucycpos.is-on { outline: 2px solid #000; outline-offset: -3px; }
 .ucycpos i { display: block; height: 3px; max-width: 28px; background: var(--voice-color); }
 
 .cyced {
   width: 439px; overflow: hidden;
-  background: #fff; color: #000; box-shadow: none;
+  background: var(--panel); color: #000; box-shadow: none;
   font-family: var(--mono); font-size: 10px;
 }
 .cyced--modern { width: 782px; }
@@ -1557,7 +1557,7 @@ body {
 .cyced__grid button {
   width: auto; height: 9.6px; padding: 0; border: 0;
   border-right: 1px dotted #000; border-bottom: 1px dotted #000;
-  background: #fff; cursor: crosshair;
+  background: var(--panel); cursor: crosshair;
 }
 .cyced__grid button.is-on::after {
   content: ""; display: block; width: 6px; height: 6px; margin: 1px auto;
@@ -1568,7 +1568,7 @@ body {
   grid-column: 3; grid-row: 2; display: grid; grid-template-columns: repeat(16, 1fr);
 }
 .cyced__steps button {
-  padding: 0; border: 0; background: #fff; font: inherit; font-size: 8px; cursor: pointer;
+  padding: 0; border: 0; background: var(--panel); font: inherit; font-size: 8px; cursor: pointer;
 }
 .cyced__steps button.is-on {
   background: var(--voice-color); color: #fff;
@@ -1603,7 +1603,7 @@ body {
 }
 .cyced__kind::after {
   z-index: 1;
-  background: #fff;
+  background: var(--panel);
   clip-path: var(--cyclic-selector-inner);
 }
 .cyced__kind > span { position: relative; z-index: 2; }
@@ -1614,7 +1614,7 @@ body {
   grid-template-rows: repeat(6, var(--cyclic-position-row-height, 10px));
   border: 1px solid #000;
 }
-.cyced__positions button { padding: 0; border: 0; border-bottom: 1px solid #000; background: #fff; cursor: pointer; }
+.cyced__positions button { padding: 0; border: 0; border-bottom: 1px solid #000; background: var(--panel); cursor: pointer; }
 .cyced__positions button:last-child { border-bottom: 0; }
 .cyced__positions button.is-on { background: #000; }
 .cyced__positions button.is-editing { outline: 1px solid #000; outline-offset: -3px; }
@@ -1630,7 +1630,7 @@ body {
   width: var(--cyclic-value-box-width, 34px);
   height: calc(var(--cyclic-value-row-height, 18px) - 1px);
   padding: 0 2px; border: 1px solid #000;
-  background: #fff; color: #000; font: inherit; font-size: 14px; font-weight: 900;
+  background: var(--panel); color: #000; font: inherit; font-size: 14px; font-weight: 900;
 }
 .cyced__accent-key { padding-top: 24px; width: 82px; text-align: center; }
 .cyced__accent-key span { display: grid; grid-template-columns: repeat(4, 1fr); font-size: 11px; }
@@ -1658,7 +1658,7 @@ body {
 }
 .cyced__modern-positions button {
   padding: 0; border: 0; border-right: 1px solid #000;
-  background: #fff; color: #000; font: 700 11px var(--mono); cursor: pointer;
+  background: var(--panel); color: #000; font: 700 11px var(--mono); cursor: pointer;
 }
 .cyced__modern-positions button:last-child { border-right: 0; }
 .cyced__modern-positions button.is-on { background: #000; color: #fff; }
@@ -1675,7 +1675,7 @@ body {
 .cyced__modern-values label:last-child { border-right: 0; }
 .cyced__modern-values input, .cyced__modern-values output {
   box-sizing: border-box; width: 100%; min-width: 0; height: 23px;
-  padding: 1px; border: 0; background: #fff; color: #000;
+  padding: 1px; border: 0; background: var(--panel); color: #000;
   font: 700 10px var(--mono); text-align: center;
 }
 .cyced__modern-values output { display: grid; place-items: center; }
@@ -1687,7 +1687,7 @@ body {
 /* Midi View — four live tracker lanes fed by the runtime's planned output. */
 .u-midiview-win { width: 760px; --midiview-time-column: 112px; }
 .u-midiview-win > .uwin__body { padding: 0; overflow: hidden; }
-.midiview { background: #fff; color: #000; font-family: var(--mono); }
+.midiview { background: var(--panel); color: #000; font-family: var(--mono); }
 .midiview__tools {
   height: 25px; display: flex; align-items: center; justify-content: flex-end;
   gap: 5px; padding: 2px 5px; border-bottom: 1px solid #000; font-size: 10px;
@@ -1695,7 +1695,7 @@ body {
 .midiview__tools span { margin-right: auto; }
 .midiview__tools button {
   height: 19px; padding: 0 7px; border: 1px solid #000;
-  background: #fff; color: #000; font: inherit; cursor: pointer;
+  background: var(--panel); color: #000; font: inherit; cursor: pointer;
 }
 .midiview__tools button.is-on { background: #000; color: #fff; }
 .midiview__tracker-head, .midiview__row {
