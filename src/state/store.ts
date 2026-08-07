@@ -1518,7 +1518,7 @@ export const useM = create<MStore>((set, get) => ({
 
   recordMidiNotes: (notes) =>
     set((s) => {
-      const incoming = eventsForPlannedNotes(notes, s.midiViewNextId);
+      const incoming = eventsForPlannedNotes(notes, s.midiViewNextId, s.project.scale);
       return {
         midiViewEvents: mergeMidiViewEvents(s.midiViewEvents, incoming),
         midiViewNextId: s.midiViewNextId + incoming.length,

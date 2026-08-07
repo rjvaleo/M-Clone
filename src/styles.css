@@ -1687,62 +1687,106 @@ body {
 /* Midi View — four live tracker lanes fed by the runtime's planned output. */
 .u-midiview-win { width: 760px; --midiview-time-column: 112px; }
 .u-midiview-win > .uwin__body { padding: 0; overflow: hidden; }
-.midiview { background: var(--panel); color: #000; font-family: var(--mono); }
+/* ===========================================================================
+   MIDI READOUT — a beat-clocked scroller, not a log.
+
+   Rows are positioned by their place on the transport timeline and the whole
+   surface is translated against the transport clock, so the display moves
+   whether or not anything is being played. The playhead is fixed to the
+   viewport; the music travels past it.
+
+   Set in Home Video, which is public domain and the only face in fonts/ that
+   is both genuinely monospaced across all printable ASCII and legible as
+   text. A grid needs every glyph the same width or the columns drift.
+   =========================================================================== */
+@font-face {
+  font-family: "Home Video";
+  src: url("/fonts/HomeVideo-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+.midiview {
+  --mv-ctrl: 74px;
+  --mv-row: 14px;
+  --mv-phosphor: #6ad46a;
+  background: #0b0f0b;
+  color: var(--mv-phosphor);
+  font-family: "Home Video", var(--mono);
+}
 .midiview__tools {
   height: 25px; display: flex; align-items: center; justify-content: flex-end;
-  gap: 5px; padding: 2px 5px; border-bottom: 1px solid #000; font-size: 10px;
+  gap: 5px; padding: 2px 5px; border-bottom: 1px solid #1e2a1e; font-size: 10px;
+  color: #4f8f4f;
 }
 .midiview__tools span { margin-right: auto; }
-.midiview__tools button {
-  height: 19px; padding: 0 7px; border: 1px solid #000;
-  background: var(--panel); color: #000; font: inherit; cursor: pointer;
+.midiview__tools button, .midiview__speed select {
+  height: 19px; padding: 0 7px; border: 1px solid #2c3f2c;
+  background: #111a11; color: var(--mv-phosphor); font: inherit; cursor: pointer;
 }
-.midiview__tools button.is-on { background: #000; color: #fff; }
-.midiview__tracker-head, .midiview__row {
+.midiview__speed { display: flex; align-items: center; gap: 4px; font-size: 9px; }
+
+.midiview__tracker-head, .midiview__line {
   display: grid;
-  grid-template-columns: var(--midiview-time-column) repeat(4, minmax(0, 1fr));
+  grid-template-columns: var(--mv-ctrl) repeat(4, minmax(0, 1fr));
 }
 .midiview__tracker-head {
-  height: 24px; background: #eee; border-bottom: 1px solid #000;
+  height: 20px; background: #111a11; border-bottom: 1px solid #2c3f2c;
 }
 .midiview__tracker-head > b {
-  padding: 5px 6px; border-right: 1px solid #aaa;
-  color: #555; font-size: 9px; letter-spacing: 0.06em;
+  padding: 4px 6px; border-right: 1px solid #1e2a1e;
+  color: #4f8f4f; font-size: 9px; letter-spacing: 0.08em;
 }
 .midiview__tracker-head > b.uvoice { color: var(--voice-color); }
+
 .midiview__viewport {
-  position: relative; height: 300px; overflow-y: auto; overflow-x: hidden;
+  position: relative; height: 300px; overflow: hidden;
+  /* Column rules and a faint scanline, both fixed to the glass rather than to
+     the music, so they do not travel with the surface. */
   background:
-    linear-gradient(90deg, transparent calc(var(--midiview-time-column) - 1px), #aaa calc(var(--midiview-time-column) - 1px) var(--midiview-time-column), transparent var(--midiview-time-column)),
-    repeating-linear-gradient(90deg, transparent 0 calc((100% - var(--midiview-time-column)) / 4 - 1px), #ddd calc((100% - var(--midiview-time-column)) / 4 - 1px) calc((100% - var(--midiview-time-column)) / 4));
+    linear-gradient(90deg, transparent calc(var(--mv-ctrl) - 1px), #1e2a1e calc(var(--mv-ctrl) - 1px) var(--mv-ctrl), transparent var(--mv-ctrl)),
+    repeating-linear-gradient(90deg, transparent 0 calc((100% - var(--mv-ctrl)) / 4 - 1px), #162116 calc((100% - var(--mv-ctrl)) / 4 - 1px) calc((100% - var(--mv-ctrl)) / 4)),
+    repeating-linear-gradient(180deg, rgb(255 255 255 / 3%) 0 1px, transparent 1px 3px),
+    #0b0f0b;
 }
-.midiview__row {
-  min-height: 20px;
-  border-top: 1px solid #ddd; border-bottom: 1px solid #bbb;
-  background: rgb(255 255 255 / 94%);
+/* Laid out once in beat space; the rAF loop translates this, not each row. */
+.midiview__surface { position: absolute; inset: 0; will-change: transform; }
+
+.midiview__line {
+  position: absolute; left: 0; right: 0; height: var(--mv-row);
+  align-items: center; font-size: 10px; line-height: var(--mv-row);
+  white-space: nowrap;
 }
-.midiview__row > time {
-  padding: 6px; border-right: 1px solid #aaa; color: #555;
-  font-size: 9px; font-variant-numeric: tabular-nums;
+.midiview__ctrl {
+  grid-column: 1; padding-left: 5px; font-size: 9px; letter-spacing: 0.05em;
 }
-.midiview__cell {
-  min-width: 0; padding: 3px 4px; border-right: 1px solid #ccc;
-  display: flex; flex-direction: column; gap: 2px; overflow: hidden;
+.midiview__ctrl--out { color: #8ce88c; }
+.midiview__ctrl--in { color: #6ab8ff; }
+.midiview__ctrl--scale { color: #3f7a3f; }
+
+.midiview__note {
+  display: inline-flex; gap: 5px; padding-left: 5px; min-width: 0; overflow: hidden;
 }
-.midiview__cell:last-child { border-right: 0; }
-.midiview__message {
-  display: grid; grid-template-columns: repeat(3, max-content);
-  justify-content: space-between; align-items: baseline; row-gap: 1px;
-  width: 100%; max-width: 100%; min-width: 0;
-  color: #222; font-size: 8px; white-space: nowrap;
+.midiview__note b, .midiview__note i { font-style: normal; white-space: pre; }
+/*
+ * Colour by which Note Order list the step came from, so the three-way mix is
+ * visible in the output rather than only on the slider. Hue is the Voice; this
+ * shifts brightness and weight within it, so a stream still reads as one
+ * stream.
+ */
+.midiview__note--original { color: var(--voice-color); }
+.midiview__note--cyclic { color: var(--voice-color); opacity: 0.62; }
+.midiview__note--utterly {
+  color: var(--voice-color); opacity: 0.62;
+  text-decoration: underline; text-underline-offset: 2px;
 }
-.midiview__message strong, .midiview__message b {
-  color: var(--voice-color); font-style: normal;
+
+.midiview__playhead {
+  position: absolute; left: 0; right: 0; height: 0; pointer-events: none;
+  border-top: 1px solid var(--mv-phosphor);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--mv-phosphor) 60%, transparent);
 }
-.midiview__message i { font-style: normal; }
-.midiview__message--note-off { opacity: 0.55; }
 .midiview__waiting {
-  position: absolute; inset: 0; display: grid; place-items: center; color: #777;
+  position: absolute; inset: 0; display: grid; place-items: center; color: #3f7a3f;
 }
 
 /* ===========================================================================
