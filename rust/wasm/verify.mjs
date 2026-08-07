@@ -83,7 +83,9 @@ api.set_param(gain, GAIN_PARAM.LEVEL, 1.0);
 
 // ---- run it -----------------------------------------------------------------
 const inBuf = new Float32Array(api.memory.buffer, api.input_ptr(), QUANTUM);
+// Two quanta now: left then right.
 const outBuf = new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM);
+const outRight = new Float32Array(api.memory.buffer, api.output_ptr() + QUANTUM * 4, QUANTUM);
 
 /** Hold a constant until every 5 ms ramp has arrived, then report the tail. */
 const settle = (value, blocks = 8) => {
@@ -137,6 +139,7 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   api.set_param(synth, SYNTH_PARAM.LEVEL, 1.0);
 
   const outBuf2 = new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM);
+  const outBuf2R = new Float32Array(api.memory.buffer, api.output_ptr() + QUANTUM * 4, QUANTUM);
   const run = (blocks) => {
     let loudest = 0;
     for (let b = 0; b < blocks; b++) {
@@ -154,6 +157,18 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   api.note_off(synth, 60);
   run(200);
   check("note off eventually silences it", run(8) === 0);
+
+  // Stereo across the real ABI. Only port 0 is patched on this bench, so the
+  // right channel must be silent — which is the proof that the two channels are
+  // genuinely separate rather than one signal copied twice.
+  api.note_on(synth, 60, 1.0, 0.0);
+  run(16);
+  const leftEnergy = outBuf2.reduce((a, v) => a + Math.abs(v), 0);
+  const rightEnergy = outBuf2R.reduce((a, v) => a + Math.abs(v), 0);
+  check("left and right are independent channels [R-FRAME-05]",
+    leftEnergy > 0.01 && rightEnergy === 0, `L ${leftEnergy.toFixed(3)} R ${rightEnergy.toFixed(3)}`);
+  api.all_notes_off(synth);
+  run(400);
 
   // Partial renders, which is what makes note timing sample-accurate.
   api.note_on(synth, 60, 1.0, 0.0);

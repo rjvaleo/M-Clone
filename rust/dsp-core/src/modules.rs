@@ -208,7 +208,11 @@ impl Default for AudioOutput {
 impl Module for AudioOutput {
     fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
         let level = self.level.follow(clamp(ports.param(Self::LEVEL), 0.0, 1.0));
+        // Stereo throughout. A mono source patched to port 0 alone leaves port 1
+        // silent, so the host duplicates rather than letting one ear go dead —
+        // see `set_io` and the bridge's stereo wiring.
         ports.output(0, ports.input(0) * level);
+        ports.output(1, ports.input(1) * level);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -220,10 +224,10 @@ impl Module for AudioOutput {
     }
 
     fn input_count(&self) -> usize {
-        1
+        2
     }
     fn output_count(&self) -> usize {
-        1
+        2
     }
     fn param_count(&self) -> usize {
         1
@@ -2620,8 +2624,51 @@ mod tests {
             let kind = ModuleKind::from_u32(value).expect("kind");
             let module = kind.build();
             assert!(module.output_count() >= 1, "{kind:?} produces nothing");
-            assert!(module.input_count() <= 1, "{kind:?} has more inputs than the shim wires");
+            // The shim carries stereo now, so two is the ceiling rather than one.
+            assert!(module.input_count() <= 2, "{kind:?} has more inputs than the shim wires");
         }
+    }
+
+    #[test]
+    // R-FRAME-05
+    fn the_output_carries_two_independent_channels() {
+        // Both ears used to hear the same samples because `AudioOutput` was one
+        // port wide, so a synth's pan was computed correctly inside the voice
+        // and thrown away on the way out.
+        let mut engine = Engine::new(RATE);
+        let left_src = engine.add(ModuleKind::HostInput.build());
+        let right_src = engine.add(ModuleKind::HostInput.build());
+        let out = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: left_src, port: 0 }, PortRef { module: out, port: 0 });
+        engine.connect(PortRef { module: right_src, port: 0 }, PortRef { module: out, port: 1 });
+        engine.set_param(out, AudioOutput::LEVEL, 1.0);
+
+        engine.set_param(left_src, HostInput::SAMPLE, 1.0);
+        engine.set_param(right_src, HostInput::SAMPLE, -1.0);
+        for _ in 0..8 { engine.process(); }
+
+        assert!(engine.output_of(out, 0) > 0.5, "left lost its signal");
+        assert!(engine.output_of(out, 1) < -0.5, "right lost its signal");
+    }
+
+    #[test]
+    // R-FRAME-05
+    fn a_panned_synth_reaches_two_ears_differently() {
+        let peak_of = |pan: f32, port: usize| {
+            let (mut engine, synth, output) = synth_rack();
+            engine.set_param(synth, Synth::PAN, pan);
+            engine.note_on(synth, 60, 1.0, 0.0);
+            let mut peak = 0.0f32;
+            for _ in 0..(RATE * 0.2) as usize {
+                engine.process();
+                peak = peak.max(engine.output_of(output, port).abs());
+            }
+            peak
+        };
+        let hard_left_l = peak_of(-1.0, 0);
+        let hard_left_r = peak_of(-1.0, 1);
+        assert!(hard_left_l > hard_left_r * 4.0,
+            "pan did not reach the ears: L {hard_left_l} R {hard_left_r}");
     }
 
     // ---- the synth ---------------------------------------------------------
@@ -2631,7 +2678,10 @@ mod tests {
         let mut engine = Engine::new(RATE);
         let synth = engine.add(ModuleKind::Synth.build_at(RATE));
         let output = engine.add(ModuleKind::AudioOutput.build());
+        // Both ears. The synth has computed a stereo pair since it was written;
+        // wiring only port 0 is what kept it inaudible.
         engine.connect(PortRef { module: synth, port: 0 }, PortRef { module: output, port: 0 });
+        engine.connect(PortRef { module: synth, port: 1 }, PortRef { module: output, port: 1 });
         engine.set_param(synth, Synth::LEVEL, 1.0);
         (engine, synth, output)
     }
