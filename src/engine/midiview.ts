@@ -30,6 +30,26 @@ export const MIDI_VIEW_LIMIT = 1000;
 export const beatOfTick = (tick: number): number => tick / PPQN;
 
 /**
+ * A note's length, as exactly three characters.
+ *
+ * Fixed width because the readout is a grid: a cell that renders two
+ * characters on one row and four on the next stops the columns lining up,
+ * which is the only reason to use a monospaced face in the first place.
+ *
+ * Below a beat the leading zero is dropped — ".25" carries two digits of
+ * detail where "0.2" carries one. At ten beats and over the exact length
+ * stops being what anyone is reading for, so it collapses to "10+".
+ */
+export function formatDurationCell(durationTicks: number): string {
+  const beats = beatOfTick(durationTicks);
+  // A note-off is an instant, not a note of no length, so it stays blank.
+  if (!(beats > 0)) return "   ";
+  if (beats >= 10) return "10+";
+  if (beats >= 1) return beats.toFixed(1).slice(0, 3);
+  return beats.toFixed(2).slice(1);
+}
+
+/**
  * A transport message, in either direction.
  *
  * Kept beside the notes rather than folded into `MidiViewEvent`: a Start
