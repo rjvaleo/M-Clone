@@ -138,13 +138,28 @@ Worth knowing when cross-referencing — the body, glossary and TOC do not agree
 | Algorithms present in this PDF | **45** |
 | Algorithms **absent from this PDF** | **9** |
 | Parameter blocks parsed | 40 / 45 present |
+| Absent algorithms **reconstructed from the index** | **9 / 9** — 131 parameter labels |
+
+## The gap is partly closed — see `algorithms_reconstructed.json`
+
+The manual's back-of-book index survived intact and cites **TOC pagination**, so each missing algorithm's known two-page span can be read back out of it. Method validated against `EQ-DDL-withLFO` (pp.53–54, present in this PDF): the index returned its parameter list exactly. See [`../notes/missing-algorithms-reconstruction.md`](../notes/missing-algorithms-reconstruction.md).
+
+**Recovered:** parameter names for all nine, ordering for `EQ-Compressor` (determined) and for `De-esser` / `Ducker/Gate` (inferred from family pattern).
+
+**Not recovered:** value ranges, defaults, descriptions, all nine routing diagrams, and the waveshaper table contents that give both tube amps their character. Tracked in [`../notes/open-questions.md`](../notes/open-questions.md).
+
+`algorithms_reconstructed.json` is kept **separate from `algorithms.json` on purpose** — the latter is a clean extraction from surviving pages, the former is inference. Join on name at read time; do not merge.
 
 ## Next
 
-The 1:1 build spec waits on a complete copy of the manual. Writing it against 45 of 54 algorithms would bake the gap into the spec.
+The 1:1 build spec can now be written against all 54 algorithms, with borrowed ranges flagged in code so a later scan corrects rather than entrenches them. What it still cannot specify faithfully: the two tube amps' waveshaper tables, and the nine routing diagrams.
+
+Cheapest remaining shot at those — Dattorro's German edition of this manual, `dp4_Deutschland.pdf`, pulled by [`../fetch-papers.sh`](../fetch-papers.sh).
 
 ## Related
 
 - [`../notes/README.md`](../notes/README.md) — notes on the scientific papers, including Dattorro's own
+- [`../notes/missing-algorithms-reconstruction.md`](../notes/missing-algorithms-reconstruction.md) — how the nine were recovered
+- [`../notes/open-questions.md`](../notes/open-questions.md) — what the reconstruction could not settle
 - [`../notes/dattorro-effect-design-part1.md`](../notes/dattorro-effect-design-part1.md) — the plate topology behind `Small Plate` / `Large Plate`
 - [`../notes/dattorro-effect-design-part2.md`](../notes/dattorro-effect-design-part2.md) — the chorus/flange/pitch family behind ~13 more

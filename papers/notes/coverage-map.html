@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M-Clone — Paper Coverage vs the 54 Algorithms</title>
+<style>
+  :root{
+    --bg:#faf9f7; --panel:#fff; --ink:#1c1b19; --muted:#6b6862; --line:#e5e2dc;
+    --accent:#8a5a2b; --ok:#2f6b4f; --okbg:#e8f2ec; --pay:#8c4a3f; --paybg:#f7eae7;
+    --warn:#7a6420; --warnbg:#f7f1de; --none:#5b5751; --nonebg:#eeebe5;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#161513; --panel:#1e1d1a; --ink:#eceae5; --muted:#9d988e; --line:#33302b;
+      --accent:#d9a066; --ok:#8fd0ae; --okbg:#1b3229; --pay:#e0a094; --paybg:#33211d;
+      --warn:#dcc177; --warnbg:#302a19; --none:#a8a29a; --nonebg:#26241f;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding:40px 20px 80px}
+  .wrap{max-width:980px;margin:0 auto}
+  h1{font-size:30px;line-height:1.2;margin:0 0 6px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 30px;font-size:15px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--accent);
+     margin:40px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:26px 0 10px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+        padding:16px 18px;margin-bottom:10px}
+  .lead{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+        border-radius:8px;padding:18px 20px;margin-bottom:26px}
+  .lead strong{color:var(--accent)}
+  table{width:100%;border-collapse:collapse;margin:12px 0 6px;font-size:14.5px}
+  th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;
+     color:var(--muted);font-weight:600;padding:6px 10px;border-bottom:1px solid var(--line)}
+  td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .abbr{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent);
+        font-weight:600;white-space:nowrap}
+  .n{color:var(--muted);text-align:right;width:34px}
+  .badge{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+         padding:3px 7px;border-radius:20px;white-space:nowrap;display:inline-block}
+  .free{background:var(--okbg);color:var(--ok)}
+  .held{background:var(--okbg);color:var(--ok)}
+  .part{background:var(--warnbg);color:var(--warn)}
+  .locked{background:var(--paybg);color:var(--pay)}
+  .gap{background:var(--nonebg);color:var(--none)}
+  a{color:var(--accent)}
+  .link{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;
+        display:block;margin-top:4px}
+  code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);
+       border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  .why{font-size:14.5px;margin:6px 0 0}
+  ol{padding-left:22px} ol li{margin-bottom:7px}
+  footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);
+         color:var(--muted);font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Paper coverage vs the 54 algorithms</h1>
+<p class="sub">Reconciled against <code>~/Documents/M-Clone/papers</code> · 7 Aug 2026 · 20 PDFs held (17 distinct works) · 29 free to fetch · 5 genuinely paywalled</p>
+
+<div class="lead">
+  <strong>The finding.</strong> Nine algorithms are missing from your <code>DP4_manual.pdf</code>. <strong>Four of the nine are dynamics and two are tube amps</strong> — precisely the two disciplines your paper folder has nothing on. The manual gap and the literature gap are the same gap.
+  <br><br>
+  Which means the two papers that close them — Giannoulis for dynamics, Yeh's thesis for tubes — settle the theory for five of the nine algorithms whose manual pages you don't have. The remaining four (<code>8 Voice Chorus</code>, <code>EQ-Chorus-DDL</code>, <code>3.3 sec Delay 2U</code>, <code>Dual Delay</code>) are already covered by Effect Design Part 2, which you hold.
+  <br><br>
+  <strong>And a cheap shot at the scan itself:</strong> Dattorro hosts a <strong>German edition</strong> of the manual, <code>dp4_Deutschland.pdf</code>. Same plates, separate typesetting run. If the omission is a defect in the English export rather than the source, those pages are in the German file. One download.
+</div>
+
+<h2>Coverage map</h2>
+
+<div class="card">
+<table>
+<thead><tr><th>abbr</th><th class="n">n</th><th>state</th><th>what covers it</th></tr></thead>
+<tbody>
+<tr><td class="abbr">rev</td><td class="n">11</td><td><span class="badge part">partial</span></td>
+  <td>Effect Design Pt.1 (complete plate), Moorer 1979, Dornean, Shenhuy, <code>stanm39</code> — all held.<br><strong>Gap:</strong> Jot &amp; Chaigne 🔒, Griesinger 🔒, Gardner ch.3 🔒 (thesis substitute is free)</td></tr>
+<tr><td class="abbr">amp</td><td class="n">6</td><td><span class="badge gap">nothing</span></td>
+  <td>Yeh thesis, WDF tutorial, ADAA — all free</td></tr>
+<tr><td class="abbr">ddl</td><td class="n">5</td><td><span class="badge held">held</span></td>
+  <td>Effect Design Pt.2 · add Laakso for the interpolation underneath</td></tr>
+<tr><td class="abbr">pit</td><td class="n">4</td><td><span class="badge part">partial</span></td>
+  <td>Pt.2 gives pitch-change vs pitch-shift then stops at the splicer.<br><strong>Gap:</strong> Rossum [36] 🔒 — the paper Pt.2 defers to</td></tr>
+<tr><td class="abbr">spk</td><td class="n">3</td><td><span class="badge gap">nothing</span></td>
+  <td>Yeh/Bank/Karjalainen cabinet, García, Gardner 1995 — free</td></tr>
+<tr><td class="abbr">flt</td><td class="n">3</td><td><span class="badge part">partial</span></td>
+  <td>Rumble ← <code>HiFi.pdf</code> ✓ · Vocal Remover needs nothing · <strong>VandrPolFilter</strong> ← Weingartner DAFx-25, free</td></tr>
+<tr><td class="abbr">cho</td><td class="n">2</td><td><span class="badge held">held</span></td><td>Effect Design Pt.2</td></tr>
+<tr><td class="abbr">fla</td><td class="n">2</td><td><span class="badge part">partial</span></td>
+  <td>Pt.2 + Smith STAN-M-21 — <em>you hold that one as HTML only</em></td></tr>
+<tr><td class="abbr">exp</td><td class="n">2</td><td><span class="badge gap">nothing</span></td><td>Giannoulis</td></tr>
+<tr><td class="abbr">dst</td><td class="n">2</td><td><span class="badge part">partial</span></td>
+  <td>Rossum ICMC 1992 — <em>HTML only</em> · Yeh thesis · ADAA</td></tr>
+<tr><td class="abbr">vib pan trm</td><td class="n">3</td><td><span class="badge held">held</span></td><td>Effect Design Pt.2</td></tr>
+<tr><td class="abbr">gen</td><td class="n">1</td><td><span class="badge held">held</span></td><td>Effect Design Pt.3 — LFOs, pseudonoise</td></tr>
+<tr><td class="abbr">cmp ess gat key</td><td class="n">4</td><td><span class="badge gap">nothing</span></td><td>Giannoulis — one paper, all four</td></tr>
+<tr><td class="abbr">rot</td><td class="n">1</td><td><span class="badge gap">nothing</span></td><td>Smith/Serafin/Abel/Berners · Pekonen §3</td></tr>
+<tr><td class="abbr">voc</td><td class="n">1</td><td><span class="badge gap">nothing</span></td><td>Dudley 1940, Dolson 1986, Gold 1990</td></tr>
+<tr><td class="abbr">tun</td><td class="n">1</td><td><span class="badge gap">nothing</span></td><td>McLeod &amp; Wyvill (MPM, written for a tuner) · YIN</td></tr>
+<tr><td class="abbr">pha</td><td class="n">1</td><td><span class="badge part">partial</span></td><td>Smith STAN-M-21 — HTML only</td></tr>
+<tr><td class="abbr">equ</td><td class="n">1</td><td><span class="badge locked">locked</span></td>
+  <td>Regalia &amp; Mitra 🔒 — no OA copy exists. <code>HiFi.pdf</code> covers the biquad side</td></tr>
+<tr><td class="abbr">dry</td><td class="n">1</td><td>—</td><td>No Effect</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Two you hold as HTML, not PDF</h2>
+<div class="card">
+  <div class="why"><code>An Allpass Approach to Digital Phasing and Flanging.html</code> and <code>Making Digital Filters Sound _Analog_.html</code> are both saved web pages. Both have proper free PDFs — CCRMA's tech-report scan and Michigan's open ICMC archive. Between them they close <code>pha</code>, <code>fla</code> and <code>dst</code>. Free, and the script pulls them.</div>
+  <a class="link" href="https://ccrma.stanford.edu/files/papers/stanm21.pdf">ccrma.stanford.edu/files/papers/stanm21.pdf</a>
+  <a class="link" href="https://quod.lib.umich.edu/i/icmc/bbp2372.1992.009/--making-digital-filters-sound-analog?rgn=main&view=fulltext">quod.lib.umich.edu/i/icmc/bbp2372.1992.009</a>
+</div>
+
+<h2>More Dattorro you don't have</h2>
+<div class="card">
+  <div class="why"><code>ESP2.pdf</code> in your folder is US Patent 5,517,436 — Andreas, Dattorro &amp; Mauchly, Ensoniq, issued May 1996. You already have it, so it's dropped from the fetch. But his CCRMA page also carries <strong>DigitalTimes<em>II</em></strong> — the sequel to your <code>DigitalTimesI</code>, on the 64:1 multirate FIR decimator — plus patent <strong>US5027306</strong> (his sigma-delta decimation filter) and the AD1879 converter notes. None are in the folder.</div>
+  <a class="link" href="https://ccrma.stanford.edu/~dattorro/machines.html">ccrma.stanford.edu/~dattorro/machines.html</a>
+</div>
+
+<h2>Housekeeping spotted in the folder</h2>
+<div class="card">
+  <div class="why"><code>Unconfirmed 177511.crdownload</code>, 4.0 MB — an interrupted Chrome download in the folder root. It never finished; re-pull or delete it so it isn't mistaken for a source. Beyond that, the duplicates your own <code>README.md</code> already flags still stand: <code>DP4_manual_TEXT.pdf</code> is the same size as <code>DP4_manual.pdf</code>, <code>Vortex_Basic_Op_original.pdf</code> exists twice, and <code>Digital_Implementation_of_Artificial_Rev.pdf</code> duplicates its longer-named twin.</div>
+</div>
+
+<h2>Genuinely unobtainable — 5 items</h2>
+<div class="card">
+<table>
+<thead><tr><th>paper</th><th>cost</th><th>closes</th></tr></thead>
+<tbody>
+<tr><td><a href="https://www.aes.org/e-lib/browse.cfm?elib=5851">Rossum, <em>An Analysis of Pitch-Shifting Algorithms</em></a><br><span style="color:var(--muted);font-size:13px">AES 87th, 1989 · AES hyphenates it, which is why searches miss it</span></td><td>$33</td><td><code>pit</code> ×4</td></tr>
+<tr><td><a href="https://aes2.org/publications/elibrary-page/?id=5663">Jot &amp; Chaigne, <em>Digital Delay Networks…</em></a><br><span style="color:var(--muted);font-size:13px">AES 90th, 1991 · free stand-in: <a href="http://articles.ircam.fr/textes/Jot97b/">Jot ICMC 1997</a></span></td><td>$33</td><td>the FDN</td></tr>
+<tr><td><a href="https://aes2.org/publications/elibrary-page/?id=5469">Griesinger, <em>Practical Processors and Programs…</em></a><br><span style="color:var(--muted);font-size:13px">AES 7th Int. Conf., 1989 · his other papers are free at <a href="http://www.davidgriesinger.com/">davidgriesinger.com</a></span></td><td>$33</td><td>plate lineage</td></tr>
+<tr><td><a href="https://doi.org/10.1109/TASSP.1987.1165037">Regalia &amp; Mitra, <em>Tunable Digital Frequency Response Equalization Filters</em></a><br><span style="color:var(--muted);font-size:13px">IEEE, 1987 · OpenAlex confirms no OA copy anywhere</span></td><td>IEEE</td><td><code>equ</code></td></tr>
+<tr><td><a href="https://doi.org/10.1080/14786442608564127">van der Pol, <em>On relaxation-oscillations</em></a><br><span style="color:var(--muted);font-size:13px">Phil. Mag. 1926 · superseded for your purposes by the DAFx-25 paper</span></td><td>T&amp;F</td><td>—</td></tr>
+</tbody>
+</table>
+  <div class="why" style="margin-top:12px">Three are AES E-Library preprints at $33 each. <strong>Membership costs less than buying three</strong>, and the E-Library is the only route to any of them. Pakarinen &amp; Yeh and Gardner ch.3 are also locked but have free substitutes by the same authors covering substantially the same material.</div>
+</div>
+
+<h2>Sequencing</h2>
+<div class="card">
+<ol>
+  <li><strong>German manual.</strong> One download, might close the 9-algorithm gap and unblock the build spec.</li>
+  <li><strong>Giannoulis.</strong> Six algorithms in one paper — and four of them sit in the manual gap.</li>
+  <li><strong>Yeh thesis.</strong> Eight algorithms, and it replaces the paywalled Pakarinen &amp; Yeh review by the same author.</li>
+  <li><strong>Smith STAN-M-21 and Rossum ICMC.</strong> You hold both as HTML; upgrading to PDF is free and closes <code>pha</code>, <code>fla</code>, <code>dst</code>.</li>
+  <li><strong>Then decide on the AES three.</strong> Jot &amp; Chaigne is the one with a live consequence — <code>reverbTank.ts</code> currently ships an FDN built on inference.</li>
+</ol>
+</div>
+
+<footer>
+  Two hosts (QMUL, ENS) block automated fetchers at the TLS layer and Michigan 403s them — those links are sound, they just need a real browser. The script checks every download is actually a PDF rather than an error page, and reports what it couldn't get.
+  <br><br>
+  Nothing here comes from a shadow library.
+</footer>
+
+</div>
+</body>
+</html>
