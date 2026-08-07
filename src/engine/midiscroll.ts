@@ -96,53 +96,64 @@ export type GridNote = {
 
 export type LaidNote<T extends GridNote> = T & {
   startRow: number;
-  /** How many rows the note covers, so length reads as height. */
+  /** How many of this lane's rows the note covers, so length reads as height. */
   spanRows: number;
-  /** Which share of the row this note takes, when several start together. */
+  /** Kept for the renderer; a note always takes its whole lane now. */
   subIndex: number;
   subCount: number;
 };
 
+/** Rows a lane fits in a beat, at most and at least, whatever it asks for. */
+const MAX_LANE_ROWS = 64;
+const MIN_LANE_ROWS = 1;
+
 /**
- * Fit one stream's notes to the grid.
+ * A lane's own row rate.
  *
- * Two things the uniform grid cannot express on its own, and both matter:
+ * Lanes share a clock but not a speed. The Rhythm variable is the voice's
+ * clock divider — the planner scales both a step's length and its advance by
+ * it — so a voice at 0.5 takes steps twice as often. Dividing the base rate by
+ * it keeps one step to a row in every lane, which is what lets a fast lane
+ * push its earlier notes down sooner rather than squeezing them sideways.
  *
- * A note longer than a row spans the rows it fills, so a phrase's shape is
- * visible as height rather than only readable as a number.
+ * Clamped, because a divider near zero would ask for thousands of rows a beat
+ * and lock the display up drawing them.
+ */
+export function laneRowsPerBeat(speed: ScrollSpeed, rhythm: number | undefined): number {
+  if (!rhythm || !(rhythm > 0)) return speed.rowsPerBeat;
+  return Math.min(MAX_LANE_ROWS, Math.max(MIN_LANE_ROWS, speed.rowsPerBeat / rhythm));
+}
+
+/**
+ * Fit one lane's notes to that lane's rows.
  *
- * Notes arriving faster than the grid — a clock divider running at twice the
- * speed, or a chord — share a slot instead of overlapping it, each taking an
- * equal share of the row's height. Two fit in the space of one, three in
- * three, and the grid itself never changes pitch.
+ * Every note takes a whole row. Notes are never narrowed to share one: when a
+ * voice runs fast its lane simply has more rows, so the notes that used to
+ * collide get a row each and the earlier ones are pushed down sooner. That is
+ * the difference between a display that speeds up and one that shrinks.
  *
- * A note is truncated where the next one begins, because legato over 100%
- * makes notes overlap in time and on a grid that would draw one block across
- * another. Notes that *start* together are a chord rather than a collision,
- * so they subdivide sideways and both keep their full length.
+ * A note spans the rows its length covers, so a phrase's shape reads as height
+ * rather than as a number. It is truncated where the next note begins, because
+ * legato over 100% overlaps notes in time and on a grid that would draw one
+ * block across another.
  */
 export function layoutStreamNotes<T extends GridNote>(
   notes: readonly T[],
   speed: ScrollSpeed,
+  rhythm: number | undefined,
 ): LaidNote<T>[] {
-  const perRow = ticksPerRow(speed);
+  const rowsPerBeat = laneRowsPerBeat(speed, rhythm);
+  const perRow = PPQN / rowsPerBeat;
+  const rowOf = (tick: number) => Math.floor(tick / perRow);
   const ordered = [...notes].sort((a, b) => a.atTick - b.atTick || a.id - b.id);
 
-  // How many notes share each starting row, for the sideways split.
-  const shareCount = new Map<number, number>();
-  for (const note of ordered) {
-    const row = rowOfTick(note.atTick, speed);
-    shareCount.set(row, (shareCount.get(row) ?? 0) + 1);
-  }
-
-  const seen = new Map<number, number>();
   return ordered.map((note, index) => {
-    const startRow = rowOfTick(note.atTick, speed);
+    const startRow = rowOf(note.atTick);
 
-    // The next note that starts strictly later is the one this can run into.
+    // The next note that starts on a later row is the one this can run into.
     let limit = Infinity;
     for (let ahead = index + 1; ahead < ordered.length; ahead++) {
-      const nextRow = rowOfTick(ordered[ahead].atTick, speed);
+      const nextRow = rowOf(ordered[ahead].atTick);
       if (nextRow > startRow) {
         limit = nextRow - startRow;
         break;
@@ -151,16 +162,12 @@ export function layoutStreamNotes<T extends GridNote>(
 
     // At least one row: shorter than the grid is not the same as invisible.
     const wanted = Math.max(1, Math.ceil((note.durationTicks ?? 0) / perRow));
-    const subIndex = seen.get(startRow) ?? 0;
-    seen.set(startRow, subIndex + 1);
-
     return {
       ...note,
       startRow,
       spanRows: Math.max(1, Math.min(wanted, limit)),
-      subIndex,
-      // Populated for every startRow in the pass above, so this always hits.
-      subCount: shareCount.get(startRow)!,
+      subIndex: 0,
+      subCount: 1,
     };
   });
 }

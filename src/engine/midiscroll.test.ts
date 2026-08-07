@@ -4,6 +4,7 @@ import {
   SCROLL_SPEEDS,
   beatsElapsed,
   rowOfTick,
+  laneRowsPerBeat,
   layoutStreamNotes,
   rowSpanForViewport,
   scrollSpeed,
@@ -117,85 +118,83 @@ describe("which rows are worth drawing", () => {
   });
 });
 
-describe("fitting notes to the grid", () => {
+describe("a lane's own rate", () => {
+  it("is the base rate when the divider is one", () => {
+    expect(laneRowsPerBeat(FOUR, 1)).toBe(4);
+  });
+
+  it("doubles when the voice takes steps twice as often", () => {
+    // Rhythm 0.5 means the planner halves the step duration, so the lane needs
+    // twice the rows to keep one step to a row.
+    expect(laneRowsPerBeat(FOUR, 0.5)).toBe(8);
+  });
+
+  it("halves when the voice takes steps half as often", () => {
+    expect(laneRowsPerBeat(FOUR, 2)).toBe(2);
+  });
+
+  it("falls back to the base rate when the voice reported no divider", () => {
+    expect(laneRowsPerBeat(FOUR, undefined)).toBe(4);
+    expect(laneRowsPerBeat(FOUR, 0)).toBe(4);
+  });
+
+  it("stays within a sane range rather than trusting an extreme divider", () => {
+    // A divider near zero would ask for thousands of rows a beat and lock the
+    // display up drawing them.
+    expect(laneRowsPerBeat(FOUR, 0.0001)).toBeLessThanOrEqual(64);
+    expect(laneRowsPerBeat(FOUR, 10000)).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("fitting notes to a lane", () => {
   const at = (tick: number, ticks: number, id = tick) =>
     ({ id, atTick: tick, durationTicks: ticks });
-  const row = PPQN / 4; // one row at 4/4
+  const row = PPQN / 4; // one row at 4/4, divider 1
 
-  it("gives a note lasting one row a span of one", () => {
-    expect(layoutStreamNotes([at(0, row)], FOUR)[0].spanRows).toBe(1);
-  });
-
-  it("stretches a longer note across the slots it fills", () => {
-    // The point of showing length as height: a note twice as long is twice
-    // as tall, so the shape of the phrase is visible without reading numbers.
-    expect(layoutStreamNotes([at(0, row * 2)], FOUR)[0].spanRows).toBe(2);
-    expect(layoutStreamNotes([at(0, row * 4)], FOUR)[0].spanRows).toBe(4);
-  });
-
-  it("still gives a very short note a whole row of height", () => {
-    // Shorter than the grid is not the same as invisible.
-    expect(layoutStreamNotes([at(0, 1)], FOUR)[0].spanRows).toBe(1);
-  });
-
-  it("compresses notes that share a slot so both fit in one row", () => {
-    // A clock divider running faster than the grid puts two notes in the
-    // space of one. They subdivide the row rather than overlapping it.
-    const laid = layoutStreamNotes([at(0, row, 1), at(0, row, 2)], FOUR);
-    expect(laid.map((n) => n.subCount)).toEqual([2, 2]);
-    expect(laid.map((n) => n.subIndex)).toEqual([0, 1]);
-  });
-
-  it("compresses three or four the same way", () => {
-    const laid = layoutStreamNotes(
-      [at(0, row, 1), at(0, row, 2), at(0, row, 3)], FOUR,
-    );
-    expect(laid.map((n) => n.subIndex)).toEqual([0, 1, 2]);
-    expect(new Set(laid.map((n) => n.subCount))).toEqual(new Set([3]));
-  });
-
-  it("leaves a note alone in its slot at full width", () => {
-    const laid = layoutStreamNotes([at(0, row), at(row * 4, row)], FOUR);
+  it("gives every note a whole row of its own", () => {
+    // Notes are never narrowed to share a slot: a lane running fast pushes
+    // its earlier notes down sooner instead of squeezing them sideways.
+    const laid = layoutStreamNotes([at(0, row, 1), at(0, row, 2)], FOUR, 1);
     expect(laid.every((n) => n.subCount === 1)).toBe(true);
   });
 
+  it("separates notes that used to collide by giving the lane more rows", () => {
+    // Two notes a sixteenth apart share a row at 4/4 with no divider, and get
+    // a row each once the lane is running at the rate that produced them.
+    const eighth = PPQN / 8;
+    const slow = layoutStreamNotes([at(0, eighth, 1), at(eighth, eighth, 2)], FOUR, 1);
+    expect(slow[0].startRow).toBe(slow[1].startRow);
+    const fast = layoutStreamNotes([at(0, eighth, 1), at(eighth, eighth, 2)], FOUR, 0.5);
+    expect(fast[0].startRow).not.toBe(fast[1].startRow);
+  });
+
+  it("still measures length in that lane's rows", () => {
+    expect(layoutStreamNotes([at(0, row * 2)], FOUR, 1)[0].spanRows).toBe(2);
+    // At twice the rate the same note covers twice as many of that lane's rows.
+    expect(layoutStreamNotes([at(0, row * 2)], FOUR, 0.5)[0].spanRows).toBe(4);
+  });
+
+  it("still gives a very short note a whole row", () => {
+    expect(layoutStreamNotes([at(0, 1)], FOUR, 1)[0].spanRows).toBe(1);
+  });
+
   it("truncates a note that would run into the next one", () => {
-    // Legato over 100% makes notes overlap in time. On a grid that would draw
-    // one block on top of another, so the earlier one stops where the next
-    // begins.
-    const laid = layoutStreamNotes([at(0, row * 8), at(row * 2, row)], FOUR);
+    const laid = layoutStreamNotes([at(0, row * 8), at(row * 2, row)], FOUR, 1);
     expect(laid[0].spanRows).toBe(2);
   });
 
-  it("does not truncate against a note in the same slot", () => {
-    // Two notes starting together are a chord, not a collision; they
-    // subdivide sideways and both keep their length.
-    const laid = layoutStreamNotes([at(0, row * 3, 1), at(0, row * 3, 2)], FOUR);
-    expect(laid.map((n) => n.spanRows)).toEqual([3, 3]);
-  });
-
-  it("reads the speed, so the same note spans more rows at a finer grid", () => {
-    const beat = PPQN;
-    expect(layoutStreamNotes([at(0, beat)], scrollSpeed("2/4"))[0].spanRows).toBe(2);
-    expect(layoutStreamNotes([at(0, beat)], scrollSpeed("8/4"))[0].spanRows).toBe(8);
+  it("copes with notes handed to it out of order", () => {
+    const laid = layoutStreamNotes([at(row * 4, row, 2), at(0, row, 1)], FOUR, 1);
+    expect(laid.find((n) => n.id === 1)?.startRow).toBe(0);
+    expect(laid.find((n) => n.id === 2)?.startRow).toBe(4);
   });
 
   it("still places a note the planner gave no length", () => {
-    // durationTicks is optional on a planned note, so the layout must not
-    // assume it: no length is one row, not zero.
-    const laid = layoutStreamNotes([{ id: 1, atTick: 0 }], FOUR);
+    const laid = layoutStreamNotes([{ id: 1, atTick: 0 }], FOUR, 1);
     expect(laid[0].spanRows).toBe(1);
-    expect(laid[0].subCount).toBe(1);
-    expect(laid[0].subIndex).toBe(0);
   });
 
-  it("returns nothing for an empty stream", () => {
-    expect(layoutStreamNotes([], FOUR)).toEqual([]);
-  });
-
-  it("copes with notes handed to it out of order", () => {
-    const laid = layoutStreamNotes([at(row * 4, row, 2), at(0, row, 1)], FOUR);
-    expect(laid.find((n) => n.id === 1)?.startRow).toBe(0);
-    expect(laid.find((n) => n.id === 2)?.startRow).toBe(4);
+  it("returns nothing for an empty lane", () => {
+    expect(layoutStreamNotes([], FOUR, 1)).toEqual([]);
   });
 })

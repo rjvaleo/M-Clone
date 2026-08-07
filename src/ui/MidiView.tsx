@@ -18,8 +18,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatLengthCell, scaleKey, type MidiViewEvent } from "../engine/midiview";
 import {
-  ROW_HEIGHT_PX, SCROLL_SPEEDS, beatsElapsed, layoutStreamNotes, rowOfTick,
-  rowSpanForViewport, scrollSpeed,
+  ROW_HEIGHT_PX, SCROLL_SPEEDS, beatsElapsed, laneRowsPerBeat, layoutStreamNotes,
+  rowOfTick, rowSpanForViewport, scrollSpeed,
 } from "../engine/midiscroll";
 import { PPQN } from "../engine/planner";
 import { useM } from "../state/store";
@@ -53,6 +53,8 @@ export function MidiView() {
    * also what makes the last bars readable after the music ends.
    */
   const [currentRow, setCurrentRow] = useState(0);
+  // Lanes convert the beat at their own rate, so they need the beat itself.
+  const [currentBeat, setCurrentBeat] = useState(0);
   useEffect(() => {
     if (!isPlaying) return;
     let frame = 0;
@@ -60,6 +62,7 @@ export function MidiView() {
       const beat = beatsElapsed(getRuntime().transportElapsedSec(), tempo);
       const row = Math.floor(beat * speed.rowsPerBeat);
       setCurrentRow((previous) => (previous === row ? previous : row));
+      setCurrentBeat((previous) => (previous === beat ? previous : beat));
       frame = requestAnimationFrame(poll);
     };
     frame = requestAnimationFrame(poll);
@@ -68,7 +71,7 @@ export function MidiView() {
 
   // A new run starts the grid again at the top, matching the cleared readout.
   useEffect(() => {
-    if (isPlaying) setCurrentRow(0);
+    if (isPlaying) { setCurrentRow(0); setCurrentBeat(0); }
   }, [isPlaying]);
 
   /**
@@ -109,23 +112,31 @@ export function MidiView() {
   }, [events, transport, speed, tempo]);
 
   /**
-   * Notes per stream, fitted to the grid.
+   * Each lane, laid out at its own rate.
    *
-   * A note spans the rows its length covers, and notes sharing a slot split it
-   * between them — so a clock divider running faster than the grid fits two in
-   * the space of one instead of drawing them on top of each other.
+   * Lanes share the transport but not a speed: a voice's Rhythm value is its
+   * clock divider, so a lane running twice as often gets twice the rows and
+   * pushes its earlier notes down twice as fast. The divider is taken from the
+   * lane's most recent note, since it is the current setting that decides how
+   * fast the lane should be moving now.
    */
-  const streams = useMemo(() => {
+  const laneLayouts = useMemo(() => {
     const perVoice: MidiViewEvent[][] = [[], [], [], []];
     for (const event of events) {
       if (event.atTick === undefined || event.type === "note-off") continue;
       perVoice[event.voice]?.push(event);
     }
-    return perVoice.map((voiceNotes) =>
-      layoutStreamNotes(
-        voiceNotes.map((note) => ({ ...note, atTick: note.atTick! })),
-        speed,
-      ));
+    return perVoice.map((voiceNotes) => {
+      const rhythm = voiceNotes[voiceNotes.length - 1]?.rhythm;
+      return {
+        rowsPerBeat: laneRowsPerBeat(speed, rhythm),
+        notes: layoutStreamNotes(
+          voiceNotes.map((note) => ({ ...note, atTick: note.atTick! })),
+          speed,
+          rhythm,
+        ),
+      };
+    });
   }, [events, speed]);
 
   const viewport = useRef<HTMLDivElement>(null);
@@ -144,8 +155,6 @@ export function MidiView() {
   // Newest at the top, counting back. Always a full screen of grid, including
   // the negative rows from before the run started, which draw empty.
   const indices = rowSpanForViewport(currentRow, height, LEAD_ROWS);
-  // The row drawn at y = 0. Named, because a bare `top` resolves to window.top.
-  const topRow = currentRow + LEAD_ROWS;
 
   const empty = events.length === 0 && transport.length === 0;
 
@@ -191,41 +200,40 @@ export function MidiView() {
           </div>
         ))}
 
-        {/* Notes sit over the grid rather than inside a row, because a note
-            can be taller than one row and a row cannot. The layer repeats the
-            grid's own columns, so each stream gets the same width as its
-            heading without either having to know the other's measurements. */}
+        {/* Each lane draws its own rows at its own rate, so a fast voice
+            pushes its notes down sooner than a slow one. Only the playhead is
+            shared: it is the same instant in every lane. */}
         <div className="midiview__notes">
-        {streams.map((voiceNotes, voice) => (
-          <div key={voice} className="midiview__stream">
-            {voiceNotes.map((note) => {
-              const fromTop = topRow - note.startRow;
-              if (fromTop < 0 || fromTop >= indices.length) return null;
-              const share = 1 / note.subCount;
-              return (
-                <span
-                  key={note.id}
-                  className={"midiview__note uvoice uvoice--" + (voice + 1)
-                    + " midiview__note--" + (note.source ?? "original")}
-                  style={{
-                    top: fromTop * ROW_HEIGHT_PX,
-                    height: note.spanRows * ROW_HEIGHT_PX,
-                    // Notes sharing a slot split it, so two fit where one did.
-                    left: `${note.subIndex * share * 100}%`,
-                    width: `${share * 100}%`,
-                  }}
-                >
-                  <b>{note.noteName}</b>
-                  <i>V{String(note.velocity).padStart(3, "0")}</i>
-                  <i>{formatLengthCell((note.durationTicks ?? 0) / PPQN)}</i>
-                  {/* Per-stream effect slot: transpose, glide, clock divide.
-                      Blank until the planner reports what it applied. */}
-                  <i className="midiview__efx">{"   "}</i>
-                </span>
-              );
-            })}
-          </div>
-        ))}
+          {laneLayouts.map((lane, voice) => {
+            const laneRow = Math.floor(currentBeat * lane.rowsPerBeat);
+            const laneTop = laneRow + LEAD_ROWS;
+            return (
+              <div key={voice} className="midiview__stream">
+                {lane.notes.map((note) => {
+                  const fromTop = laneTop - note.startRow;
+                  if (fromTop < 0 || fromTop * ROW_HEIGHT_PX > height) return null;
+                  return (
+                    <span
+                      key={note.id}
+                      className={"midiview__note uvoice uvoice--" + (voice + 1)
+                        + " midiview__note--" + (note.source ?? "original")}
+                      style={{
+                        top: fromTop * ROW_HEIGHT_PX,
+                        height: note.spanRows * ROW_HEIGHT_PX,
+                      }}
+                    >
+                      <b>{note.noteName}</b>
+                      <i>V{String(note.velocity).padStart(3, "0")}</i>
+                      <i>{formatLengthCell((note.durationTicks ?? 0) / PPQN)}</i>
+                      {/* Per-lane effect slot: transpose, glide, clock divide.
+                          Blank until the planner reports what it applied. */}
+                      <i className="midiview__efx">{"   "}</i>
+                    </span>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
 
         {empty && (
