@@ -322,7 +322,7 @@ body {
    simulated desktop this used to sit in — the framed white screen and its
    menu bar — is gone; the windows float directly on the page. */
 .uroot {
-  color: #000;
+  color: var(--ink);
   font-size: 11px;
   line-height: 1.3;
   position: relative;
@@ -2165,7 +2165,7 @@ body.dark-bg { background: #191919; }
 .u-patterns { width: 228px; height: 120px; overflow: visible; }
 .u-patterns > .uwin__title {
   position: relative; z-index: 3; width: 91px; height: 20px;
-  padding: 0 4px; gap: 3px; border-right: 0; background: #fff;
+  padding: 0 4px; gap: 3px; border-right: 0; background: var(--panel);
   font-size: 11px; line-height: 18px;
 }
 .u-patterns > .uwin__title::after {
