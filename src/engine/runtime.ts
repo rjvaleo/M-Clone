@@ -398,18 +398,43 @@ export class MRuntime {
   /**
    * Take a decoded system message from a MIDI input port.
    *
-   * Always accepted, whatever the sync direction: the follower is cheap to
-   * keep current, and a source that was already running should be locked on
-   * the moment External Clock is switched on rather than a beat later.
+   * Always tracked, whatever the sync direction: the follower is cheap to keep
+   * current, and a source that was already running should be locked on the
+   * moment External Clock is switched on rather than a beat later.
+   *
+   * Returns what the host should do to the transport, or null for nothing.
+   * The runtime does not touch the transport itself because starting it is
+   * asynchronous and owned by the caller; this reports the intent and the
+   * caller runs it through the same path a Start from any other source takes.
    */
-  ingestClockMessage(message: DecodedMidiMessage, atSec: number): void {
-    if (message.type === "clock") this.follower = clockTick(this.follower, atSec);
-    else if (message.type === "start") this.follower = clockStart(this.follower);
+  ingestClockMessage(
+    message: DecodedMidiMessage,
+    atSec: number,
+  ): "start" | "continue" | "stop" | null {
+    if (message.type === "clock") {
+      this.follower = clockTick(this.follower, atSec);
+      return null;
+    }
+    if (message.type === "song-position") {
+      this.follower = clockSongPosition(this.follower, message.sixteenths);
+      return null;
+    }
+    if (message.type === "start") this.follower = clockStart(this.follower);
     else if (message.type === "continue") this.follower = clockContinue(this.follower);
     else if (message.type === "stop") this.follower = clockStop(this.follower);
-    else if (message.type === "song-position") {
-      this.follower = clockSongPosition(this.follower, message.sixteenths);
-    }
+    else return null;
+
+    // Deliberately not gated on tick freshness. Start arrives before the first
+    // pulse, so judging it by the tick history would reject the very message
+    // that begins the run.
+    const settings = this.getPerformanceSettings();
+    if (settings.syncRatioDirection !== "in" || !settings.externalClock) return null;
+    return message.type;
+  }
+
+  /** The tempo the follower is reading, for display and for tests. */
+  followedTempo(): number | null {
+    return followerTempo(this.follower, this.getPerformanceSettings().syncRatio);
   }
 
   /** True when an external source is actually driving, rather than merely selected. */

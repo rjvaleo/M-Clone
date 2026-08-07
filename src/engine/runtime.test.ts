@@ -159,3 +159,67 @@ describe("browser runtime transport", () => {
     expect(runtime.schedulingDiagnostics().recoveries).toBe(1);
   });
 });
+
+describe("following an external transport", () => {
+  /** A runtime whose sync settings the test controls. */
+  const following = (over: Partial<{
+    externalClock: boolean; syncRatioDirection: "in" | "out";
+  }> = {}) => {
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    return new MRuntime(() => createDefaultProject(), null, {
+      clock: { nowSec: () => 0 },
+      getPerformanceSettings: () => ({
+        useMetronome: false,
+        sendClock: false,
+        externalClock: true,
+        syncRatio: 4,
+        syncRatioDirection: "in",
+        ...over,
+      }),
+    });
+  };
+
+  it("asks the host to roll on Start", () => {
+    expect(following().ingestClockMessage({ type: "start" }, 0)).toBe("start");
+  });
+
+  it("asks the host to resume on Continue", () => {
+    // Distinct from Start so the host can choose not to rewind.
+    expect(following().ingestClockMessage({ type: "continue" }, 0)).toBe("continue");
+  });
+
+  it("asks the host to halt on Stop", () => {
+    expect(following().ingestClockMessage({ type: "stop" }, 0)).toBe("stop");
+  });
+
+  it("asks for nothing on a plain clock pulse", () => {
+    // Pulses set the tempo. Only the transport messages move the transport.
+    expect(following().ingestClockMessage({ type: "clock" }, 0)).toBeNull();
+  });
+
+  it("acts on Start even though no pulse has arrived yet", () => {
+    // Start precedes the first pulse, so a freshness check on the tick history
+    // would reject the very message that begins the run.
+    const runtime = following();
+    expect(runtime.ingestClockMessage({ type: "start" }, 0)).toBe("start");
+  });
+
+  it("stays silent when External Clock is off", () => {
+    // Still decoded and still tracked, so switching the option on mid-stream
+    // locks straight on — but it must not seize the transport unasked.
+    const runtime = following({ externalClock: false });
+    expect(runtime.ingestClockMessage({ type: "start" }, 0)).toBeNull();
+    expect(runtime.ingestClockMessage({ type: "stop" }, 0)).toBeNull();
+  });
+
+  it("stays silent while M is the master", () => {
+    const runtime = following({ syncRatioDirection: "out" });
+    expect(runtime.ingestClockMessage({ type: "start" }, 0)).toBeNull();
+  });
+
+  it("still tracks pulses while not following, so enabling it locks on at once", () => {
+    const runtime = following({ externalClock: false });
+    for (let i = 0; i < 24; i++) runtime.ingestClockMessage({ type: "clock" }, i * 0.0208333);
+    expect(runtime.followedTempo()).toBeCloseTo(120, 0);
+  });
+})

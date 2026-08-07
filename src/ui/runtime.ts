@@ -22,7 +22,16 @@ export function getRuntime(): MRuntime {
           // Clock and transport carry no channel, so they are taken by the
           // runtime's follower and never reach the channel routing below.
           if (!isChannelMessage(message)) {
-            getRuntime().ingestClockMessage(message, performance.now() / 1000);
+            const action = getRuntime()
+              .ingestClockMessage(message, performance.now() / 1000);
+            // The same path a Start from the Input Control System takes, so an
+            // external transport and a local one cannot drift out of step.
+            if (action === "start" || action === "continue") {
+              void runtime?.start().then(() => useM.getState().setPlaying(true));
+            } else if (action === "stop") {
+              runtime?.stop();
+              useM.getState().setPlaying(false);
+            }
             return;
           }
           const deviceId = (event.currentTarget as MIDIInput | null)?.id ?? null;
