@@ -1,76 +1,121 @@
 /**
- * The MIDI readout, as a beat-clocked scroller.
+ * The MIDI readout, as a tracker.
  *
- * This used to be a log: rows appended as events arrived, scrolled by however
- * tall the list had grown. That drifts from the music by construction, because
- * a list only moves when something happens — a bar of rests and the display
- * sits still while the transport keeps going.
+ * A row is one subdivision of the beat and every subdivision gets one, whether
+ * or not a note lands in it. New rows arrive at the top and push the rest
+ * down, a whole row at a time, so the movement is a clock tick rather than a
+ * glide. Two notes a few ticks apart share a row instead of drawing on top of
+ * each other, and a fast passage takes exactly as much space as a slow one —
+ * the grid comes from the subdivision, not from how dense the music is.
  *
- * Now every row is placed by its position on the transport's 960 PPQN
- * timeline, and the surface is redrawn against the transport clock rather than
- * against the arrival of events. The row under the playhead is the note being
- * heard because both are the same number, not two things kept in step.
+ * Two earlier models were wrong in opposite ways. A log appended a row per
+ * event, so a bar of rests froze the display. Placing rows at their exact
+ * position in beat space scrolled smoothly but spaced the music by its own
+ * density, which is what made switching between fast and slow passages look
+ * sloppy and let text overlap.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { formatLengthCell, scaleKey, type MidiViewEvent } from "../engine/midiview";
 import {
-  beatOfTick, formatLengthCell, scaleKey, type MidiViewEvent,
-} from "../engine/midiview";
-import {
-  ROW_HEIGHT_PX, SCROLL_SPEEDS, beatsElapsed, scrollSpeed, yForBeat,
+  SCROLL_SPEEDS, beatsElapsed, rowOfTick, rowSpanForViewport, scrollSpeed,
 } from "../engine/midiscroll";
+import { PPQN } from "../engine/planner";
 import { useM } from "../state/store";
 import { getRuntime } from "./runtime";
 
-/**
- * The playhead sits one row down from the top.
- *
- * So a note is heard almost as soon as it appears, and the surface below is
- * what has already played — a record running away from the line rather than a
- * queue running towards it.
- */
-const PLAYHEAD_ROWS_FROM_TOP = 1;
+/** Rows of empty grid kept above the newest one, so it is not flush to the top. */
+const LEAD_ROWS = 1;
+
+type Row = {
+  ctrl: string | null;
+  tune: string | null;
+  streams: (MidiViewEvent | null)[];
+};
 
 export function MidiView() {
   const events = useM((state) => state.midiViewEvents);
   const transport = useM((state) => state.midiViewTransport);
   const clear = useM((state) => state.clearMidiView);
   const tempo = useM((state) => state.project.tempo);
-  const isPlaying = useM((state) => state.isPlaying);
   const [speedId, setSpeedId] = useState("4/4");
   const speed = scrollSpeed(speedId);
 
-  // No viewport measurement: the playhead is a fixed number of rows from the
-  // top, so nothing here depends on how tall the window happens to be.
-  const surface = useRef<HTMLDivElement>(null);
-
   /**
-   * Drive the surface from the transport clock, not from React state.
+   * The row the transport is on, as a whole number.
    *
-   * A re-render per frame would rebuild every row sixty times a second to move
-   * them all by the same amount. Instead the rows are laid out once in beat
-   * space and the whole surface is translated, so a frame costs one style
-   * write however many notes are on screen.
+   * Polled every frame but stored as state, so React re-renders on the tick
+   * and not between ticks: the display only ever changes when this integer
+   * changes, and a frame landing mid-row has nothing to draw.
    */
+  const [currentRow, setCurrentRow] = useState(0);
   useEffect(() => {
     let frame = 0;
-    const tick = () => {
+    const poll = () => {
       const beat = beatsElapsed(getRuntime().transportElapsedSec(), tempo);
-      if (surface.current) {
-        surface.current.style.transform =
-          `translateY(${beat * speed.rowsPerBeat * ROW_HEIGHT_PX}px)`;
-      }
-      frame = requestAnimationFrame(tick);
+      const row = Math.floor(beat * speed.rowsPerBeat);
+      setCurrentRow((previous) => (previous === row ? previous : row));
+      frame = requestAnimationFrame(poll);
     };
-    frame = requestAnimationFrame(tick);
+    frame = requestAnimationFrame(poll);
     return () => cancelAnimationFrame(frame);
   }, [tempo, speed.rowsPerBeat]);
 
-  const playheadY = PLAYHEAD_ROWS_FROM_TOP * ROW_HEIGHT_PX;
-  // Laid out at beat zero; the rAF loop above slides the whole surface.
-  const top = (beat: number) => yForBeat(beat, 0, playheadY, speed);
-  const beatOf = (event: MidiViewEvent) =>
-    event.atTick === undefined ? null : beatOfTick(event.atTick);
+  /**
+   * Fold both event lists onto the grid, keyed by row.
+   *
+   * A stream keeps only the last note in its row: a subdivision is one slot,
+   * and stacking two notes into it is what made rows grow and text collide.
+   */
+  const rows = useMemo(() => {
+    const byRow = new Map<number, Row>();
+    const rowAt = (index: number): Row => {
+      let row = byRow.get(index);
+      if (!row) {
+        row = { ctrl: null, tune: null, streams: [null, null, null, null] };
+        byRow.set(index, row);
+      }
+      return row;
+    };
+
+    // CTRL carries the transport and nothing else.
+    for (const mark of transport) {
+      const tick = beatsElapsed(mark.atSec, tempo) * PPQN;
+      rowAt(rowOfTick(tick, speed)).ctrl =
+        `${mark.direction === "out" ? "▶" : "◀"} ${mark.type.toUpperCase()}`;
+    }
+
+    // TUNE prints once, on the row where it changes — not against every note.
+    let lastTune: string | null = null;
+    for (const event of events) {
+      if (event.atTick === undefined || event.type === "note-off") continue;
+      const row = rowAt(rowOfTick(event.atTick, speed));
+      row.streams[event.voice] = event;
+      const tune = event.scale ? scaleKey(event.scale) : null;
+      if (tune && tune !== lastTune) {
+        row.tune = tune;
+        lastTune = tune;
+      }
+    }
+    return byRow;
+  }, [events, transport, speed, tempo]);
+
+  const viewport = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(200);
+  useEffect(() => {
+    const el = viewport.current;
+    if (!el) return;
+    const measure = () => setHeight(el.clientHeight);
+    measure();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(el);
+    return () => observer?.disconnect();
+  }, []);
+
+  // Newest at the top, counting back. Always a full screen of grid, including
+  // the negative rows from before the run started, which draw empty.
+  const indices = rowSpanForViewport(currentRow, height, LEAD_ROWS);
 
   const empty = events.length === 0 && transport.length === 0;
 
@@ -91,52 +136,48 @@ export function MidiView() {
 
       <div className="midiview__tracker-head">
         <b>CTRL</b>
+        <b>TUNE</b>
         {Array.from({ length: 4 }, (_, voice) => (
           <b key={voice} className={`uvoice uvoice--${voice + 1}`}>STREAM {voice + 1}</b>
         ))}
       </div>
 
-      <div className="midiview__viewport">
-        <div className="midiview__surface" ref={surface}>
-          {transport.map((mark) => (
-            <div key={`t${mark.id}`} className="midiview__line"
-              style={{ top: top(beatsElapsed(mark.atSec, tempo)) }}>
-              <span className={`midiview__ctrl midiview__ctrl--${mark.direction}`}>
-                {mark.direction === "out" ? "▶" : "◀"} {mark.type.toUpperCase()}
-              </span>
+      <div className="midiview__viewport" ref={viewport}>
+        {indices.map((index) => {
+          const row = rows.get(index);
+          return (
+            <div
+              key={index}
+              className={"midiview__row"
+                + (index === currentRow ? " is-now" : "")
+                // A rule on the beat, so the pulse is readable at a glance.
+                + (index % speed.rowsPerBeat === 0 ? " is-beat" : "")}
+            >
+              <span className="midiview__ctrl">{row?.ctrl ?? ""}</span>
+              <span className="midiview__tune">{row?.tune ?? ""}</span>
+              {Array.from({ length: 4 }, (_, voice) => {
+                const note = row?.streams[voice];
+                if (!note) return <span key={voice} className="midiview__cell" />;
+                return (
+                  <span
+                    key={voice}
+                    className={"midiview__cell uvoice uvoice--" + (voice + 1)
+                      + " midiview__cell--" + (note.source ?? "original")}
+                  >
+                    <b>{note.noteName.padEnd(4, " ")}</b>
+                    <i>V{String(note.velocity).padStart(3, "0")}</i>
+                    <i>{formatLengthCell((note.durationTicks ?? 0) / PPQN)}</i>
+                    {/* Per-stream effect slot — transpose, glide, clock divide.
+                        Blank until the planner reports what it applied. */}
+                    <i className="midiview__efx">{"   "}</i>
+                  </span>
+                );
+              })}
             </div>
-          ))}
-
-          {events.map((event) => {
-            const beat = beatOf(event);
-            if (beat === null) return null;
-            // A note-off is the tail of a note already drawn, not its own row.
-            if (event.type === "note-off") return null;
-            return (
-              <div key={event.id} className="midiview__line" style={{ top: top(beat) }}>
-                <span className="midiview__ctrl midiview__ctrl--scale">
-                  {event.scale ? scaleKey(event.scale) : ""}
-                </span>
-                <span
-                  className={"midiview__note uvoice uvoice--" + (event.voice + 1)
-                    + " midiview__note--" + (event.source ?? "original")}
-                  style={{ gridColumn: event.voice + 2 }}
-                >
-                  <b>{event.noteName.padEnd(4, " ")}</b>
-                  <i>V{String(event.velocity).padStart(3, "0")}</i>
-                  <i>{formatLengthCell((event.durationTicks ?? 0) / 960)}</i>
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Fixed to the viewport, not the surface: the music moves past it. */}
-        <div className="midiview__playhead" style={{ top: playheadY }} />
+          );
+        })}
         {empty && (
-          <div className="midiview__waiting">
-            {isPlaying ? "Running…" : "Waiting for generated MIDI data…"}
-          </div>
+          <div className="midiview__waiting">Waiting for generated MIDI data…</div>
         )}
       </div>
     </div>
