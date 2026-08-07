@@ -18,6 +18,12 @@ public/idmlab-rack.js
 release/
 release-notes.md
 
+# sample libraries — source material, kept locally rather than in the repo.
+# 1.2 GB between them, against a 92 MB .git, and none of it is needed to build
+# or test. Committing either would roughly fourteen-times the clone.
+Audio - Archival LIBRARY/
+Audio - dec 2004 sound design/
+
 # test coverage
 coverage/
 
