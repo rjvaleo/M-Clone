@@ -32,9 +32,28 @@ import {
 } from "./synth";
 import { cyclicResetVoices } from "./cyclicreset";
 import { clockPulseInterval, metronomeInterval } from "./clockoutput";
+import {
+  ClockInput,
+  type ClockRealtimeMessage,
+  type ClockStatus,
+} from "./clockinput";
 
 const LOOKAHEAD_SEC = 0.12;
 const TICK_MS = 25;
+
+type PerformanceSettings = {
+  useMetronome: boolean;
+  sendClock: boolean;
+  syncRatio: number;
+  syncRatioDirection: "out" | "in";
+  externalClockEnabled: boolean;
+};
+
+type ClockUiDiagnostics = {
+  inferredBpm: number;
+  clockJitter: number;
+  clockStatus: ClockStatus;
+};
 
 export class MRuntime {
   private getState: () => ProjectState;
@@ -62,11 +81,15 @@ export class MRuntime {
   private onCyclicReset: ((voices: readonly number[]) => void) | null;
   private onPlannedSteps: ((steps: readonly import("./planner").PlannedStep[]) => void) | null;
   private onMidiMessage: ((event: MIDIMessageEvent) => void) | null;
-  private getPerformanceSettings: () => {
-    useMetronome: boolean; sendClock: boolean; syncRatio: number; syncRatioDirection: "out" | "in";
-  };
+  private getPerformanceSettings: () => PerformanceSettings;
+  private onClockDiagnostics: ((diagnostics: ClockUiDiagnostics) => void) | null;
+  private onClockTransport: ((transport: "start" | "stop" | "continue") => void) | null;
+  private performanceClockMs: () => number;
   private nextClockAt = 0;
   private nextMetronomeAt = 0;
+  private clockInput = new ClockInput();
+  private externalTempoOverride: number | null = null;
+  private lastClockDiagnosticsKey = "";
 
   constructor(
     getState: () => ProjectState,
@@ -77,9 +100,10 @@ export class MRuntime {
       onCyclicReset?: (voices: readonly number[]) => void;
       onMidiMessage?: (event: MIDIMessageEvent) => void;
       onPlannedSteps?: (steps: readonly import("./planner").PlannedStep[]) => void;
-      getPerformanceSettings?: () => {
-        useMetronome: boolean; sendClock: boolean; syncRatio: number; syncRatioDirection: "out" | "in";
-      };
+      getPerformanceSettings?: () => PerformanceSettings;
+      onClockDiagnostics?: (diagnostics: ClockUiDiagnostics) => void;
+      onClockTransport?: (transport: "start" | "stop" | "continue") => void;
+      performanceClockMs?: () => number;
     } = {},
   ) {
     this.getState = getState;
@@ -89,8 +113,15 @@ export class MRuntime {
     this.onCyclicReset = options.onCyclicReset ?? null;
     this.onMidiMessage = options.onMidiMessage ?? null;
     this.onPlannedSteps = options.onPlannedSteps ?? null;
+    this.onClockDiagnostics = options.onClockDiagnostics ?? null;
+    this.onClockTransport = options.onClockTransport ?? null;
+    this.performanceClockMs = options.performanceClockMs ?? (() => performance.now());
     this.getPerformanceSettings = options.getPerformanceSettings ?? (() => ({
-      useMetronome: false, sendClock: false, syncRatio: 4, syncRatioDirection: "out",
+      useMetronome: false,
+      sendClock: false,
+      syncRatio: 4,
+      syncRatioDirection: "out",
+      externalClockEnabled: false,
     }));
   }
 
@@ -215,6 +246,24 @@ export class MRuntime {
     return this.scheduling.snapshot();
   }
 
+  async onClockInput(message: ClockRealtimeMessage, performanceMs: number): Promise<void> {
+    const settings = this.clockInputSettings();
+    const update = this.clockInput.handle(message, performanceMs, settings);
+    if (update.inferredTempo !== undefined) this.externalTempoOverride = update.inferredTempo;
+    if (update.lostClock) this.externalTempoOverride = null;
+    this.publishClockDiagnostics(update.diagnostics);
+    if (update.transport === "start") {
+      await this.start();
+      this.onClockTransport?.("start");
+    } else if (update.transport === "continue") {
+      await this.resume();
+      this.onClockTransport?.("continue");
+    } else if (update.transport === "stop") {
+      this.stop();
+      this.onClockTransport?.("stop");
+    }
+  }
+
   /**
    * Play a one-shot chord straight to the sinks — what M calls Editor Sound:
    * clicking a Reference Keyboard key, adding a note to a step, or dragging the
@@ -252,7 +301,7 @@ export class MRuntime {
     if (this.timer !== null) return;
     const ctx = this.ensure();
     if (ctx.state === "suspended") await ctx.resume();
-    const state = this.getState();
+    const state = this.effectiveState();
     this.resetRandom(state.seed, state.voices.length);
     this.lifecycle.reset();
     this.cursors = makeCursors(state, this.nowSec() + 0.06);
@@ -262,7 +311,8 @@ export class MRuntime {
     this.pausedAt = null;
     this.nextClockAt = this.cursors[0]?.nextTimeSec ?? this.nowSec();
     this.nextMetronomeAt = this.nextClockAt;
-    if (this.getPerformanceSettings().sendClock) this.midi?.sendRealtime(0xfa);
+    const settings = this.getPerformanceSettings();
+    if (settings.sendClock && settings.syncRatioDirection === "out") this.midi?.sendRealtime(0xfa);
     if (this.timer === null) {
       this.expectedWakeSec = this.nowSec() + TICK_MS / 1000;
       this.timer = this.scheduler.repeat(() => this.tick(), TICK_MS);
@@ -308,7 +358,7 @@ export class MRuntime {
     this.synth?.cancelScheduled();
     this.midi?.cancelScheduled();
     this.midi?.panic();
-    const state = this.getState();
+    const state = this.effectiveState();
     this.resetRandom(state.seed, state.voices.length);
     this.lifecycle.reset();
     this.cursors = makeCursors(state, this.nowSec() + 0.06);
@@ -329,11 +379,13 @@ export class MRuntime {
     this.midi?.panic();
     this.lifecycle.reset();
     this.pausedAt = null;
-    if (this.getPerformanceSettings().sendClock) this.midi?.sendRealtime(0xfc);
+    const settings = this.getPerformanceSettings();
+    if (settings.sendClock && settings.syncRatioDirection === "out") this.midi?.sendRealtime(0xfc);
   }
 
   private tick(): void {
     if (!this.ctx) return;
+    this.refreshClockInputState();
     const now = this.nowSec();
     if (this.ctx.state !== "running") {
       if (!this.suspended) {
@@ -352,6 +404,14 @@ export class MRuntime {
       this.suspended = false;
       this.expectedWakeSec = now;
     }
+    const timeoutUpdate = this.clockInput.observeTimeout(
+      this.performanceClockMs(),
+      this.clockInputSettings(),
+    );
+    if (timeoutUpdate) {
+      this.externalTempoOverride = null;
+      this.publishClockDiagnostics(timeoutUpdate.diagnostics);
+    }
     const decision = this.scheduling.observeWake(
       now,
       this.expectedWakeSec,
@@ -359,7 +419,7 @@ export class MRuntime {
     );
     this.expectedWakeSec = now + TICK_MS / 1000;
     if (decision.recover) this.recoverFromStall(now);
-    const state = this.getState();
+    const state = this.effectiveState();
     const timing = timingFingerprints(state);
     this.cursors = rebaseChangedTimelines(this.cursors, this.timing, timing);
     this.timing = timing;
@@ -426,5 +486,31 @@ export class MRuntime {
       };
     });
     this.programs = "";
+  }
+
+  private clockInputSettings() {
+    const settings = this.getPerformanceSettings();
+    return {
+      enabled: settings.externalClockEnabled && settings.syncRatioDirection === "in",
+      syncRatio: settings.syncRatio,
+    };
+  }
+
+  private effectiveState(): ProjectState {
+    const state = this.getState();
+    return this.externalTempoOverride === null ? state : { ...state, tempo: this.externalTempoOverride };
+  }
+
+  private refreshClockInputState(): void {
+    if (this.clockInputSettings().enabled) return;
+    this.externalTempoOverride = null;
+    this.publishClockDiagnostics(this.clockInput.disable().diagnostics);
+  }
+
+  private publishClockDiagnostics(diagnostics: ClockUiDiagnostics): void {
+    const key = `${diagnostics.clockStatus}|${diagnostics.inferredBpm.toFixed(4)}|${diagnostics.clockJitter.toFixed(4)}`;
+    if (key === this.lastClockDiagnosticsKey) return;
+    this.lastClockDiagnosticsKey = key;
+    this.onClockDiagnostics?.(diagnostics);
   }
 }

@@ -109,6 +109,7 @@ import {
   normalizeSynthSettings,
   type SynthSettings,
 } from "../engine/synth";
+import type { ClockStatus } from "../engine/clockinput";
 
 /** 26 Snapshot locations, one per letter key A-Z. */
 export const SNAPSHOT_COUNT = 26;
@@ -117,6 +118,13 @@ export const SNAPSHOT_COUNT = 26;
  * up to 999 notes in a Pattern."
  */
 export const MAX_PATTERN_STEPS = 999;
+
+function clockStatusForPerformanceSettings(
+  enabled: boolean,
+  direction: "out" | "in",
+): ClockStatus {
+  return enabled && direction === "in" ? "lost" : "disabled";
+}
 
 export type MidiInputResponse =
   | { type: "echo"; voice: number; note: number; velocity: number; channels?: number[] }
@@ -261,6 +269,10 @@ export type MStore = {
   tempoRange: TempoRange;
   syncRatio: 1 | 2 | 4 | 8 | 16;
   syncRatioDirection: "out" | "in";
+  externalClockEnabled: boolean;
+  inferredBpm: number;
+  clockJitter: number;
+  clockStatus: ClockStatus;
   robotRange: BatonPoint;
   robotTimeBase: 1 | 2 | 4 | 8 | 16;
   continuousConducting: ContinuousConducting;
@@ -453,6 +465,11 @@ export type MStore = {
   setTempoRange: (low: number, high: number) => void;
   setSyncRatio: (value: number) => void;
   setSyncRatioDirection: (direction: "out" | "in") => void;
+  setClockInputDiagnostics: (diagnostics: {
+    inferredBpm: number;
+    clockJitter: number;
+    clockStatus: ClockStatus;
+  }) => void;
   setRobotRange: (axis: "x" | "y", value: number) => void;
   setRobotTimeBase: (value: number) => void;
   robotStep: (signedX: number, signedY: number) => void;
@@ -647,6 +664,10 @@ export const useM = create<MStore>((set, get) => ({
   tempoRange: { low: 80, high: 160 },
   syncRatio: 4,
   syncRatioDirection: "out",
+  externalClockEnabled: DEFAULT_OPTIONS.externalClock,
+  inferredBpm: 0,
+  clockJitter: 0,
+  clockStatus: clockStatusForPerformanceSettings(DEFAULT_OPTIONS.externalClock, "out"),
   robotRange: { x: 0.15, y: 0.15 },
   robotTimeBase: 4,
   continuousConducting: freshContinuousConducting(),
@@ -1233,6 +1254,10 @@ export const useM = create<MStore>((set, get) => ({
       tempoRange: d.tempoRange,
       syncRatio: d.syncRatio as MStore["syncRatio"],
       syncRatioDirection: d.syncRatioDirection,
+      externalClockEnabled: d.options.externalClock,
+      inferredBpm: 0,
+      clockJitter: 0,
+      clockStatus: clockStatusForPerformanceSettings(d.options.externalClock, d.syncRatioDirection),
       robotRange: d.robotRange,
       robotTimeBase: d.robotTimeBase as MStore["robotTimeBase"],
       cyclicPositions: d.cyclicPositions,
@@ -1296,6 +1321,10 @@ export const useM = create<MStore>((set, get) => ({
       selectedPatternIndices: [initial.project.voices[initial.selectedVoice].patternIndex],
       editorRegion: null,
       options: initial.options,
+      externalClockEnabled: initial.options.externalClock,
+      inferredBpm: 0,
+      clockJitter: 0,
+      clockStatus: clockStatusForPerformanceSettings(initial.options.externalClock, initial.syncRatioDirection),
       selectedVoice: initial.selectedVoice,
       isPlaying: false,
       isPaused: false,
@@ -1315,6 +1344,12 @@ export const useM = create<MStore>((set, get) => ({
 
   setOption: (id, on) => set((s) => ({
     options: setOptionValue(s.options, id, on),
+    externalClockEnabled: id === "externalClock" ? on : s.externalClockEnabled,
+    inferredBpm: id === "externalClock" && !on ? 0 : s.inferredBpm,
+    clockJitter: id === "externalClock" && !on ? 0 : s.clockJitter,
+    clockStatus: id === "externalClock"
+      ? clockStatusForPerformanceSettings(on, s.syncRatioDirection)
+      : s.clockStatus,
     project: id === "secondOrderTranspose"
       ? { ...s.project, secondOrderTranspose: on }
       : s.project,
@@ -1897,7 +1932,15 @@ export const useM = create<MStore>((set, get) => ({
         ? { syncRatio: value as MStore["syncRatio"] }
         : {},
     ),
-  setSyncRatioDirection: (direction) => set({ syncRatioDirection: direction }),
+  setSyncRatioDirection: (direction) => set((s) => ({
+    syncRatioDirection: direction,
+    clockStatus: clockStatusForPerformanceSettings(s.externalClockEnabled, direction),
+  })),
+  setClockInputDiagnostics: (diagnostics) => set({
+    inferredBpm: diagnostics.inferredBpm,
+    clockJitter: diagnostics.clockJitter,
+    clockStatus: diagnostics.clockStatus,
+  }),
   setRobotRange: (axis, value) =>
     set((s) => ({
       robotRange: {
