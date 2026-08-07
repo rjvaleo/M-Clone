@@ -76,7 +76,9 @@ describe("the Options menu", () => {
   it("reports availability so unbuilt options can be shown honestly", () => {
     // Everything that needs MIDI input is unavailable until that is wired.
     expect(isOptionAvailable("useMetronome")).toBe(true);
-    expect(isOptionAvailable("externalClock")).toBe(false);
+    // Was unavailable until the clock follower existed; clockinput.ts and the
+    // realtime decoding in midiinput.ts make it real, so the switch is live.
+    expect(isOptionAvailable("externalClock")).toBe(true);
     expect(isOptionAvailable("midiConduct")).toBe(true);
     expect(isOptionAvailable("echoInBackground")).toBe(true);
     expect(isOptionAvailable("tapAffectsVelocity")).toBe(true);
