@@ -1768,19 +1768,52 @@ body {
 .midiview__ctrl { color: #8ce88c; font-size: 9px; }
 .midiview__tune { color: #3f7a3f; font-size: 9px; }
 
-.midiview__cell { display: inline-flex; gap: 5px; min-width: 0; }
-.midiview__cell b, .midiview__cell i { font-style: normal; white-space: pre; }
+.midiview__cell { min-width: 0; }
+
+/*
+ * Notes sit over the grid, not inside a row.
+ *
+ * A row is one line tall and a note can be taller, so the note layer is
+ * positioned against the same row height the grid uses. This is the one place
+ * absolute positioning is right: the grid stays uniform and steps, and the
+ * blocks are measured off it rather than floating free.
+ */
+/* The overlay repeats the grid's columns, so a stream is exactly as wide as
+   its heading and neither has to know the other's measurements. */
+.midiview__notes {
+  position: absolute; inset: 0; pointer-events: none;
+  display: grid;
+  grid-template-columns:
+    var(--mv-ctrl) var(--mv-tune) repeat(4, minmax(0, 1fr));
+}
+.midiview__stream { position: relative; grid-row: 1; }
+.midiview__stream:nth-child(1) { grid-column: 3; }
+.midiview__stream:nth-child(2) { grid-column: 4; }
+.midiview__stream:nth-child(3) { grid-column: 5; }
+.midiview__stream:nth-child(4) { grid-column: 6; }
+
+.midiview__note {
+  position: absolute; overflow: hidden;
+  display: flex; align-items: flex-start; gap: 4px;
+  padding: 0 4px; font-size: 10px; line-height: var(--mv-row);
+  white-space: pre;
+  /* Length is height. A block twice as tall lasted twice as long, so the
+     shape of a phrase reads without anyone parsing the numbers. */
+  border-left: 2px solid currentColor;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.midiview__note b, .midiview__note i { font-style: normal; }
 .midiview__efx { color: #3f7a3f; }
 /*
  * Colour by which Note Order list the step came from, so the three-way mix is
  * visible in the output rather than only on the slider. Hue stays the Voice's,
  * so a stream still reads as one stream.
  */
-.midiview__cell--original { color: var(--voice-color); }
-.midiview__cell--cyclic { color: var(--voice-color); opacity: 0.62; }
-.midiview__cell--utterly {
-  color: var(--voice-color); opacity: 0.62;
-  text-decoration: underline; text-underline-offset: 2px;
+.midiview__note--original { color: var(--voice-color); }
+.midiview__note--cyclic { color: var(--voice-color); opacity: 0.66; }
+.midiview__note--utterly {
+  color: var(--voice-color); opacity: 0.66;
+  border-left-style: dashed;
 }
 
 .midiview__waiting {
