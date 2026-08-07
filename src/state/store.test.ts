@@ -1404,6 +1404,27 @@ describe("the Options menu in the store", () => {
     expect(g().options.noZoomRects).toBe(false);
   });
 
+  it("mirrors external clock availability and diagnostics in performance state", () => {
+    expect(g().externalClockEnabled).toBe(false);
+    expect(g().clockStatus).toBe("disabled");
+    g().setSyncRatioDirection("in");
+    g().setOption("externalClock", true);
+    expect(g().externalClockEnabled).toBe(true);
+    expect(g().clockStatus).toBe("lost");
+    g().setClockInputDiagnostics({ inferredBpm: 123.4, clockJitter: 1.25, clockStatus: "locked" });
+    expect(g()).toMatchObject({ inferredBpm: 123.4, clockJitter: 1.25, clockStatus: "locked" });
+    g().setOption("externalClock", false);
+    expect(g()).toMatchObject({
+      externalClockEnabled: false,
+      inferredBpm: 0,
+      clockJitter: 0,
+      clockStatus: "disabled",
+    });
+    g().setOption("externalClock", true);
+    g().setSyncRatioDirection("out");
+    expect(g().clockStatus).toBe("disabled");
+  });
+
   it("marks the document dirty, because options are saved with it", () => {
     useM.setState({ isDirty: false });
     g().setOption("noZoomRects", true);
