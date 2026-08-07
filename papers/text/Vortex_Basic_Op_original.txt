@@ -1,0 +1,603 @@
+
+
+=== [p1] ===
+All Rights Reserved.
+Copyright 1994, Lexicon Inc.
+INPUT
+A
+B
+VALUE
+A/B
+STORE
+VALUE
+REGISTER/PRESET
+OVL
+LVL
+CLEAR
+PEDAL/TAP
+9
+10
+11
+12
+13
+14
+15
+16
+8
+7
+6
+5
+4
+3
+2
+1
+DEJA VU
+CHOIR
+SHIMMER
+SWEEP
+SHADOW
+CYCLOID
+BLEEN
+FRACTAL
+DUO
+MAZE
+MOSAIC
+AEROSOL
+CENTRIFUGE
+ORBITS
+ATMOSPHERE
+REFLEXION
+FEEDBACK 1
+FEEDBACK 2
+RATE 1
+DEPTH 1
+RESONANCE 1
+RATE 2
+DEPTH 2
+RESONANCE 2
+ECHO 2
+ECHO 1
+ENVELOPE
+MORPH A/B
+ECHO FX LVL
+MOD FX LVL
+OUTPUT
+MIX
+TM
+UDIO
+A
+ORPHING
+M
+ROCESSOR
+P
+Basic Operation
+TAP and Echo Rhythms
+The ability to set different rhythmic
+divisions for Vortex's two echoes
+allows you to set up some very
+interesting patterns. For example:
+1. Load preset 8. DUO B.
+2. Tap in a whole note interval (4
+beats between taps).
+3. Turn the Parameter knob to
+ECHO 1÷, and set the VALUE
+knob to 16. This will give ECHO
+1 a sixteenth-note rhythm.
+4. Select ECHO 2÷, and set its
+VALUE to 8, giving ECHO 2 an
+eighth-note rhythm.
+Now, you can tap any interval, and
+ECHO 1 will always have a rhythm
+which is twice as fast as that of
+ECHO 2.
+Vortex has two independent delay
+lines which are configured in a va-
+riety of ways to create rhythmic
+effects.  The ECHO 1÷ and ECHO
+2÷ controls allow  you to set inde-
+pendent rhythms, which will always
+be related to the tap interval, for
+each of Vortex's two delay lines.
+For example, if you tap in a whole
+note interval (4 beats between
+taps), the parameter value 4 corre-
+sponds to quarter-note echoes, the
+parameter value 8 corresponds to
+eighth-note echoes...64 to sixty-
+fourth-note echoes.
+Tap intervals can be as long as 28 seconds,
+allowing long phrases of music, rather than
+single beats, to determine tempo. Whenever
+Vortex is turned on, the tap interval will return to
+the default value. (1=a quarter-note at 65 bpm)
+Tap Interval
+(Number of Beats between TAPs)
+1
+2
+3
+Rhythmic Divisions
+ECHO
+Value
+1
+2
+3
+4
+5
+6
+7
+8 • • •
+6
+1
+1
+1
+2
+2
+3
+4
+6
+5
+3
+7
+7
+6
+5
+5:4
+7:4
+3
+5
+6
+7
+5:4
+7:4
+3
+5
+6
+7
+5:4
+7:4
+* If you have a footpedal connected to Vortex,
+you must select one of the ECHO÷ parameters
+in order for the button to function as TAP —
+footswitch TAP function is always active.
+Vortex allows you to set the tempo
+for all effects, simply by pressing
+TAP twice. You can tap with a
+footswitch, or with the front panel
+TAP button.*
+To set tempo in Vortex, just press
+TAP twice in rhythm to establish the
+tempo you want. The front panel
+LED will light on your first press of
+TAP to indicate a tap interval is
+being calculated. Your second TAP
+defines the tap interval and turns off
+the LED. Now, any effect you select
+will be synchronized to your tempo.
+To select a new tempo at any time,
+just TAP twice. Vortex will update
+the tempo throughout the box on
+receipt of the second TAP.
+Editing Effects
+Storing Effects
+Vortex presets cannot be erased or
+overwritten by parameter changes;
+the original version will always be
+restored when loaded. If you make
+changes to a preset and want to
+save the changes as a custom ef-
+fect, or if you want to match certain
+effects as A/B pairs, you must store
+your new versions into registers.
+You can store any effect you want
+into any register space. To store the
+currently running effect:
+1. Press STORE.
+2. If you were in preset mode, the
+register LED will go on, indicat-
+ing that Vortex has automatically
+switched to register mode — se-
+lecting whatever register is indi-
+cated  by the position of the REG-
+ISTER/PRESET  knob and the
+A/B button.
+3. Releasing STORE will store the
+currently running effect into the
+register indicated on the display,
+overwriting the effect previously
+stored there. The display will
+flash briefly to indicate the store
+operation was successful.
+4. Store operations are executed
+on release of the STORE but-
+ton. If you want to store to a
+different register, or to a differ-
+ent register bank, than the one
+displayed, turn the REGISTER/
+PRESET knob to the register
+number you want, and check the
+setting of the A/B button before
+releasing STORE.
+Each Vortex effect consists of mul-
+tiple modulation and delay func-
+tions, and each has its own distinc-
+tive sonic signature. All 32 effects
+share a common set of 16 param-
+eters which allow you to access
+dimensional, rhythmic, and dy-
+namic aspects of each effect.
+FEEDBACK 1
+FEEDBACK 2
+RATE 1
+DEPTH 1
+RESONANCE 1
+RATE 2
+DEPTH 2
+RESONANCE 2
+ENVELOPE
+MORPH A/B
+ECHO FX LVL
+MOD FX LVL
+OUTPUT
+MIX
+ECHO 2
+ECHO 1
+PEDAL/TAP
+Select a parameter.
+A
+B
+VALUE
+A/B
+VALUE
+Use the VALUE knob to adjust the
+selected parameter.
+The VALUE LED lights whenever
+parameter values are displayed.
+Parameter values (1-64) will be
+displayed when VALUE is turned.
+The decimal point indicates changes have
+been made since the last store operation.
+To adjust a  parameter, select it with
+the PARAMETER knob, then turn
+the VALUE knob. The first turn of
+VALUE will display the current pa-
+rameter setting and light the
+VALUE LED. Subsequent adjust-
+ments will increment or decrement
+parameter values along their entire
+range (1-64).
+A
+B
+VALUE
+A/B
+Presets and Registers
+Vortex is loaded with 32 permanent
+presets, arranged in two banks,
+and numbered 1A-16A and 1B-
+16B. Vortex also has 32 memory
+locations, called registers, where
+you can store your own effects.
+Each preset and register has an A
+and a B version. In the presets, A
+and B versions are matched into
+specific effect pairs. You can set up
+your own pairing system in the reg-
+isters.
+The front panel A/B button determines which version of an effect will be
+loaded. When this button is pressed with an effect running, it will initiate a
+dynamic transition, or morph  from one effect to the other.
+Vortex has 32 presets and 32 registers for
+storing your customized effects. Pressing
+the REGISTER/PRESET button ...
+LED indicates
+register selection.
+REGISTER/PRESET
+9
+10
+11
+12
+13
+14
+15
+16
+8
+7
+6
+5
+4
+3
+2
+1
+DEJA VU
+CHOIR
+SHIMMER
+SWEEP
+SHADOW
+CYCLOID
+BLEEN
+FRACTAL
+DUO
+MAZE
+MOSAIC
+AEROSOL
+CENTRIFUGE
+ORBITS
+ATMOSPHERE
+REFLEXION
+...determines whether  presets
+(REFLEXION ... FRACTAL),
+or registers (1 ... 16) will be
+selected by the knob.
+LEDs  indicate A/B selection.
+The setting of A/B determines whether the A or B
+versions of presets and registers will be loaded.
+
+
+=== [p2] ===
+3 Oak Part, Bedford, MA 01730 • Tel: (781) 280-0300 • Fax: (781) 280-0490
+Basic Operation
+FOOTSWITCHES
+POWER
+OUTPUTS
+INPUTS
+9V~, 1A,
+50-60Hz
+LEXICON, INC.
+WALTHAM MA 02154
+MADE IN U.S.A.
+P/N 021-09504
+SERIAL #
+THIS DEVICE COMPLIES WITH PART
+15 OF THE FCC RULES.
+OPERATION IS SUBJECT TO THE
+FOLLOWING TWO CONDITIONS:
+(1) THIS DEVICE MAY NOT CAUSE
+HARMFUL INTERFERENCE, AND
+(2) THIS DEVICE MUST ACCEPT ANY
+INTERFERENCE RECEIVED<
+INCLUDING INTERFERENCE THAT
+MAY CAUSE UNDESIRED OPERATION.
+:TIP
+:RING
+:SLEEVE
+BYPASS
+STEP
+TAP
+A/B
+L
+(HI-Z PHONES)
+L
+R
+(MONO)
+R
+(MONO)
+USE LEXICON
+MSA AC ADAPTER
+VORTEX
+A
+B
+COM
+A/B
+A/B RELAY
+SPECIFICATION
+< 100V, < 100mA
+STEREO
+PLUG
+ONLY
+FOOTPEDAL
+Other Features
+Vortex offers many other features
+you'll want to explore:
+• All Vortex effects are dynami-
+cally sensitive.
+• Vortex has a CLEAR function
+which allows registers to be
+skipped in any effect sequence
+you create.You can also set up
+chains which use cleared regis-
+ters as loop points.
+• One footswitch is provided with
+Vortex for control of either TAP
+and A/B functions, or register
+STEP and BYPASS. A second
+footswitch can be connected to
+control the remaining  footswitch
+functions.
+• Vortex is supplied with an electri-
+cally isolated analog switch that
+allows remote control of a guitar
+amplifier lead/rhythm channel
+selection. Simply connect a stan-
+dard 1/4" guitar cable between
+the Vortex rear panel A/B relay
+switch and the A/B switching in-
+put on your amp. Both the front
+panel A/B button, and the
+footswitch A/B control will acti-
+vate this switch, allowing you to
+simultaneously switch effects
+and amplifier settings.
+Vortex gives you the ability to con-
+tinuously transform one effect into
+another. This feature, which we call
+Audio Morphing,™allows you to
+transform closely related, or wildly
+dissimilar effects — and to set the
+time period over which the transfor-
+mation occurs.
+Morphs are performed between
+register pairs. To set up a morph,
+store an effect into any A register,
+then store another effect into the
+corresponding B register.
+Morphing is accomplished auto-
+matically when you press the A/B
+switch. The MORPH A/B param-
+eter allows you to set the time it
+takes for one effect to transform into
+another when A/B is pressed. The
+combined morph rates set for A and
+B determine the total length of time
+a morph will take. The total duration
+of the morph can be varied from 10
+seconds to .01 second. (1=slowest
+rate; 64=fastest rate) Morph rates,
+like other parameters, are stored as
+part of the effect.
+Audio Morphing™
+When you morph between two ver-
+sions of the same effect, all of the
+parameter values move smoothly
+from one version to the other.When
+you morph between two different
+effects, the entire structure of the
+effect transforms to the other effect.
+Everything changes — rates, lev-
+els, audio routing, routing of the
+LFOs and envelope, etc. Try listen-
+ing to some of the preset effect
+pairs to get an idea of what
+morphing can do with different ef-
+fect combinations.
+Once a parameter is assigned to a
+pedal, pedal control of the param-
+eter is always active, even if you
+move the Parameter knob to select
+another parameter for editing.
+While an assigned parameter is se-
+lected, value changes made with
+the pedal will be displayed. When
+pedal motion stops, the display will
+return to display of the register or
+preset number.
+When the Parameter knob is turned
+to another position, the Pedal LED
+will turn off, and the value of the new
+parameter will be displayed. The
+new parameter can be edited with
+VALUE; the pedal will continue to
+control its assigned parameter.
+To remove a pedal assignment,
+select the assigned parameter and
+press PEDAL/TAP, or select an-
+other parameter for assignment and
+press PEDAL/TAP. When a pedal
+is deassigned, the parameter re-
+turns to its original value (as set
+prior to pedal assignment.)
+Any one of 14 parameters can be
+assigned to pedal control — and
+pedal assignment can be stored as
+part of an effect. A and B effects can
+each have different pedal assign-
+ments. To make use of the many
+features available through pedal
+control, simply connect a pedal via
+the rear panel FOOTPEDAL con-
+nector. Each time an effect is loaded,
+Vortex checks this connection.
+When a pedal is connected,  the
+PEDAL function of the PEDAL/TAP
+button is activated.
+Now, PEDAL/TAP functions as a
+TAP button only when ECHO 1÷ or
+ECHO 2÷ is selected.  (Footswitch
+TAP function is unaffected.) When
+the Parameter knob is turned to any
+other position, pressing this button
+assigns the selected parameter to
+pedal control.
+1. Plug a pedal into Vortex, and
+load a new effect (so that Vortex
+will recognize pedal connection.)
+2. Turn the Parameter knob to se-
+lect any assignable parameter
+— for example, MIX.
+3. Press PEDAL/TAP. The LED will
+light to indicate that the pedal
+has been assigned to that pa-
+rameter.
+4. When the pedal is moved be-
+yond the displayed value of MIX,
+the pedal will acquire control over
+the parameter's full range.
+Morphing with a Pedal
+When you assign the MORPH A/B
+parameter, the pedal immediately
+acquires control over the morph,
+and the morph jumps to the current
+pedal position. (Toe up=1=effect B;
+toe down=64=effect A.)
+The LED will light when you assign a parameter and
+whenever an assigned parameter is selected with the
+knob, until the assignment is changed or removed.
+FEEDBACK 1
+FEEDBACK 2
+RATE 1
+DEPTH 1
+RESONANCE 1
+RATE 2
+DEPTH 2
+RESONANCE 2
+ENVELOPE
+MORPH A/B
+ECHO FX LVL
+MOD FX LVL
+OUTPUT
+MIX
+ECHO 2
+ECHO 1
+PEDAL/TAP
+FEEDBACK 1
+FEEDBACK 2
+RATE 1
+DEPTH 1
+RESONANCE 1
+RATE 2
+DEPTH 2
+RESONANCE 2
+ECHO 2
+ECHO 1
+ENVELOPE
+MORPH A/B
+ECHO FX LVL
+MOD FX LVL
+OUTPUT
+MIX
+PEDAL/ TAP
+ If you unplug the pedal, load a new effect to make sure that Vortex recognizes the disconnection.
+A/B still selects the A or B effect,
+and the A and B LEDs indicate
+which effect is available for editing.
+Edits can be made via the front
+panel to either A or B effect param-
+eters, but the pedal determines
+which effect is being heard.
+When you deassign the pedal, Vor-
+tex will immediately switch to which-
+ever effect, A or B, is indicated by
+the front panel LEDs.
+If either the A or B effect has been stored
+with the pedal assigned to MORPH A/B,
+(and a pedal is connected) pedal control
+is immediate when the effect is loaded.
+When a pedal is plugged into Vortex, the PEDAL/TAP button
+assigns any one of 14 parameters* to pedal control.
+The PEDAL/TAP button performs TAP functions
+when ECHO 1÷ or ECHO 2÷ is selected.
+Pedal Control
+Contact Lexicon, or your local dealer for more
+information on this, or any Lexicon product.
+Preset 3 ORBITS
+A and B in this preset are variations on a
+single effect, B having slow orbital paths,
+and A having faster orbits. This is a good
+example of using morphing to produce
+subtle changes in the overall sound of an
+effect.
+Preset 15 BLEEN
+A and B are completely different from
+one another. A is based on envelope
+detune, while B is based on "ring modu-
+lated" echo feedback. The sound is com-
+pletely transformed as the effect morphs
+from A to B.

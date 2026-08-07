@@ -99,6 +99,28 @@ export interface StereoPannerNodeLike extends AudioNodeLike {
   readonly pan: AudioParamLike;
 }
 
+/**
+ * Takes one multi-channel signal apart into one output per channel.
+ *
+ * Connect *from* an indexed output: `splitter.connect(destination, channel)`.
+ * Web Audio's default up-mixing means a mono source arriving here appears on
+ * both outputs, which is what makes a widener safe to put in front of anything.
+ */
+export interface ChannelSplitterNodeLike extends AudioNodeLike {
+  readonly numberOfOutputs: number;
+}
+
+/**
+ * Puts channels back together into one multi-channel signal.
+ *
+ * Connect *to* an indexed input: `source.connect(merger, 0, channel)`. The
+ * third argument is the reason `AudioNodeLike.connect` grew its two optional
+ * indices — without them there is no way to address a specific side.
+ */
+export interface ChannelMergerNodeLike extends AudioNodeLike {
+  readonly numberOfInputs: number;
+}
+
 export interface CompressorNodeLike extends AudioNodeLike {
   readonly threshold: AudioParamLike;
   readonly knee: AudioParamLike;
@@ -142,6 +164,17 @@ export interface EffectContext {
   createBuffer(channels: number, frames: number, sampleRate: number): AudioBufferLike;
   /** An LFO source for modulated delay lines. See the note above. */
   createOscillator(): OscillatorNodeLike;
+  /**
+   * Stereo placement. Promoted here from `SynthContext` when the sample
+   * players and the mixer gained pan: putting a signal somewhere in the field
+   * is not a synthesis concern, and a drum that cannot be panned is a drum in
+   * the middle of every mix it appears in.
+   */
+  createStereoPanner(): StereoPannerNodeLike;
+  /** Take a stereo signal apart. Sides are addressed by output index. */
+  createChannelSplitter(numberOfOutputs: number): ChannelSplitterNodeLike;
+  /** Put one back together. Sides are addressed by input index. */
+  createChannelMerger(numberOfInputs: number): ChannelMergerNodeLike;
 }
 
 /** What playing a sample needs, on top of what building an effect needs. */
@@ -172,6 +205,7 @@ export interface SampleContext extends EffectContext {
 export interface SynthContext extends SampleContext {
   // `createOscillator` is inherited from EffectContext, where the reverb tanks
   // need it as an LFO. A synth wants it as a voice — same node, different job.
-  createStereoPanner(): StereoPannerNodeLike;
+  // `createStereoPanner` is inherited too, for the same kind of reason: the
+  // synth was its first caller, and it stopped being its only one.
   createPeriodicWave(real: Float32Array, imag: Float32Array): PeriodicWaveLike;
 }

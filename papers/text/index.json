@@ -1,0 +1,106 @@
+{
+ "About_This_Reverberation_Business": {
+  "pages": 17,
+  "chars": 81023,
+  "sha256_16": "cfa3339b38ced362",
+  "text_layer": true
+ },
+ "DP4_manual": {
+  "pages": 199,
+  "chars": 0,
+  "sha256_16": "96b76ade5422ff10",
+  "text_layer": true,
+  "note": "handled separately"
+ },
+ "DattorroLAA": {
+  "pages": 4,
+  "chars": 6278,
+  "sha256_16": "2c22a4add11e46dd",
+  "text_layer": true
+ },
+ "Design_of_a_Reverb_Plugin_and_Evaluation": {
+  "pages": 57,
+  "chars": 75916,
+  "sha256_16": "32bb5ea05b990825",
+  "text_layer": true
+ },
+ "Digital_Implementation_of_Artificial_Rev": {
+  "pages": 4,
+  "chars": 10630,
+  "sha256_16": "281da7e328bdbde9",
+  "text_layer": true
+ },
+ "Digital_Implementation_of_Artificial_Reverberation": {
+  "pages": 4,
+  "chars": 10630,
+  "sha256_16": "df33c014a08a0a84",
+  "text_layer": true
+ },
+ "EffectDesignPart2": {
+  "pages": 25,
+  "chars": 103448,
+  "sha256_16": "fef75168d47bc85d",
+  "text_layer": true
+ },
+ "HiFi": {
+  "pages": 32,
+  "chars": 130277,
+  "sha256_16": "f775cdb3ce11a4dc",
+  "text_layer": true
+ },
+ "IIRAdapt": {
+  "pages": 13,
+  "chars": 19937,
+  "sha256_16": "4cf7855be59e4b22",
+  "text_layer": true
+ },
+ "Wavelet": {
+  "pages": 11,
+  "chars": 16837,
+  "sha256_16": "51573623140a9a13",
+  "text_layer": true
+ },
+ "stanm39": {
+  "pages": 185,
+  "chars": 0,
+  "sha256_16": "e1e50dde6f5f9abf",
+  "text_layer": false,
+  "note": "handled separately"
+ },
+ "EffectDesignPart1": {
+  "pages": 25,
+  "chars": 104254,
+  "sha256_16": "23b630f7eb88c292",
+  "text_layer": true
+ },
+ "EffectDesignPart3": {
+  "pages": 32,
+  "chars": 97963,
+  "sha256_16": "1adb38c8100bbb20",
+  "text_layer": true
+ },
+ "DigitalTimesI": {
+  "pages": 16,
+  "chars": 57768,
+  "sha256_16": "7b6814cfb47edffd",
+  "text_layer": true
+ },
+ "TissueSaturationPulse": {
+  "pages": 12,
+  "chars": 18842,
+  "sha256_16": "7253123965a6a26f",
+  "text_layer": true
+ },
+ "proj392c": {
+  "pages": 10,
+  "chars": 15100,
+  "sha256_16": "ede02b2a9084c2a3",
+  "text_layer": true
+ },
+ "Vortex_Basic_Op_original": {
+  "pages": 2,
+  "chars": 13187,
+  "sha256_16": "0559656608fe9297",
+  "text_layer": true
+ }
+}

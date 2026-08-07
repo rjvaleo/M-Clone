@@ -52,11 +52,17 @@ export default defineConfig({
          * cannot be provoked from Node — a source that refuses to stop, a
          * limiter that reports nothing. Raise this number as those are reached;
          * never lower it.
+         *
+         * Raised 98.5 → 99 when the DP/4 and Blackhole control surfaces were
+         * covered: every documented knob on both machines now has a test that
+         * asserts the right node moved, which took branches to 99.17. Before
+         * that the two files had been holding the whole gate red since they
+         * landed, with statements at 99.64 against a threshold of 100.
          */
         lines: 100,
         functions: 100,
         statements: 100,
-        branches: 98.5,
+        branches: 99,
       },
     },
   },

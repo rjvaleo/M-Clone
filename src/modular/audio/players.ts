@@ -31,8 +31,14 @@
 import { rampParam, type AudioParamLike } from "./params";
 import type { AudioNodeLike, ManagedAudioNode } from "./graphAdapter";
 import type { AudioNodeSpec } from "./audioPlan";
-import type { AudioBufferLike, GainNodeLike, SampleContext, SynthContext } from "./nodes";
-import { VoiceBank } from "./voices";
+import type {
+  AudioBufferLike,
+  GainNodeLike,
+  SampleContext,
+  StereoPannerNodeLike,
+  SynthContext,
+} from "./nodes";
+import { clampPan, VoiceBank } from "./voices";
 import { GRAIN_WAKE_MS, GrainScheduler, type GrainSettings } from "./grains";
 import type { SmoothingLookup } from "./effects";
 import { SynthPlayer } from "./synthPlayer";
@@ -101,6 +107,7 @@ abstract class PlayerModule implements ManagedAudioNode, NotePlayer {
   protected readonly structure: Readonly<Record<string, unknown>>;
   private readonly inputGain: GainNodeLike;
   private readonly outputGain: GainNodeLike;
+  private readonly panner: StereoPannerNodeLike;
   private disposed = false;
 
   constructor(
@@ -123,7 +130,14 @@ abstract class PlayerModule implements ManagedAudioNode, NotePlayer {
     this.outputGain = context.createGain();
     // Silent until the adapter fades it up, exactly like an effect.
     rampParam(this.outputGain.gain, 0, atSec, "none");
-    this.bank = new VoiceBank(context, this.outputGain);
+
+    // voices → pan → level → out. Pan before level rather than after so the
+    // adapter's crossfade is the last thing in the chain and stays a plain
+    // scalar on the summed signal, whatever the pan is doing.
+    this.panner = context.createStereoPanner();
+    rampParam(this.panner.pan, clampPan(numberOr(spec.parameters.pan, 0)), atSec, "none");
+    this.panner.connect(this.outputGain);
+    this.bank = new VoiceBank(context, this.panner);
   }
 
   get input(): AudioNodeLike {
@@ -145,6 +159,11 @@ abstract class PlayerModule implements ManagedAudioNode, NotePlayer {
 
   setParameter(parameterId: string, value: number, atSec: number): void {
     this.parameters[parameterId] = value;
+    // Handled here rather than in each player: every source has a position,
+    // and three identical overrides is three places for one to be forgotten.
+    if (parameterId === "pan") {
+      rampParam(this.panner.pan, clampPan(value), atSec, "linear");
+    }
     this.onParameter(parameterId, value, atSec);
   }
 
@@ -167,6 +186,7 @@ abstract class PlayerModule implements ManagedAudioNode, NotePlayer {
     this.onDispose();
     this.bank.dispose();
     this.inputGain.disconnect();
+    this.panner.disconnect();
     this.outputGain.disconnect();
   }
 
@@ -196,6 +216,15 @@ export type PercussionSlot = {
   chokeGroup: number;
   /** Per-slot trim, so a loud snare can be balanced without editing the file. */
   gain: number;
+  /**
+   * Where this pad sits, −1 to +1, before the module's own pan.
+   *
+   * `AUDIO_ENGINE_SPEC.md` §4 asks for per-pad pan, and a kit is the one place
+   * it genuinely earns its node: hats to one side and a floor tom to the other
+   * is most of what makes a programmed kit sound like it was played in a room
+   * rather than summed to a point.
+   */
+  pan: number;
 };
 
 export const readPercussionSlots = (value: unknown): PercussionSlot[] => {
@@ -207,6 +236,7 @@ export const readPercussionSlots = (value: unknown): PercussionSlot[] => {
       assetId: stringOr(slot.assetId, ""),
       chokeGroup: Math.trunc(numberOr(slot.chokeGroup, 0)),
       gain: numberOr(slot.gain, 1),
+      pan: clampPan(numberOr(slot.pan, 0)),
     };
   });
 };
@@ -238,6 +268,9 @@ class PercussionPlayer extends PlayerModule {
         playbackRate: pitch,
         decaySec: Math.max(0.02, decay),
         chokeGroup: slot.chokeGroup,
+        // Only when the pad is actually off-centre: a centred slot would build
+        // a panner per hit to do nothing, and a kit is mostly centred pads.
+        ...(slot.pan === 0 ? {} : { pan: slot.pan }),
       });
     }
   }

@@ -35,7 +35,15 @@ in [`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md).
   `rjvaleo/scale-sequencer`, with its Raga Marwa data bug and its broken
   below-the-root degrees fixed on the way in.
 - **PWM generator.** Fourier coefficients for a pulse of any duty cycle, the
-  first piece of the synth.
+  first piece of the synth ([`MODULAR_SYNTH_PLAN.md`](MODULAR_SYNTH_PLAN.md)).
+- **A stereo rack.** Every source has a pan and Percussion pans per pad; the
+  feedback-delay reverbs tap alternate lines to alternate sides so their tails
+  decorrelate; a **Stereo Widener** does mid/side width with a mono bass band;
+  and a four-channel **Mixer** adds level, pan, mute and solo. Closes the Phase 6
+  deliverable "stereo audio ports … mixer/master output, mute/solo/pan/fader"
+  and tier 5's Stereo Widener. Before this the rack was mono on two wires: one
+  `createStereoPanner` caller in the whole codebase and no channel splitter or
+  merger anywhere.
 
 ### Testing
 

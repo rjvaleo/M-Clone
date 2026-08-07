@@ -1,0 +1,277 @@
+{
+ "source": "DP4_manual.pdf p171 (Glossary)",
+ "entries": 47,
+ "algorithms": 54,
+ "list": [
+  {
+   "name": "No Effect (Bypass Preset)",
+   "entry": "No Effect (Bypass Preset)",
+   "abbrev": "dry"
+  },
+  {
+   "name": "DigitalTubeAmp",
+   "entry": "DigitalTubeAmp",
+   "abbrev": "amp"
+  },
+  {
+   "name": "EQ-Compressor",
+   "entry": "EQ-Compressor",
+   "abbrev": "cmp"
+  },
+  {
+   "name": "Small Room Rev",
+   "entry": "Small Room Rev",
+   "abbrev": "rev"
+  },
+  {
+   "name": "DynamicTubeAmp",
+   "entry": "DynamicTubeAmp",
+   "abbrev": "amp"
+  },
+  {
+   "name": "Expander",
+   "entry": "Expander",
+   "abbrev": "exp"
+  },
+  {
+   "name": "Large Room Rev",
+   "entry": "Large Room Rev",
+   "abbrev": "rev"
+  },
+  {
+   "name": "Speaker Cabinet",
+   "entry": "Speaker Cabinet",
+   "abbrev": "spk"
+  },
+  {
+   "name": "InversExpander",
+   "entry": "InversExpander",
+   "abbrev": "exp"
+  },
+  {
+   "name": "Hall Reverb",
+   "entry": "Hall Reverb",
+   "abbrev": "rev"
+  },
+  {
+   "name": "Tunable Spkr 1",
+   "entry": "Tunable Spkr 1, 2",
+   "abbrev": "spk"
+  },
+  {
+   "name": "Tunable Spkr 2",
+   "entry": "Tunable Spkr 1, 2",
+   "abbrev": "spk"
+  },
+  {
+   "name": "De-esser",
+   "entry": "De-esser",
+   "abbrev": "ess"
+  },
+  {
+   "name": "Small Plate",
+   "entry": "Small Plate",
+   "abbrev": "rev"
+  },
+  {
+   "name": "Rotating Spkr",
+   "entry": "Rotating Spkr",
+   "abbrev": "rot"
+  },
+  {
+   "name": "Rumble Filter",
+   "entry": "Rumble Filter",
+   "abbrev": "flt"
+  },
+  {
+   "name": "Large Plate",
+   "entry": "Large Plate",
+   "abbrev": "rev"
+  },
+  {
+   "name": "EQ-Chorus-DDL",
+   "entry": "EQ-Chorus-DDL",
+   "abbrev": "cho"
+  },
+  {
+   "name": "Parametric EQ",
+   "entry": "Parametric EQ",
+   "abbrev": "equ"
+  },
+  {
+   "name": "Reverse Reverb",
+   "entry": "Reverse Reverb",
+   "abbrev": "rev"
+  },
+  {
+   "name": "EQ-Vibrato-DDL",
+   "entry": "EQ-Vibrato-DDL",
+   "abbrev": "vib"
+  },
+  {
+   "name": "VandrPolFilter",
+   "entry": "VandrPolFilter",
+   "abbrev": "flt"
+  },
+  {
+   "name": "ReverseReverb2",
+   "entry": "ReverseReverb2",
+   "abbrev": "rev"
+  },
+  {
+   "name": "EQ-Panner-DDL",
+   "entry": "EQ-Panner-DDL",
+   "abbrev": "pan"
+  },
+  {
+   "name": "Sine/Noise Gen",
+   "entry": "Sine/Noise Gen",
+   "abbrev": "gen"
+  },
+  {
+   "name": "Gated Reverb",
+   "entry": "Gated Reverb",
+   "abbrev": "rev"
+  },
+  {
+   "name": "EQ-Flanger-DDL",
+   "entry": "EQ-Flanger-DDL",
+   "abbrev": "fla"
+  },
+  {
+   "name": "3.3 sec Delay 2U",
+   "entry": "3.3 sec Delay 2U",
+   "abbrev": "ddl"
+  },
+  {
+   "name": "NonLin Reverb 1",
+   "entry": "NonLin Reverb 1, 2, 3",
+   "abbrev": "rev"
+  },
+  {
+   "name": "NonLin Reverb 2",
+   "entry": "NonLin Reverb 1, 2, 3",
+   "abbrev": "rev"
+  },
+  {
+   "name": "NonLin Reverb 3",
+   "entry": "NonLin Reverb 1, 2, 3",
+   "abbrev": "rev"
+  },
+  {
+   "name": "EQ-Tremolo-DDL",
+   "entry": "EQ-Tremolo-DDL",
+   "abbrev": "trm"
+  },
+  {
+   "name": "Pitch Shift 2U",
+   "entry": "Pitch Shift 2U",
+   "abbrev": "pit"
+  },
+  {
+   "name": "MultiTap Delay",
+   "entry": "MultiTap Delay",
+   "abbrev": "ddl"
+  },
+  {
+   "name": "Phaser - DDL",
+   "entry": "Phaser - DDL",
+   "abbrev": "pha"
+  },
+  {
+   "name": "GuitarTuner2U",
+   "entry": "GuitarTuner2U",
+   "abbrev": "tun"
+  },
+  {
+   "name": "Dual Delay",
+   "entry": "Dual Delay",
+   "abbrev": "ddl"
+  },
+  {
+   "name": "8 Voice Chorus",
+   "entry": "8 Voice Chorus",
+   "abbrev": "cho"
+  },
+  {
+   "name": "Ducker / Gate",
+   "entry": "Ducker / Gate",
+   "abbrev": "gat"
+  },
+  {
+   "name": "Tempo Delay",
+   "entry": "Tempo Delay",
+   "abbrev": "ddl"
+  },
+  {
+   "name": "Flanger",
+   "entry": "Flanger",
+   "abbrev": "fla"
+  },
+  {
+   "name": "Keyed Expander",
+   "entry": "Keyed Expander",
+   "abbrev": "key"
+  },
+  {
+   "name": "EQ-DDL-withLFO",
+   "entry": "EQ-DDL-withLFO",
+   "abbrev": "ddl"
+  },
+  {
+   "name": "Pitch Shifter",
+   "entry": "Pitch Shifter",
+   "abbrev": "pit"
+  },
+  {
+   "name": "Vocoder (4)",
+   "entry": "Vocoder (4)",
+   "abbrev": "voc"
+  },
+  {
+   "name": "VCF-Distort 1",
+   "entry": "VCF-Distort 1, 2",
+   "abbrev": "dst"
+  },
+  {
+   "name": "VCF-Distort 2",
+   "entry": "VCF-Distort 1, 2",
+   "abbrev": "dst"
+  },
+  {
+   "name": "Pitch Shift-DDL",
+   "entry": "Pitch Shift-DDL",
+   "abbrev": "pit"
+  },
+  {
+   "name": "Vocal Remover",
+   "entry": "Vocal Remover",
+   "abbrev": "flt"
+  },
+  {
+   "name": "Guitar Amp 1",
+   "entry": "Guitar Amp 1, 2, 3, 4",
+   "abbrev": "amp"
+  },
+  {
+   "name": "Guitar Amp 2",
+   "entry": "Guitar Amp 1, 2, 3, 4",
+   "abbrev": "amp"
+  },
+  {
+   "name": "Guitar Amp 3",
+   "entry": "Guitar Amp 1, 2, 3, 4",
+   "abbrev": "amp"
+  },
+  {
+   "name": "Guitar Amp 4",
+   "entry": "Guitar Amp 1, 2, 3, 4",
+   "abbrev": "amp"
+  },
+  {
+   "name": "FastPitchShift",
+   "entry": "FastPitchShift",
+   "abbrev": "pit"
+  }
+ ]
+}
