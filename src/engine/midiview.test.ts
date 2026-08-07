@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   beatOfTick,
   eventsForPlannedNotes,
-  formatDurationCell,
+  formatLengthCell,
+  scaleKey,
   groupMidiViewRows,
   mergeMidiViewEvents,
 } from "./midiview";
-import { PPQN } from "./planner";
+import { SCALES, type ScaleName } from "./music";
 
 describe("Midi View event conversion", () => {
   it("creates one Note On and one Note Off from the actual planned note", () => {
@@ -165,41 +166,96 @@ describe("musical position on the readout", () => {
   });
 })
 
-describe("the three-character duration cell", () => {
+describe("the three-character length cell", () => {
+  it("reads as a percentage, zero to one hundred", () => {
+    // Not a beat count: the useful thing about a note's length on a scrolling
+    // display is how much of its step it fills, which is the same quantity
+    // M's Legato variable sets.
+    expect(formatLengthCell(1)).toBe("100");
+    expect(formatLengthCell(0.5)).toBe("050");
+    expect(formatLengthCell(0.07)).toBe("007");
+  });
+
   it("is always exactly three characters, so columns cannot drift", () => {
-    // The whole point of the fixed cell. A readout that sometimes renders two
-    // characters and sometimes four stops being a grid.
-    for (const beats of [0, 0.01, 0.125, 0.25, 0.5, 0.75, 1, 1.5, 2, 3.75, 9, 9.9, 10, 64, 999]) {
-      expect(formatDurationCell(beats * PPQN), `at ${beats} beats`).toHaveLength(3);
+    for (const gate of [0, 0.004, 0.05, 0.5, 0.999, 1]) {
+      expect(formatLengthCell(gate), `at ${gate}`).toHaveLength(3);
     }
   });
 
-  it("shows a whole beat as one point zero", () => {
-    expect(formatDurationCell(PPQN)).toBe("1.0");
-    expect(formatDurationCell(PPQN * 2)).toBe("2.0");
-    expect(formatDurationCell(PPQN * 1.5)).toBe("1.5");
-  });
-
-  it("drops the leading zero below a beat, to keep two digits of detail", () => {
-    // ".25" carries more than "0.2" in the same three characters.
-    expect(formatDurationCell(PPQN * 0.25)).toBe(".25");
-    expect(formatDurationCell(PPQN * 0.5)).toBe(".50");
-    expect(formatDurationCell(PPQN * 0.125)).toBe(".13");
-  });
-
-  it("marks anything ten beats or longer as over", () => {
-    // Three characters cannot hold both digits and a decimal, and the exact
-    // length of a very long note is not what the readout is for.
-    expect(formatDurationCell(PPQN * 10)).toBe("10+");
-    expect(formatDurationCell(PPQN * 64)).toBe("10+");
+  it("clamps rather than overflowing the cell", () => {
+    // A note held past its step is still just "full" as far as three
+    // characters are concerned.
+    expect(formatLengthCell(1.8)).toBe("100");
+    expect(formatLengthCell(-1)).toBe("   ");
   });
 
   it("renders a note-off, which has no length, as blank rather than zero", () => {
-    // A note-off is an instant. "0.0" would read as a note of no length.
-    expect(formatDurationCell(0)).toBe("   ");
+    // A note-off is an instant. "000" would read as a note of no length.
+    expect(formatLengthCell(0)).toBe("   ");
   });
 
-  it("never renders a negative length", () => {
-    expect(formatDurationCell(-960)).toBe("   ");
+  it("rounds to whole percent", () => {
+    expect(formatLengthCell(0.666)).toBe("067");
+  });
+})
+
+describe("the scale key beside the note", () => {
+  it("abbreviates every scale M has to at most four letters", () => {
+    // Fixed-width column: the longest key sets the gutter, so a name that
+    // does not abbreviate would push the note out of alignment on that row.
+    for (const name of Object.keys(SCALES) as ScaleName[]) {
+      const key = scaleKey(name);
+      expect(key.length, `${name} -> ${key}`).toBeLessThanOrEqual(4);
+      expect(key.length, `${name} -> ${key}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("gives every scale a distinct key, so the column is readable", () => {
+    const keys = (Object.keys(SCALES) as ScaleName[]).map(scaleKey);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("keeps the modes recognisable rather than merely unique", () => {
+    expect(scaleKey("major")).toBe("MAJ");
+    expect(scaleKey("minor")).toBe("MIN");
+    expect(scaleKey("dorian")).toBe("DOR");
+    expect(scaleKey("mixolydian")).toBe("MIX");
+    expect(scaleKey("chromatic")).toBe("CHRM");
+  });
+
+  it("separates the two pentatonics and the harmonic minor", () => {
+    // These are the three that collide under a naive three-letter truncation.
+    expect(scaleKey("majorPentatonic")).toBe("MPNT");
+    expect(scaleKey("minorPentatonic")).toBe("mPNT");
+    expect(scaleKey("harmonicMinor")).toBe("HMIN");
+  });
+
+  it("falls back rather than throwing on a name it does not know", () => {
+    // A document from a build with more scales must still render.
+    expect(scaleKey("bebopSomething" as ScaleName)).toBe("?");
+  });
+})
+
+describe("which list a note came from", () => {
+  const planned = (source?: "original" | "cyclic" | "utterly") => ({
+    voice: 0, note: 60, velocity: 100, channel: 1,
+    startSec: 1, durationSec: 0.5, atTick: 960, durationTicks: 480, source,
+  });
+
+  it("carries the source through to both the on and the off", () => {
+    // The off is coloured too, or a note changes colour halfway through.
+    const [on, off] = eventsForPlannedNotes([planned("utterly")], 0);
+    expect(on.source).toBe("utterly");
+    expect(off.source).toBe("utterly");
+  });
+
+  it("keeps M's three names rather than inventing new ones", () => {
+    for (const source of ["original", "cyclic", "utterly"] as const) {
+      expect(eventsForPlannedNotes([planned(source)], 0)[0].source).toBe(source);
+    }
+  });
+
+  it("omits the key entirely when the planner did not say", () => {
+    expect("source" in eventsForPlannedNotes([planned()], 0)[0]).toBe(false);
   });
 })

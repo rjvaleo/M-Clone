@@ -24,6 +24,15 @@ export type PlannedNote = {
   /** Absolute musical position on the shared 960 PPQN transport timeline. */
   atTick?: number;
   durationTicks?: number;
+  /**
+   * Which of the three Note Order lists this step was drawn from.
+   *
+   * `nextMixedStepIndex` has always decided this and the planner used it to
+   * choose a list and then dropped it. Carrying it lets the readout colour a
+   * note by where it came from, which is the only way to see the Note Order
+   * mix actually working rather than inferring it from the slider.
+   */
+  source?: "original" | "cyclic" | "utterly";
 };
 export type PlannedStep = { voice: number; step: number };
 
@@ -182,6 +191,7 @@ export function planWindow(
                   durationSec: onsetIntervalSec * v.legato * legato,
                   atTick: Math.round(transportTick),
                   durationTicks: Math.max(0, Math.round(baseTicks * rhythm * v.legato * legato)),
+                  source: r.source,
                 });
               }
             }
