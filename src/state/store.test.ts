@@ -1807,3 +1807,32 @@ describe("coverage of state mutation guard paths", () => {
     expect(g().project.tempo).toBe(137);
   });
 });
+
+describe("transport messages in the readout", () => {
+  it("records what was sent and what was received", () => {
+    g().recordMidiTransport("start", "out", 1.5);
+    g().recordMidiTransport("stop", "in", 2.5);
+    expect(g().midiViewTransport).toEqual([
+      { id: 0, atSec: 1.5, type: "start", direction: "out" },
+      { id: 1, atSec: 2.5, type: "stop", direction: "in" },
+    ]);
+  });
+
+  it("shares its id counter with the notes, so nothing collides", () => {
+    g().recordMidiTransport("start", "out", 0);
+    const first = g().midiViewNextId;
+    g().recordMidiTransport("stop", "out", 1);
+    expect(g().midiViewNextId).toBe(first + 1);
+  });
+
+  it("keeps the list bounded, like the note list", () => {
+    for (let i = 0; i < 1100; i++) g().recordMidiTransport("start", "out", i);
+    expect(g().midiViewTransport.length).toBeLessThanOrEqual(1000);
+  });
+
+  it("clears with the notes when a document is opened or started", () => {
+    g().recordMidiTransport("start", "out", 0);
+    g().newDocument();
+    expect(g().midiViewTransport).toEqual([]);
+  });
+})
