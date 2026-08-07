@@ -115,8 +115,11 @@ class RackProcessor extends AudioWorkletProcessor {
 
     this.rack.process(currentFrame);
 
-    // Same signal to every output channel. Stereo comes with the panner.
-    for (const channel of output) channel.set(this.rack.output);
+    // Real stereo. Port 0 is left, port 1 is right; a third channel, if a host
+    // ever asks for one, repeats the left rather than going silent.
+    output[0]?.set(this.rack.output);
+    if (output.length > 1) output[1].set(this.rack.outputRight);
+    for (let i = 2; i < output.length; i += 1) output[i].set(this.rack.output);
 
     // The only thing that ever goes back up the port. `takeReport` decides
     // whether one is due — that decision lives next door where it can be

@@ -20,12 +20,12 @@ class FakeEngine implements EngineExports {
   readonly params = new Map<string, number>();
   readonly cables = new Set<string>();
   readonly modules = new Map<number, number>();
-  memory = { buffer: new ArrayBuffer(2048) };
+  memory = { buffer: new ArrayBuffer(4096) };
 
   /** What `memory.grow` looks like from JavaScript: a fresh, larger buffer,
    * with every view into the old one now detached. */
   growMemory(): void {
-    this.memory = { buffer: new ArrayBuffer(4096) };
+    this.memory = { buffer: new ArrayBuffer(8192) };
   }
   private nextId = 0;
   /** Kinds this build does not have, to stand in for a version skew. */
@@ -145,7 +145,7 @@ class FakeEngine implements EngineExports {
   /** Records the range, so a test can see where a quantum was broken. */
   process_range(start: number, len: number): void {
     this.calls.push(`process:${start}+${len}`);
-    const output = new Float32Array(this.memory.buffer, this.output_ptr(), 128);
+    const output = new Float32Array(this.memory.buffer, this.output_ptr(), 256);
     output.fill(this.renderLevel, start, start + len);
   }
   /** Every rendered range, in order, as `start+len` pairs. */
@@ -906,6 +906,50 @@ describe("Building the looper's two engines", () => {
     );
     expect(engine.of("remove")).toContain(`remove:${first}`);
     expect(engine.variants.get(rack.moduleIdOf("l")!)).toBe(1);
+  });
+});
+
+describe("Stereo cabling", () => {
+  it("wires two ports between two stereo modules [R-FRAME-05]", () => {
+    // The synth has computed a stereo pair since it was written and only port 0
+    // was ever patched, so pan was correct inside the voice and inaudible.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("out", "m.audio-output")], [wire("s", "out")]));
+    const s = rack.moduleIdOf("s");
+    const out = rack.moduleIdOf("out");
+    expect(engine.cables.has(`${s}:0→${out}:0`)).toBe(true);
+    expect(engine.cables.has(`${s}:1→${out}:1`)).toBe(true);
+  });
+
+  it("wires one port when either end is mono", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("g", "m.audio-gain"), node("out", "m.audio-output")], [wire("g", "out")]));
+    const g = rack.moduleIdOf("g");
+    const out = rack.moduleIdOf("out");
+    expect(engine.cables.has(`${g}:0→${out}:0`)).toBe(true);
+    expect(engine.cables.has(`${g}:1→${out}:1`)).toBe(false);
+  });
+
+  it("hands back left and right as distinct views of one buffer", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    expect(rack.output).toHaveLength(128);
+    expect(rack.outputRight).toHaveLength(128);
+    expect(rack.output).not.toBe(rack.outputRight);
+    // Held rather than sliced per call: this is read once per render callback.
+    expect(rack.output).toBe(rack.output);
+    expect(rack.outputRight).toBe(rack.outputRight);
+  });
+
+  it("drops both cables of a stereo pair when the connection goes", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    const nodes = [node("s", "m.synth"), node("out", "m.audio-output")];
+    rack.update(plan(nodes, [wire("s", "out")]));
+    rack.update(plan(nodes, [], 2));
+    expect(engine.cable_count()).toBe(0);
   });
 });
 

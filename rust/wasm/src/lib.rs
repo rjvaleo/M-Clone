@@ -35,7 +35,12 @@ const NO_MODULE: u32 = u32::MAX;
 static mut ENGINE: Option<Engine> = None;
 
 static mut INPUT: [f32; QUANTUM] = [0.0; QUANTUM];
-static mut OUTPUT: [f32; QUANTUM] = [0.0; QUANTUM];
+/// Interleaved-by-channel: the left quantum, then the right.
+///
+/// Planar rather than interleaved because that is the shape an `AudioWorklet`
+/// hands out — `outputs[0][0]` and `outputs[0][1]` are separate arrays — so the
+/// host copies each half with one `set` and no stride.
+static mut OUTPUT: [f32; QUANTUM * 2] = [0.0; QUANTUM * 2];
 
 /// Where the host's audio enters and leaves. Set by `set_io`.
 static mut INPUT_MODULE: u32 = NO_MODULE;
@@ -60,7 +65,7 @@ fn input_buffer() -> &'static [f32; QUANTUM] {
 }
 
 #[allow(static_mut_refs)]
-fn output_buffer() -> &'static mut [f32; QUANTUM] {
+fn output_buffer() -> &'static mut [f32; QUANTUM * 2] {
     unsafe { &mut OUTPUT }
 }
 
@@ -214,7 +219,8 @@ pub extern "C" fn input_ptr() -> *mut f32 {
     &raw mut INPUT as *mut f32
 }
 
-/// Where the host reads one quantum of output.
+/// Where the host reads one quantum of output: `QUANTUM` left samples followed
+/// by `QUANTUM` right samples.
 #[no_mangle]
 pub extern "C" fn output_ptr() -> *mut f32 {
     &raw mut OUTPUT as *mut f32
@@ -273,6 +279,7 @@ pub extern "C" fn process_range(start: u32, len: u32) {
 
     let Some(engine) = engine() else {
         output[start..end].fill(0.0);
+        output[QUANTUM + start..QUANTUM + end].fill(0.0);
         return;
     };
 
@@ -281,8 +288,13 @@ pub extern "C" fn process_range(start: u32, len: u32) {
             engine.set_param(input_module, HostInput::SAMPLE, input[i]);
         }
         engine.process();
-        output[i] =
-            if output_module != NO_MODULE { engine.output_of(output_module, 0) } else { 0.0 };
+        let (left, right) = if output_module != NO_MODULE {
+            (engine.output_of(output_module, 0), engine.output_of(output_module, 1))
+        } else {
+            (0.0, 0.0)
+        };
+        output[i] = left;
+        output[QUANTUM + i] = right;
     }
 }
 

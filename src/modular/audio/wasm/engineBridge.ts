@@ -476,8 +476,20 @@ export const ENGINE_ONLY_PARAMS: ReadonlySet<string> = new Set([
   "mod-wheel",
 ]);
 
-/** Every audio port on these modules is port 0; that changes with the DP/4. */
-const PORT_INDEX = 0;
+/**
+ * How many channels a module type carries on its audio ports.
+ *
+ * Stereo is wired as two cables rather than one wide one, because the engine's
+ * ports are per-channel — which is also what lets a patch take just the left
+ * side of something when it wants to.
+ */
+const STEREO: ReadonlySet<string> = new Set([
+  "m.synth", "m.audio-output", "m.percussion", "m.looper", "m.granular",
+]);
+
+/** The channel count two connected module types agree on. */
+export const cableChannels = (from: string, to: string): number =>
+  STEREO.has(from) && STEREO.has(to) ? 2 : 1;
 
 /** The `.wasm` exports, exactly as `rust/wasm/src/lib.rs` declares them. */
 export interface EngineExports {
@@ -562,10 +574,27 @@ export class WasmRack {
     return this.inputView;
   }
 
+  /** The left channel. */
   get output(): Float32Array {
     this.refreshViews();
-    return this.outputView;
+    return this.leftView;
   }
+
+  /** The right channel. */
+  get outputRight(): Float32Array {
+    this.refreshViews();
+    return this.rightView;
+  }
+
+  /**
+   * The two halves of the output buffer, held rather than sliced per call.
+   *
+   * `subarray` allocates a fresh view every time, and this is read once per
+   * render callback — so slicing on demand would put a small allocation on the
+   * audio thread sixty times a second for no gain.
+   */
+  private leftView!: Float32Array;
+  private rightView!: Float32Array;
 
   private refreshViews(): void {
     // `byteLength === 0` catches a detached view; the buffer identity check
@@ -575,7 +604,12 @@ export class WasmRack {
       return;
     }
     this.inputView = new Float32Array(this.engine.memory.buffer, this.engine.input_ptr(), this.quantum);
-    this.outputView = new Float32Array(this.engine.memory.buffer, this.engine.output_ptr(), this.quantum);
+    // Two quanta: the left channel then the right. Planar, because that is the
+    // shape an AudioWorklet hands out.
+    this.outputView = new Float32Array(
+      this.engine.memory.buffer, this.engine.output_ptr(), this.quantum * 2);
+    this.leftView = this.outputView.subarray(0, this.quantum);
+    this.rightView = this.outputView.subarray(this.quantum, this.quantum * 2);
   }
 
   private readonly built = new Map<string, Built>();
@@ -586,7 +620,7 @@ export class WasmRack {
    * comes from a module no plan mentions, so a node-keyed mirror could not
    * represent it.
    */
-  private readonly cables = new Map<string, { from: number; to: number }>();
+  private readonly cables = new Map<string, { from: number; to: number; port: number }>();
   private readonly unsupportedTypes = new Set<string>();
   private outputModuleId: number | undefined;
   /** Asset hash to engine slot, as the main thread assigned them. */
@@ -608,7 +642,9 @@ export class WasmRack {
 
     this.quantum = engine.quantum_size();
     this.inputView = new Float32Array(engine.memory.buffer, engine.input_ptr(), this.quantum);
-    this.outputView = new Float32Array(engine.memory.buffer, engine.output_ptr(), this.quantum);
+    this.outputView = new Float32Array(engine.memory.buffer, engine.output_ptr(), this.quantum * 2);
+    this.leftView = this.outputView.subarray(0, this.quantum);
+    this.rightView = this.outputView.subarray(this.quantum, this.quantum * 2);
   }
 
   /** Module types the plan asked for that this engine does not have yet. */
@@ -895,9 +931,18 @@ export class WasmRack {
   }
 
   private rewire(plan: AudioPlan): void {
-    const wanted = new Map<string, { from: number; to: number }>();
-    const want = (from: number, to: number): void => {
-      wanted.set(`${from}:${PORT_INDEX}→${to}:${PORT_INDEX}`, { from, to });
+    const wanted = new Map<string, { from: number; to: number; port: number }>();
+    /**
+     * One document cable becomes one engine cable per channel.
+     *
+     * Two mono cables rather than one stereo one, because the engine's ports
+     * are per-channel — which is also what lets a patch take only the left side
+     * of something when that is what it wants.
+     */
+    const want = (from: number, to: number, channels: number): void => {
+      for (let port = 0; port < channels; port += 1) {
+        wanted.set(`${from}:${port}→${to}:${port}`, { from, to, port });
+      }
     };
 
     for (const connection of plan.connections) {
@@ -906,20 +951,23 @@ export class WasmRack {
       const from = this.moduleIdOf(connection.from.nodeId);
       const to = this.moduleIdOf(connection.to.nodeId);
       if (from === undefined || to === undefined) continue;
-      want(from, to);
+      const fromType = this.moduleTypeOf(connection.from.nodeId) ?? "";
+      const toType = this.moduleTypeOf(connection.to.nodeId) ?? "";
+      want(from, to, cableChannels(fromType, toType));
     }
 
-    for (const moduleId of this.openInputs(plan)) want(this.hostInputId, moduleId);
+    // The host feed is mono; it lands on port 0 and the module widens it.
+    for (const moduleId of this.openInputs(plan)) want(this.hostInputId, moduleId, 1);
 
     for (const [key, cable] of this.cables) {
       if (wanted.has(key)) continue;
-      this.engine.disconnect(cable.from, PORT_INDEX, cable.to, PORT_INDEX);
+      this.engine.disconnect(cable.from, cable.port, cable.to, cable.port);
       this.cables.delete(key);
     }
 
     for (const [key, cable] of wanted) {
       if (this.cables.has(key)) continue;
-      this.engine.connect(cable.from, PORT_INDEX, cable.to, PORT_INDEX);
+      this.engine.connect(cable.from, cable.port, cable.to, cable.port);
       this.cables.set(key, cable);
     }
   }
