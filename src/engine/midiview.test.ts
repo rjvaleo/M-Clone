@@ -259,3 +259,21 @@ describe("which list a note came from", () => {
     expect("source" in eventsForPlannedNotes([planned()], 0)[0]).toBe(false);
   });
 })
+
+describe("the lane's clock divider", () => {
+  const planned = (rhythm?: number) => ({
+    voice: 0, note: 60, velocity: 100, channel: 1,
+    startSec: 1, durationSec: 0.5, atTick: 960, durationTicks: 480, rhythm,
+  });
+
+  it("carries to both the on and the off", () => {
+    // The lane's rate must not change halfway through a note.
+    const [on, off] = eventsForPlannedNotes([planned(0.5)], 0);
+    expect(on.rhythm).toBe(0.5);
+    expect(off.rhythm).toBe(0.5);
+  });
+
+  it("omits the key entirely when the planner did not say", () => {
+    expect("rhythm" in eventsForPlannedNotes([planned()], 0)[0]).toBe(false);
+  });
+})

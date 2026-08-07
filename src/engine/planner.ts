@@ -33,6 +33,15 @@ export type PlannedNote = {
    * mix actually working rather than inferring it from the slider.
    */
   source?: "original" | "cyclic" | "utterly";
+  /**
+   * The Rhythm variable's multiplier for this voice on this step.
+   *
+   * It is the voice's clock divider: the planner scales both the step's
+   * duration and its advance by it, so a voice at 0.5 takes steps twice as
+   * often as one at 1.0. Carried out so a display can give each lane its own
+   * rate instead of pretending every voice moves at the same speed.
+   */
+  rhythm?: number;
 };
 export type PlannedStep = { voice: number; step: number };
 
@@ -192,6 +201,7 @@ export function planWindow(
                   atTick: Math.round(transportTick),
                   durationTicks: Math.max(0, Math.round(baseTicks * rhythm * v.legato * legato)),
                   source: r.source,
+                  rhythm,
                 });
               }
             }

@@ -38,6 +38,8 @@ export type MidiViewEvent = {
    * the scale changes would make the history lie.
    */
   scale?: ScaleName;
+  /** The voice's clock divider on this step; see `PlannedNote.rhythm`. */
+  rhythm?: number;
 };
 
 export const MIDI_VIEW_LIMIT = 1000;
@@ -140,6 +142,7 @@ export function eventsForPlannedNotes(
           durationTicks: note.durationTicks ?? 0,
         }),
         ...(note.source === undefined ? {} : { source: note.source }),
+        ...(note.rhythm === undefined ? {} : { rhythm: note.rhythm }),
         ...(scale === undefined ? {} : { scale }),
       },
       {
@@ -157,6 +160,7 @@ export function eventsForPlannedNotes(
           durationTicks: 0,
         }),
         ...(note.source === undefined ? {} : { source: note.source }),
+        ...(note.rhythm === undefined ? {} : { rhythm: note.rhythm }),
         ...(scale === undefined ? {} : { scale }),
       },
     ];
