@@ -3074,3 +3074,12 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
   white-space: nowrap;
   border: 0;
 }
+
+/* Transport messages in the MIDI readout. They span the row rather than
+   sitting in a stream column, because a Start belongs to no single Voice. */
+.midiview__transport {
+  grid-column: 2 / -1; display: inline-flex; gap: 6px; align-items: center;
+  padding: 0 4px; font-size: 9px; letter-spacing: .06em;
+}
+.midiview__transport--out { color: #6ad46a; }
+.midiview__transport--in { color: #6ab8ff; }

@@ -15,9 +15,28 @@ export type MidiViewEvent = {
 
 export const MIDI_VIEW_LIMIT = 1000;
 
+/**
+ * A transport message, in either direction.
+ *
+ * Kept beside the notes rather than folded into `MidiViewEvent`: a Start
+ * belongs to no Voice and has no pitch, velocity or duration, so every one of
+ * that type's fields would be a lie on it.
+ *
+ * Clock pulses are deliberately absent. At 24 per quarter note a moderate
+ * tempo produces around fifty rows a second, which would bury the notes the
+ * readout exists to show.
+ */
+export type MidiViewTransport = {
+  id: number;
+  atSec: number;
+  type: "start" | "stop" | "continue";
+  direction: "out" | "in";
+};
+
 export type MidiViewRow = {
   atSec: number;
   streams: [MidiViewEvent[], MidiViewEvent[], MidiViewEvent[], MidiViewEvent[]];
+  transport: MidiViewTransport[];
 };
 
 export function eventsForPlannedNotes(
@@ -67,15 +86,21 @@ export function mergeMidiViewEvents(
 }
 
 /** Align all four Voices on one tracker timeline, preserving chords per cell. */
-export function groupMidiViewRows(events: readonly MidiViewEvent[]): MidiViewRow[] {
+export function groupMidiViewRows(
+  events: readonly MidiViewEvent[],
+  transport: readonly MidiViewTransport[] = [],
+): MidiViewRow[] {
   const rows = new Map<number, MidiViewRow>();
-  for (const event of events) {
-    let row = rows.get(event.atSec);
+  const rowAt = (atSec: number): MidiViewRow => {
+    let row = rows.get(atSec);
     if (!row) {
-      row = { atSec: event.atSec, streams: [[], [], [], []] };
-      rows.set(event.atSec, row);
+      row = { atSec, streams: [[], [], [], []], transport: [] };
+      rows.set(atSec, row);
     }
-    row.streams[event.voice].push(event);
-  }
+    return row;
+  };
+  for (const event of events) rowAt(event.atSec).streams[event.voice].push(event);
+  // A Start and the first note of a run land together, so they share a row.
+  for (const mark of transport) rowAt(mark.atSec).transport.push(mark);
   return [...rows.values()].sort((a, b) => a.atSec - b.atSec);
 }

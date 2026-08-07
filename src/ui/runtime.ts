@@ -15,6 +15,9 @@ export function getRuntime(): MRuntime {
       {
         onCyclicReset: (voices) => useM.getState().signalCyclicReset(voices),
         onPlannedSteps: (steps) => useM.getState().followDrumMachine(steps),
+        onTransportSent: (type) => {
+          useM.getState().recordMidiTransport(type, "out", performance.now() / 1000);
+        },
         onMidiMessage: (event) => {
           if (!event.data) return;
           const message = decodeMidiMessage(event.data);
@@ -26,6 +29,10 @@ export function getRuntime(): MRuntime {
               .ingestClockMessage(message, performance.now() / 1000);
             // The same path a Start from the Input Control System takes, so an
             // external transport and a local one cannot drift out of step.
+            if (action) {
+              useM.getState()
+                .recordMidiTransport(action, "in", performance.now() / 1000);
+            }
             if (action === "start" || action === "continue") {
               void runtime?.start().then(() => useM.getState().setPlaying(true));
             } else if (action === "stop") {
