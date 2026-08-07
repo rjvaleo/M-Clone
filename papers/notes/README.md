@@ -85,6 +85,11 @@ All three parts are now present. Together they are a complete effects toolbox by
 
 ## Related
 
+- [`external-references.md`](external-references.md) — the literature *not* in this folder, mapped onto all 54 algorithms, with free sources
+- [`missing-algorithms-reconstruction.md`](missing-algorithms-reconstruction.md) — the 9 algorithms absent from `DP4_manual.pdf`, recovered from its own index
+- [`open-questions.md`](open-questions.md) — what that reconstruction could not settle
+- [`coverage-map.html`](coverage-map.html) — the same coverage picture, rendered
+- [`../fetch-papers.sh`](../fetch-papers.sh) — pulls every free paper listed in `external-references.md`
 - [`../../MODULAR_AV_SALVAGE_PLAN.md`](../../MODULAR_AV_SALVAGE_PLAN.md) — how the audio rack was built and what remains
 - [`../../docs/AUDIO_ENGINE_SPEC.md`](../../docs/AUDIO_ENGINE_SPEC.md) — the product-level audio spec these papers serve
 - `DP4_manual.pdf` — 199 pages, ~54 algorithms, its own audit and build spec still pending
