@@ -799,3 +799,9 @@ button { cursor: pointer; }
 }
 .mm-preset-pad__slot:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 1px; }
 
+
+/* The theme and kit pickers, borrowed by the classic M view. Its menu bar is
+   22px tall and monochrome, so they sit tighter here than in the patch bar. */
+.mm-classic-theming { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.mm-classic-theming .mm-kit-picker { display: flex; align-items: center; gap: 4px; font-size: 10px; }
+.mm-classic-theming select { font: 10px var(--font); height: 18px; }
