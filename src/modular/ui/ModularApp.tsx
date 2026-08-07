@@ -77,6 +77,22 @@ import {
  * without a re-render. `--mm-module-density` is the fallback for a family the
  * theme does not define.
  */
+
+/**
+ * The order the add menu offers modules in: the order they are wired, from the
+ * clock through to the output. With forty-plus modules an alphabetical list is
+ * a lookup table; grouped by signal domain it is a description of the chain.
+ */
+const MODULE_GROUPS: { family: string; label: string }[] = [
+  { family: "clock", label: "Clock and transport" },
+  { family: "source", label: "Pattern material" },
+  { family: "transform", label: "Note transforms" },
+  { family: "control", label: "Control and conducting" },
+  { family: "routing", label: "Routing and output" },
+  { family: "instrument", label: "Instruments" },
+  { family: "audio", label: "Audio" },
+];
+
 /**
  * Modules whose "voices" status is a live count from the audio engine.
  *
