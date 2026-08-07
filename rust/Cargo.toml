@@ -1,0 +1,12 @@
+[workspace]
+members = ["dsp-core", "wasm"]
+resolver = "2"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+# Symbol names cost bytes and buy nothing in a browser: the worklet calls
+# exports by the names in `#[no_mangle]`, which survive stripping.
+strip = true

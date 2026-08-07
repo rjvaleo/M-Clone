@@ -28,6 +28,7 @@ import {
   defaultSynthSettings,
   modulateSettings,
   SynthVoiceBank,
+  type OscillatorSettings,
   type SynthSettings,
   type SynthWave,
 } from "./synthVoice";
@@ -175,9 +176,9 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
     /* a synth is a source: there is no dry path to balance against */
   }
 
-  noteOn(note: number, velocity: number, atSec: number): void {
+  noteOn(note: number, velocity: number, atSec: number, detuneCents = 0): void {
     if (this.disposed) return;
-    this.bank.noteOn(this.settingsFor(note, velocity), note, velocity, atSec);
+    this.bank.noteOn(this.settingsFor(note, velocity, detuneCents), note, velocity, atSec);
   }
 
   noteOff(note: number, atSec: number): void {
@@ -203,7 +204,7 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
    * settings' own, the LFOs are not yet wired, and the mod wheel is a live
    * control — so those four read as zero until they exist.
    */
-  private settingsFor(note: number, velocity: number): SynthSettings {
+  private settingsFor(note: number, velocity: number, detuneCents = 0): SynthSettings {
     const sources: ModSourceValues = {
       lfo1: 0,
       lfo2: 0,
@@ -215,6 +216,23 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
       modWheel: 0,
       random: Math.max(-1, Math.min(1, this.random() * 2 - 1)),
     };
-    return modulateSettings(this.patch, this.patch.matrix, sources);
+    const settings = modulateSettings(this.patch, this.patch.matrix, sources);
+    if (detuneCents === 0) return settings;
+    // Added to every oscillator rather than applied once downstream, because
+    // the voice has no single pitch to bend — three oscillators each carry
+    // their own detune, and the note's own offset belongs on top of all of
+    // them. Cents are already this parameter's unit, so it is a sum.
+    const shift = (osc: OscillatorSettings): OscillatorSettings =>
+      ({ ...osc, detuneCents: osc.detuneCents + detuneCents });
+    // Rebuilt as a literal triple rather than mapped: `oscillators` is a fixed
+    // three-tuple, and `map` would widen it to an array.
+    return {
+      ...settings,
+      oscillators: [
+        shift(settings.oscillators[0]),
+        shift(settings.oscillators[1]),
+        shift(settings.oscillators[2]),
+      ],
+    };
   }
 }

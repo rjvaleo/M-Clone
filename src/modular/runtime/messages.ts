@@ -34,6 +34,20 @@ export type StreamMessage = {
   stepIndex: number;
   pitches: readonly number[];
   note: number;
+  /**
+   * How far the true pitch sits from `note`, in cents. Always within ±50.
+   *
+   * Most of the eighty-one scales in `tuning/scales.ts` have degrees between
+   * the piano keys — a maqam's 150-cent second, 31-EDO, Werckmeister III — so
+   * a note quantised onto one of them cannot be expressed as a MIDI integer
+   * alone. `note` stays the key to press and this carries the rest.
+   *
+   * Zero for everything that has not been retuned, which is why adding it
+   * costs existing modules nothing: a reader that ignores it hears 12-TET,
+   * exactly as before. An instrument that can bend applies it; MIDI out, which
+   * has no per-note pitch without going to MPE, does not.
+   */
+  detuneCents: number;
   velocity: number;
   channel: number;
   controlValue: number;
@@ -51,6 +65,7 @@ const blankMessage = (): StreamMessage => ({
   stepIndex: 0,
   pitches: NO_PITCHES,
   note: 60,
+  detuneCents: 0,
   velocity: 100,
   channel: 1,
   controlValue: 0,
@@ -65,6 +80,7 @@ const resetMessage = (message: StreamMessage): StreamMessage => {
   message.stepIndex = 0;
   message.pitches = NO_PITCHES;
   message.note = 60;
+  message.detuneCents = 0;
   message.velocity = 100;
   message.channel = 1;
   message.controlValue = 0;

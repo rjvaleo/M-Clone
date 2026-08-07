@@ -174,7 +174,11 @@ export function SoundPool({
         <input
           ref={fileInputRef}
           type="file"
-          accept="audio/*"
+          // Extensions as well as the wildcard. `audio/*` is resolved against
+          // the *browser's* idea of what it can play, so on a build with no
+          // AIFF support the picker can grey out the very files this app now
+          // decodes for itself — the user never gets as far as an error.
+          accept="audio/*,.aif,.aiff,.aifc,.wav,.flac,.mp3,.m4a,.ogg,.opus,.caf"
           multiple
           style={{ display: "none" }}
           onChange={(event) => {

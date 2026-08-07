@@ -75,6 +75,25 @@ describe("Playing notes", () => {
     expect(player.activeVoices).toBe(1);
   });
 
+  it("adds a note's microtonal detune to every oscillator", () => {
+    // What makes the eighty-one scales audible. A quantiser upstream splits a
+    // pitch into a MIDI key plus cents; the key picks the frequency and this
+    // is the only place the cents are applied.
+    const { context, player } = rig();
+    player.noteOn(60, 100, 1, -50);
+    const detunes = of(context, FakeOscillator).map((osc) => osc.detune.value);
+    // Osc 2 and 3 have their own detune (+7 and −1200 by default), so the
+    // note's offset has to be a sum rather than an assignment or the patch's
+    // own tuning is destroyed.
+    expect(detunes).toEqual([-50, -43, -1250]);
+  });
+
+  it("leaves the patch's own detune alone when a note has none", () => {
+    const { context, player } = rig();
+    player.noteOn(60, 100, 1);
+    expect(of(context, FakeOscillator).map((osc) => osc.detune.value)).toEqual([0, 7, -1200]);
+  });
+
   it("releases the voice on note-off", () => {
     const { player } = rig();
     player.noteOn(60, 100, 1);

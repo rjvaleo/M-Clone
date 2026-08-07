@@ -530,7 +530,7 @@ describe("Recording adapter", () => {
     const adapter = new RecordingAdapter("test");
     const pooled = {
       type: "note-on" as const, atTick: 10, atSec: 1, sequence: 0, portId: "mo",
-      channel: 1, note: 60, velocity: 90, program: 0, controller: 0, value: 0, noteId: 3,
+      channel: 1, note: 60, detuneCents: 0, velocity: 90, program: 0, controller: 0, value: 0, noteId: 3,
     };
     adapter.send([pooled], 1);
     pooled.note = 99;
@@ -545,7 +545,7 @@ describe("Recording adapter", () => {
     const adapter = new RecordingAdapter();
     const event = {
       type: "note-on" as const, atTick: 0, atSec: 0, sequence: 0, portId: "mo",
-      channel: 1, note: 60, velocity: 90, program: 0, controller: 0, value: 0, noteId: 0,
+      channel: 1, note: 60, detuneCents: 0, velocity: 90, program: 0, controller: 0, value: 0, noteId: 0,
     };
     adapter.send([event, event, event], 2);
     expect(adapter.events).toHaveLength(2);

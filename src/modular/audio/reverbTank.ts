@@ -229,11 +229,12 @@ export function createModulator(
       for (const osc of oscillators) {
         // Stopping before disconnecting leaves nothing running behind a
         // disposed module — an oscillator with no destination still costs.
+        /* v8 ignore next 5 — only a real browser throws here */
         try {
           osc.stop();
           /* v8 ignore next 3 — only a real browser throws here */
         } catch {
-          /* already stopped, or never started under a fake context */
+          // Started at construction, so this means the context is already gone.
         }
         osc.disconnect();
       }

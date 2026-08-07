@@ -15,6 +15,9 @@ import {
   StepToNotesProcessor,
   TimeBaseProcessor,
   TranspositionProcessor,
+  ScaleContextProcessor,
+  ScaleQuantizerProcessor,
+  ChordQuantizerProcessor,
   TransportProcessor,
   VelocityRangeProcessor,
   type PatternView,
@@ -900,6 +903,168 @@ describe("Play Enable processor", () => {
   });
 });
 
+describe("Scale Context processor", () => {
+  const context = (values: Record<string, unknown> = {}) => {
+    const bus = new MessageBus();
+    const read = collector(bus, "sc", "scale-out");
+    const processor = new ScaleContextProcessor(build("sc", bus, {
+      root: "C",
+      scale: "ionian-major",
+      ...values,
+    }));
+    return { bus, read, processor };
+  };
+
+  it("broadcasts its root so downstream harmony modules follow the key", () => {
+    const { bus, read, processor } = context({ root: "D" });
+    bus.beginNode("sc", 64);
+    processor.process(window(0, 480));
+    expect(read().map((m) => m.controlValue)).toEqual([2]);
+  });
+
+  it("names the scale's notes for its face", () => {
+    const { bus, processor } = context({ root: "C", scale: "ionian-major" });
+    bus.beginNode("sc", 64);
+    processor.process(window(0, 480));
+    // The status is what tells a person the module is set to what they meant,
+    // which matters more here than usual: the parameter is an id like
+    // `maqam-rast`, not a list of notes.
+    expect(processor.status().notes).toContain("C");
+    expect(processor.status().scale).toContain("Ionian");
+  });
+
+  it("reports cents rather than note names for a scale that has no note names", () => {
+    // A 31-EDO degree is not any letter. Printing "C D E" for it would be a
+    // lie about what the module is doing.
+    const { bus, processor } = context({ scale: "31-edo" });
+    bus.beginNode("sc", 64);
+    processor.process(window(0, 480));
+    expect(processor.status().notes).toMatch(/¢/);
+  });
+
+  it("falls back to a real scale when the document names one that is gone", () => {
+    const { bus, read, processor } = context({ scale: "scale-that-was-removed" });
+    bus.beginNode("sc", 64);
+    expect(() => processor.process(window(0, 480))).not.toThrow();
+    expect(read()).toHaveLength(1);
+  });
+});
+
+describe("Scale Quantizer processor", () => {
+  const quantizer = (values: Record<string, unknown> = {}) => {
+    const bus = new MessageBus();
+    const read = collector(bus, "sq", "notes-out");
+    const processor = new ScaleQuantizerProcessor(build("sq", bus, {
+      root: "C",
+      scale: "ionian-major",
+      direction: "nearest",
+      enabled: true,
+      ...values,
+    }));
+    return { bus, read, processor };
+  };
+
+  const notes = (values: number[]) =>
+    values.map((note) => ({ kind: "note-event" as const, atTick: 0, durationTicks: 120, note, velocity: 90, channel: 1 }));
+
+  it("pulls out-of-scale notes onto the scale and leaves the rest alone", () => {
+    const { bus, read, processor } = quantizer();
+    feed(bus, "sq", "notes-in", notes([60, 61, 62]));
+    bus.beginNode("sq", 64);
+    processor.process(window(0, 480));
+    // 61 is out of C major and ties down to 60; 60 and 62 are already degrees.
+    expect(read().map((m) => m.note)).toEqual([60, 60, 62]);
+  });
+
+  it("passes everything through untouched when disabled", () => {
+    const { bus, read, processor } = quantizer({ enabled: false });
+    feed(bus, "sq", "notes-in", notes([60, 61, 62, 63]));
+    bus.beginNode("sq", 64);
+    processor.process(window(0, 480));
+    expect(read().map((m) => m.note)).toEqual([60, 61, 62, 63]);
+  });
+
+  it("carries the microtonal remainder that a MIDI note cannot hold", () => {
+    // The reason this module exists rather than rounding to a MIDI integer.
+    const { bus, read, processor } = quantizer({ scale: "31-edo" });
+    feed(bus, "sq", "notes-in", notes([61, 63, 65]));
+    bus.beginNode("sq", 64);
+    processor.process(window(0, 480));
+    const out = read();
+    expect(out.some((m) => m.detuneCents !== 0)).toBe(true);
+    for (const message of out) expect(Math.abs(message.detuneCents)).toBeLessThanOrEqual(50.000001);
+  });
+
+  it("takes its key from an upstream Scale Context", () => {
+    const { bus, read, processor } = quantizer({ root: "C" });
+    feed(bus, "sq", "scale-in", [{ kind: "control", atTick: 0, controlValue: 2 }]);
+    feed(bus, "sq", "notes-in", notes([65]));
+    bus.beginNode("sq", 64);
+    processor.process(window(0, 480));
+    // F is in C major and out of D major, so the context has to be what moved it.
+    expect(read()[0].note).not.toBe(65);
+  });
+
+  it("snaps only downward when told to", () => {
+    const { bus, read, processor } = quantizer({ direction: "down" });
+    feed(bus, "sq", "notes-in", notes([61, 66]));
+    bus.beginNode("sq", 64);
+    processor.process(window(0, 480));
+    expect(read().map((m) => m.note)).toEqual([60, 65]);
+  });
+
+  it("counts what it moved, for its face", () => {
+    const { bus, processor } = quantizer();
+    feed(bus, "sq", "notes-in", notes([60, 61, 62, 63]));
+    bus.beginNode("sq", 64);
+    processor.process(window(0, 480));
+    expect(processor.status().snapped).toBe("2 of 4");
+  });
+});
+
+describe("Chord Quantizer processor", () => {
+  const chords = (values: Record<string, unknown> = {}) => {
+    const bus = new MessageBus();
+    const read = collector(bus, "cq", "notes-out");
+    const processor = new ChordQuantizerProcessor(build("cq", bus, {
+      root: "C",
+      scale: "ionian-major",
+      chord: "triad",
+      enabled: true,
+      ...values,
+    }));
+    return { bus, read, processor };
+  };
+
+  const notes = (values: number[]) =>
+    values.map((note) => ({ kind: "note-event" as const, atTick: 0, durationTicks: 120, note, velocity: 90, channel: 1 }));
+
+  it("pulls every note onto a chord tone", () => {
+    const { bus, read, processor } = chords();
+    feed(bus, "cq", "notes-in", notes([60, 62, 64, 65, 67]));
+    bus.beginNode("cq", 64);
+    processor.process(window(0, 480));
+    // C major triad is C E G; D snaps down to C, F down to E.
+    expect(read().map((m) => m.note)).toEqual([60, 60, 64, 64, 67]);
+  });
+
+  it("admits the seventh when the shape asks for it", () => {
+    const { bus, read, processor } = chords({ chord: "seventh" });
+    feed(bus, "cq", "notes-in", notes([71]));
+    bus.beginNode("cq", 64);
+    processor.process(window(0, 480));
+    expect(read()[0].note).toBe(71);
+  });
+
+  it("passes everything through untouched when disabled", () => {
+    const { bus, read, processor } = chords({ enabled: false });
+    feed(bus, "cq", "notes-in", notes([61, 62, 63]));
+    bus.beginNode("cq", 64);
+    processor.process(window(0, 480));
+    expect(read().map((m) => m.note)).toEqual([61, 62, 63]);
+  });
+});
+
 describe("Transposition processor", () => {
   const transposition = (values: Record<string, unknown> = {}) => {
     const bus = new MessageBus();
@@ -930,6 +1095,24 @@ describe("Transposition processor", () => {
     bus.beginNode("tr", 64);
     processor.process(window(0, 500));
     expect(read().map((note) => note.note)).toEqual([72, 64]);
+  });
+
+  it("carries a note's detune through untouched", () => {
+    // A note quantised onto a microtonal scale upstream arrives here with its
+    // pitch split between `note` and `detuneCents`. Messages come out of the
+    // pool reset, so a transform that copies only the note silently drops the
+    // note back to 12-TET — which would make every scale in the library sound
+    // like the twelve it was trying not to be.
+    const { bus, read, processor } = transposition({ mode: "semitone", semitones: 12 });
+    feed(bus, "tr", "notes-in", [
+      { kind: "note-event", atTick: 0, durationTicks: 120, note: 60, velocity: 90, channel: 1, detuneCents: -50 },
+      { kind: "note-event", atTick: 240, durationTicks: 120, note: 64, velocity: 90, channel: 1, detuneCents: 33 },
+    ]);
+    bus.beginNode("tr", 64);
+    processor.process(window(0, 500));
+    const out = read();
+    expect(out.map((note) => note.note)).toEqual([72, 76]);
+    expect(out.map((note) => note.detuneCents)).toEqual([-50, 33]);
   });
 
   it("applies scale-degree transposition", () => {

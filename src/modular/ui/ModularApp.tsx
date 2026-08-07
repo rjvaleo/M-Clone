@@ -10,6 +10,23 @@ import { expandStreamNode } from "../model/stream";
 import { CANVAS_SIZE, canvasExtent, centeringOffset, clampZoom, scrollToCenter, stageSize, clampFramePixels, easeZoom, wheelDeltaPixels, zoomByWheel, zoomScrollPosition } from "./viewport";
 import { isDragSurface, menuPlacement, placeNode, visibleRegion } from "./nodePlacement";
 import { buildMenu, soleMatch } from "./moduleMenu";
+import { parameterControlKind, selectorVariant } from "./parameterControl";
+import { isLiveStatus, statusLevel } from "./nodeStatus";
+import { preferredEngine, type RackEngineChoice } from "../audio/wasm/rackNode";
+import type { RackReport } from "../audio/wasm/rackProtocol";
+import { KitContext } from "../theme/kits/KitContext";
+import { KIT_IDS, KIT_META, type KitId } from "../theme/kits/types";
+import { Knob } from "../theme/kits/controls/Knob";
+import { Slider } from "../theme/kits/controls/Slider";
+import { Fader } from "../theme/kits/controls/Fader";
+import { Toggle } from "../theme/kits/controls/Toggle";
+import { Button } from "../theme/kits/controls/Button";
+import { Selector } from "../theme/kits/controls/Selector";
+import { Stepper } from "../theme/kits/controls/Stepper";
+import { Jack } from "../theme/kits/controls/Jack";
+import { Led } from "../theme/kits/controls/Led";
+import { Meter } from "../theme/kits/controls/Meter";
+import { Display } from "../theme/kits/controls/Display";
 import {
   centreOn, EMPTY_VIEW, openingScrollTop, ROLL_PITCH_COUNT, viewWindow, type RollView,
 } from "./noteRoll";
@@ -60,6 +77,7 @@ import {
  * without a re-render. `--mm-module-density` is the fallback for a family the
  * theme does not define.
  */
+
 /**
  * The order the add menu offers modules in: the order they are wired, from the
  * clock through to the output. With forty-plus modules an alphabetical list is
@@ -83,6 +101,15 @@ const MODULE_GROUPS: { family: string; label: string }[] = [
  * that plays perfectly and reports "Idle" for ever.
  */
 const hasVoiceCount = (moduleType: string): boolean => isPlayerModule(moduleType);
+
+/**
+ * What a full voice meter means.
+ *
+ * The voice pool's own ceiling, not a per-module polyphony setting — the
+ * meter answers "how close is this to using everything available", which is
+ * the question worth a meter rather than a number.
+ */
+const VOICE_METER_CEILING = 16;
 
 const accentVar = (colorToken: string): string =>
   `var(--mm-module-${colorToken}, var(--mm-module-density))`;
@@ -401,33 +428,85 @@ function ParameterControl({
   value: JsonValue;
   onChange: (value: JsonValue) => void;
 }) {
-  if (descriptor.kind === "json") return null;
-  if (descriptor.kind === "boolean") {
-    return <label className="mm-field mm-field--check">
+  const kind = parameterControlKind(descriptor);
+  if (kind === "none") return null;
+
+  // Everything below this point is a kit control — the same fourteen-widget
+  // vocabulary the Kit Gallery demonstrates, drawn by whichever kit the app
+  // is wearing. See ui/parameterControl.ts for which control a parameter
+  // gets and why, and theme/kits/ for what each one looks like.
+  const number = typeof value === "number" ? value : 0;
+  const minimum = descriptor.minimum ?? 0;
+  const maximum = descriptor.maximum ?? 1;
+
+  if (kind === "toggle") {
+    return <div className="mm-field mm-field--kit">
       <span>{descriptor.label}</span>
-      <input type="checkbox" checked={value === true}
-        onChange={(event) => onChange(event.currentTarget.checked)} />
-    </label>;
+      <Toggle value={value === true} onChange={(next) => onChange(next)} />
+    </div>;
   }
-  if (descriptor.kind === "enum") {
-    return <label className="mm-field">
+
+  if (kind === "button") {
+    return <div className="mm-field mm-field--kit">
       <span>{descriptor.label}</span>
-      <select value={String(value)} onChange={(event) => onChange(event.currentTarget.value)}>
-        {descriptor.options?.map((option) => <option key={option}>{option}</option>)}
-      </select>
-    </label>;
+      <Button label={value === true ? "On" : "Off"} pressed={value === true}
+        onClick={() => onChange(!(value === true))} />
+    </div>;
   }
-  if (descriptor.kind === "number") {
+
+  if (kind === "selector") {
+    const options = descriptor.options ?? [];
+    return <div className="mm-field mm-field--kit">
+      <span>{descriptor.label}</span>
+      <Selector
+        options={options.map((option) => ({ value: option, label: option }))}
+        value={String(value)}
+        variant={selectorVariant(options)}
+        label={descriptor.label}
+        onChange={(next) => onChange(next)}
+      />
+    </div>;
+  }
+
+  if (kind === "stepper") {
+    return <div className="mm-field mm-field--kit">
+      <span>{descriptor.label}</span>
+      <Stepper value={number} min={minimum} max={maximum} step={descriptor.step}
+        onChange={(next) => onChange(next)} />
+    </div>;
+  }
+
+  if (kind === "knob" || kind === "slider" || kind === "fader") {
+    // A readout beside the control, because every panel in the catalogue puts
+    // one there: a knob with no number is unreadable the moment you let go.
+    const readout = <Display value={number} unit={descriptor.unit} variant="chip"
+      decimals={descriptor.step !== undefined && descriptor.step < 1 ? 2 : 0} />;
+    return <div className="mm-field mm-field--kit mm-field--continuous">
+      <span>{descriptor.label}</span>
+      <span className="mm-field__control">
+        {kind === "knob" && <Knob value={number} min={minimum} max={maximum} step={descriptor.step}
+          size={34} onChange={(next) => onChange(next)} />}
+        {kind === "slider" && <Slider value={number} min={minimum} max={maximum} step={descriptor.step}
+          orientation="horizontal" length={78} onChange={(next) => onChange(next)} />}
+        {kind === "fader" && <Fader value={number} min={minimum} max={maximum} step={descriptor.step}
+          length={64} onChange={(next) => onChange(next)} />}
+        {readout}
+      </span>
+    </div>;
+  }
+
+  if (kind === "number") {
     return <label className="mm-field">
       <span>{descriptor.label}</span>
       <span className="mm-number">
-        <input type="number" value={typeof value === "number" ? value : 0}
+        <input type="number" value={number}
           min={descriptor.minimum} max={descriptor.maximum} step={descriptor.step}
           onChange={(event) => onChange(Number(event.currentTarget.value))} />
         {descriptor.unit && <small>{descriptor.unit}</small>}
       </span>
     </label>;
   }
+
   return <label className="mm-field">
     <span>{descriptor.label}</span>
     <input value={String(value)} onChange={(event) => onChange(event.currentTarget.value)} />
@@ -829,6 +908,7 @@ function NodeFace({
   onClose,
   status,
   midiDevices,
+  connectedPorts,
 }: {
   node: NodeInstance;
   zoom: number;
@@ -849,6 +929,10 @@ function NodeFace({
   onClose: () => void;
   status: Readonly<Record<string, string>>;
   midiDevices: readonly MidiDeviceOption[];
+  /** `"nodeId:portId"` for every port with a cable on it, so a jack can show
+   * itself as connected. Computed once for the whole graph rather than per
+   * port, which would rescan every edge for every jack on every render. */
+  connectedPorts: ReadonlySet<string>;
 }) {
   const descriptor = moduleRegistry.get(node.moduleType);
   const [drag, setDrag] = useState({ x: 0, y: 0 });
@@ -942,6 +1026,7 @@ function NodeFace({
           aria-label={`${node.label} input ${port.label}`}
           onPointerDown={(event) => onPortPointerDown(event, { nodeId: node.id, portId: port.id }, "input")}
           onClick={(event) => { event.stopPropagation(); onPortClick({ nodeId: node.id, portId: port.id }); }}>
+          <Jack direction="in" connected={connectedPorts.has(`${node.id}:${port.id}`)} />
           <span className="mm-port__label">{port.label}</span>
         </button>)}
     </div>
@@ -955,6 +1040,7 @@ function NodeFace({
           onPointerDown={(event) => onPortPointerDown(event, { nodeId: node.id, portId: port.id }, "output")}
           onClick={(event) => { event.stopPropagation(); onPortClick({ nodeId: node.id, portId: port.id }); }}>
           <span className="mm-port__label">{port.label}</span>
+          <Jack direction="out" connected={connectedPorts.has(`${node.id}:${port.id}`)} />
         </button>)}
     </div>
     <div className="mm-node__face">
@@ -995,8 +1081,25 @@ function NodeFace({
             if (element.kind === "command") return <button type="button" className="mm-command"
               key={`${element.kind}-${element.id}`}
               onClick={() => onCommand(node, element.id, element.label)}>{element.label}</button>;
-            if (element.kind === "status") return <output className="mm-status"
-              key={`${element.kind}-${element.id}`}><span>{element.label}</span><b>{status[element.id] ?? "Idle"}</b></output>;
+            if (element.kind === "status") {
+              // A status is a readout, so it gets the kit's readout controls:
+              // an LED for "is this doing anything", the text itself as a
+              // Display, and — where the status is a count of something with
+              // a known ceiling — a Meter, which is the difference between
+              // reading "6" and seeing that six is nearly all of them.
+              const text = status[element.id] ?? "Idle";
+              const live = isLiveStatus(text);
+              return <output className="mm-status mm-status--kit"
+                key={`${element.kind}-${element.id}`}>
+                <Led on={live} tone="accent" />
+                <Display label={element.label} value={text} variant="inline"
+                  tone={live ? "accent" : "normal"} />
+                {hasVoiceCount(node.moduleType) && element.id === "voices" && <Meter
+                  levels={[statusLevel(text, VOICE_METER_CEILING)]}
+                  orientation="horizontal" length={46} segments={8}
+                  label={`${element.label} level`} />}
+              </output>;
+            }
             return <CustomFace key={`${element.kind}-${element.id}-${index}`}
               element={element} node={node} setParameter={setParameter}
               setParameters={setParameters} status={status} />;
@@ -1017,6 +1120,11 @@ export function ModularApp() {
   const [handMode, setHandMode] = useState(() => readStoredBoolean(STORAGE_KEYS.handMode, true));
   const [panning, setPanning] = useState(false);
   const [themeId, setThemeId] = useState<ThemeId>(() => readStoredTheme());
+  /** Which kit draws the controls. The theme's other half — see the picker
+   * beside the theme picker, and `theme/kits/` for what a kit is. */
+  const [kitId, setKitId] = useState<KitId>("thinRing");
+  /** Which audio backend is actually rendering, for the status bar. */
+  const [engineKind, setEngineKind] = useState<RackEngineChoice>("web-audio");
   const [message, setMessage] = useState("idMLab graph ready");
   const [menu, setMenu] = useState<{ x: number; y: number; graphX: number; graphY: number } | null>(null);
   // The menu opens empty every time: a remembered query is a menu that
@@ -1027,6 +1135,17 @@ export function ModularApp() {
     groups: MODULE_GROUPS,
     query: menuQuery,
   }), [menuQuery]);
+
+  /** Every port with a cable on it, as `"nodeId:portId"`. Built once per edge
+   * change so each jack is a set lookup rather than a scan of every edge. */
+  const connectedPorts = useMemo(() => {
+    const ports = new Set<string>();
+    for (const edge of Object.values(graph.edges)) {
+      ports.add(`${edge.from.nodeId}:${edge.from.portId}`);
+      ports.add(`${edge.to.nodeId}:${edge.to.portId}`);
+    }
+    return ports;
+  }, [graph.edges]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [pendingConnection, setPendingConnection] = useState<PortRef | null>(null);
@@ -1052,6 +1171,10 @@ export function ModularApp() {
   const [playingAsset, setPlayingAsset] = useState<string | null>(null);
   /** Live audio node count. A stale "when it started" figure explains nothing. */
   const [audioNodes, setAudioNodes] = useState(0);
+  // What the Rust rack says about itself, polled on the same 100 ms tick as
+  // everything else in the status bar. Null on Web Audio, which reports
+  // nothing — see `AudioEngine.rackReport`.
+  const [rackReport, setRackReport] = useState<RackReport | null>(null);
   /** Manifest of a document opened before audio started, replayed on start. */
   const pendingAssetsRef = useRef<AssetEntry[] | null>(null);
   const publisherRef = useRef(new PlanPublisher());
@@ -1745,6 +1868,10 @@ export function ModularApp() {
       setRuntimeStatuses((current) =>
         JSON.stringify(current) === JSON.stringify(next) ? current : next);
       setAudioNodes(audioRef.current?.liveNodeCount ?? 0);
+      setRackReport((current) => {
+        const next = audioRef.current?.rackReport ?? null;
+        return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+      });
       const devices = midiSessionRef.current?.devices() ?? [];
       setMidiDevices((current) =>
         JSON.stringify(current) === JSON.stringify(devices) ? current : devices);
@@ -1795,8 +1922,21 @@ export function ModularApp() {
     // resolved last — so turning audio on after building a patch produced an
     // engine with nothing in it, while turning it on first worked. One effect
     // owns synchronisation now, and it runs on both triggers.
-    void engine.start().then(() => {
+    void engine.start().then(async () => {
       refreshAssets();
+      // The Rust rack is opt-in via `?engine=rust` and deliberately not
+      // persisted: someone who lands on a broken build gets the working
+      // backend back by removing a parameter rather than by finding a
+      // setting. Attached after `start()` because a worklet node on a
+      // suspended context never pulls.
+      if (preferredEngine(window.location.search) === "rust") {
+        const attached = await engine.useRustEngine();
+        setEngineKind(engine.engineKind);
+        setMessage(attached
+          ? "Audio running · Rust engine"
+          : "Audio running · Rust engine unavailable, using Web Audio");
+        return;
+      }
       setMessage("Audio running");
     });
     return engine;
@@ -1936,6 +2076,7 @@ export function ModularApp() {
 
   useEffect(() => () => runtimeRef.current?.stop(), []);
   return <SoundPoolContext.Provider value={{ assets, preview: playAsset }}>
+  <KitContext.Provider value={kitId}>
   <main className="mm-app" onClick={() => setMenu(null)}>
     <input
       ref={openInputRef}
@@ -1994,6 +2135,13 @@ export function ModularApp() {
         <label>Zoom <input type="range" min="12" max="110" value={Math.round(zoom * 100)}
           onChange={(event) => setZoom(Number(event.currentTarget.value) / 100)} /></label>
         <ThemePicker themeId={themeId} onSelect={setThemeId} />
+        {/* The kit sits beside the theme because they are the two halves of
+            the same choice: the theme decides the colours, the kit decides
+            the shapes, and neither constrains the other. */}
+        <label className="mm-kit-picker">Kit <select value={kitId}
+          onChange={(event) => setKitId(event.currentTarget.value as KitId)}>
+          {KIT_IDS.map((id) => <option key={id} value={id}>{KIT_META[id].label}</option>)}
+        </select></label>
       </nav>
     </header>
     <div ref={viewportRef} className={`mm-canvas-viewport${handMode ? " is-hand" : ""}${panning ? " is-panning" : ""}`}
@@ -2052,6 +2200,7 @@ export function ModularApp() {
           dropTarget={dropTarget}
           status={runtimeStatuses[node.id] ?? {}}
           midiDevices={midiDevices}
+          connectedPorts={connectedPorts}
           onClose={() => removeNode(node.id)} />)}
       </div>
       </div>
@@ -2092,7 +2241,8 @@ export function ModularApp() {
       onRemove={removeAsset}
       onClose={() => setPoolOpen(false)}
     /> : null}
-    <footer className="mm-status-bar"><span>{message}</span><span>{Object.keys(graph.nodes).length} nodes · {Object.keys(graph.edges).length} cable{audioOn ? ` · ${audioNodes} audio` : ""}</span></footer>
+    <footer className="mm-status-bar"><span>{message}</span><span>{Object.keys(graph.nodes).length} nodes · {Object.keys(graph.edges).length} cable{audioOn ? ` · ${audioNodes} audio · ${engineKind === "rust" ? "Rust" : "Web Audio"}` : ""}{rackReport ? ` · ${rackReport.modules} in engine · ${rackReport.samples} sample${rackReport.samples === 1 ? "" : "s"}` : ""}</span></footer>
   </main>
+  </KitContext.Provider>
   </SoundPoolContext.Provider>;
 }

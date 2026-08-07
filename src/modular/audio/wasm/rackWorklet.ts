@@ -1,0 +1,133 @@
+// The processor that hosts the Rust rack on the audio thread.
+//
+// Bundled separately (`npm run build:worklet`) rather than imported, because an
+// `AudioWorklet` runs in its own global scope with no DOM, no `fetch`, and no
+// module resolution — `addModule` takes a URL to a self-contained script. That
+// is also why `WasmRack` is bundled *into* this file rather than talking to it
+// across `postMessage`: every call it makes is a plain function call into WASM,
+// and routing those through a message port would put the main thread back in
+// the audio path, which is the whole thing this migration exists to end.
+//
+// What crosses the port is only what has to: a compiled plan going in, and
+// later the telemetry stream going out.
+//
+// This file cannot be unit tested — there is no `AudioWorkletGlobalScope` in
+// Node and no way to construct one. It is kept as thin as the shim in
+// `rust/wasm/src/lib.rs` for the same reason, and everything with a decision in
+// it lives in `engineBridge.ts` next door, which is fully covered.
+
+import { WasmRack, type EngineExports } from "./engineBridge";
+// The name and the message shape live in rackProtocol.ts so the main thread can
+// import them without importing this file, which registers a processor the
+// moment it loads and only exists inside an AudioWorkletGlobalScope.
+import { RACK_PROCESSOR_NAME, type RackMessage } from "./rackProtocol";
+
+export { RACK_PROCESSOR_NAME };
+export type { RackMessage };
+
+declare const sampleRate: number;
+/**
+ * The audio clock's frame index for the first sample of this quantum.
+ *
+ * An `AudioWorkletGlobalScope` global, and the same clock
+ * `AudioContext.currentTime` counts in — which is what lets a scheduled note
+ * be placed against a time the main thread measured.
+ */
+declare const currentFrame: number;
+declare const AudioWorkletProcessor: {
+  new (): { readonly port: MessagePort };
+};
+declare function registerProcessor(name: string, processor: unknown): void;
+
+class RackProcessor extends AudioWorkletProcessor {
+  private readonly rack: WasmRack;
+  /** Set when construction failed; the node then renders silence rather than throwing every quantum. */
+  private readonly broken: boolean;
+
+  constructor(options: { processorOptions?: { module?: WebAssembly.Module } }) {
+    super();
+    const compiled = options.processorOptions?.module;
+    // The module arrives already compiled: `WebAssembly.compile` is async and
+    // a constructor cannot await, but a `WebAssembly.Module` is structured-
+    // cloneable and instantiating one is synchronous and cheap.
+    const instance = compiled ? new WebAssembly.Instance(compiled, {}) : null;
+    this.broken = instance === null;
+    this.rack = instance
+      ? new WasmRack(instance.exports as unknown as EngineExports, sampleRate)
+      : (null as unknown as WasmRack);
+
+    this.port.onmessage = (event: MessageEvent<RackMessage>) => {
+      if (this.broken) return;
+      const message = event.data;
+      switch (message.type) {
+        case "sample":
+          // Before any plan that names it: a plan assigning a slot to audio
+          // the engine does not hold yet would point a sampler at nothing.
+          this.rack.loadSample(message.slot, {
+            channels: message.channels,
+            sampleRate: message.sampleRate,
+          });
+          break;
+        case "sample-map":
+          this.rack.setSampleMap(message.map);
+          break;
+        case "plan":
+          this.rack.update(message.plan);
+          break;
+        case "reset":
+          this.rack.reset();
+          break;
+        case "note-on":
+          this.rack.noteOn(message.note, message.velocity, message.detuneCents);
+          break;
+        case "schedule":
+          this.rack.schedule(message.nodeId, message.atSec, message.events);
+          break;
+        case "note-off":
+          this.rack.noteOff(message.note);
+          break;
+        case "all-notes-off":
+          this.rack.allNotesOff();
+          break;
+        case "modulation":
+          this.rack.setModulation(message.nodeId, message.source, message.dest, message.amount);
+          break;
+      }
+    };
+  }
+
+  process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+    const output = outputs[0];
+    if (this.broken) {
+      for (const channel of output) channel.fill(0);
+      return true;
+    }
+
+    // Mono in: the rack's host input is one channel, and summing here rather
+    // than downstream keeps the engine's port model honest until `Frame`'s
+    // sixteen channels are actually wired through.
+    const input = inputs[0];
+    if (input && input.length > 0) {
+      this.rack.input.set(input[0]);
+    } else {
+      this.rack.input.fill(0);
+    }
+
+    this.rack.process(currentFrame);
+
+    // Real stereo. Port 0 is left, port 1 is right; a third channel, if a host
+    // ever asks for one, repeats the left rather than going silent.
+    output[0]?.set(this.rack.output);
+    if (output.length > 1) output[1].set(this.rack.outputRight);
+    for (let i = 2; i < output.length; i += 1) output[i].set(this.rack.output);
+
+    // The only thing that ever goes back up the port. `takeReport` decides
+    // whether one is due — that decision lives next door where it can be
+    // tested, rather than as a counter in this untestable file.
+    const report = this.rack.takeReport();
+    if (report) this.port.postMessage(report);
+    return true;
+  }
+}
+
+registerProcessor(RACK_PROCESSOR_NAME, RackProcessor);
