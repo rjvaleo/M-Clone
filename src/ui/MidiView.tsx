@@ -35,6 +35,7 @@ export function MidiView() {
   const transport = useM((state) => state.midiViewTransport);
   const clear = useM((state) => state.clearMidiView);
   const tempo = useM((state) => state.project.tempo);
+  const isPlaying = useM((state) => state.isPlaying);
   const [speedId, setSpeedId] = useState("4/4");
   const speed = scrollSpeed(speedId);
 
@@ -44,9 +45,16 @@ export function MidiView() {
    * Polled every frame but stored as state, so React re-renders on the tick
    * and not between ticks: the display only ever changes when this integer
    * changes, and a frame landing mid-row has nothing to draw.
+   *
+   * Only while running. `transportElapsedSec` is measured from a fixed origin
+   * against a clock that never stops, so it keeps climbing after the transport
+   * halts — polling it then would scroll the last run's notes past the
+   * playhead indefinitely. Stopped, the grid holds where it was left, which is
+   * also what makes the last bars readable after the music ends.
    */
   const [currentRow, setCurrentRow] = useState(0);
   useEffect(() => {
+    if (!isPlaying) return;
     let frame = 0;
     const poll = () => {
       const beat = beatsElapsed(getRuntime().transportElapsedSec(), tempo);
@@ -56,7 +64,12 @@ export function MidiView() {
     };
     frame = requestAnimationFrame(poll);
     return () => cancelAnimationFrame(frame);
-  }, [tempo, speed.rowsPerBeat]);
+  }, [isPlaying, tempo, speed.rowsPerBeat]);
+
+  // A new run starts the grid again at the top, matching the cleared readout.
+  useEffect(() => {
+    if (isPlaying) setCurrentRow(0);
+  }, [isPlaying]);
 
   /**
    * The CTRL and TUNE lanes, keyed by row.
