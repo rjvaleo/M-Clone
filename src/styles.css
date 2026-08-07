@@ -1,17 +1,30 @@
 /* Classic theme — a clean vector take on M's 1-bit Mac look.
    Colors are CSS variables so a future "modern" theme can reskin without
    touching layout or logic. */
+/*
+ * The palette, expressed against idMLab's theme tokens.
+ *
+ * Each one falls back to the colour it has always had, so this sheet on its
+ * own — M-Clone's own entry point, where no theme is applied — looks exactly
+ * as it did. When idMLab's theme engine writes its tokens onto the root
+ * element, these follow it instead.
+ *
+ * `--m-sel` is M's pale selection wash. It used to be called `--sel`, which is
+ * also the name idMLab gives its accent: since `applyTheme` writes tokens as
+ * inline style on the root, and inline beats a stylesheet rule, the theme was
+ * silently repainting M's selections. Renaming it ends that collision.
+ */
 :root {
-  --bg: #d9d9d3;
-  --panel: #f4f4ef;
-  --ink: #16160f;
-  --line: #16160f;
-  --accent: #16160f;
-  --cell: #ffffff;
-  --cell-on: #16160f;
-  --beat: #e6e6df;
-  --muted: #cfcfc7;
-  --sel: #fff7c2;
+  --bg: rgb(var(--s-page, 217 217 211));
+  --panel: rgb(var(--s-raised, 244 244 239));
+  --ink: var(--tx-800, #16160f);
+  --line: var(--bd-200, #16160f);
+  --accent: var(--ac-on, #16160f);
+  --cell: var(--s-card, #ffffff);
+  --cell-on: var(--ac-on, #16160f);
+  --beat: var(--hv-100, #e6e6df);
+  --muted: var(--bd-100, #cfcfc7);
+  --m-sel: var(--sel-soft, #fff7c2);
   --font: "Chicago", "Geneva", ui-sans-serif, system-ui, "Helvetica Neue", Arial,
     sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -185,7 +198,7 @@ body {
   font-size: 11px;
 }
 .voices__row--sel {
-  background: var(--sel);
+  background: var(--m-sel);
 }
 .voices input[type="number"] {
   width: 46px;
@@ -345,21 +358,21 @@ body {
 
 .uwin {
   flex: none;
-  border: 1px solid #000; /* hairline */
-  background: #fff; /* opaque — windows never show through each other */
+  border: 1px solid var(--line); /* hairline */
+  background: var(--panel); /* opaque — windows never show through each other */
   box-shadow: 2px 2px 0 rgb(0 0 0 / 18%);
 }
 .uwin__title {
   box-sizing: border-box;
   height: 24px;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--line);
   padding: 1px 6px;
   font-weight: 700;
   font-size: 12px;
   display: flex;
   gap: 6px;
   align-items: center;
-  background: #fff;
+  background: var(--panel);
 }
 .uwin__slash { opacity: 0.4; }
 .uwin__note { font-weight: 400; font-size: 10px; opacity: 0.7; }
@@ -375,9 +388,10 @@ body {
   font-size: 11px;
 }
 .uroot input[type="number"], .uroot select {
-  border: 1px solid #000;
+  border: 1px solid var(--line);
   padding: 1px 2px;
-  background: #fff;
+  background: var(--cell);
+  color: var(--ink);
 }
 .unum { width: 34px; }
 .unum--s { width: 22px; }
@@ -395,7 +409,7 @@ body {
   border: 1px solid #000; padding: 1px 3px; text-align: center;
 }
 .utable th { background: #eee; font-size: 10px; }
-.utable__sel { background: var(--sel); }
+.utable__sel { background: var(--m-sel); }
 .ustepcell { padding: 1px !important; }
 .ustep {
   width: 18px; height: 16px; border: 1px solid #999; background: #fff; padding: 0; cursor: pointer; display: block;

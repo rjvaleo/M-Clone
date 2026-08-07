@@ -2144,7 +2144,11 @@ export function ModularApp() {
   useEffect(() => () => runtimeRef.current?.stop(), []);
   if (classic) {
     return <Suspense fallback={<div className="mm-classic-loading">Loading classic M…</div>}>
-      <ClassicView onExit={() => setClassic(false)} />
+      <ClassicView
+        onExit={() => setClassic(false)}
+        themeId={themeId} onSelectTheme={setThemeId}
+        kitId={kitId} onSelectKit={setKitId}
+      />
     </Suspense>;
   }
 

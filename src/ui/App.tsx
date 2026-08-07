@@ -116,7 +116,12 @@ function useElementSize() {
  * Absent — which is how M-Clone's own entry point mounts this — nothing about
  * the app changes.
  */
-export function App({ onExitToPatch }: { onExitToPatch?: () => void } = {}) {
+export function App({ onExitToPatch, extraControls }: {
+  onExitToPatch?: () => void;
+  /** Rendered at the right of the menu bar. idMLab puts its theme and kit
+   *  pickers here, so the classic view can be re-skinned from inside itself. */
+  extraControls?: React.ReactNode;
+} = {}) {
   const lastNumerical = useRef<number | null>(null);
   const [workspaceZoom, setWorkspaceZoom] = useState(() => {
     try {
@@ -384,6 +389,7 @@ export function App({ onExitToPatch }: { onExitToPatch?: () => void } = {}) {
         <WindowMenu label="Windows" items={windowItems} />
         <WindowMenu label="Options" items={optionItems} />
         <WindowMenu label="View" items={viewItems} />
+        {extraControls}
         <p className="app__doc" aria-live="polite">
           {documentName ?? "Untitled"}{isDirty ? " •" : ""}
         </p>

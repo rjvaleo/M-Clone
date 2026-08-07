@@ -16,8 +16,33 @@
  */
 
 import { App } from "../../ui/App";
+import { ThemePicker } from "./ThemePicker";
+import { KIT_IDS, KIT_META, type KitId } from "../theme/kits/types";
+import type { ThemeId } from "../theme/themes";
 import "../../styles.css";
 
-export function ClassicView({ onExit }: { onExit: () => void }) {
-  return <App onExitToPatch={onExit} />;
+export function ClassicView({ onExit, themeId, onSelectTheme, kitId, onSelectKit }: {
+  onExit: () => void;
+  themeId: ThemeId;
+  onSelectTheme: (id: ThemeId) => void;
+  kitId: KitId;
+  onSelectKit: (id: KitId) => void;
+}) {
+  return (
+    <App
+      onExitToPatch={onExit}
+      // The same two pickers the patch view carries. Without them you could
+      // reach the classic interface and then have no way to re-skin it, which
+      // is the one thing the theme engine is here to do.
+      extraControls={
+        <div className="mm-classic-theming">
+          <ThemePicker themeId={themeId} onSelect={onSelectTheme} />
+          <label className="mm-kit-picker">Kit <select value={kitId}
+            onChange={(event) => onSelectKit(event.currentTarget.value as KitId)}>
+            {KIT_IDS.map((id) => <option key={id} value={id}>{KIT_META[id].label}</option>)}
+          </select></label>
+        </div>
+      }
+    />
+  );
 }
