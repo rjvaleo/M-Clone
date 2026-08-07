@@ -1688,12 +1688,14 @@ body {
 .u-midiview-win { width: 760px; --midiview-time-column: 112px; }
 .u-midiview-win > .uwin__body { padding: 0; overflow: hidden; }
 /* ===========================================================================
-   MIDI READOUT — a beat-clocked scroller, not a log.
+   MIDI READOUT — a tracker.
 
-   Rows are positioned by their place on the transport timeline and the whole
-   surface is translated against the transport clock, so the display moves
-   whether or not anything is being played. The playhead is fixed to the
-   viewport; the music travels past it.
+   A row is one subdivision of the beat and every subdivision gets one, so the
+   grid is even whether the music is dense or sparse. Rows are uniform height
+   and stack in normal flow: new ones arrive at the top and push the rest down
+   a whole row at a time. Nothing is absolutely positioned and nothing is
+   transformed, so the movement is a clock tick rather than a glide, and text
+   cannot overlap because a row is one line tall by construction.
 
    Set in Home Video, which is public domain and the only face in fonts/ that
    is both genuinely monospaced across all printable ASCII and legible as
@@ -1706,7 +1708,8 @@ body {
 }
 
 .midiview {
-  --mv-ctrl: 74px;
+  --mv-ctrl: 62px;
+  --mv-tune: 42px;
   --mv-row: 14px;
   --mv-phosphor: #6ad46a;
   background: #0b0f0b;
@@ -1725,66 +1728,61 @@ body {
 }
 .midiview__speed { display: flex; align-items: center; gap: 4px; font-size: 9px; }
 
-.midiview__tracker-head, .midiview__line {
+.midiview__tracker-head, .midiview__row {
   display: grid;
-  grid-template-columns: var(--mv-ctrl) repeat(4, minmax(0, 1fr));
+  grid-template-columns:
+    var(--mv-ctrl) var(--mv-tune) repeat(4, minmax(0, 1fr));
 }
 .midiview__tracker-head {
-  height: 20px; background: #111a11; border-bottom: 1px solid #2c3f2c;
+  height: 18px; background: #111a11; border-bottom: 1px solid #2c3f2c;
 }
 .midiview__tracker-head > b {
-  padding: 4px 6px; border-right: 1px solid #1e2a1e;
+  padding: 3px 5px; border-right: 1px solid #1e2a1e;
   color: #4f8f4f; font-size: 9px; letter-spacing: 0.08em;
 }
 .midiview__tracker-head > b.uvoice { color: var(--voice-color); }
 
 .midiview__viewport {
   position: relative; height: 300px; overflow: hidden;
-  /* Column rules and a faint scanline, both fixed to the glass rather than to
-     the music, so they do not travel with the surface. */
-  background:
-    linear-gradient(90deg, transparent calc(var(--mv-ctrl) - 1px), #1e2a1e calc(var(--mv-ctrl) - 1px) var(--mv-ctrl), transparent var(--mv-ctrl)),
-    repeating-linear-gradient(90deg, transparent 0 calc((100% - var(--mv-ctrl)) / 4 - 1px), #162116 calc((100% - var(--mv-ctrl)) / 4 - 1px) calc((100% - var(--mv-ctrl)) / 4)),
-    repeating-linear-gradient(180deg, rgb(255 255 255 / 3%) 0 1px, transparent 1px 3px),
-    #0b0f0b;
+  background: repeating-linear-gradient(180deg, rgb(255 255 255 / 3%) 0 1px, transparent 1px 3px), #0b0f0b;
 }
-/* Laid out once in beat space; the rAF loop translates this, not each row. */
-.midiview__surface { position: absolute; inset: 0; will-change: transform; }
 
-.midiview__line {
-  position: absolute; left: 0; right: 0; height: var(--mv-row);
-  align-items: center; font-size: 10px; line-height: var(--mv-row);
-  white-space: nowrap;
+/* Uniform, in normal flow. One line tall, so nothing can overlap. */
+.midiview__row {
+  height: var(--mv-row); line-height: var(--mv-row);
+  font-size: 10px; white-space: nowrap;
 }
-.midiview__ctrl {
-  grid-column: 1; padding-left: 5px; font-size: 9px; letter-spacing: 0.05em;
+/* The beat, so the pulse is readable without counting rows. */
+.midiview__row.is-beat { background: rgb(106 212 106 / 5%); }
+/* The row the transport is on. Inverted rather than outlined: at one line
+   tall a border would change the row's height and shift everything below. */
+.midiview__row.is-now {
+  background: rgb(106 212 106 / 16%);
+  box-shadow: inset 0 0 0 1px rgb(106 212 106 / 45%);
 }
-.midiview__ctrl--out { color: #8ce88c; }
-.midiview__ctrl--in { color: #6ab8ff; }
-.midiview__ctrl--scale { color: #3f7a3f; }
 
-.midiview__note {
-  display: inline-flex; gap: 5px; padding-left: 5px; min-width: 0; overflow: hidden;
+.midiview__ctrl, .midiview__tune, .midiview__cell {
+  padding: 0 5px; overflow: hidden; text-overflow: clip;
+  border-right: 1px solid #162116;
 }
-.midiview__note b, .midiview__note i { font-style: normal; white-space: pre; }
+.midiview__ctrl { color: #8ce88c; font-size: 9px; }
+.midiview__tune { color: #3f7a3f; font-size: 9px; }
+
+.midiview__cell { display: inline-flex; gap: 5px; min-width: 0; }
+.midiview__cell b, .midiview__cell i { font-style: normal; white-space: pre; }
+.midiview__efx { color: #3f7a3f; }
 /*
  * Colour by which Note Order list the step came from, so the three-way mix is
- * visible in the output rather than only on the slider. Hue is the Voice; this
- * shifts brightness and weight within it, so a stream still reads as one
- * stream.
+ * visible in the output rather than only on the slider. Hue stays the Voice's,
+ * so a stream still reads as one stream.
  */
-.midiview__note--original { color: var(--voice-color); }
-.midiview__note--cyclic { color: var(--voice-color); opacity: 0.62; }
-.midiview__note--utterly {
+.midiview__cell--original { color: var(--voice-color); }
+.midiview__cell--cyclic { color: var(--voice-color); opacity: 0.62; }
+.midiview__cell--utterly {
   color: var(--voice-color); opacity: 0.62;
   text-decoration: underline; text-underline-offset: 2px;
 }
 
-.midiview__playhead {
-  position: absolute; left: 0; right: 0; height: 0; pointer-events: none;
-  border-top: 1px solid var(--mv-phosphor);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--mv-phosphor) 60%, transparent);
-}
 .midiview__waiting {
   position: absolute; inset: 0; display: grid; place-items: center; color: #3f7a3f;
 }
