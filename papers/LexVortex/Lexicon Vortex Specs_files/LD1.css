@@ -1,0 +1,15 @@
+
+.leftlinks   { color: #3f9; font-weight: 800; font-size: 11px; font-family: Arial, Helvetica, Geneva, sans-serif; text-decoration: none }
+.newstitle { color: #000; font-weight: bold; font-size: 16px; font-family: Arial, Helvetica, Geneva, sans-serif; text-decoration: none }
+.newstext { color: #555; font-weight: normal; font-size: 12px; font-family: Arial, Helvetica, Geneva, sans-serif; text-decoration: none }
+.newsdate { color: #000; font-style: italic; font-weight: normal; font-size: 10px; font-family: Arial, Helvetica, Geneva, sans-serif; text-decoration: none }
+.support { color: #33c; font-weight: bold; font-size: 12px; font-family: Arial, Helvetica, Geneva, sans-serif; text-decoration: none }
+.supportsm { color: #33c; font-weight: bold; font-size: 9px; font-family: Arial, Helvetica, Geneva, sans-serif; text-decoration: none }
+.toplinks { color: #96c; font-weight: bold; font-size: 11px; font-family: Arial, Helvetica, Geneva, sans-serif; text-decoration: none; text-indent: 25px }
+.newslinks { color: #96c; font-weight: bold; font-size: 11px; font-family: Arial, Helvetica, Geneva, sans-serif; text-decoration: none; text-indent: 25px }
+.topheadlines  { color: #96c; font-weight: normal; font-size: 10px; font-family: Arial, Helvetica, Geneva, sans-serif; text-decoration: none; text-align: left }
+.leftlinks:hover   { color: #f06; font-weight: 800; font-size: 11px; font-family: Arial, Helvetica, Geneva, sans-serif; text-decoration: underline }
+.toplinks:hover { color: #f06; font-weight: bold; font-size: 11px; font-family: Arial, Helvetica, Geneva, sans-serif; text-decoration: underline }
+a {text-decoration: none;}
+a:hover {text-decoration: underline;}
+.toplinks {padding-left: 20px;}

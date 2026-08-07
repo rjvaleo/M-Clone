@@ -1,0 +1,42 @@
+{
+ "source": "DP4_manual.pdf p128 (Available ABCD Routings)",
+ "shown": 18,
+ "total": 32,
+ "note": "Feedback1 and Feedback2 differ only in the dry path, so 32 combinations render as 18 diagrams.",
+ "ab": [
+  "serial",
+  "parallel",
+  "feedback1",
+  "feedback2"
+ ],
+ "cd": [
+  "serial",
+  "parallel",
+  "feedback1",
+  "feedback2"
+ ],
+ "abcd": [
+  "serial",
+  "parallel"
+ ],
+ "diagrams": [
+  "AB Serial \u2192 CD Serial",
+  "AB Serial \u2192 CD Parallel",
+  "AB Serial \u2192 CD Feedback",
+  "AB Parallel \u2192 CD Serial",
+  "AB Parallel \u2192 CD Parallel",
+  "AB Parallel \u2192 CD Feedback",
+  "AB Feedback \u2192 CD Serial",
+  "AB Feedback \u2192 CD Parallel",
+  "AB Feedback \u2192 CD Feedback",
+  "AB Serial + CD Serial",
+  "AB Serial + CD Parallel",
+  "AB Serial + CD Feedback",
+  "AB Parallel + CD Serial",
+  "AB Parallel + CD Parallel",
+  "AB Parallel + CD Feedback",
+  "AB Feedback + CD Serial",
+  "AB Feedback + CD Parallel",
+  "AB Feedback + CD Feedback"
+ ]
+}

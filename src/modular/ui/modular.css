@@ -514,6 +514,26 @@ button { cursor: pointer; }
   border-radius: 4px; padding: 4px 8px; font-size: 11px; line-height: 1.35;
 }
 .mm-module-menu button:hover { background: var(--hv-100); color: var(--tx-800); }
+/*
+ * The search field.
+ *
+ * The list itself stays flat and fully open — groups ordered by name, which
+ * puts Audio first, where the fourteen-module rack that used to sit a thousand
+ * pixels below the fold now leads. The field is the fast path once you know
+ * what you want; the list is the one you scan.
+ *
+ * Sticky under the "Add module" title so scrolling never strands the query out
+ * of reach of the results it produced.
+ */
+.mm-module-menu__search {
+  position: sticky; top: 22px; z-index: 1;
+  margin: 2px 0 4px; padding: 5px 8px; font: inherit; font-size: 11px;
+  color: var(--tx-800); background: var(--s-sunken, var(--s-card));
+  border: 1px solid var(--bd-200); border-radius: 5px;
+}
+.mm-module-menu__search::placeholder { color: var(--tx-300); }
+.mm-module-menu__search:focus-visible { outline: 2px solid var(--ac-500); outline-offset: -1px; }
+.mm-module-menu__empty { margin: 6px 8px; font-size: 11px; color: var(--tx-400); }
 .mm-status-bar { border-top: 1px solid var(--bd-100); border-bottom: 0; }
 
 /* --- theme picker ---------------------------------------------------------

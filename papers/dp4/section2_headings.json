@@ -1,0 +1,218 @@
+[
+ {
+  "pdf_page": 44,
+  "heading": "EQ - DDL - WITH LFO"
+ },
+ {
+  "pdf_page": 44,
+  "heading": "LFO"
+ },
+ {
+  "pdf_page": 46,
+  "heading": "EQ - FLANGER - DDL"
+ },
+ {
+  "pdf_page": 48,
+  "heading": "EQ - PANNER - DDL"
+ },
+ {
+  "pdf_page": 50,
+  "heading": "EQ-TREMOLO-DDL"
+ },
+ {
+  "pdf_page": 52,
+  "heading": "EQ - VIBRATO - DDL"
+ },
+ {
+  "pdf_page": 54,
+  "heading": "EXPANDER"
+ },
+ {
+  "pdf_page": 56,
+  "heading": "FAST PITCH SHIFT"
+ },
+ {
+  "pdf_page": 57,
+  "heading": "FLANGER"
+ },
+ {
+  "pdf_page": 58,
+  "heading": "GATED REVERB"
+ },
+ {
+  "pdf_page": 61,
+  "heading": "GUITAR AMP 1, GUITAR AMP 2"
+ },
+ {
+  "pdf_page": 63,
+  "heading": "GUITAR AMP 3"
+ },
+ {
+  "pdf_page": 65,
+  "heading": "GUITAR AMP 4"
+ },
+ {
+  "pdf_page": 67,
+  "heading": "GUITAR TUNER 2U"
+ },
+ {
+  "pdf_page": 68,
+  "heading": "HALL REVERB"
+ },
+ {
+  "pdf_page": 68,
+  "heading": "LPF"
+ },
+ {
+  "pdf_page": 71,
+  "heading": "INVERSE EXPANDER"
+ },
+ {
+  "pdf_page": 73,
+  "heading": "KEYED EXPANDER"
+ },
+ {
+  "pdf_page": 75,
+  "heading": "LARGE PLATE"
+ },
+ {
+  "pdf_page": 77,
+  "heading": "LARGE ROOM REV"
+ },
+ {
+  "pdf_page": 80,
+  "heading": "MULTI TAP DELAY"
+ },
+ {
+  "pdf_page": 80,
+  "heading": "NO EFFECT (BYPASS EFFECT)"
+ },
+ {
+  "pdf_page": 82,
+  "heading": "NON LIN REVERB 1, 2, 3"
+ },
+ {
+  "pdf_page": 83,
+  "heading": "ENVELOPE LEVEL 1"
+ },
+ {
+  "pdf_page": 83,
+  "heading": "ENVELOPE LEVEL 2"
+ },
+ {
+  "pdf_page": 83,
+  "heading": "ENVELOPE LEVEL 9"
+ },
+ {
+  "pdf_page": 83,
+  "heading": "LEVEL"
+ },
+ {
+  "pdf_page": 83,
+  "heading": "SIGNAL"
+ },
+ {
+  "pdf_page": 83,
+  "heading": "TIME"
+ },
+ {
+  "pdf_page": 85,
+  "heading": "PARAMETRIC EQ"
+ },
+ {
+  "pdf_page": 86,
+  "heading": "PHASER-DDL"
+ },
+ {
+  "pdf_page": 88,
+  "heading": "PITCH SHIFT 2U"
+ },
+ {
+  "pdf_page": 90,
+  "heading": "PITCHSHIFT - DDL"
+ },
+ {
+  "pdf_page": 92,
+  "heading": "PITCH SHIFTER"
+ },
+ {
+  "pdf_page": 94,
+  "heading": "ATTACK TIME"
+ },
+ {
+  "pdf_page": 94,
+  "heading": "HOLD TIME"
+ },
+ {
+  "pdf_page": 94,
+  "heading": "RELEASE"
+ },
+ {
+  "pdf_page": 94,
+  "heading": "REVERSEREVERB1"
+ },
+ {
+  "pdf_page": 96,
+  "heading": "REVERSE REVERB 2"
+ },
+ {
+  "pdf_page": 98,
+  "heading": "ROTATING SPEAKER"
+ },
+ {
+  "pdf_page": 100,
+  "heading": "RUMBLE FILTER"
+ },
+ {
+  "pdf_page": 101,
+  "heading": "SINE/NOISE GEN"
+ },
+ {
+  "pdf_page": 102,
+  "heading": "SMALL PLATE"
+ },
+ {
+  "pdf_page": 104,
+  "heading": "SMALL ROOM REV"
+ },
+ {
+  "pdf_page": 107,
+  "heading": "SPEAKER CABINET"
+ },
+ {
+  "pdf_page": 108,
+  "heading": "TEMPO DELAY"
+ },
+ {
+  "pdf_page": 109,
+  "heading": "TUNABLE SPKR 1"
+ },
+ {
+  "pdf_page": 110,
+  "heading": "TUNABLE SPKR 2"
+ },
+ {
+  "pdf_page": 112,
+  "heading": "VAN DER POL FILTER"
+ },
+ {
+  "pdf_page": 113,
+  "heading": "VCF"
+ },
+ {
+  "pdf_page": 113,
+  "heading": "VCF - DISTORT 1"
+ },
+ {
+  "pdf_page": 115,
+  "heading": "VCF - DISTORT 2"
+ },
+ {
+  "pdf_page": 117,
+  "heading": "VOCAL REMOVER"
+ },
+ {
+  "pdf_page": 119,
+  "heading": "VOCODER"
+ }
+]

@@ -151,12 +151,38 @@ Velocity Range and Legato Processor.
 16. **Pattern Editor** — the compound described below: a clock in, fully formed notes out.
 17. **MIDI Output** — utility face with destination/channel/latency/program controls.
 
-Eight **audio effect** modules — Filter, Delay, Reverb, Chorus, Phaser,
-Distortion, Bit Crush, and Ring Modulator — each a `input → dry/wet → output`
-shell around one builder, with the mix as an equal-power crossfade.
+Fourteen **audio modules** over one `input → dry/wet → output` shell — Audio
+Output, Gain, Delay, Reverb, EQ, Compressor, Limiter, Bit Crusher, Blackhole,
+DP/4 Reverb, DP/4 Non Lin, the DP/4+ machine, Stereo Widener and Mixer — with
+the mix as an equal-power crossfade.
 
-Three **sample players** — Percussion, Looper, and Granular — driven by note
-events through the shared voice bank.
+Four **instruments** — the Percussion, Looper and Granular sample players and
+the Synth — driven by note events through the shared voice bank.
+
+### Stereo
+
+The rack is stereo throughout rather than mono arriving on two wires:
+
+- **Every source has a position.** Percussion, Looper, Granular and the Synth
+  each own a `pan`, ramped rather than structural. Percussion additionally pans
+  per pad, as `AUDIO_ENGINE_SPEC.md` §4 asks; a centred pad builds no panner at
+  all, so a mostly-centred kit costs nothing.
+- **The reverb tanks decorrelate.** `createFeedbackNetwork` taps alternate delay
+  lines to alternate sides of a two-channel merger, so each ear hears a
+  different set of line lengths while the Householder bus still mixes all of
+  them inside the loop. Blackhole and the DP/4 reverbs inherit it. Each side is
+  normalised by the lines it carries, so the tail did not change level.
+- **Stereo Widener** (`m.audio-widener`) — a mid/side matrix with the side path
+  high-passed, so the band below its corner stays mono however wide the rest is
+  set. It is deliberately *not* a null at width 1: monoing the bass is the
+  feature, and a true bypass is `mix = 0` like everything else in the rack.
+- **Mixer** (`m.audio-mixer`) — four independent inputs through the DP/4's
+  per-port wiring, each with level, pan, mute and solo. Mute is a ramp on a
+  channel that stays wired, for the same reason bypass is.
+
+`EffectContext` gained `createStereoPanner`, `createChannelSplitter` and
+`createChannelMerger`, and `AudioNodeLike.connect` gained the two optional
+channel indices that addressing a side requires.
 
 #### Cyclic faces
 
@@ -282,10 +308,17 @@ asserted nothing at all.
 
 ## Verification baseline
 
-- `npm test -- --run`: **1,624 tests passed across 118 files**.
-- `npm run coverage`: passed its thresholds.
+- `npm test -- --run`: **1,794 tests passed across 125 files**.
 - `npm run typecheck`: passed.
 - `npm run build`: passed.
+- `npm run coverage`: **passes**, for the first time since `72085dc`. That
+  commit left `dp4.ts` at 88.29% of statements and `blackhole.ts` at 99.41%,
+  which held the gate red — the two machines built correctly and their control
+  surfaces were never asked to move, so only one case of one `setParameter`
+  switch was reached by any test. Both are now at 100%; every documented knob
+  on both machines has a test asserting that the right node moved rather than
+  merely that the call did not throw. **100%** of statements, lines and
+  functions, **99.17%** of branches, ratcheted from 98.5 to 99.
 - Browser verification on every UI change in this session, which is how most of
   the real defects were found — the unit tests passed throughout.
 
