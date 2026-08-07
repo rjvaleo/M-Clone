@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { eventsForPlannedNotes, groupMidiViewRows, mergeMidiViewEvents } from "./midiview";
+import {
+  beatOfTick,
+  eventsForPlannedNotes,
+  groupMidiViewRows,
+  mergeMidiViewEvents,
+} from "./midiview";
 
 describe("Midi View event conversion", () => {
   it("creates one Note On and one Note Off from the actual planned note", () => {
@@ -110,5 +115,50 @@ describe("transport messages in the readout", () => {
       note: 60, noteName: "C4", velocity: 100, durationSec: 0.1,
     };
     expect(groupMidiViewRows([note])[0].transport).toEqual([]);
+  });
+})
+
+describe("musical position on the readout", () => {
+  const planned = (over = {}) => ({
+    voice: 0, note: 60, velocity: 100, channel: 1,
+    startSec: 1, durationSec: 0.5, atTick: 1920, durationTicks: 960, ...over,
+  });
+
+  it("carries the tick through, so rows can be placed by musical time", () => {
+    // Seconds drift against the music the moment the tempo moves; the tick is
+    // the position the planner actually decided.
+    const [on, off] = eventsForPlannedNotes([planned()], 0);
+    expect(on.atTick).toBe(1920);
+    expect(off.atTick).toBe(2880);
+  });
+
+  it("gives the note-on its length in ticks", () => {
+    const [on] = eventsForPlannedNotes([planned()], 0);
+    expect(on.durationTicks).toBe(960);
+  });
+
+  it("defaults a missing length to zero when the position is known", () => {
+    // atTick and durationTicks are independently optional on PlannedNote, so
+    // one can arrive without the other.
+    const [on, off] = eventsForPlannedNotes(
+      [planned({ durationTicks: undefined })], 0,
+    );
+    expect(on.durationTicks).toBe(0);
+    expect(off.atTick).toBe(1920);
+  });
+
+  it("survives a note the planner gave no tick", () => {
+    // atTick is optional on PlannedNote, so the readout must not assume it.
+    const [on] = eventsForPlannedNotes(
+      [planned({ atTick: undefined, durationTicks: undefined })], 0,
+    );
+    expect(on.atTick).toBeUndefined();
+    expect(on.atSec).toBe(1);
+  });
+
+  it("converts a tick to a beat at 960 PPQN", () => {
+    expect(beatOfTick(0)).toBe(0);
+    expect(beatOfTick(960)).toBe(1);
+    expect(beatOfTick(480)).toBe(0.5);
   });
 })

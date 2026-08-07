@@ -1,4 +1,5 @@
 import { midiToName } from "./music";
+import { PPQN } from "./planner";
 import type { PlannedNote } from "./planner";
 
 export type MidiViewEvent = {
@@ -11,9 +12,22 @@ export type MidiViewEvent = {
   noteName: string;
   velocity: number;
   durationSec: number;
+  /**
+   * Position and length on the shared 960 PPQN transport timeline.
+   *
+   * Optional because `PlannedNote` makes them optional. Seconds drift against
+   * the music the moment the tempo moves; the tick is the position the
+   * planner actually decided, so the readout places rows by this when it has
+   * it and falls back to seconds when it does not.
+   */
+  atTick?: number;
+  durationTicks?: number;
 };
 
 export const MIDI_VIEW_LIMIT = 1000;
+
+/** Ticks to beats, at the transport's 960 PPQN. */
+export const beatOfTick = (tick: number): number => tick / PPQN;
 
 /**
  * A transport message, in either direction.
@@ -56,6 +70,12 @@ export function eventsForPlannedNotes(
         noteName,
         velocity: note.velocity,
         durationSec: note.durationSec,
+        // Spread rather than assigned: a note the planner gave no tick keeps
+        // the shape it always had, instead of carrying undefined keys.
+        ...(note.atTick === undefined ? {} : {
+          atTick: note.atTick,
+          durationTicks: note.durationTicks ?? 0,
+        }),
       },
       {
         id: firstId + index * 2 + 1,
@@ -67,6 +87,10 @@ export function eventsForPlannedNotes(
         noteName,
         velocity: 0,
         durationSec: 0,
+        ...(note.atTick === undefined ? {} : {
+          atTick: note.atTick + (note.durationTicks ?? 0),
+          durationTicks: 0,
+        }),
       },
     ];
   });
