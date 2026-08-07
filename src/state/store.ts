@@ -961,6 +961,14 @@ export const useM = create<MStore>((set, get) => ({
       slideshowTransport: playing
         ? resumeSlideshowState(s.slideshowTransport, nowSeconds())
         : pauseSlideshowState(s.slideshowTransport, nowSeconds()),
+      // A new run starts the transport tick again from near zero, so it
+      // reuses the row numbers the last one wrote. Two performances drawn on
+      // the same rows read as one impossible performance, so the readout
+      // starts empty. Only the stopped-to-running edge counts: this is called
+      // from several places while already playing.
+      ...(playing && !s.isPlaying
+        ? { midiViewEvents: [], midiViewTransport: [], midiViewNextId: 0 }
+        : {}),
     }));
   },
 

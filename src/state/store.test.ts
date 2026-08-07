@@ -1836,3 +1836,33 @@ describe("transport messages in the readout", () => {
     expect(g().midiViewTransport).toEqual([]);
   });
 })
+
+describe("the readout across runs", () => {
+  it("empties when a new run starts", () => {
+    // The planner restarts transportTick near zero on every start, so a new
+    // run reuses the row numbers the last one wrote. Keeping both would draw
+    // two performances on top of each other.
+    g().recordMidiTransport("start", "out", 0);
+    useM.setState({ isPlaying: false });
+    g().setPlaying(true);
+    expect(g().midiViewTransport).toEqual([]);
+    expect(g().midiViewEvents).toEqual([]);
+  });
+
+  it("keeps what was played when the run stops", () => {
+    // Stopping should leave the last bars on screen to look at, not wipe them.
+    g().setPlaying(true);
+    g().recordMidiTransport("start", "out", 0);
+    g().setPlaying(false);
+    expect(g().midiViewTransport).toHaveLength(1);
+  });
+
+  it("does not empty when already playing", () => {
+    // setPlaying(true) is called from several places; only the transition
+    // from stopped to running is a new run.
+    g().setPlaying(true);
+    g().recordMidiTransport("start", "out", 0);
+    g().setPlaying(true);
+    expect(g().midiViewTransport).toHaveLength(1);
+  });
+})
