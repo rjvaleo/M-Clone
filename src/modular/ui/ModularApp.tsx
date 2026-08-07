@@ -61,6 +61,7 @@ import type {
 import { createNode, moduleRegistry } from "../registry/registry";
 import { applyTheme, DEFAULT_THEME_ID, themeMeta, type ThemeId } from "../theme/themes";
 import { ThemePicker } from "./ThemePicker";
+import { MenuBar, type MenuActions } from "./MenuBar";
 import { CyclicGrid } from "./CyclicGrid";
 import { executeRuntimeCommand, queueRuntimeParameter } from "./runtimebridge";
 import {
@@ -2074,6 +2075,64 @@ export function ModularApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recenterToken]);
 
+  /** Load a whole graph, discarding the history that belonged to the old one. */
+  const loadGraph = (next: ReturnType<typeof starterGraph>) => {
+    setGraph(next);
+    setUndo([]);
+    setRedo([]);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setPendingConnection(null);
+    reseedIdsFromGraph(next);
+    setRecenterToken((value) => value + 1);
+  };
+
+  /**
+   * Open the add-module menu in the middle of the view.
+   *
+   * The same menu the canvas opens on right-click, so the two routes cannot
+   * drift apart — but reachable from the bar, which is where someone who has
+   * not been told about right-click will look.
+   */
+  const openAddMenu = () => {
+    const viewport = viewportRef.current;
+    const x = viewport ? viewport.scrollLeft + viewport.clientWidth / 2 : canvasSize.width / 2;
+    const y = viewport ? viewport.scrollTop + viewport.clientHeight / 2 : canvasSize.height / 2;
+    setMenuQuery("");
+    setMenu({ x, y, graphX: x / zoom, graphY: y / zoom });
+  };
+
+  const nudgeZoom = (delta: number) =>
+    setZoom((value) => Math.min(1.1, Math.max(0.12, Math.round((value + delta) * 100) / 100)));
+
+  const menuActions: MenuActions = {
+    new: { run: () => loadGraph(starterGraph()) },
+    template1: { run: () => loadGraph(streamTemplate(1)) },
+    template4: { run: () => loadGraph(streamTemplate(4)) },
+    template8: { run: () => loadGraph(streamTemplate(8)) },
+    template16: { run: () => loadGraph(streamTemplate(16)) },
+    open: { run: () => openInputRef.current?.click() },
+    save: { run: save },
+    savePack: { run: savePack },
+
+    undo: { run: undoLast, enabled: undo.length > 0 },
+    redo: { run: redoLast, enabled: redo.length > 0 },
+    duplicate: { run: duplicateSelection, enabled: Boolean(selectedNodeId) },
+    delete: {
+      run: deleteSelection,
+      enabled: Boolean(selectedNodeId) || Boolean(selectedEdgeId),
+    },
+
+    addModule: { run: openAddMenu },
+    center: { run: () => setRecenterToken((value) => value + 1) },
+
+    zoomIn: { run: () => nudgeZoom(0.1), enabled: zoom < 1.1 },
+    zoomOut: { run: () => nudgeZoom(-0.1), enabled: zoom > 0.12 },
+    zoomReset: { run: () => setZoom(1) },
+    hand: { run: () => setHandMode((value) => !value), checked: handMode },
+    sounds: { run: () => setPoolOpen((value) => !value), checked: poolOpen },
+  };
+
   useEffect(() => () => runtimeRef.current?.stop(), []);
   return <SoundPoolContext.Provider value={{ assets, preview: playAsset }}>
   <KitContext.Provider value={kitId}>
@@ -2091,47 +2150,15 @@ export function ModularApp() {
     />
     <header className="mm-project-bar">
       <div><strong>idMLab</strong><span>Untitled.idmlab</span></div>
-      <nav aria-label="Project controls">
-        <button type="button" onClick={() => {
-          const next = starterGraph();
-          setGraph(next); setUndo([]); setRedo([]); setSelectedNodeId(null); setSelectedEdgeId(null); setPendingConnection(null);
-          reseedIdsFromGraph(next); setRecenterToken((value) => value + 1);
-        }}>New</button>
-        <button type="button" onClick={() => {
-          const next = streamTemplate(1);
-          setGraph(next); setUndo([]); setRedo([]); setSelectedNodeId(null); setSelectedEdgeId(null); setPendingConnection(null);
-          reseedIdsFromGraph(next); setRecenterToken((value) => value + 1);
-        }}>1 Stream</button>
-        <button type="button" onClick={() => {
-          const next = streamTemplate(4);
-          setGraph(next); setUndo([]); setRedo([]); setSelectedNodeId(null); setSelectedEdgeId(null); setPendingConnection(null);
-          reseedIdsFromGraph(next); setRecenterToken((value) => value + 1);
-        }}>4 Streams</button>
-        <button type="button" onClick={() => {
-          const next = streamTemplate(8);
-          setGraph(next); setUndo([]); setRedo([]); setSelectedNodeId(null); setSelectedEdgeId(null); setPendingConnection(null);
-          reseedIdsFromGraph(next); setRecenterToken((value) => value + 1);
-        }}>8 Streams</button>
-        <button type="button" onClick={() => {
-          const next = streamTemplate(16);
-          setGraph(next); setUndo([]); setRedo([]); setSelectedNodeId(null); setSelectedEdgeId(null); setPendingConnection(null);
-          reseedIdsFromGraph(next); setRecenterToken((value) => value + 1);
-        }}>16 Streams</button>
-        <button type="button" onClick={() => openInputRef.current?.click()}>Open</button>
-        <button type="button" onClick={save}>Save</button>
-        <button type="button" onClick={savePack} title="Save the project with its samples inside it">Save + samples</button>
-        <button type="button" onClick={undoLast} disabled={!undo.length}>Undo</button>
-        <button type="button" onClick={redoLast} disabled={!redo.length}>Redo</button>
-        <button type="button" onClick={duplicateSelection} disabled={!selectedNodeId}>Duplicate</button>
-        <button type="button" onClick={deleteSelection} disabled={!selectedNodeId && !selectedEdgeId}>Delete</button>
-        <button type="button" className={handMode ? "is-active" : ""}
-          aria-pressed={handMode} onClick={() => setHandMode((value) => !value)}>Hand</button>
-        <button type="button" title="Bring the view back to the patch"
-          onClick={() => setRecenterToken((value) => value + 1)}>Center</button>
+      <MenuBar actions={menuActions} />
+      {/* The pickers stay as controls rather than becoming menu items: a
+          continuous value and a fifty-entry swatch list are both things you
+          steer, not commands you issue. */}
+      <nav aria-label="View controls">
+        {/* The engine toggle stays a button: it is the control reached for
+            most often, and it reads at a glance whether sound is running. */}
         <button type="button" className={audioOn ? "is-active" : ""}
           aria-pressed={audioOn} onClick={toggleAudio}>Audio</button>
-        <button type="button" className={poolOpen ? "is-active" : ""}
-          aria-pressed={poolOpen} onClick={() => setPoolOpen((value) => !value)}>Sounds</button>
         <label>Zoom <input type="range" min="12" max="110" value={Math.round(zoom * 100)}
           onChange={(event) => setZoom(Number(event.currentTarget.value) / 100)} /></label>
         <ThemePicker themeId={themeId} onSelect={setThemeId} />

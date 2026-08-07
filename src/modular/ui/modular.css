@@ -61,6 +61,42 @@ button { cursor: pointer; }
   box-shadow: 0 0 12px color-mix(in srgb, var(--ac-on) 32%, transparent);
 }
 
+/* The menu bar.
+   Built from the same tokens as everything else in the project bar, so it
+   follows whichever of the fifty themes is active rather than carrying a look
+   of its own. */
+.mm-menu { display: flex; align-items: center; gap: 2px; }
+.mm-menu__slot { position: relative; display: inline-flex; }
+.mm-menu__title {
+  border: 1px solid transparent; border-radius: 5px; background: transparent;
+  color: var(--tx-700); padding: 5px 10px; font-size: 12px; font-weight: 600;
+  cursor: pointer;
+}
+.mm-menu__title:hover { background: var(--hv-100); color: var(--tx-800); }
+.mm-menu__title.is-open {
+  background: var(--ac-on); color: var(--mm-on-accent); border-color: var(--ac-on);
+}
+.mm-menu__list {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 60;
+  min-width: 190px; padding: 4px;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--bd-200); border-radius: 7px;
+  background: var(--s-card);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 28%);
+}
+.mm-menu__item {
+  display: flex; align-items: center; width: 100%;
+  border: 0; border-radius: 4px; background: transparent;
+  color: var(--tx-700); padding: 5px 10px; font-size: 12px;
+  text-align: left; white-space: nowrap; cursor: pointer;
+}
+.mm-menu__item:hover:not(:disabled) { background: var(--ac-on); color: var(--mm-on-accent); }
+.mm-menu__item:disabled { opacity: .38; cursor: default; }
+/* Every item in a menu that holds a toggle reserves the tick column, so the
+   labels stay in one line whether or not one is on. */
+.mm-menu__check { display: inline-block; width: 14px; flex: none; }
+.mm-menu__separator { height: 0; margin: 4px 6px; border: 0; border-top: 1px solid var(--bd-100); }
+
 .mm-canvas-viewport { position: relative; overflow: auto; background-color: var(--mm-canvas); }
 .mm-canvas-viewport.is-hand { cursor: grab; touch-action: none; }
 .mm-canvas-viewport.is-panning { cursor: grabbing; user-select: none; }
