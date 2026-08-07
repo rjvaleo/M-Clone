@@ -3,7 +3,7 @@
 
 import { MRuntime } from "../engine/runtime";
 import { useM } from "../state/store";
-import { decodeMidiMessage, mapAssignedInputChannel } from "../engine/midiinput";
+import { decodeMidiMessage, isChannelMessage, mapAssignedInputChannel } from "../engine/midiinput";
 
 let runtime: MRuntime | null = null;
 
@@ -19,6 +19,12 @@ export function getRuntime(): MRuntime {
           if (!event.data) return;
           const message = decodeMidiMessage(event.data);
           if (!message) return;
+          // Clock and transport carry no channel, so they are taken by the
+          // runtime's follower and never reach the channel routing below.
+          if (!isChannelMessage(message)) {
+            getRuntime().ingestClockMessage(message, performance.now() / 1000);
+            return;
+          }
           const deviceId = (event.currentTarget as MIDIInput | null)?.id ?? null;
           const mappedChannel = mapAssignedInputChannel(
             useM.getState().project.midiAssignments.inputs, deviceId, message.channel,
@@ -54,6 +60,7 @@ export function getRuntime(): MRuntime {
             useMetronome: state.options.useMetronome,
             sendClock: state.options.sendClock,
             syncRatio: state.syncRatio,
+            externalClock: state.options.externalClock,
             syncRatioDirection: state.syncRatioDirection,
           };
         },

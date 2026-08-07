@@ -89,7 +89,7 @@ import {
   type MidiViewEvent,
 } from "../engine/midiview";
 import type { PlannedNote, PlannedStep } from "../engine/planner";
-import type { DecodedMidiMessage, MidiInputVoice } from "../engine/midiinput";
+import type { ChannelMidiMessage, MidiInputVoice } from "../engine/midiinput";
 import { applyRecordedNotes, routeMidiNote } from "../engine/midiinput";
 import {
   decodeInputControl,
@@ -293,7 +293,7 @@ export type MStore = {
   ) => void;
   setMidiAssignmentConfig: (value: Partial<ProjectState["midiAssignments"]>) => void;
   toggleEchoMapChannel: (channel: number) => void;
-  receiveMidi: (message: DecodedMidiMessage) => MidiInputResponse[];
+  receiveMidi: (message: ChannelMidiMessage) => MidiInputResponse[];
   advanceMouseVoices: (velocity: number) => MidiInputResponse[];
 
   setTempo: (bpm: number) => void;

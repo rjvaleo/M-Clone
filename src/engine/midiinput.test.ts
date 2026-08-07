@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyRecordedNotes,
   decodeMidiMessage,
+  isChannelMessage,
   mapAssignedInputChannel,
   routeMidiNote,
   type MidiInputVoice,
@@ -62,3 +63,62 @@ describe("live MIDI input", () => {
     ]);
   });
 });
+
+describe("system realtime and position messages", () => {
+  // These are how a clock source drives a follower. They are one byte long,
+  // except Song Position Pointer, so the decoder cannot assume three.
+  it("decodes a clock pulse", () => {
+    expect(decodeMidiMessage([0xf8])).toEqual({ type: "clock" });
+  });
+
+  it("decodes start, continue and stop", () => {
+    expect(decodeMidiMessage([0xfa])).toEqual({ type: "start" });
+    expect(decodeMidiMessage([0xfb])).toEqual({ type: "continue" });
+    expect(decodeMidiMessage([0xfc])).toEqual({ type: "stop" });
+  });
+
+  it("decodes a Song Position Pointer from its two seven-bit halves", () => {
+    // 14 bits, least significant first: 0x0a | (0x01 << 7) = 138 sixteenths.
+    expect(decodeMidiMessage([0xf2, 0x0a, 0x01]))
+      .toEqual({ type: "song-position", sixteenths: 138 });
+    expect(decodeMidiMessage([0xf2, 0x00, 0x00]))
+      .toEqual({ type: "song-position", sixteenths: 0 });
+    expect(decodeMidiMessage([0xf2, 0x7f, 0x7f]))
+      .toEqual({ type: "song-position", sixteenths: 16383 });
+  });
+
+  it("refuses a truncated Song Position Pointer", () => {
+    // Unlike the realtime bytes, SPP carries two data bytes. A cut-short one
+    // must not be read as position zero.
+    expect(decodeMidiMessage([0xf2])).toBeNull();
+    expect(decodeMidiMessage([0xf2, 0x0a])).toBeNull();
+  });
+
+  it("ignores realtime messages it has no use for", () => {
+    // Active Sensing arrives constantly from some hardware; treating it as
+    // anything would be worse than dropping it.
+    expect(decodeMidiMessage([0xfe])).toBeNull();
+    expect(decodeMidiMessage([0xff])).toBeNull();
+  });
+
+  it("still refuses a truncated channel message", () => {
+    expect(decodeMidiMessage([0x90, 60])).toBeNull();
+    expect(decodeMidiMessage([])).toBeNull();
+  });
+})
+
+describe("telling channel messages from system ones", () => {
+  it("accepts the messages that can be routed to a Voice", () => {
+    expect(isChannelMessage({ type: "note-on", channel: 1, note: 60, velocity: 100 })).toBe(true);
+    expect(isChannelMessage({ type: "note-off", channel: 1, note: 60, velocity: 0 })).toBe(true);
+    expect(isChannelMessage({ type: "control", channel: 1, controller: 7, value: 90 })).toBe(true);
+  });
+
+  it("rejects the ones that carry no channel", () => {
+    expect(isChannelMessage({ type: "clock" })).toBe(false);
+    expect(isChannelMessage({ type: "start" })).toBe(false);
+    expect(isChannelMessage({ type: "continue" })).toBe(false);
+    expect(isChannelMessage({ type: "stop" })).toBe(false);
+    expect(isChannelMessage({ type: "song-position", sixteenths: 4 })).toBe(false);
+  });
+})
