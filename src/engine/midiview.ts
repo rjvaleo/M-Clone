@@ -30,6 +30,14 @@ export type MidiViewEvent = {
    * and trusting it.
    */
   source?: "original" | "cyclic" | "utterly";
+  /**
+   * The scale in force when the note was planned.
+   *
+   * Stamped at capture rather than read at render: rows already on screen
+   * were played under whatever scale was set then, and re-labelling them when
+   * the scale changes would make the history lie.
+   */
+  scale?: ScaleName;
 };
 
 export const MIDI_VIEW_LIMIT = 1000;
@@ -110,6 +118,7 @@ export type MidiViewRow = {
 export function eventsForPlannedNotes(
   notes: readonly PlannedNote[],
   firstId: number,
+  scale?: ScaleName,
 ): MidiViewEvent[] {
   const events = notes.flatMap((note, index) => {
     const noteName = midiToName(note.note);
@@ -131,6 +140,7 @@ export function eventsForPlannedNotes(
           durationTicks: note.durationTicks ?? 0,
         }),
         ...(note.source === undefined ? {} : { source: note.source }),
+        ...(scale === undefined ? {} : { scale }),
       },
       {
         id: firstId + index * 2 + 1,
@@ -147,6 +157,7 @@ export function eventsForPlannedNotes(
           durationTicks: 0,
         }),
         ...(note.source === undefined ? {} : { source: note.source }),
+        ...(scale === undefined ? {} : { scale }),
       },
     ];
   });
