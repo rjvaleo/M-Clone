@@ -85,18 +85,24 @@ import {
  */
 
 /**
- * The order the add menu offers modules in: the order they are wired, from the
- * clock through to the output. With forty-plus modules an alphabetical list is
- * a lookup table; grouped by signal domain it is a description of the chain.
+ * The order the add menu offers modules in.
+ *
+ * Reached-for first, not wired-first. This used to run the length of the
+ * signal chain, clock through to output, which reads well as a description of
+ * the system and puts the three things most often added — an effect, an
+ * instrument, a pattern source — at the bottom of a forty-plus item list.
+ *
+ * Audio, instruments and sequencers lead. The rest keep their signal-flow
+ * order behind them, since that is still the best way to read the remainder.
  */
 const MODULE_GROUPS: { family: string; label: string }[] = [
+  { family: "audio", label: "Audio" },
+  { family: "instrument", label: "Instruments" },
+  { family: "source", label: "Sequencers" },
   { family: "clock", label: "Clock and transport" },
-  { family: "source", label: "Pattern material" },
   { family: "transform", label: "Note transforms" },
   { family: "control", label: "Control and conducting" },
   { family: "routing", label: "Routing and output" },
-  { family: "instrument", label: "Instruments" },
-  { family: "audio", label: "Audio" },
 ];
 
 /**

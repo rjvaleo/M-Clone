@@ -51,7 +51,8 @@ export const OPTION_LABELS: Record<OptionId, string> = {
  * hidden or silently inert.
  */
 const NEEDS_MIDI_INPUT: ReadonlySet<OptionId> = new Set<OptionId>([
-  "externalClock",
+  // Empty. External Clock lived here until the clock follower existed; every
+  // option now reaches something real.
 ]);
 
 export function isOptionAvailable(id: OptionId): boolean {
