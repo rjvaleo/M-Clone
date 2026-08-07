@@ -1,7 +1,7 @@
 /**
  * The rest of Classic M, decomposed into modules.
  *
- * Everything here comes from the catalogue in `MODULAR_IMPLEMENTATION_PLAN.md`
+ * Everything here comes from the catalogue in `IDMLAB_MASTER_PLAN.md`
  * §7.4–§7.6. Each one is a single-stream node with its complete working face
  * and, where the original workflow used preset views, eight embedded positions.
  *
@@ -11,6 +11,7 @@
  */
 
 import type { ModuleDescriptor } from "../model/graph";
+import { SCALES as SCALE_LIBRARY } from "../tuning/scales";
 import {
   boolParam,
   command,
@@ -42,7 +43,20 @@ import {
 } from "./descriptorKit";
 
 const CHANNELS = ["all", ...Array.from({ length: 16 }, (_, i) => String(i + 1))];
-const SCALES = ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "chromatic"];
+/**
+ * Every scale the harmony modules offer, by id.
+ *
+ * Taken from the tuning library rather than written out here. There used to be
+ * a local list of eight 12-TET mode names in this spot, which meant the eighty
+ * -one scales in `tuning/scales.ts` — the maqamat, the historical
+ * temperaments, the EDOs, Partch — existed in the codebase and could not be
+ * chosen anywhere in the app.
+ *
+ * Ids rather than names because a document stores this value: `scaleById`
+ * guarantees the id is stable across releases, while a display name is free to
+ * be reworded.
+ */
+const SCALES = SCALE_LIBRARY.map((scale) => scale.id);
 const ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 // ---- clock and transport ---------------------------------------------------
@@ -284,7 +298,7 @@ const SCALE_CONTEXT = defineModule({
   ],
   parameters: [
     enumParam("root", "Root", ROOTS, "C"),
-    enumParam("scale", "Scale", SCALES, "major"),
+    enumParam("scale", "Scale", SCALES, "ionian-major"),
   ],
   commands: [],
   face: [
@@ -305,7 +319,7 @@ const SCALE_QUANTIZER = defineModule({
   ],
   parameters: [
     enumParam("root", "Root", ROOTS, "C"),
-    enumParam("scale", "Scale", SCALES, "major"),
+    enumParam("scale", "Scale", SCALES, "ionian-major"),
     enumParam("direction", "Snap direction", ["nearest", "down", "up"], "nearest"),
     boolParam("enabled", "Enabled", true),
   ],

@@ -615,12 +615,22 @@ export const SCALES: readonly Scale[] = [
 
 const BY_ID = new Map(SCALES.map((scale) => [scale.id, scale]));
 
-/** Look a scale up by the id a document stored. */
+/**
+ * Look a scale up by the id a document stored.
+ *
+ * Throws on an unknown id, which is right for code that has just written the
+ * id itself — a typo there is a bug and should be loud. It is *not* right on
+ * the note-scheduling path, where the id came from a saved project and a scale
+ * renamed between releases must not take playback down; see `findScale`.
+ */
 export function scaleById(id: string): Scale {
   const scale = BY_ID.get(id);
   if (!scale) throw new Error(`Unknown scale: ${id}`);
   return scale;
 }
+
+/** Look a scale up, or get nothing back. For ids that came from a document. */
+export const findScale = (id: string): Scale | undefined => BY_ID.get(id);
 
 /** Every scale in one category, in the order the library lists them. */
 export const scalesInCategory = (category: ScaleCategory): Scale[] =>

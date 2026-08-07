@@ -468,6 +468,7 @@ describe("Routing note events to players", () => {
     sequence: 0,
     portId: "p1",
     channel: 1,
+    detuneCents: 0,
     note: 36,
     velocity: 100,
     program: 0,

@@ -1,0 +1,2767 @@
+{
+ "EQ - DDL - WITH LFO": {
+  "params": [
+   {
+    "index": 3,
+    "name": "DDL+LFO Left Delay Time",
+    "range": "0 to 845 ms"
+   },
+   {
+    "index": 4,
+    "name": "DDL+LFO Right Delay Time",
+    "range": "0 to 845 ms"
+   },
+   {
+    "index": 5,
+    "name": "DDL+LFO LFO Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "DDL+LFO LFO Width",
+    "range": "00 to 99"
+   },
+   {
+    "index": 7,
+    "name": "Left/Right LFO",
+    "range": "Out-of-Phase or"
+   },
+   {
+    "index": 8,
+    "name": "DDL+LFO Delay Regen",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 9,
+    "name": "DDL+LFO Delay Cross Regen",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 10,
+    "name": "DDL+LFO Regen Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 11,
+    "name": "DDL+LFO Right Delay Input",
+    "range": "Off or"
+   },
+   {
+    "index": 12,
+    "name": "DDL+LFO Right Output Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "Bass Fc",
+    "range": "0 to 1000"
+   },
+   {
+    "index": 14,
+    "name": "Bass EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 15,
+    "name": "Treble Fc",
+    "range": "01KHz to 16KHz"
+   },
+   {
+    "index": 16,
+    "name": "Treble EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 17,
+    "name": "EQ Input Level Trim",
+    "range": "-24 to +00 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "FLANGER": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Flanger LFO Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 4,
+    "name": "Flanger LFO Width",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Flanger Center",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "Flanger Feedback",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 7,
+    "name": "Flanger Notch Depth",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 8,
+    "name": "Left/Right LFO",
+    "range": "Out-of-Phase or"
+   },
+   {
+    "index": 9,
+    "name": "Flanger Sample & Hold Rate",
+    "range": "Off, 001 to 100"
+   },
+   {
+    "index": 10,
+    "name": "Flanger Left Delay Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 11,
+    "name": "Flanger Right Delay Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 12,
+    "name": "Flanger Delay Feedback",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 13,
+    "name": "Flanger Left Echo Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 14,
+    "name": "Flanger Right Echo Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 15,
+    "name": "Flanger Echo Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 16,
+    "name": "Bass Fc",
+    "range": "0 to 1000"
+   },
+   {
+    "index": 17,
+    "name": "EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 18,
+    "name": "Treble Fc",
+    "range": "01KHz to 16KHz"
+   },
+   {
+    "index": 19,
+    "name": "EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 20,
+    "name": "EQ Input Level Trim",
+    "range": "-24 to +00 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "EQ - PANNER - DDL": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Panner Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 4,
+    "name": "Panner Width",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Left/Right LFO",
+    "range": "Out-of-Phase or"
+   },
+   {
+    "index": 6,
+    "name": "Panner Sample & Hold Rate",
+    "range": "Off, 001 to 100"
+   },
+   {
+    "index": 7,
+    "name": "Panner Left Delay Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 8,
+    "name": "Panner Right Delay Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 9,
+    "name": "Panner Delay Regen",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 10,
+    "name": "Panner Left Echo Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 11,
+    "name": "Panner Right Echo Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 12,
+    "name": "Panner Echo Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "Bass Fc",
+    "range": "0 to 1000"
+   },
+   {
+    "index": 14,
+    "name": "Bass EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 15,
+    "name": "Treble Fc",
+    "range": "01KHz to 16KHz"
+   },
+   {
+    "index": 16,
+    "name": "Treble EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 17,
+    "name": "EQ Input Level Trim",
+    "range": "-24 to +00 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "EQ - TREMOLO - DDL": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Tremolo Rate",
+    "range": "000 to 200"
+   },
+   {
+    "index": 4,
+    "name": "Tremolo Depth",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Left/Right LFO",
+    "range": "Out-of-Phase or"
+   },
+   {
+    "index": 6,
+    "name": "Tremolo Sample & Hold Rate",
+    "range": "Off, 001 to 100"
+   },
+   {
+    "index": 7,
+    "name": "Tremolo Left Delay Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 8,
+    "name": "Tremolo Right Delay Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 9,
+    "name": "Tremolo Delay Regen",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 10,
+    "name": "Tremolo Left Echo Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 11,
+    "name": "Tremolo Right Echo Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 12,
+    "name": "Tremolo Echo Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "Bass Fc",
+    "range": "0 to 1000"
+   },
+   {
+    "index": 14,
+    "name": "Bass EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 15,
+    "name": "Treble Fc",
+    "range": "01KHz to 16KHz"
+   },
+   {
+    "index": 16,
+    "name": "Treble EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 17,
+    "name": "EQ Input Level Trim",
+    "range": "-24 to +00 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "EQ - VIBRATO - DDL": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Vibrato Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 4,
+    "name": "Vibrato Width",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Left/Right LFO",
+    "range": "Out-of-Phase or"
+   },
+   {
+    "index": 6,
+    "name": "Vibrato Sample & Hold Rate",
+    "range": "Off, 001 to 100"
+   },
+   {
+    "index": 7,
+    "name": "Vibrato Left Delay Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 8,
+    "name": "Vibrato Right Delay Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 9,
+    "name": "Vibrato Delay Regen",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 10,
+    "name": "Vibrato Left Echo Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 11,
+    "name": "Vibrato Right Echo Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 12,
+    "name": "Vibrato Echo Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "Bass Fc",
+    "range": "0 to 1000"
+   },
+   {
+    "index": 14,
+    "name": "Bass EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 15,
+    "name": "Treble Fc",
+    "range": "01KHz to 16KHz"
+   },
+   {
+    "index": 16,
+    "name": "Treble EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 17,
+    "name": "EQ Input Level Trim",
+    "range": "-24 to +00 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "EXPANDER": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Exp Ratio",
+    "range": "1:1 to 1:40, infinity"
+   },
+   {
+    "index": 4,
+    "name": "Exp Threshold",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 5,
+    "name": "Gain Change",
+    "range": "N/A"
+   },
+   {
+    "index": 6,
+    "name": "Exp Attack",
+    "range": "50\\265s to 100ms"
+   },
+   {
+    "index": 7,
+    "name": "Exp Release",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 8,
+    "name": "Expander Gate Hold Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 9,
+    "name": "Sidechain EQ Gain",
+    "range": "-48 to +48 dB"
+   },
+   {
+    "index": 10,
+    "name": "HighPass Fc",
+    "range": "4 to 8000"
+   },
+   {
+    "index": 11,
+    "name": "LowPass Fc",
+    "range": "100"
+   },
+   {
+    "index": 12,
+    "name": "Trigger Mask",
+    "range": "Off or"
+   },
+   {
+    "index": 13,
+    "name": "Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 14,
+    "name": "Trig Mask Lower Threshold",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 15,
+    "name": "Expander Output Gain",
+    "range": "-48 to +48 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "FAST PITCH SHIFT": {
+  "params": [
+   {
+    "index": 3,
+    "name": "PitchShifter Vc 1 Fine",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 4,
+    "name": "PitchShifter Vc 1 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "PitchShifter Vc 1 Pan",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 6,
+    "name": "PitchShifter Vc 2 Fine",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 7,
+    "name": "PitchShifter Vc 2 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 8,
+    "name": "PitchShifter Vc 2 Pan",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 9,
+    "name": "PitchShifter LFO Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 10,
+    "name": "PitchShifter LFO Width",
+    "range": "00 to 99"
+   }
+  ],
+  "confidence": "check"
+ },
+ "EQ - FLANGER - DDL": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Flanger LFO Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 4,
+    "name": "Flanger LFO Width",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Flanger Center",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "Flanger Regen",
+    "range": "-99 to +99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "GATED REVERB": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Attack",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 4,
+    "name": "Hold Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 5,
+    "name": "Decay",
+    "range": "0.20 to 100.0 sec"
+   },
+   {
+    "index": 6,
+    "name": "Release Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 7,
+    "name": "Trigger Threshold",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 8,
+    "name": "Retrigger Threshold",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 9,
+    "name": "HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 10,
+    "name": "Diffusion 1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 11,
+    "name": "Diffusion 2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 12,
+    "name": "Decay Definition",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "Slapback",
+    "range": "0 to 500 ms"
+   },
+   {
+    "index": 14,
+    "name": "Slapback Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 19,
+    "name": "Left/Right Balance",
+    "range": "-99 to +99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "GUITAR AMP 2": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Amp Preamp Gain",
+    "range": "-48 to +48 dB"
+   },
+   {
+    "index": 4,
+    "name": "Output Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Amp Tube Bias",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "Pre-EQ Input Level Trim",
+    "range": "-24 to +00 dB"
+   },
+   {
+    "index": 7,
+    "name": "Pre-EQ High Pass Cutoff",
+    "range": "4 to 1000"
+   },
+   {
+    "index": 8,
+    "name": "Pre-EQ Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 9,
+    "name": "Pre-EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 10,
+    "name": "Pre-EQ Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 11,
+    "name": "Noise Gate Off Below",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 12,
+    "name": "Noise Gate On Above",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 13,
+    "name": "Gate Release Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 14,
+    "name": "Speaker High Pass Cutoff",
+    "range": "4 to 1000"
+   },
+   {
+    "index": 15,
+    "name": "OutEQ1 Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 16,
+    "name": "OutEQ1 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 17,
+    "name": "OutEQ1 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 18,
+    "name": "OutEQ2 Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 19,
+    "name": "OutEQ2 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 20,
+    "name": "OutEQ2 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 21,
+    "name": "Speaker Low Pass Cutoff",
+    "range": "2.0 to 16.0 KHz"
+   }
+  ],
+  "confidence": "good"
+ },
+ "INVERSE EXPANDER": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Preamp Gain",
+    "range": "-48 to +48 dB"
+   },
+   {
+    "index": 4,
+    "name": "Output Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "PreEQ Input Level Trim",
+    "range": "-24 to +00 dB"
+   },
+   {
+    "index": 6,
+    "name": "Pre-EQ Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 7,
+    "name": "Pre-EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 8,
+    "name": "Pre-EQ Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 9,
+    "name": "ExpndRatio",
+    "range": "1:1 to 40:1, infinity"
+   },
+   {
+    "index": 10,
+    "name": "Threshold",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 11,
+    "name": "Gain Change",
+    "range": "N/A"
+   },
+   {
+    "index": 12,
+    "name": "Noise Gate Off Below",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 13,
+    "name": "Noise Gate On Above",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 14,
+    "name": "Gate Release Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 15,
+    "name": "Speaker High Pass Cutoff",
+    "range": "4 to 1000"
+   },
+   {
+    "index": 16,
+    "name": "OutEQ1 Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 17,
+    "name": "OutEQ1 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 18,
+    "name": "OutEQ1 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 19,
+    "name": "OutEQ2 Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 20,
+    "name": "OutEQ2 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 21,
+    "name": "OutEQ2 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 22,
+    "name": "Speaker Low Pass Cutoff",
+    "range": "2.0 to 16.0 KHz"
+   }
+  ],
+  "confidence": "good"
+ },
+ "GUITAR AMP 4": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Amp Preamp Gain",
+    "range": "-48 to +48 dB"
+   },
+   {
+    "index": 4,
+    "name": "Output Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Amp Level Detect Attack",
+    "range": "50\\265s to 100ms"
+   },
+   {
+    "index": 6,
+    "name": "Amp Level Detect Release",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 7,
+    "name": "Amp Tube Bias",
+    "range": "00 to 99"
+   },
+   {
+    "index": 8,
+    "name": "Pre-EQ InputLevel Trim",
+    "range": "-18 to +06 dB"
+   },
+   {
+    "index": 9,
+    "name": "Pre-EQHighPass Cutoff",
+    "range": "4 to 1000"
+   },
+   {
+    "index": 10,
+    "name": "Pre-EQ Fc",
+    "range": "5 to 9999"
+   },
+   {
+    "index": 11,
+    "name": "Pre-EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 12,
+    "name": "Pre-EQ Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 13,
+    "name": "Noise Gate Off Below",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 14,
+    "name": "Gate Release Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 15,
+    "name": "Speaker HighPass Cutoff",
+    "range": "4 to 1000"
+   },
+   {
+    "index": 16,
+    "name": "OutEQ1 Fc",
+    "range": "5 to 9999"
+   },
+   {
+    "index": 17,
+    "name": "OutEQ1 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 18,
+    "name": "OutEQ1 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 19,
+    "name": "OutEQ2 Fc",
+    "range": "5 to 9999"
+   },
+   {
+    "index": 20,
+    "name": "OutEQ2 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 21,
+    "name": "OutEQ2 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 22,
+    "name": "Speaker Low Pass Cutoff",
+    "range": "2.0 to 16.0 KHz"
+   }
+  ],
+  "confidence": "good"
+ },
+ "GUITAR TUNER": {
+  "params": [
+   {
+    "index": 1,
+    "name": "Mix",
+    "range": "00 to 99"
+   },
+   {
+    "index": 2,
+    "name": "Volume",
+    "range": "00 to 99"
+   },
+   {
+    "index": 3,
+    "name": "Note",
+    "range": "A to G#"
+   },
+   {
+    "index": 4,
+    "name": "Range",
+    "range": "Bass or"
+   },
+   {
+    "index": 6,
+    "name": "Reference",
+    "range": "A438 to A445"
+   }
+  ],
+  "confidence": "check"
+ },
+ "HALL REVERB": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Decay",
+    "range": "0.70 to 250.0 sec"
+   },
+   {
+    "index": 4,
+    "name": "Predelay Time",
+    "range": "0 to 450 ms"
+   },
+   {
+    "index": 5,
+    "name": "LF DecayTime",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 6,
+    "name": "HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 7,
+    "name": "HF Bandwidth",
+    "range": "01 to 99"
+   },
+   {
+    "index": 8,
+    "name": "Diffusion1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 9,
+    "name": "Diffusion2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 10,
+    "name": "Decay Definition",
+    "range": "00 to 99"
+   },
+   {
+    "index": 11,
+    "name": "Detune Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 12,
+    "name": "Detune Depth",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "Primary Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 14,
+    "name": "Ref 1 Time",
+    "range": "0 to 120 milliseconds"
+   },
+   {
+    "index": 15,
+    "name": "Ref 1 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 16,
+    "name": "Ref 1 Send",
+    "range": "00 to 99"
+   },
+   {
+    "index": 17,
+    "name": "Ref 2 Time",
+    "range": "0 to 120 milliseconds"
+   },
+   {
+    "index": 18,
+    "name": "Ref 2 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 19,
+    "name": "Ref 2 Send",
+    "range": "00 to 99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "KEYED EXPANDER": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Exp Ratio",
+    "range": "1:1 to 1:40, infinity"
+   },
+   {
+    "index": 4,
+    "name": "Exp Threshold",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 5,
+    "name": "Gain Change",
+    "range": "N/A"
+   },
+   {
+    "index": 6,
+    "name": "Exp Attack",
+    "range": "50\\265s to 100ms"
+   },
+   {
+    "index": 7,
+    "name": "Exp Release",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 8,
+    "name": "Expander Gate Hold Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 9,
+    "name": "Sidechain EQ Gain",
+    "range": "-48 to +48 dB"
+   },
+   {
+    "index": 10,
+    "name": "HighPass Fc",
+    "range": "4 to 8000"
+   },
+   {
+    "index": 11,
+    "name": "LowPass Fc",
+    "range": "100"
+   },
+   {
+    "index": 12,
+    "name": "Trigger Mask",
+    "range": "Off or"
+   },
+   {
+    "index": 13,
+    "name": "Trigger Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 14,
+    "name": "Trigger Mask Threshold",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 15,
+    "name": "Expander Output Mix",
+    "range": "00 to 99"
+   },
+   {
+    "index": 16,
+    "name": "Expander Output Gain",
+    "range": "-48 to +48 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "SMALL PLATE": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Decay",
+    "range": "0.40 to 140.0 sec"
+   },
+   {
+    "index": 4,
+    "name": "Predelay Time",
+    "range": "0 to 430 ms"
+   },
+   {
+    "index": 5,
+    "name": "HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "HF Bandwidth",
+    "range": "01 to 99"
+   },
+   {
+    "index": 7,
+    "name": "Diffusion 1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 8,
+    "name": "Diffusion 2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 9,
+    "name": "Decay Definition",
+    "range": "00 to 99"
+   },
+   {
+    "index": 14,
+    "name": "Left/Right Balance",
+    "range": "-99 to +99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "LARGE ROOM REV": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Decay",
+    "range": "0.20 to 150.0 sec"
+   },
+   {
+    "index": 4,
+    "name": "Predelay Time",
+    "range": "0 to 450 ms"
+   },
+   {
+    "index": 5,
+    "name": "LF DecayTime",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 6,
+    "name": "HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 7,
+    "name": "HF Bandwidth",
+    "range": "01 to 99"
+   },
+   {
+    "index": 8,
+    "name": "Diffusion1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 9,
+    "name": "Diffusion2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 10,
+    "name": "Decay Definition",
+    "range": "00 to 99"
+   },
+   {
+    "index": 11,
+    "name": "Detune Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 12,
+    "name": "Detune Depth",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "Primary Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 14,
+    "name": "Ref 1 Time",
+    "range": "0 to 120 milliseconds"
+   },
+   {
+    "index": 15,
+    "name": "Ref 1 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 16,
+    "name": "Ref 1 Send",
+    "range": "00 to 99"
+   },
+   {
+    "index": 17,
+    "name": "Ref 2 Time",
+    "range": "0 to 120 milliseconds"
+   },
+   {
+    "index": 18,
+    "name": "Ref 2 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 19,
+    "name": "Ref 2 Send",
+    "range": "00 to 99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "MULTI TAP DELAY": {
+  "params": [
+   {
+    "index": 1,
+    "name": "Mix",
+    "range": "00 to 99"
+   },
+   {
+    "index": 2,
+    "name": "Volume",
+    "range": "00 to 99"
+   },
+   {
+    "index": 12,
+    "name": "NonLin HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "NonLin HF Bandwidth",
+    "range": "01 to 99"
+   },
+   {
+    "index": 14,
+    "name": "NonLin Diffusion1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 15,
+    "name": "NonLin Diffusion2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 16,
+    "name": "NonLin Density 1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 17,
+    "name": "NonLin Density 2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 18,
+    "name": "NonLin Primary Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 19,
+    "name": "Reflection 1 Time Non Lin 1, 3",
+    "range": "0 to 600 ms"
+   },
+   {
+    "index": 20,
+    "name": "Reflection 1 Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 21,
+    "name": "Reflection 2 Time Non Lin 1, 3",
+    "range": "0 to 600 ms"
+   },
+   {
+    "index": 22,
+    "name": "Reflection 2 Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 23,
+    "name": "Left/Right Balance",
+    "range": "-99 to +99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "NO EFFECT": {
+  "params": [
+   {
+    "index": 1,
+    "name": "Mix",
+    "range": "00 to 99"
+   },
+   {
+    "index": 2,
+    "name": "Volume",
+    "range": "00 to 99"
+   },
+   {
+    "index": 12,
+    "name": "NonLin HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "NonLin HF Bandwidth",
+    "range": "01 to 99"
+   },
+   {
+    "index": 14,
+    "name": "NonLin Diffusion1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 15,
+    "name": "NonLin Diffusion2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 16,
+    "name": "NonLin Density 1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 17,
+    "name": "NonLin Density 2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 18,
+    "name": "NonLin Primary Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 19,
+    "name": "Reflection 1 Time Non Lin 1, 3",
+    "range": "0 to 600 ms"
+   },
+   {
+    "index": 20,
+    "name": "Reflection 1 Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 21,
+    "name": "Reflection 2 Time Non Lin 1, 3",
+    "range": "0 to 600 ms"
+   },
+   {
+    "index": 22,
+    "name": "Reflection 2 Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 23,
+    "name": "Left/Right Balance",
+    "range": "-99 to +99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "PARAMETRIC EQ": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Bass Fc",
+    "range": "0 to 1000"
+   },
+   {
+    "index": 4,
+    "name": "Bass Gain (loShv)",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 5,
+    "name": "Mid1 Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 6,
+    "name": "Mid1 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 7,
+    "name": "Mid1 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 11,
+    "name": "Treble Fc",
+    "range": "01 to 16 KHz"
+   },
+   {
+    "index": 12,
+    "name": "Treble Gain (HiShv)",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 13,
+    "name": "EQ Input Level Attenuation",
+    "range": "-24 to +00 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "PHASER - DDL": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Phaser LFO Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 4,
+    "name": "Phaser LFO Width",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Phaser Center",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 6,
+    "name": "Phaser Feedback",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 7,
+    "name": "Phaser Notch Depth",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 8,
+    "name": "Left/Right LFO",
+    "range": "Out-of-Phase or"
+   },
+   {
+    "index": 9,
+    "name": "Phaser Sample & Hold Rate",
+    "range": "Off, 001 to 100"
+   },
+   {
+    "index": 10,
+    "name": "Phaser Left Delay Time",
+    "range": "0 to 1600 ms"
+   },
+   {
+    "index": 11,
+    "name": "Phaser Right Delay Time",
+    "range": "0 to 1600 ms"
+   },
+   {
+    "index": 12,
+    "name": "Phaser Delay Feedback",
+    "range": "-99 to +99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "PITCH SHIFTER": {
+  "params": [
+   {
+    "index": 3,
+    "name": "PitchShifter Vc 1 Semi",
+    "range": "-12 to +12"
+   },
+   {
+    "index": 4,
+    "name": "PitchShifter Vc 1 Fine",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 5,
+    "name": "PitchShifter Vc 1 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "PitchShifter Vc 1 Pan",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 7,
+    "name": "PitchShifter Vc 2 Semi",
+    "range": "-12 to +12"
+   },
+   {
+    "index": 8,
+    "name": "PitchShifter Vc 2 Fine",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 9,
+    "name": "PitchShifter Vc 2 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 10,
+    "name": "PitchShifter Vc 2 Pan",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 11,
+    "name": "PitchShifter LFO Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 12,
+    "name": "PitchShifter LFO Width",
+    "range": "00 to 99"
+   }
+  ],
+  "confidence": "check"
+ },
+ "PITCHSHIFT - DDL": {
+  "params": [
+   {
+    "index": 3,
+    "name": "PitchShift Vc 1 Semi",
+    "range": "-12 to +12"
+   },
+   {
+    "index": 4,
+    "name": "PitchShift Vc 1 Fine",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 5,
+    "name": "PitchShift Vc 1 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "PitchShifter Vc 1 Pan",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 7,
+    "name": "PitchShift Vc 2 Semi",
+    "range": "-12 to +12"
+   },
+   {
+    "index": 8,
+    "name": "PitchShift Vc 2 Fine",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 9,
+    "name": "PitchShift Vc 2 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 10,
+    "name": "PitchShifter Vc 2 Pan",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 11,
+    "name": "PitchShift Dry Level to DDL",
+    "range": "00 to 99"
+   },
+   {
+    "index": 12,
+    "name": "PitchShift Left Delay Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 13,
+    "name": "PitchShift Right Delay Time",
+    "range": "0 to 1500 ms"
+   },
+   {
+    "index": 14,
+    "name": "PitchShift Delay Mix",
+    "range": "00 to 99"
+   },
+   {
+    "index": 15,
+    "name": "PitchShift Delay Regen",
+    "range": "-99 to +99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "REVERSE REVERB 2": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Envelope Hold Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 4,
+    "name": "Envelope Attack",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 5,
+    "name": "Envelope Release",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 6,
+    "name": "Trigger Threshold",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 7,
+    "name": "HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 8,
+    "name": "Diffusion 1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 9,
+    "name": "Diffusion 2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 10,
+    "name": "Decay Definition",
+    "range": "00 to 99"
+   },
+   {
+    "index": 11,
+    "name": "Slapback",
+    "range": "0 to 530ms"
+   },
+   {
+    "index": 12,
+    "name": "Slapback Level",
+    "range": "00 to 99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "ROTATING SPEAKER": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Rotating Speaker Slow Speed",
+    "range": "01 to 55"
+   },
+   {
+    "index": 4,
+    "name": "Rotating Speaker Fast Speed",
+    "range": "01 to 55"
+   },
+   {
+    "index": 5,
+    "name": "Rotating Speaker Speed",
+    "range": "Slow or"
+   },
+   {
+    "index": 6,
+    "name": "Rotating Speaker Inertia",
+    "range": "00 to 99"
+   },
+   {
+    "index": 7,
+    "name": "Distortion Level In",
+    "range": "-48 to +48 dB"
+   },
+   {
+    "index": 8,
+    "name": "Distortion Level Out",
+    "range": "00 to 99"
+   },
+   {
+    "index": 9,
+    "name": "Rotating Speaker Distortion Tone",
+    "range": "000 to 127"
+   },
+   {
+    "index": 10,
+    "name": "Rotating Speaker Stereo Spread",
+    "range": "00 to 99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "RUMBLE FILTER": {
+  "params": [
+   {
+    "index": 3,
+    "name": "HighPass Fc",
+    "range": "4 to 8000"
+   },
+   {
+    "index": 4,
+    "name": "LowPass Fc",
+    "range": "100"
+   },
+   {
+    "index": 5,
+    "name": "Filter Gain",
+    "range": "-48 to +48 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "SINE/NOISE GEN": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Sine Frequency",
+    "range": "0 to 9999"
+   },
+   {
+    "index": 4,
+    "name": "Sine/Noise Gen Balance",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Noise Filter Low Pass Fc",
+    "range": "100"
+   },
+   {
+    "index": 6,
+    "name": "Bass Fc",
+    "range": "0 to 1000"
+   },
+   {
+    "index": 7,
+    "name": "Bass EQ Gain",
+    "range": "-48 to +48 dB"
+   },
+   {
+    "index": 8,
+    "name": "Treble Fc",
+    "range": "01 KHz to 16 KHz"
+   },
+   {
+    "index": 9,
+    "name": "Treble EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 10,
+    "name": "EQ Input Level Trim",
+    "range": "-24 to +00 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "SMALL ROOM REV": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Decay",
+    "range": "0.20 to 100.0 sec"
+   },
+   {
+    "index": 4,
+    "name": "Predelay Time",
+    "range": "0 to 450 ms"
+   },
+   {
+    "index": 5,
+    "name": "LF DecayTime",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 6,
+    "name": "HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 7,
+    "name": "HF Bandwidth",
+    "range": "01 to 99"
+   },
+   {
+    "index": 8,
+    "name": "Diffusion1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 9,
+    "name": "Diffusion2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 10,
+    "name": "Decay Definition",
+    "range": "00 to 99"
+   },
+   {
+    "index": 11,
+    "name": "Detune Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 12,
+    "name": "Detune Depth",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "Primary Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 14,
+    "name": "Ref 1 Time",
+    "range": "0 to 120 milliseconds"
+   },
+   {
+    "index": 15,
+    "name": "Ref 1 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 16,
+    "name": "Ref 1 Send",
+    "range": "00 to 99"
+   },
+   {
+    "index": 17,
+    "name": "Ref 2 Time",
+    "range": "0 to 120 milliseconds"
+   },
+   {
+    "index": 18,
+    "name": "Ref 2 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 19,
+    "name": "Ref 2 Send",
+    "range": "00 to 99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "TUNABLE SPEAKER": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Distortion Level In",
+    "range": "00 to 99"
+   },
+   {
+    "index": 4,
+    "name": "Distortion Level Out",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Pre-Distortion VCF Fc",
+    "range": "01 to 99"
+   },
+   {
+    "index": 6,
+    "name": "Pre-Distortion VCF Q",
+    "range": "01 to 25"
+   },
+   {
+    "index": 7,
+    "name": "Envelope Follower to Pre VCF",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 11,
+    "name": "Envelope Follower Attack",
+    "range": "50\\265s to 10.0s"
+   },
+   {
+    "index": 12,
+    "name": "Envelope Follower Release",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 13,
+    "name": "Distortion Bypass",
+    "range": "Off or"
+   },
+   {
+    "index": 14,
+    "name": "Pre-EQ High Pass Cutoff",
+    "range": "0 to 1000"
+   }
+  ],
+  "confidence": "good"
+ },
+ "TEMPO DELAY": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Tempo Delay Time",
+    "range": "various"
+   },
+   {
+    "index": 4,
+    "name": "Internal Clock Tempo",
+    "range": "050 to 250 bpm"
+   },
+   {
+    "index": 5,
+    "name": "TempoDelay Fine Tune",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 6,
+    "name": "Tempo Control",
+    "range": "Internal"
+   },
+   {
+    "index": 7,
+    "name": "Tempo Delay Regen",
+    "range": "00 to 99"
+   },
+   {
+    "index": 8,
+    "name": "Tempo Delay Pan",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 9,
+    "name": "Tempo Delay Smoothing",
+    "range": "50\\265s to 10.0 s"
+   },
+   {
+    "index": 10,
+    "name": "Tempo Delay Pan",
+    "range": "-99 to +99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "SPEAKER CABINET": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Mid1 Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 4,
+    "name": "Mid1 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 5,
+    "name": "Mid1 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 12,
+    "name": "PreEQ InputLevel Trim",
+    "range": "-18 to +06 dB"
+   },
+   {
+    "index": 13,
+    "name": "Speaker Output Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 14,
+    "name": "Noise Gate Off Below",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 15,
+    "name": "Gate Release Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 16,
+    "name": "Pre-EQHighPass Cutoff",
+    "range": "4 to 1000"
+   }
+  ],
+  "confidence": "good"
+ },
+ "VAN DER POL FILTER": {
+  "params": [
+   {
+    "index": 3,
+    "name": "HighPass Fc",
+    "range": "4 to 8000"
+   },
+   {
+    "index": 4,
+    "name": "LowPass Fc",
+    "range": "100"
+   },
+   {
+    "index": 5,
+    "name": "Filter Gain",
+    "range": "-48 to +48 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "VCF - DISTORT 1": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Distortion Level In",
+    "range": "00 to 99"
+   },
+   {
+    "index": 4,
+    "name": "Distortion Level Out",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Pre-Distortion VCF Fc",
+    "range": "01 to 99"
+   },
+   {
+    "index": 6,
+    "name": "Pre-Distortion VCF Q",
+    "range": "01 to 25"
+   },
+   {
+    "index": 7,
+    "name": "Envelope Follower to Pre VCF",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 11,
+    "name": "Envelope Follower Attack",
+    "range": "50\\265s to 10.0s"
+   },
+   {
+    "index": 12,
+    "name": "Envelope Follower Release",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 13,
+    "name": "Distortion Bypass",
+    "range": "Off or"
+   },
+   {
+    "index": 14,
+    "name": "Pre-EQ High Pass Cutoff",
+    "range": "0 to 1000"
+   },
+   {
+    "index": 15,
+    "name": "Speaker HighPass Cutoff",
+    "range": "4 to 1000"
+   },
+   {
+    "index": 17,
+    "name": "Amp Feedback HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 18,
+    "name": "Amp Feedback Delay",
+    "range": "000 to 127"
+   }
+  ],
+  "confidence": "good"
+ },
+ "VOCAL REMOVER": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Vocal Pos",
+    "range": "-127 to +127"
+   },
+   {
+    "index": 4,
+    "name": "L/R Delay",
+    "range": "-127 to +127"
+   },
+   {
+    "index": 5,
+    "name": "Bass Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "Treble Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 7,
+    "name": "Mid Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 8,
+    "name": "Bass Fc",
+    "range": "80 to 1000"
+   },
+   {
+    "index": 9,
+    "name": "Trebl Fc",
+    "range": "1000 to 16000"
+   },
+   {
+    "index": 10,
+    "name": "Mid Fc",
+    "range": "80 to 16000"
+   },
+   {
+    "index": 11,
+    "name": "BW",
+    "range": "80 to 16000"
+   }
+  ],
+  "confidence": "good"
+ },
+ "DUAL DELAY": {
+  "params": [
+   {
+    "index": 3,
+    "name": "DDL+LFO Left Delay Time",
+    "range": "0 to 845 ms"
+   },
+   {
+    "index": 4,
+    "name": "DDL+LFO Right Delay Time",
+    "range": "0 to 845 ms"
+   },
+   {
+    "index": 5,
+    "name": "DDL+LFO LFO Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "DDL+LFO LFO Width",
+    "range": "00 to 99"
+   },
+   {
+    "index": 7,
+    "name": "Left/Right LFO",
+    "range": "Out-of-Phase or"
+   },
+   {
+    "index": 8,
+    "name": "DDL+LFO Delay Regen",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 9,
+    "name": "DDL+LFO Delay Cross Regen",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 10,
+    "name": "DDL+LFO Regen Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 11,
+    "name": "DDL+LFO Right Delay Input",
+    "range": "Off or"
+   },
+   {
+    "index": 12,
+    "name": "DDL+LFO Right Output Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "Bass Fc",
+    "range": "0 to 1000"
+   },
+   {
+    "index": 14,
+    "name": "Bass EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 15,
+    "name": "Treble Fc",
+    "range": "01KHz to 16KHz"
+   },
+   {
+    "index": 16,
+    "name": "Treble EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 17,
+    "name": "EQ Input Level Trim",
+    "range": "-24 to +00 dB"
+   }
+  ],
+  "confidence": "good"
+ },
+ "GUITAR AMP 1": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Amp Preamp Gain",
+    "range": "-48 to +48 dB"
+   },
+   {
+    "index": 4,
+    "name": "Output Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Amp Tube Bias",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "Pre-EQ Input Level Trim",
+    "range": "-24 to +00 dB"
+   },
+   {
+    "index": 7,
+    "name": "Pre-EQ High Pass Cutoff",
+    "range": "4 to 1000"
+   },
+   {
+    "index": 8,
+    "name": "Pre-EQ Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 9,
+    "name": "Pre-EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 10,
+    "name": "Pre-EQ Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 11,
+    "name": "Noise Gate Off Below",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 12,
+    "name": "Noise Gate On Above",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 13,
+    "name": "Gate Release Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 14,
+    "name": "Speaker High Pass Cutoff",
+    "range": "4 to 1000"
+   },
+   {
+    "index": 15,
+    "name": "OutEQ1 Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 16,
+    "name": "OutEQ1 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 17,
+    "name": "OutEQ1 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 18,
+    "name": "OutEQ2 Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 19,
+    "name": "OutEQ2 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 20,
+    "name": "OutEQ2 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 21,
+    "name": "Speaker Low Pass Cutoff",
+    "range": "2.0 to 16.0 KHz"
+   }
+  ],
+  "confidence": "good"
+ },
+ "GUITAR AMP 3": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Preamp Gain",
+    "range": "-48 to +48 dB"
+   },
+   {
+    "index": 4,
+    "name": "Output Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "PreEQ Input Level Trim",
+    "range": "-24 to +00 dB"
+   },
+   {
+    "index": 6,
+    "name": "Pre-EQ Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 7,
+    "name": "Pre-EQ Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 8,
+    "name": "Pre-EQ Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 9,
+    "name": "ExpndRatio",
+    "range": "1:1 to 40:1, infinity"
+   },
+   {
+    "index": 10,
+    "name": "Threshold",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 11,
+    "name": "Gain Change",
+    "range": "N/A"
+   },
+   {
+    "index": 12,
+    "name": "Noise Gate Off Below",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 13,
+    "name": "Noise Gate On Above",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 14,
+    "name": "Gate Release Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 15,
+    "name": "Speaker High Pass Cutoff",
+    "range": "4 to 1000"
+   },
+   {
+    "index": 16,
+    "name": "OutEQ1 Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 17,
+    "name": "OutEQ1 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 18,
+    "name": "OutEQ1 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 19,
+    "name": "OutEQ2 Fc",
+    "range": "100 to 9999"
+   },
+   {
+    "index": 20,
+    "name": "OutEQ2 Gain",
+    "range": "-48 to +24 dB"
+   },
+   {
+    "index": 21,
+    "name": "OutEQ2 Q",
+    "range": "01 to 18"
+   },
+   {
+    "index": 22,
+    "name": "Speaker Low Pass Cutoff",
+    "range": "2.0 to 16.0 KHz"
+   }
+  ],
+  "confidence": "good"
+ },
+ "LARGE PLATE": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Decay",
+    "range": "0.40 to 140.0 sec"
+   },
+   {
+    "index": 4,
+    "name": "Predelay Time",
+    "range": "0 to 430 ms"
+   },
+   {
+    "index": 5,
+    "name": "HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "HF Bandwidth",
+    "range": "01 to 99"
+   },
+   {
+    "index": 7,
+    "name": "Diffusion 1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 8,
+    "name": "Diffusion 2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 9,
+    "name": "Decay Definition",
+    "range": "00 to 99"
+   },
+   {
+    "index": 14,
+    "name": "Left/Right Balance",
+    "range": "-99 to +99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "NON LIN REVERB 1": {
+  "params": [
+   {
+    "index": 12,
+    "name": "NonLin HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 13,
+    "name": "NonLin HF Bandwidth",
+    "range": "01 to 99"
+   },
+   {
+    "index": 14,
+    "name": "NonLin Diffusion1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 15,
+    "name": "NonLin Diffusion2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 16,
+    "name": "NonLin Density 1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 17,
+    "name": "NonLin Density 2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 18,
+    "name": "NonLin Primary Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 19,
+    "name": "Reflection 1 Time Non Lin 1, 3",
+    "range": "0 to 600 ms"
+   },
+   {
+    "index": 20,
+    "name": "Reflection 1 Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 21,
+    "name": "Reflection 2 Time Non Lin 1, 3",
+    "range": "0 to 600 ms"
+   },
+   {
+    "index": 22,
+    "name": "Reflection 2 Send",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 23,
+    "name": "Left/Right Balance",
+    "range": "-99 to +99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "PITCH SHIFT 2U": {
+  "params": [
+   {
+    "index": 3,
+    "name": "PitchShifter Vc 1 Semi",
+    "range": "-12 to +12"
+   },
+   {
+    "index": 4,
+    "name": "PitchShifter Vc 1 Fine",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 5,
+    "name": "PitchShifter Vc 1 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 6,
+    "name": "PitchShifter Vc 1 Pan",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 7,
+    "name": "PitchShifter Vc 2 Semi",
+    "range": "-12 to +12"
+   },
+   {
+    "index": 8,
+    "name": "PitchShifter Vc 2 Fine",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 9,
+    "name": "PitchShifter Vc 2 Level",
+    "range": "00 to 99"
+   },
+   {
+    "index": 10,
+    "name": "PitchShifter Vc 2 Pan",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 11,
+    "name": "PitchShifter LFO Rate",
+    "range": "00 to 99"
+   },
+   {
+    "index": 12,
+    "name": "PitchShifter LFO Width",
+    "range": "00 to 99"
+   }
+  ],
+  "confidence": "check"
+ },
+ "REVERSE REVERB 1": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Envelope Hold Time",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 4,
+    "name": "Envelope Attack",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 5,
+    "name": "Envelope Release",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 6,
+    "name": "Trigger Threshold",
+    "range": "-96 to +00 dB"
+   },
+   {
+    "index": 7,
+    "name": "HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 8,
+    "name": "Diffusion 1",
+    "range": "00 to 99"
+   },
+   {
+    "index": 9,
+    "name": "Diffusion 2",
+    "range": "00 to 99"
+   },
+   {
+    "index": 10,
+    "name": "Decay Definition",
+    "range": "00 to 99"
+   },
+   {
+    "index": 11,
+    "name": "Slapback",
+    "range": "0 to 530ms"
+   },
+   {
+    "index": 12,
+    "name": "Slapback Level",
+    "range": "00 to 99"
+   }
+  ],
+  "confidence": "good"
+ },
+ "VCF - DISTORT 2": {
+  "params": [
+   {
+    "index": 3,
+    "name": "Distortion Level In",
+    "range": "00 to 99"
+   },
+   {
+    "index": 4,
+    "name": "Distortion Level Out",
+    "range": "00 to 99"
+   },
+   {
+    "index": 5,
+    "name": "Pre-Distortion VCF Fc",
+    "range": "01 to 99"
+   },
+   {
+    "index": 6,
+    "name": "Pre-Distortion VCF Q",
+    "range": "01 to 25"
+   },
+   {
+    "index": 7,
+    "name": "Envelope Follower to Pre VCF",
+    "range": "-99 to +99"
+   },
+   {
+    "index": 11,
+    "name": "Envelope Follower Attack",
+    "range": "50\\265s to 10.0s"
+   },
+   {
+    "index": 12,
+    "name": "Envelope Follower Release",
+    "range": "1ms to 10.0s"
+   },
+   {
+    "index": 13,
+    "name": "Distortion Bypass",
+    "range": "Off or"
+   },
+   {
+    "index": 14,
+    "name": "Pre-EQ High Pass Cutoff",
+    "range": "0 to 1000"
+   },
+   {
+    "index": 15,
+    "name": "Speaker HighPass Cutoff",
+    "range": "4 to 1000"
+   },
+   {
+    "index": 17,
+    "name": "Amp Feedback HF Damping",
+    "range": "00 to 99"
+   },
+   {
+    "index": 18,
+    "name": "Amp Feedback Delay",
+    "range": "000 to 127"
+   }
+  ],
+  "confidence": "good"
+ },
+ "VOCODER": {
+  "params": [
+   {
+    "index": 1,
+    "name": "AB Input Select",
+    "range": "(1,2)"
+   },
+   {
+    "index": 2,
+    "name": "AB Unit Routing",
+    "range": "serial, parallel, feedback1 or feedback2"
+   },
+   {
+    "index": 3,
+    "name": "CD Unit Routing",
+    "range": "serial, parallel, feedback1 or feedback2"
+   },
+   {
+    "index": 4,
+    "name": "AB - CD Routing",
+    "range": "serial o"
+   }
+  ],
+  "confidence": "check"
+ }
+}

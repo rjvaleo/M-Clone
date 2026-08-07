@@ -41,6 +41,15 @@ export type RuntimeEvent = {
   portId: string;
   channel: number;
   note: number;
+  /**
+   * Cents away from `note`, for a pitch that is not on the twelve-tone grid.
+   *
+   * Travels with the note rather than being re-derived downstream: by the time
+   * an event reaches an adapter the scale it was quantised against is long
+   * gone, so this is the only place the microtonal part of the pitch still
+   * exists. Zero for everything untouched by a quantiser.
+   */
+  detuneCents: number;
   velocity: number;
   program: number;
   controller: number;
@@ -79,6 +88,7 @@ const blankEvent = (): RuntimeEvent => ({
   portId: "",
   channel: 1,
   note: 60,
+  detuneCents: 0,
   velocity: 100,
   program: 0,
   controller: 0,

@@ -11,7 +11,7 @@ change between minor versions.
 idMLab is a separate application on the `modular` branch: a node graph with its
 own document format (`.mmod`, plus the self-contained `.mmodpack`), not a mode of
 M Classic Web. It shares this repository and nothing else. Its state is recorded
-in [`MODULAR_STATUS.md`](MODULAR_STATUS.md).
+in [`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md).
 
 ### Added
 
@@ -133,7 +133,7 @@ hardware/browser MIDI certification.
   still works there.
 - Scheduling runs on the browser main thread with a bounded adaptive horizon.
   Background tabs, heavy pages, and system sleep can stall it; see
-  [`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md) for the exact
+  [`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md) §A.6 for the exact
   guarantees and recovery behavior.
 - Events more than 20 ms late are dropped; releases and state events are always
   retained.
