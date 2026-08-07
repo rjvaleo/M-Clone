@@ -85,8 +85,10 @@ import {
 import { normalizeCyclicStep } from "../engine/cyclic";
 import {
   eventsForPlannedNotes,
+  MIDI_VIEW_LIMIT,
   mergeMidiViewEvents,
   type MidiViewEvent,
+  type MidiViewTransport,
 } from "../engine/midiview";
 import type { PlannedNote, PlannedStep } from "../engine/planner";
 import type { ChannelMidiMessage, MidiInputVoice } from "../engine/midiinput";
@@ -272,6 +274,11 @@ export type MStore = {
   cyclicLengths: CyclicPositionLengths;
   activeCyclicPositions: Record<CyclicVariable, number>;
   midiViewEvents: MidiViewEvent[];
+  /** Transport messages in either direction, shown alongside the notes. */
+  midiViewTransport: MidiViewTransport[];
+  recordMidiTransport: (
+    type: "start" | "stop" | "continue", direction: "out" | "in", atSec: number,
+  ) => void;
   midiViewNextId: number;
   movieRecorder: MovieRecorder;
   synthSettings: SynthSettings[];
@@ -668,6 +675,7 @@ export const useM = create<MStore>((set, get) => ({
   ) as CyclicPositionLengths,
   activeCyclicPositions: { accent: 0, legato: 0, rhythm: 0 },
   midiViewEvents: [],
+  midiViewTransport: [],
   midiViewNextId: 0,
   movieRecorder: EMPTY_MOVIE_RECORDER,
   synthSettings: createDefaultSynthSettings(),
@@ -1254,6 +1262,7 @@ export const useM = create<MStore>((set, get) => ({
       editorRegion: null,
       editingVar: null,
       midiViewEvents: [],
+      midiViewTransport: [],
       midiViewNextId: 0,
       movieRecorder: EMPTY_MOVIE_RECORDER,
       synthSettings: createDefaultSynthSettings(),
@@ -1301,6 +1310,7 @@ export const useM = create<MStore>((set, get) => ({
       isPaused: false,
       editingVar: null,
       midiViewEvents: [],
+      midiViewTransport: [],
       midiViewNextId: 0,
       movieRecorder: EMPTY_MOVIE_RECORDER,
       synthSettings: createDefaultSynthSettings(),
@@ -1497,6 +1507,15 @@ export const useM = create<MStore>((set, get) => ({
         },
       };
     }),
+  recordMidiTransport: (type, direction, atSec) =>
+    set((s) => ({
+      midiViewTransport: [
+        ...s.midiViewTransport.slice(-(MIDI_VIEW_LIMIT - 1)),
+        { id: s.midiViewNextId, atSec, type, direction },
+      ],
+      midiViewNextId: s.midiViewNextId + 1,
+    })),
+
   recordMidiNotes: (notes) =>
     set((s) => {
       const incoming = eventsForPlannedNotes(notes, s.midiViewNextId);

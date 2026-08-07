@@ -4,10 +4,11 @@ import { useM } from "../state/store";
 
 export function MidiView() {
   const events = useM((state) => state.midiViewEvents);
+  const transport = useM((state) => state.midiViewTransport);
   const clear = useM((state) => state.clearMidiView);
   const [follow, setFollow] = useState(true);
   const viewport = useRef<HTMLDivElement>(null);
-  const rows = useMemo(() => groupMidiViewRows(events), [events]);
+  const rows = useMemo(() => groupMidiViewRows(events, transport), [events, transport]);
 
   useEffect(() => {
     if (follow && viewport.current) {
@@ -34,6 +35,14 @@ export function MidiView() {
         {rows.map((row) => (
           <div className="midiview__row" key={row.atSec}>
             <time>{row.atSec.toFixed(3)}</time>
+            {/* Transport spans the row: a Start belongs to no single stream. */}
+            {row.transport.map((mark) => (
+              <span key={mark.id}
+                className={`midiview__transport midiview__transport--${mark.direction}`}>
+                <strong>{mark.direction === "out" ? "▶ SENT" : "◀ RECV"}</strong>
+                <b>{mark.type.toUpperCase()}</b>
+              </span>
+            ))}
             {row.streams.map((stream, voice) => (
               <div key={voice} className={`midiview__cell uvoice uvoice--${voice + 1}`}>
                 {stream.map((event) => (
@@ -50,7 +59,7 @@ export function MidiView() {
             ))}
           </div>
         ))}
-        {events.length === 0 && <div className="midiview__waiting">Waiting for generated MIDI data…</div>}
+        {events.length === 0 && transport.length === 0 && <div className="midiview__waiting">Waiting for generated MIDI data…</div>}
       </div>
     </div>
   );

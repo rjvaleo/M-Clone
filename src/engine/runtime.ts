@@ -67,6 +67,7 @@ export class MRuntime {
   private onCyclicReset: ((voices: readonly number[]) => void) | null;
   private onPlannedSteps: ((steps: readonly import("./planner").PlannedStep[]) => void) | null;
   private onMidiMessage: ((event: MIDIMessageEvent) => void) | null;
+  private onTransportSent: ((type: "start" | "stop") => void) | null;
   private getPerformanceSettings: () => {
     useMetronome: boolean; sendClock: boolean; externalClock: boolean;
     syncRatio: number; syncRatioDirection: "out" | "in";
@@ -83,6 +84,8 @@ export class MRuntime {
       clock?: ClockDriver;
       onCyclicReset?: (voices: readonly number[]) => void;
       onMidiMessage?: (event: MIDIMessageEvent) => void;
+      /** Told whenever a transport message is actually put on the wire. */
+      onTransportSent?: (type: "start" | "stop") => void;
       onPlannedSteps?: (steps: readonly import("./planner").PlannedStep[]) => void;
       getPerformanceSettings?: () => {
         useMetronome: boolean; sendClock: boolean; externalClock: boolean;
@@ -96,6 +99,7 @@ export class MRuntime {
     this.clock = options.clock ?? null;
     this.onCyclicReset = options.onCyclicReset ?? null;
     this.onMidiMessage = options.onMidiMessage ?? null;
+    this.onTransportSent = options.onTransportSent ?? null;
     this.onPlannedSteps = options.onPlannedSteps ?? null;
     this.getPerformanceSettings = options.getPerformanceSettings ?? (() => ({
       useMetronome: false, sendClock: false, externalClock: false,
@@ -271,7 +275,10 @@ export class MRuntime {
     this.pausedAt = null;
     this.nextClockAt = this.cursors[0]?.nextTimeSec ?? this.nowSec();
     this.nextMetronomeAt = this.nextClockAt;
-    if (this.getPerformanceSettings().sendClock) this.midi?.sendRealtime(0xfa);
+    if (this.getPerformanceSettings().sendClock) {
+      this.midi?.sendRealtime(0xfa);
+      this.onTransportSent?.("start");
+    }
     if (this.timer === null) {
       this.expectedWakeSec = this.nowSec() + TICK_MS / 1000;
       this.timer = this.scheduler.repeat(() => this.tick(), TICK_MS);
@@ -338,7 +345,10 @@ export class MRuntime {
     this.midi?.panic();
     this.lifecycle.reset();
     this.pausedAt = null;
-    if (this.getPerformanceSettings().sendClock) this.midi?.sendRealtime(0xfc);
+    if (this.getPerformanceSettings().sendClock) {
+      this.midi?.sendRealtime(0xfc);
+      this.onTransportSent?.("stop");
+    }
   }
 
   private tick(): void {
