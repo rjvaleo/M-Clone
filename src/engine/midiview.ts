@@ -1,5 +1,6 @@
 import { midiToName } from "./music";
 import { PPQN } from "./planner";
+import type { ScaleName } from "./music";
 import type { PlannedNote } from "./planner";
 
 export type MidiViewEvent = {
@@ -22,6 +23,13 @@ export type MidiViewEvent = {
    */
   atTick?: number;
   durationTicks?: number;
+  /**
+   * Which Note Order list the step came from — M's Original, Cyclic Random
+   * and Utterly Random. The readout colours by it, which is the only way to
+   * watch the three-way mix actually working rather than reading the slider
+   * and trusting it.
+   */
+  source?: "original" | "cyclic" | "utterly";
 };
 
 export const MIDI_VIEW_LIMIT = 1000;
@@ -30,24 +38,50 @@ export const MIDI_VIEW_LIMIT = 1000;
 export const beatOfTick = (tick: number): number => tick / PPQN;
 
 /**
+ * The scale in force, as a short key to sit left of the note.
+ *
+ * Hand-written rather than truncated. Three letters collides twice — both
+ * pentatonics on "MIN"/"MAJ" and harmonic minor on "HAR" — and a column where
+ * two different scales read the same is worse than no column. Case carries
+ * the pentatonic pair: "MPNT" against "mPNT", the way score shorthand uses
+ * upper for major and lower for minor.
+ */
+const SCALE_KEYS: Record<ScaleName, string> = {
+  chromatic: "CHRM",
+  major: "MAJ",
+  minor: "MIN",
+  dorian: "DOR",
+  mixolydian: "MIX",
+  lydian: "LYD",
+  phrygian: "PHR",
+  harmonicMinor: "HMIN",
+  majorPentatonic: "MPNT",
+  minorPentatonic: "mPNT",
+  blues: "BLU",
+};
+
+export function scaleKey(name: ScaleName): string {
+  // A document written by a build with more scales must still render.
+  return SCALE_KEYS[name] ?? "?";
+}
+
+/**
  * A note's length, as exactly three characters.
  *
- * Fixed width because the readout is a grid: a cell that renders two
- * characters on one row and four on the next stops the columns lining up,
- * which is the only reason to use a monospaced face in the first place.
+ * A percentage of its step rather than a count of beats: on a display where
+ * a note is already drawn as tall as it lasts, the number worth reading is
+ * how much of the step it fills — the same quantity M's Legato variable sets.
  *
- * Below a beat the leading zero is dropped — ".25" carries two digits of
- * detail where "0.2" carries one. At ten beats and over the exact length
- * stops being what anyone is reading for, so it collapses to "10+".
+ * Fixed width because the readout is a grid. A cell that renders two
+ * characters on one row and four on the next stops the columns lining up,
+ * which is the only reason to set it in a monospaced face at all.
  */
-export function formatDurationCell(durationTicks: number): string {
-  const beats = beatOfTick(durationTicks);
+export function formatLengthCell(gate: number): string {
   // A note-off is an instant, not a note of no length, so it stays blank.
-  if (!(beats > 0)) return "   ";
-  if (beats >= 10) return "10+";
-  if (beats >= 1) return beats.toFixed(1).slice(0, 3);
-  return beats.toFixed(2).slice(1);
+  if (!(gate > 0)) return "   ";
+  return String(Math.min(100, Math.round(gate * 100))).padStart(3, "0");
 }
+
 
 /**
  * A transport message, in either direction.
@@ -96,6 +130,7 @@ export function eventsForPlannedNotes(
           atTick: note.atTick,
           durationTicks: note.durationTicks ?? 0,
         }),
+        ...(note.source === undefined ? {} : { source: note.source }),
       },
       {
         id: firstId + index * 2 + 1,
@@ -111,6 +146,7 @@ export function eventsForPlannedNotes(
           atTick: note.atTick + (note.durationTicks ?? 0),
           durationTicks: 0,
         }),
+        ...(note.source === undefined ? {} : { source: note.source }),
       },
     ];
   });
