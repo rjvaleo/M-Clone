@@ -131,4 +131,27 @@ describe("Registry-declared smoothing", () => {
     // An unknown id must still answer, rather than throwing inside a ramp.
     expect(factory.smoothingFor("m.audio-delay", "nonsense")).toBe("linear");
   });
+
+  it("answers a repeated lookup from the cache, and keeps parameters apart", () => {
+    // The cache exists so that dragging a fader does not re-scan a descriptor's
+    // parameters on every ramp; a counting registry is the only way to see the
+    // difference between a hit and a miss from the outside.
+    const registry = new Map(moduleRegistry);
+    const uncached = registry.get.bind(registry);
+    let lookups = 0;
+    registry.get = (moduleType) => {
+      lookups += 1;
+      return uncached(moduleType);
+    };
+    const factory = new EffectModuleFactory(new FakeAudioContext(), registry);
+
+    expect(factory.smoothingFor("m.audio-delay", "feedback")).toBe("linear");
+    expect(factory.smoothingFor("m.audio-delay", "feedback")).toBe("linear");
+    expect(lookups).toBe(1);
+
+    // Two parameters on one module are distinct keys, so the second is a miss
+    // and gets its own answer rather than the first one's.
+    expect(factory.smoothingFor("m.audio-delay", "max-delay-seconds")).toBe("none");
+    expect(lookups).toBe(2);
+  });
 });
