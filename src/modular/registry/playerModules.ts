@@ -41,6 +41,15 @@ const audioOut = () => output("audio-out", "Audio", audioSignal());
 const levelParam = (): ParameterDescriptor => numberParam("level", "Level", 0.8, 0, 2, 0.01);
 const muteParam = (): ParameterDescriptor => boolParam("mute", "Mute");
 
+/**
+ * Where the module sits in the field.
+ *
+ * Ramped, never structural: moving a source across the image is the most
+ * ordinary thing a mix does, and a rebuild for it would be a crossfade in the
+ * middle of a gesture.
+ */
+const panParam = (): ParameterDescriptor => numberParam("pan", "Pan", 0, -1, 1, 0.01);
+
 /** Structural: read once when the subgraph is built, so it cannot be ramped. */
 const assetParam = (label = "Sample"): ParameterDescriptor => ({
   ...stringParam("asset-id", label),
@@ -55,15 +64,18 @@ const slotsParam = (): ParameterDescriptor => ({
   // Four voices wired to the starter kit, so a fresh module makes sound with
   // nothing patched into it. Both hihats share choke group 1 — striking one
   // silences the other, which is the rule this feature exists for.
+  // Kick and snare centred, the two hats slightly right — the ordinary
+  // placement of a kit heard from behind it, and enough of a default that a
+  // fresh module sounds like a room rather than a point.
   defaultValue: [
-    { note: 36, assetId: syntheticAssetId("kick"), chokeGroup: 0, gain: 1 },
-    { note: 38, assetId: syntheticAssetId("snare"), chokeGroup: 0, gain: 1 },
-    { note: 42, assetId: syntheticAssetId("hihat"), chokeGroup: 1, gain: 1 },
-    { note: 46, assetId: syntheticAssetId("hihat"), chokeGroup: 1, gain: 0.9 },
-    { note: 48, assetId: "", chokeGroup: 0, gain: 1 },
-    { note: 50, assetId: "", chokeGroup: 0, gain: 1 },
-    { note: 52, assetId: "", chokeGroup: 0, gain: 1 },
-    { note: 53, assetId: "", chokeGroup: 0, gain: 1 },
+    { note: 36, assetId: syntheticAssetId("kick"), chokeGroup: 0, gain: 1, pan: 0 },
+    { note: 38, assetId: syntheticAssetId("snare"), chokeGroup: 0, gain: 1, pan: -0.1 },
+    { note: 42, assetId: syntheticAssetId("hihat"), chokeGroup: 1, gain: 1, pan: 0.35 },
+    { note: 46, assetId: syntheticAssetId("hihat"), chokeGroup: 1, gain: 0.9, pan: 0.35 },
+    { note: 48, assetId: "", chokeGroup: 0, gain: 1, pan: 0 },
+    { note: 50, assetId: "", chokeGroup: 0, gain: 1, pan: 0 },
+    { note: 52, assetId: "", chokeGroup: 0, gain: 1, pan: 0 },
+    { note: 53, assetId: "", chokeGroup: 0, gain: 1, pan: 0 },
   ],
   smoothing: "none",
   morph: "step-end",
@@ -80,6 +92,7 @@ const PERCUSSION = defineModule({
   parameters: [
     slotsParam(),
     levelParam(),
+    panParam(),
     numberParam("pitch-semitones", "Pitch", 0, -24, 24, 1, "st"),
     numberParam("decay-seconds", "Decay", 0.5, 0.02, 4, 0.01, "s"),
     muteParam(),
@@ -88,6 +101,7 @@ const PERCUSSION = defineModule({
     section("slots", "Slots", [custom("percussion-slots", "Note to sample", ["slots"])]),
     section("voice", "Voice", [
       param("level"),
+      param("pan"),
       param("pitch-semitones"),
       param("decay-seconds"),
       param("mute"),
@@ -105,6 +119,7 @@ const LOOPER = defineModule({
   parameters: [
     assetParam("Loop"),
     levelParam(),
+    panParam(),
     numberParam("rate", "Rate", 1, 0.05, 4, 0.01, "×"),
     // Only meaningful in time-stretch mode, where pitch stops following rate.
     numberParam("pitch-shift", "Pitch", 0, -24, 24, 1, "st"),
@@ -117,7 +132,7 @@ const LOOPER = defineModule({
     muteParam(),
   ],
   face: [
-    section("sample", "Sample", [custom("asset-slot", "Sample", ["asset-id"]), param("level"), status("voices", "Sounding")]),
+    section("sample", "Sample", [custom("asset-slot", "Sample", ["asset-id"]), param("level"), param("pan"), status("voices", "Sounding")]),
     section("playback", "Playback", [
       param("rate"),
       param("pitch-shift"),
@@ -143,6 +158,7 @@ const GRANULAR = defineModule({
   parameters: [
     assetParam("Source"),
     levelParam(),
+    panParam(),
     numberParam("grain-size", "Grain", 0.2, 0.005, 2, 0.005, "s"),
     // Shorter than the grain size means grains overlap, which is what makes a
     // cloud rather than a stutter.
@@ -155,7 +171,7 @@ const GRANULAR = defineModule({
     muteParam(),
   ],
   face: [
-    section("sample", "Sample", [custom("asset-slot", "Sample", ["asset-id"]), param("level"), status("voices", "Grains")]),
+    section("sample", "Sample", [custom("asset-slot", "Sample", ["asset-id"]), param("level"), param("pan"), status("voices", "Grains")]),
     section("cloud", "Cloud", [
       param("grain-size"),
       param("grain-spacing"),

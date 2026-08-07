@@ -334,9 +334,17 @@ describe("The players", () => {
   it("reads slots defensively, because they come from a document", () => {
     expect(readPercussionSlots(null)).toEqual([]);
     expect(readPercussionSlots([{}])).toEqual([
-      { note: 36, assetId: "", chokeGroup: 0, gain: 1 },
+      { note: 36, assetId: "", chokeGroup: 0, gain: 1, pan: 0 },
     ]);
     expect(readPercussionSlots([{ note: "x", gain: null }])[0].note).toBe(36);
+  });
+
+  it("clamps a slot pan from a hand-edited document rather than trusting it", () => {
+    // A `.mmod` is JSON a user can open in an editor, so the range is not a
+    // promise the loader may rely on.
+    expect(readPercussionSlots([{ pan: 4 }])[0].pan).toBe(1);
+    expect(readPercussionSlots([{ pan: -4 }])[0].pan).toBe(-1);
+    expect(readPercussionSlots([{ pan: "hard left" }])[0].pan).toBe(0);
   });
 
   it("defaults the percussion kit to something audible with two hats choking", () => {

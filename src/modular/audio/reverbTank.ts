@@ -231,6 +231,7 @@ export function createModulator(
         // disposed module — an oscillator with no destination still costs.
         try {
           osc.stop();
+          /* v8 ignore next 3 — only a real browser throws here */
         } catch {
           /* already stopped, or never started under a fake context */
         }
@@ -292,6 +293,26 @@ export type NetworkOptions = {
  *
  * Stability: `|g_i| < 1` and `A` orthogonal means the loop cannot grow. The one
  * way to break it is `setInfinite`, which pins `g_i = 1` deliberately.
+ *
+ * ## Why the output is two buses and not one
+ *
+ * Summing every line into one output makes a tank that is *mono arriving on two
+ * wires*: both ears hear identical samples, so the tail has no width at all and
+ * a reverb with no width is the one thing a reverb must not be.
+ *
+ * The fix is the output matrix, not a second tank. Alternate lines are tapped
+ * to alternate sides, so each ear hears a different set of delay lengths and
+ * the two are genuinely decorrelated — while the Householder bus still mixes
+ * *all* the lines into *all* the lines inside the loop, so both sides remain
+ * the same room rather than becoming two smaller ones. That is how FDN reverbs
+ * normally go stereo, and it costs three gains and a merger rather than
+ * doubling the delay lines.
+ *
+ * Each bus is normalised by the lines it actually carries, `1/√(N/2)` rather
+ * than `1/√N`. The old mono output was up-mixed by Web Audio to both channels
+ * at full amplitude, so per-ear power was 1; splitting the lines without
+ * re-normalising would have quietly dropped the tail by 3 dB on every existing
+ * patch.
  */
 export function createFeedbackNetwork(
   context: EffectContext,
@@ -300,8 +321,14 @@ export function createFeedbackNetwork(
 ): FeedbackNetwork {
   const count = clamp(Math.round(options.lineCount), 2, FDN_BASE_SECONDS.length);
   const input = context.createGain();
-  const output = context.createGain();
   const bus = context.createGain();
+
+  // The stereo output matrix: two taps into a two-channel merger.
+  const leftBus = context.createGain();
+  const rightBus = context.createGain();
+  const output = context.createChannelMerger(2);
+  leftBus.connect(output, 0, 0);
+  rightBus.connect(output, 0, 1);
 
   const lines = Array.from({ length: count }, (_, i) => {
     const length = FDN_BASE_SECONDS[i] * options.sizeScale;
@@ -318,7 +345,10 @@ export function createFeedbackNetwork(
     input.connect(delay);
     delay.connect(damping);
     damping.connect(decay);
-    decay.connect(output);
+    // Alternate lines to alternate ears. Adjacent base lengths are the most
+    // different from each other, so this is also the split that decorrelates
+    // hardest for the fewest connections.
+    decay.connect(i % 2 === 0 ? leftBus : rightBus);
     // Each line's own return, plus the shared reflection bus.
     decay.connect(returnGain);
     returnGain.connect(delay);
@@ -331,7 +361,10 @@ export function createFeedbackNetwork(
   // Householder: the shared bus carries −2/N of the sum back to every line.
   setNow(bus.gain, -2 / count, atSec);
   setNow(input.gain, 1, atSec);
-  setNow(output.gain, 1 / Math.sqrt(count), atSec);
+  // Normalised per side; see the note on the output matrix above.
+  const sideGain = 1 / Math.sqrt(Math.max(1, count / 2));
+  setNow(leftBus.gain, sideGain, atSec);
+  setNow(rightBus.gain, sideGain, atSec);
 
   const modulator = createModulator(
     context,
@@ -375,6 +408,8 @@ export function createFeedbackNetwork(
       input,
       output,
       bus,
+      leftBus,
+      rightBus,
       ...lines.flatMap((l) => [l.delay, l.damping, l.decay, l.returnGain]),
       ...modulator.owned,
     ],
@@ -406,6 +441,8 @@ export function createFeedbackNetwork(
       input.disconnect();
       output.disconnect();
       bus.disconnect();
+      leftBus.disconnect();
+      rightBus.disconnect();
       for (const line of lines) {
         line.delay.disconnect();
         line.damping.disconnect();

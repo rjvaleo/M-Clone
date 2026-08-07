@@ -36,6 +36,8 @@ import { crushCurve, impulseFrameCount, renderPlateImpulse } from "./dsp";
 import type { BiquadFilterKind, EffectContext, GainNodeLike } from "./nodes";
 import { createBlackholeCore } from "./blackhole";
 import { createDp4Machine, createDp4ReverbCore, createNonLinCore } from "./dp4";
+import { createWidener } from "./widener";
+import { createMixer } from "./mixer";
 
 /** Where a parameter's ramp shape comes from — the registry descriptor. */
 export type SmoothingLookup = (parameterId: string) => SmoothingPolicy;
@@ -520,6 +522,47 @@ const buildDp4Machine: CoreBuilder = (context, spec) => {
  * map against the registry: a module registered with no builder would be a face
  * that makes no sound, and a builder with no module would be dead code.
  */
+/**
+ * The widener, wrapped.
+ *
+ * Series rather than parallel: a mid/side matrix has no meaningful dry blend —
+ * half a width transform is just a different width, and the shell's mix would
+ * be a second control fighting the first.
+ */
+const buildWidener: CoreBuilder = (context, spec) => {
+  const core = createWidener(context, spec, context.currentTime);
+  return {
+    input: core.input,
+    output: core.output,
+    params: {},
+    parallel: false,
+    owned: core.owned,
+    setParameter(parameterId, value, atSec) {
+      if (parameterId === "width") core.setWidth(value, atSec);
+      if (parameterId === "crossover") core.setCrossoverHz(value, atSec);
+    },
+  };
+};
+
+/**
+ * The mixer, wrapped.
+ *
+ * Series for the same reason the DP/4 is: there is no single dry signal to
+ * balance against four independent inputs.
+ */
+const buildMixer: CoreBuilder = (context, spec) => {
+  const core = createMixer(context, spec, context.currentTime);
+  return {
+    input: core.input,
+    output: core.output,
+    params: {},
+    parallel: false,
+    owned: core.owned,
+    inputFor: (portId) => core.inputFor(portId),
+    setParameter: (parameterId, value, atSec) => core.setParameter(parameterId, value, atSec),
+  };
+};
+
 export const EFFECT_BUILDERS: Readonly<Record<string, CoreBuilder>> = {
   "m.audio-output": buildOutput,
   "m.audio-gain": buildGain,
@@ -533,6 +576,8 @@ export const EFFECT_BUILDERS: Readonly<Record<string, CoreBuilder>> = {
   "m.audio-dp4-reverb": buildDp4Reverb,
   "m.audio-dp4-nonlin": buildDp4NonLin,
   "m.audio-dp4": buildDp4Machine,
+  "m.audio-widener": buildWidener,
+  "m.audio-mixer": buildMixer,
 };
 
 export const isEffectModule = (moduleType: string): boolean => moduleType in EFFECT_BUILDERS;

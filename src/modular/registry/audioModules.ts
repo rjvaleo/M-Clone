@@ -545,6 +545,72 @@ const AUDIO_DP4 = defineModule({
   ],
 });
 
+/**
+ * Stereo Widener — `MODULAR_IMPLEMENTATION_PLAN.md` §9.2 tier 5.
+ *
+ * Both controls ramp. `crossover` moves a filter corner rather than deciding a
+ * topology, so unlike a convolver's impulse or a delay's maximum length there
+ * is nothing here that has to be structural.
+ */
+const AUDIO_WIDENER = defineModule({
+  type: "m.audio-widener",
+  label: "Stereo Widener",
+  family: "audio",
+  colorToken: "audio",
+  ports: [audioIn(), audioOut()],
+  parameters: [
+    numberParam("width", "Width", 1, 0, 2, 0.01, "×"),
+    // Bass below here stays centred at every width. See `widener.ts` for why
+    // this is not optional behaviour.
+    numberParam("crossover", "Bass mono", 120, 20, 500, 1, "Hz"),
+    muteParam(),
+  ],
+  face: [
+    section("image", "Image", [param("width"), param("crossover"), param(AUDIO_MUTE_PARAM)]),
+  ],
+});
+
+/**
+ * Mixer — `MODULAR_IMPLEMENTATION_PLAN.md` §12 Phase 6, `AUDIO_ENGINE_SPEC.md` §15.
+ *
+ * Four independent inputs like the DP/4, and for the same reason: summing them
+ * at one port would make the four faders decorative.
+ */
+const AUDIO_MIXER = defineModule({
+  type: "m.audio-mixer",
+  label: "Mixer",
+  family: "audio",
+  colorToken: "audio",
+  layout: "editor",
+  ports: [
+    input("audio-in-1", "In 1", audioSignal(), { merge: "sum" }),
+    input("audio-in-2", "In 2", audioSignal(), { merge: "sum" }),
+    input("audio-in-3", "In 3", audioSignal(), { merge: "sum" }),
+    input("audio-in-4", "In 4", audioSignal(), { merge: "sum" }),
+    audioOut(),
+  ],
+  parameters: [
+    ...[1, 2, 3, 4].flatMap((channel) => [
+      numberParam(`level-${channel}`, `${channel} level`, 0.8, 0, 2, 0.01),
+      numberParam(`pan-${channel}`, `${channel} pan`, 0, -1, 1, 0.01),
+      boolParam(`mute-${channel}`, `${channel} mute`),
+      boolParam(`solo-${channel}`, `${channel} solo`),
+    ]),
+    muteParam(),
+  ],
+  face: [
+    ...[1, 2, 3, 4].map((channel) =>
+      section(`channel-${channel}`, `Channel ${channel}`, [
+        param(`level-${channel}`),
+        param(`pan-${channel}`),
+        param(`mute-${channel}`),
+        param(`solo-${channel}`),
+      ]),
+    ),
+    section("state", "State", [param(AUDIO_MUTE_PARAM)]),
+  ],
+});
+
 export const AUDIO_MODULES: ModuleDescriptor[] = [
   AUDIO_OUTPUT,
   AUDIO_GAIN,
@@ -558,4 +624,6 @@ export const AUDIO_MODULES: ModuleDescriptor[] = [
   AUDIO_DP4_REVERB,
   AUDIO_DP4_NONLIN,
   AUDIO_DP4,
+  AUDIO_WIDENER,
+  AUDIO_MIXER,
 ];
