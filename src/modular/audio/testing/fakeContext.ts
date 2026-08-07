@@ -17,6 +17,8 @@ import type {
   AudioBufferSourceNodeLike,
   BiquadFilterKind,
   BiquadFilterNodeLike,
+  ChannelMergerNodeLike,
+  ChannelSplitterNodeLike,
   CompressorNodeLike,
   ConvolverNodeLike,
   DelayNodeLike,
@@ -75,20 +77,39 @@ export class FakeParam implements AudioParamLike {
   }
 }
 
+/** One wire, with the channel indices it was made on. */
+export type FakeWire = { destination: AudioNodeLike; output: number; input: number };
+
 export class FakeNode implements AudioNodeLike {
   readonly outgoing = new Set<AudioNodeLike>();
+  /**
+   * Every connection in order, indices included.
+   *
+   * `outgoing` cannot answer "which side did this land on", and for a widener
+   * or a stereo tank that is the only question worth asking — two graphs with
+   * identical node counts differ solely in their channel indices.
+   */
+  readonly wires: FakeWire[] = [];
   disconnectCalls = 0;
 
   constructor(readonly kind: string) {}
 
-  connect(destination: AudioNodeLike): void {
+  connect(destination: AudioNodeLike, output = 0, input = 0): void {
     this.outgoing.add(destination);
+    this.wires.push({ destination, output, input });
   }
 
   disconnect(destination?: AudioNodeLike): void {
     this.disconnectCalls += 1;
-    if (destination) this.outgoing.delete(destination);
-    else this.outgoing.clear();
+    if (destination) {
+      this.outgoing.delete(destination);
+      for (let i = this.wires.length - 1; i >= 0; i--) {
+        if (this.wires[i].destination === destination) this.wires.splice(i, 1);
+      }
+      return;
+    }
+    this.outgoing.clear();
+    this.wires.length = 0;
   }
 }
 
@@ -241,6 +262,18 @@ export class FakeStereoPanner extends FakeNode implements StereoPannerNodeLike {
   }
 }
 
+export class FakeChannelSplitter extends FakeNode implements ChannelSplitterNodeLike {
+  constructor(readonly numberOfOutputs: number) {
+    super("channel-splitter");
+  }
+}
+
+export class FakeChannelMerger extends FakeNode implements ChannelMergerNodeLike {
+  constructor(readonly numberOfInputs: number) {
+    super("channel-merger");
+  }
+}
+
 export class FakePeriodicWave implements PeriodicWaveLike {
   constructor(readonly real: Float32Array, readonly imag: Float32Array) {}
 }
@@ -273,6 +306,14 @@ export class FakeAudioContext implements EffectContext, EngineContext {
 
   createStereoPanner(): StereoPannerNodeLike {
     return this.track(new FakeStereoPanner());
+  }
+
+  createChannelSplitter(numberOfOutputs: number): ChannelSplitterNodeLike {
+    return this.track(new FakeChannelSplitter(numberOfOutputs));
+  }
+
+  createChannelMerger(numberOfInputs: number): ChannelMergerNodeLike {
+    return this.track(new FakeChannelMerger(numberOfInputs));
   }
 
   createPeriodicWave(real: Float32Array, imag: Float32Array): PeriodicWaveLike {

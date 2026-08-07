@@ -1,0 +1,543 @@
+
+
+=== [p1] ===
+MINIMUM PEAK IMPULSE FIR FILTER DESIGN
+CHRISTINE S. LAW∗AND JON DATTORRO†
+Abstract. Saturation pulses rf(t) are essential to many imaging applications. Criteria for desirable saturation
+proﬁle are ﬂat passband magnitude and sharp transition with minimum peak rf(t) amplitude. Design parameters for
+RF pulses include passband and stopband ripple tolerances and time-bandwidth product. The well-known Shinnar-
+Le Roux RF pulse design technique is a transform that relates magnetization proﬁle to two polynomials AN and
+BN. In the past, BN has been obtained by traditional digital ﬁlter design techniques. A conventional approach, to
+minimum-peak rf(t) , is to design a maximum-phase polynomial BN , factor BN to obtain its roots, then com-
+binatorially search by root inversion over all possible phase patterns. But this conventional method is limited to
+time-bandwidth ≈18 before number of combinations becomes prohibitive. For time-bandwidth well in excess of
+that, we propose a convex optimization technique that determines a BN yielding the global minimum peak rf(t)
+amplitude.
+A novel convex optimization method for ﬁnding a minimum peak ﬁnite impulse response digital ﬁlter is pre-
+sented. This digital ﬁlter frequency domain magnitude obeys speciﬁed tolerances while its phase is unconstrained.
+This problem can be formulated as an optimization, with the exception of one constraint, that is convex. To overcome
+nonconvexity, we employ an iterative convex method in which the concept of direction-matrix is introduced. This
+results in solving a noncombinatorial sequence of convex problems.
+Key words. digital ﬁlter design, convex optimization, iterative convex method, rank constraint
+AMS subject classiﬁcations. 46N10, 90C25
+1. Introduction. Finite Impulse Response (FIR) ﬁlter design, subject to upper and
+lower bounds on frequency response magnitude, is generally a nonconvex problem. Wu et al.
+[1] show how such a problem can be formulated in a convex manner by employing spectral
+factorization. Their design procedure lies in the domain of power spectral density R(ω) of
+the ﬁlter’s impulse response h(t). They formulated a lowpass ﬁlter design example as a con-
+vex optimization problem to minimize stopband ripples subject to constraints on passband
+frequency, stopband frequency, and passband ripples. Other common ﬁlter design problems,
+such as minimizing maximum approximation error (between target and desired magnitude
+response functions) and magnitude equalizer design, can be formulated as convex problems
+as well.
+2. Methods. This purpose of this paper is to show how to design a lowpass ﬁlter that
+minimizes the impulse response peak amplitude ∥h(t)∥∞with a given a frequency magnitude
+response as constraint, i.e.,
+minimize
+∥h(t)∥∞
+subject to
+1 −δ1 ≤|H(ω)| ≤1 + δ1 , ω ∈[0, ωp]
+|H(ω)| ≤δ2 ,
+ω ∈[ωs , π]
+(2.1)
+where ωp, ωs, δ1, and δ2 are the passband frequency, stopband frequency, maximum passband
+ripple, and maximum stopband ripple respectively. And H(ω) is the frequency ﬁlter response,
+H(ω) = F(h(t)), where F represents Fourier Transform operation.
+∗Acute Vascular Imaging Center, Level 2, Oxford University Hospital, Oxford OX3 9DU, United Kingdom
+(christine.law@ndm.ox.ac.uk).
+†Systems Optimization Laboratory, Stanford University, Stanford CA, USA
+1
+
+
+=== [p2] ===
+2
+C. S. LAW
+But this problem statement is nonconvex (i.e. solution not necessarily globally optimal)
+[2]. So instead, deﬁne an autocorrelation matrix of h as
+G≜hhH ∈Cn×n
+(2.2)
+where G is positive semideﬁnite with rank 1. G is of rank 1 because every column of G is
+made up of vector h shifted by different amount and scaled differently (also by elements of h,
+Fig.2.1). Summing along each of 2N −1 subdiagonals produces entries of the autocorrelation
+function r of h , where
+r(i) = PN−1
+j=0 h(j)h(j + i)∗,
+where
+∗denotes complex conjugate.
+and
+r ≜rre + i rim ∈Cn.
+(2.3)
+To write r(n) in terms of G, deﬁne I0 ≜I and deﬁne In as a zero matrix having vector 1
+along the nth superdiagonal when n is positive or 1 along the nth subdiagonal when n is
+negative.
+For example, r(0) is the sum of all elements along the main diagonal of G, i.e.
+r(0)
+=
+h(0)h(0)∗+ h(1)h(1)∗+ · · · + h(N −1)h(N −1)∗
+=
+trace
+
+
+
+
+
+
+
+1
+0
+· · ·
+0
+0
+1
+0
+...
+0
+· · ·
+0
+1
+
+G
+
+
+
+
+
+=
+trace(IG)
+(2.4)
+and r(1) is the sum of all elements along the ﬁrst super diagonal of G.
+r(1)
+=
+h(0)h(1)∗+ h(1)h(2)∗+ · · · + h(N −2)h(N −1)∗
+=
+trace
+
+
+
+
+
+
+
+
+
+
+
+0
+1
+0
+· · ·
+0
+0
+0
+1
+0
+...
+...
+1
+0
+· · ·
+0
+0
+
+
+T
+G
+
+
+
+
+
+
+
+
+
+=
+trace(IT
+1 G)
+(2.5)
+An important property of G is the fact that its main diagonal holds squared absolute
+entries of h (red circles in Fig. 2.1. Minimizing ∥h∥∞is therefore equivalent to minimizing
+∥diag(G)∥∞.
+Deﬁne R(ω) as the Fourier transform of r(n) and recall R(ω) is the Fourier transform
+of h deﬁned in Eq. 2.1, R(ω) is the power spectral density function of h, i.e.
+R(ω)
+=
+F(r(n))
+H(ω)
+=
+F(h)
+R(ω)
+=
+|H(ω)|2
+
+
+=== [p3] ===
+MINIMUM PEAK DIGITAL FILTER
+3
+By spectral factorization [8], an equivalent problem to Eq. 2.1 is expressed in Eq. 2.6.
+minimize
+∥diag(G)∥∞
+subject to
+R(ω) = rre(0) + 2
+N−1
+P
+n=1
+(rre cos(ωn) + rim sin(ωn))
+(1 −δ1)2 ≤R(ω) ≤(1 + δ1)2,
+ω ∈[−ωp , ωp]
+R(ω) ≤δ2
+2 ,
+±ω ∈[ωs , π]
+R(ω) ≥0 ,
+ω ∈[−π , π]
+r(n) = trace(IT
+n G) ,
+n=0 . . . N −1
+G ⪰0
+rank(G) = 1
+(2.6)
+Each line of the constraints in Eq. 2.6 is explained below:
+1. Deﬁnition of R(ω). It is equal to taking the Fast Fourier Transform of r(n). The
+expression used in Eq. 2.6 is a direct translation to the implementation in Matlab
+using CVX [3, 4].
+2. Constraint in passband. Since R(ω) = |H(ω)|2, the tolerance is squared.
+3. Constraint in stopband.
+4. Nonnegativity constraint due to R(ω) = |H(ω)|2.
+5. Relating r(n) to G by summing each sub-diagonal of G.
+6. and 7. These last two constraints (G is positive semi-deﬁnite and rank(G) = 1) en-
+force G to be an autocorrelation matrix.
+The optimal G and r exist in subspace where all constraints intersect. Excepting the rank
+constraint, this problem is convex. To overcome the rank constraint limitation, an iterative
+convex method is used and is described in the following session.
+FIG. 2.1. Autocorrelation matrix G. Red circles highlight the elements on the main diagonal which sum to r(0).
+2.1. iterative convex method. Using the iterative convex method (see Appendix), we
+can rewrite Eq. 2.6 as a sequence of convex optimization problems by introducing a new
+direction vector W:
+
+
+=== [p4] ===
+4
+C. S. LAW
+FIG. 2.2. Graphical depiction of the relationship between key variables.
+While rank(G) > 1
+{
+minimize
+G∈SN, r∈RN
+⟨G , W⟩
+subject to
+R(ω) = rre(0) + 2
+N−1
+P
+n=1
+(rre(n) cos(ωn) + rim(n) sin(ωn))
+(1 −δ1)2 ≤R(ω) ≤(1 + δ1)2
+ω ∈[−ωp, ωp]
+R(ω) ≤δ2
+2
+± ω ∈[ωs , π]
+R(ω) ≥0
+ω ∈[−π, π]
+r(n) = trace(IT
+n G)
+n = 0 . . . N −1
+G ⪰0
+diag(G) ≤h2
+max
+Update W
+(2.7)
+}
+where hmax is the desired impulse response peak magnitude. This constraint on diag(G)
+replaces the objective from problem 2.6. This sequence of convex optimization problems is
+executed sequentially beginning with an initialization of W (usually the identity matrix). At
+the end of each iteration, the direction vector W is updated. If rank(G) > 1, then the next
+iteration will be computed using an updated W. This process is repeated until rank(G) = 1.
+One way to update the direction vector W is described as follows. Eigenvectors of W are
+chosen to be identical to G. Suppose G has an eigendecomposition that is the diagonalization
+G = QΛQT
+(2.8)
+where Q is an orthogonal matrix containing eigenvectors of G, and Λ is a diagonal matrix
+holding eigenvalues corresponding to those eigenvectors. The direction vector W is updated
+by setting its eigenvectors as Q and by setting its eigenvalues, whose locations corresponding
+to the smallest N −1 eigenvalues of G, to be 1 and 0 elsewhere. The idea is, on the next
+
+
+=== [p5] ===
+MINIMUM PEAK DIGITAL FILTER
+5
+iteration, the smallest eigenvalues of G get minimized. We choose
+W = QΦQT ,
+Φ =
+
+
+0
+0
+1
+1
+...
+0
+1
+
+
+(2.9)
+This way,
+⟨G , W⟩= tr(GW) = tr(QΛΦQT ) =
+N
+X
+i=2
+Λii
+(2.10)
+the vector inner product is a sum of the N −1 smallest eigenvalues of G. Rank of G must
+equal 1 when those N −1 eigenvalues vanish because
+rank G = rank Λ
+(2.11)
+Once a rank-one matrix G is found, polynomial h can be obtained simply by extracting
+the ﬁrst column of G followed by normalization (see Fig. 2.1): h = G(:, 1)/
+p
+G(1, 1).
+3. Results.
+3.1. Low ﬁlter order. We compared our optimization technique with the conventional
+zero-ﬂipping technique when the ﬁlter order is low and trackable. Figure 3.1 shows two
+impulse response ﬁlters with minimum peak found by zero-ﬂipping (blue) and by the pro-
+posed optimal technique (red). The impulse response maximum peak obtained by these two
+techniques are 0.1189. The ﬁlter order N = 40, passband frequency ωp = 0.2π, stopband
+frequency ωs = 0.3π, passband and stopband ripple tolerance δp = δs = 0.01. The number
+of zeros required to ﬂip in order to determine the minimum peak is 10. Figure 3.2 illus-
+trates the frequency domain magnitude proﬁles using our optimal technique and that from
+zero-ﬂipping.
+3.2. High ﬁlter order. When the ﬁlter order is high and the number of zeros required
+for ﬂipping exceeded reasonable computation time (we gave up running our zero-ﬂipping
+program when there was an power outage after one week of computation), we display the
+optimal minimum peak ﬁlter calculated by our technique and the minimum phase ﬁlter as
+reference in ﬁgure 3.3. The design criteria are: ﬁlter order N = 84, passband frequency
+ωp = 0.26π, stopband frequency ωs = 0.3π, passband and stopband ripple tolerance δp =
+δs = 0.01 (ﬁg. 3.4). The number of zeros required to ﬂip is 21 (ﬁg. 3.5).
+4. Discussion. We presented a method to design a globally minimum peak time-domain
+ﬁlter without the need for exhaustive root-inversion search. Minimum peak time-domain ﬁl-
+ter can be obtained by a series of Convex Optimization for which the objective is to ﬁnd a
+h having the lowest possible peak amplitude while simultaneously satisfying the given ﬁlter
+design parameters. Instead of working directly with time domain impulse response function
+or its Fourier transform in the frequency domain, our technique employs its autocorrela-
+tion and imposes a rank constraint on the autocorrelation matrix G . The main diagonal of
+G is [h(0)h(0)∗, h(1)h(1)∗, · · ·]T. Minimizing ∥h∥∞is therefore equivalent to minimizing
+∥diag(G)∥∞.
+Once the program has achieved global minimum, h can be extracted from
+
+
+=== [p6] ===
+6
+C. S. LAW
+FIG. 3.1. Impulse response determined by (blue) zero-ﬂipping method and (red) proposed optimal method.
+FIG. 3.2. Frequency domain ﬁlter proﬁles determined by (blue) zero-ﬂipping method and (red) proposed
+optimal method.
+the ﬁrst column of G . Columns of autocorrelation matrix G are simply copies of h hav-
+ing different scale factors; consequently, rank(G)=1. But a rank constraint is not convex.
+We overcome this by using an iterative convex method. The number of iterations varies and
+depend on the complexity of the problem.
+Applications for this speciﬁc example, i.e. minimizing FIR ﬁlter impulse response peak
+for speciﬁc magnitude frequency response, is only applicable when the frequency domain
+phase is unconstrained. One such situation is for designing radio frequency (RF) saturation
+pulse in magnetic resonance imaging (MRI). The purpose of saturation pulse is to remove
+unwanted signals from certain anatomy or tissue (for instance, suppressing signal from out-
+side the volume of interest to prevent aliasing). In MRI, RF pulses design is related to FIR
+digital ﬁlter design [5]. Phase of saturation pulse in the frequency domain is not important
+but a sharp transition width and ﬂat passband are often desired. The peak magnitude of the
+
+
+=== [p7] ===
+MINIMUM PEAK DIGITAL FILTER
+7
+FIG. 3.3. Impulse response of a (black) minimum phase ﬁlter and (red) corresponding ﬁlter determined by our
+proposed optimal method.
+FIG. 3.4. Frequency domain ﬁlter proﬁles of the (black) minimum phase ﬁlter and (red) proposed optimal method.
+saturation pulse in time domain is proportional to the speciﬁc absorption rate (SAR) of RF
+energy being deposited onto patients [6, 7, 8]. There are straight regulations of maximum
+SAR one can receive during MRI, which result in tradeoff between saturation pulse peak
+magnitude and its frequency domain speciﬁcations. The technique we presented in this paper
+is applicable for FIR ﬁlter design. More work is needed to extend this technique for direct
+RF saturation pulse design.
+5. APPENDIX. The problem solve in this paper is rank-constrained. To visualize the
+process of our iterative convex method pictorially, we will look at a closely related cardinality-
+constrained problem instead. Consider the following cardinality-constrained problem:
+
+
+=== [p8] ===
+8
+C. S. LAW
+FIG. 3.5. Pole-zero diagram of the minimum phase ﬁlter.
+ﬁnd
+x ∈Rn
+subject to
+x ∈E
+x ⪰0
+∥x∥0 ≤k
+(5.1)
+The objective in problem 5.1 is to ﬁnd a real vector x subject to the constraints that x
+belongs to the ellipsoid E, x belongs to the positive orthant, and the desired cardinality of
+x is k, i.e. the number of nonzero elements in x is at most k. A cardinality constraint is
+nonconvex. Thus, the entire problem becomes nonconvex. To overcome the nonconvexity,
+an iterative convex method is used to rewrite problem 5.1 as a sequence of convex problems
+where the cardinality constraint is replaced by a vector inner-product:
+minimize
+x∈Rn
+⟨x, y⟩
+subject to
+x ∈E
+x ⪰0
+(5.2)
+Convex problem 5.2 introduces a new parameter y which is called the direction vector
+and is the key to the iterative convex method technique. If an optimal direction vector y⋆
+is known at the beginning, then substituting that y⋆into problem 5.2 would give an optimal
+solution x⋆that is also optimal to problem 5.1. In that case, no iteration is required. We know
+that such a y⋆exists because we assume that a cardinality-k solution is feasible to problem
+5.1: Optimal y⋆has 1 in each entry corresponding to 0 in cardinality-k x⋆. If we knew where
+those zeros in x⋆were supposed to be, then y⋆would be known at the beginning.
+In practice, optimal direction vector y⋆is not known in advance. So we choose an initial
+y, solve problem 5.2, update y, and then solve problem 5.2 using the updated y. This sequence
+of solving problem 5.2 and updating y is repeated until an optimal cardinality-k solution is
+found. Direction vector y is updated in much the same way as W in Eq. 2.9. Instead of
+eigenvalues, we look directly at entries of vector x: Optimal x⋆from problem 5.2 is ﬁrst
+sorted. Then direction vector y is set to 1 in each entry corresponding to the smallest N −k
+entries in x⋆and 0 elsewhere.
+
+
+=== [p9] ===
+MINIMUM PEAK DIGITAL FILTER
+9
+⟨x⋆, y⟩=
+N
+X
+i=k+1
+smallest entries x⋆
+i in x⋆
+(5.3)
+Figure 5.1 illustrates this iteration process.
+choose initial
+direction vector y
+minimize
+x∈Rn
+⟨x, y⟩
+subject to
+x ∈E
+x ⪰0
+update
+direction vector y
+use
+updated y
+Is
+∥x∥0 ≤k?
+stop
+No
+Yes
+FIG. 5.1. Flow chart 1.
+Let us visualize this problem in R2, deﬁne x ≜[x1, x2]T. Assume k = 1, then if either
+x1 or x2 is zero, an optimal solution is found. If the initial choice of direction vector y (e.g.
+y = [1, 1]T) does not yield an optimal solution, x1 and x2 are nonzero. Without loss of
+generality, assume the elements in the resulting vector x is x2 > x1 > 0. We update the
+direction vector y by setting the element of y that corresponds to the location of x1 be 1. i.e.
+the updated y is y = [1, 0]T. Using y = [1, 0]T, problem 5.2 is solved again and this cycle is
+repeated until an optimal solution is found. Figures 5.2-5.6 illustrate this concept.
+REFERENCES
+[1] S. P. WU, S. BOYD, AND L. VANDENBERGHE, FIR ﬁlter design via semideﬁnite programming and spectral
+factorization, Proc. IEEE. Con. Decision and Control, 1 (1996), pp. 271–276.
+[2] S. BOYD AND L. VANDENBERGHE, Convex Optimization, Cambridge University Press, 2004.
+
+
+=== [p10] ===
+10
+C. S. LAW
+update direction vector y
+Is x2 > x1 > 0?
+updated y = [1, 0]T
+updated y = [0, 1]T
+Yes
+No
+minimize
+x∈Rn
+⟨x, y⟩
+subject to
+x ∈E
+x ⪰0
+choose initial
+direction vector
+y = [1, 1]T
+Is ∥x∥0 ≤1?
+use
+updated y
+stop
+Yes
+No
+FIG. 5.2. Flow chart 2.
+[3] CVX RESEARCH, INC., CVX: Matlab Software for Disciplined Convex Programming, version 2.0 beta, Sep
+2012.
+[4] M. GRANT AND S. BOYD, Graph implementations for nonsmooth convex programs, Recent Advances in
+Learning and Control (a tribute to M. Vidyasagar), V. Blondel, S. Boyd, and H. Kimura, editors, Lecture
+Notes in Control and Information Sciences, 2008, pages 95-110.
+[5] J. PAULY, P. LE ROUX, D. NISHIMURA, AND A. MACOVSKI, Parameter Relations for the Shinnar-Le Roux
+Selective Excitation Pulse Design Algorithm, IEEE Trans. on Medical Imaging, 10 (1) 1991, pp. 53–65.
+[6] M. SHINNAR, Reduced Power Selective Excitation Radio Frequency Pulses, Magnetic Resonance in
+Medicine, 32 (1994), pp. 658–660.
+[7] R. SCHULTE, J. TSAO, P. BOESIGER, AND K. PRUESSMANN, Equi-ripple design of quadratic-phase RF
+pulses, Journal of Magnetic Resonance, 116 (2004), pp. 111–122.
+[8] R. SCHULTE, A. HENNING, J. TSAO, P. BOESIGER, AND K. PRUESSMANN, Design of broadband RF pulses
+with polynomial-phase response, Journal of Magnetic Resonance, 186 (2007), pp. 167–175.
+
+
+=== [p11] ===
+MINIMUM PEAK DIGITAL FILTER
+11
+y⊥
+κ ≜{x | xTy = κ}
+y = [1, 1]T
+x2
+x1
+E
+FIG. 5.3. Choose initial direction vector y. In this R2 example, the feasible-solution set is the intersection
+(shown in red) between the ellipsoid E (orange) and the positive orthant x ⪰0 (blue). The initial direction vector y
+is chosen as [1, 1]T. Also drawn is the vector normal y⊥
+κ.
+y⊥
+κ ≜{x | xTy = κ}
+y = [1, 1]T
+x2
+x1
+E
+0.3 1
+0.7
+1
+FIG. 5.4. First iteration. The next step is to solve minimize
+x∈Rn
+⟨x, y⟩for x within the feasible-solution set.
+Graphically, pushing y⊥
+κ in the direction of y will lead to an increase of xTy = κ. Since the objective is to
+minimize xTy, we push the y⊥
+κ in the direction opposite to y until it reaches the boundary of the feasible set. The
+intersection between y⊥
+κ and the feasible set boundary is the optimal solution x⋆to problem 5.2 for y = [1, 1]T.
+Here, x⋆= [0.3, 0.7]T.
+
+
+=== [p12] ===
+12
+C. S. LAW
+y⊥
+κ ≜{x | xTy = κ}
+y = [1, 0]T
+x2
+x1
+E
+FIG. 5.5. Update y. We sort the entries of x⋆= [0.3, 0.7]T. Here, x2 > x1. Thus, we update y by placing 1
+in its second entry and 0 elsewhere; i.e. updated y = [1, 0]T.
+x2
+x1
+E
+x⋆= [0, 1.15]T
+3
+2
+1
+FIG. 5.6. Second iteration. We solve the problem minimize
+x∈Rn
+⟨x, y⟩again using y = [1, 0]T. We push y⊥
+κ in
+the direction opposite to y until it reaches the boundary of the feasible set. Here, we have x⋆= [0, 1.15]T whose
+cardinality is 1. Thus, x⋆= [0, 1.15]T is also an optimal solution to the original problem 5.1. In fact, the set
+x1 = 0, x2 ∈[1.15, 2.7] is a solution to problems 5.1 and 5.2.

@@ -28,7 +28,13 @@
 // immediate cut and long enough to be inaudible as an edge.
 
 import { rampParam } from "./params";
-import type { AudioBufferLike, AudioBufferSourceNodeLike, GainNodeLike, SampleContext } from "./nodes";
+import type {
+  AudioBufferLike,
+  AudioBufferSourceNodeLike,
+  GainNodeLike,
+  SampleContext,
+  StereoPannerNodeLike,
+} from "./nodes";
 import type { AudioNodeLike } from "./graphAdapter";
 
 /** How long a choked voice takes to get out of the way. */
@@ -59,11 +65,22 @@ export type VoiceOptions = {
   loopEndSec?: number;
   /** Voices sharing a group silence each other. Zero means no choking. */
   chokeGroup?: number;
+  /**
+   * Where this one voice sits in the field, −1 to +1.
+   *
+   * Omitted means no panner is built at all, which is the point: a granular
+   * cloud fires a voice every few tens of milliseconds, and a node per grain
+   * that every grain sets to centre is pure cost. Only Percussion passes this,
+   * because only Percussion has a per-pad position to express.
+   */
+  pan?: number;
 };
 
 type Voice = {
   source: AudioBufferSourceNodeLike;
   gain: GainNodeLike;
+  /** Built only when the voice was given a pan; see `VoiceOptions.pan`. */
+  panner: StereoPannerNodeLike | null;
   chokeGroup: number;
   startedAtSec: number;
 };
@@ -134,9 +151,21 @@ export class VoiceBank {
 
     this.applyEnvelope(gain, at, options);
     source.connect(gain);
-    gain.connect(this.destination);
 
-    const voice: Voice = { source, gain, chokeGroup, startedAtSec: at };
+    // The panner, when there is one, sits after the envelope and before the
+    // module's own output — so a pad's position is fixed relative to the kit
+    // and the kit's position is applied once, downstream, to all of it.
+    let panner: StereoPannerNodeLike | null = null;
+    if (options.pan !== undefined) {
+      panner = this.context.createStereoPanner();
+      rampParam(panner.pan, clampPan(options.pan), at, "none");
+      gain.connect(panner);
+      panner.connect(this.destination);
+    } else {
+      gain.connect(this.destination);
+    }
+
+    const voice: Voice = { source, gain, panner, chokeGroup, startedAtSec: at };
     source.onended = () => this.retire(voice);
     startSource(source, at, options.offsetSec, options.durationSec);
 
@@ -179,6 +208,7 @@ export class VoiceBank {
       stopSource(voice.source, 0);
       voice.source.disconnect();
       voice.gain.disconnect();
+      voice.panner?.disconnect();
     }
     this.voices = [];
   }
@@ -233,10 +263,15 @@ export class VoiceBank {
     voice.source.onended = null;
     voice.source.disconnect();
     voice.gain.disconnect();
+    voice.panner?.disconnect();
     const index = this.voices.indexOf(voice);
     if (index >= 0) this.voices.splice(index, 1);
   }
 }
+
+/** Web Audio clamps this itself; doing it here keeps a bad value out of the graph. */
+export const clampPan = (value: number): number =>
+  Number.isFinite(value) ? Math.min(1, Math.max(-1, value)) : 0;
 
 /**
  * When a voice has become inaudible, or null when it plays to its own end.
