@@ -70,6 +70,10 @@ export const APP_MENUS: AppMenu[] = [
       "separator",
       { id: "hand", label: "Hand Tool", hint: "Drag the canvas instead of selecting" },
       { id: "sounds", label: "Sound Pool", hint: "Show the sample pool" },
+      "separator",
+      // Not a toggle: it swaps the whole surface. Coming back is the classic
+      // interface's own View menu's job, so there is nothing to tick here.
+      { id: "classicView", label: "Classic M", hint: "Switch to the classic M interface" },
     ],
   },
 ];
