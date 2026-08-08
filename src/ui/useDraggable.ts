@@ -147,7 +147,14 @@ export function useDraggable(id: string, def: Pos, options: { autoPlace?: boolea
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
         const size = elementSize();
-        latest = placeWindow(latest, size, occupiedRects(), WINDOW_GAP);
+        // A dropped window stays exactly where it was dropped.
+        //
+        // Release used to run `placeWindow`, which snapped to nearby edges and
+        // pushed an overlap to the nearest free gap. Tidy in the abstract, and
+        // wrong in practice: you cannot deliberately overlap two windows, and a
+        // window you placed carefully jumps as you let go. Depth is what
+        // resolves overlap here — the window you touched comes to the front —
+        // so the geometry does not need to as well.
         posRef.current = latest;
         setPos(latest);
         registeredWindows.set(id, { ...latest, ...size, autoPlace });

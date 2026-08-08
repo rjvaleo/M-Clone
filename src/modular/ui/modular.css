@@ -805,3 +805,62 @@ button { cursor: pointer; }
 .mm-classic-theming { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .mm-classic-theming .mm-kit-picker { display: flex; align-items: center; gap: 4px; font-size: 10px; }
 .mm-classic-theming select { font: 10px var(--font); height: 18px; }
+
+
+/*
+ * Classic M, as a panel on the canvas.
+ *
+ * It sits inside `.mm-canvas`, so it pans and zooms with the modules. The body
+ * is a clipping box: M lays itself out against its own 640x480 workspace and
+ * would otherwise spill past the panel edge rather than scroll inside it.
+ */
+.mm-classic-panel {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  /* The same surface tokens `.mm-node` uses, so M sits on the canvas looking
+     like the other objects on it rather than like a floating dialog. */
+  background: var(--s-card);
+  border: 1px solid var(--bd-200);
+  border-radius: 9px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+}
+.mm-classic-panel.is-dragging { user-select: none; }
+
+.mm-classic-panel__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* A generous grab strip. The first version was 33px tall on a 760px panel,
+     which meant most attempts to move M missed and panned the canvas instead. */
+  padding: 12px 10px 12px 14px;
+  background: var(--s-raised, var(--s-card));
+  border-bottom: 1px solid var(--bd-200);
+  cursor: grab;
+  flex: 0 0 auto;
+  touch-action: none;
+}
+.mm-classic-panel.is-dragging .mm-classic-panel__bar { cursor: grabbing; }
+
+.mm-classic-panel__title {
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tx-900, var(--mm-text));
+  font-weight: 600;
+}
+.mm-classic-panel__bar button {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--tx-500, var(--mm-text));
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.mm-classic-panel__bar button:hover { color: var(--tx-900, var(--mm-text)); }
+
+/* M owns everything below the bar, and scrolls inside it. */
+.mm-classic-panel__body { flex: 1 1 auto; overflow: auto; position: relative; }

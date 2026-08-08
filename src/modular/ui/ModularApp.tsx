@@ -62,11 +62,7 @@ import { createNode, moduleRegistry } from "../registry/registry";
 import { applyTheme, DEFAULT_THEME_ID, themeMeta, type ThemeId } from "../theme/themes";
 import { ThemePicker } from "./ThemePicker";
 import { MenuBar, type MenuActions } from "./MenuBar";
-import { lazy, Suspense } from "react";
-
-/** Loaded on demand: M's shell and its stylesheet are dead weight until asked for. */
-const ClassicView = lazy(() => import("./ClassicView")
-  .then((module) => ({ default: module.ClassicView })));
+import { ClassicPanel, CLASSIC_PANEL_SIZE } from "./ClassicPanel";
 import { CyclicGrid } from "./CyclicGrid";
 import { executeRuntimeCommand, queueRuntimeParameter } from "./runtimebridge";
 import {
@@ -1138,8 +1134,14 @@ export function ModularApp() {
   /** Which audio backend is actually rendering, for the status bar. */
   const [engineKind, setEngineKind] = useState<RackEngineChoice>("web-audio");
   const [message, setMessage] = useState("idMLab graph ready");
-  /** Classic M takes the whole surface; it is a mode, not a panel. */
-  const [classic, setClassic] = useState(false);
+  /**
+   * Classic M, placed on the canvas rather than replacing it.
+   *
+   * `null` means closed. Opening it puts the panel near the middle of the
+   * visible canvas rather than at the origin, so it lands where the user is
+   * looking instead of somewhere they have to go and find.
+   */
+  const [classicAt, setClassicAt] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; graphX: number; graphY: number } | null>(null);
   // The menu opens empty every time: a remembered query is a menu that
   // silently hides most of itself the next time it is opened.
@@ -2144,19 +2146,46 @@ export function ModularApp() {
     zoomReset: { run: () => setZoom(1) },
     hand: { run: () => setHandMode((value) => !value), checked: handMode },
     sounds: { run: () => setPoolOpen((value) => !value), checked: poolOpen },
-    classicView: { run: () => setClassic(true) },
+    classicView: {
+      run: () => setClassicAt((at) => {
+        if (at) return null;
+        const viewport = viewportRef.current;
+        // Placed by the same rule as a new module: fully visible, clear of the
+        // chrome, and not on top of anything already there.
+        const visible = viewport
+          ? visibleRegion(
+            {
+              left: viewport.scrollLeft,
+              top: viewport.scrollTop,
+              width: viewport.clientWidth,
+              height: viewport.clientHeight,
+            },
+            zoom,
+          )
+          : { x: 0, y: 0, width: canvasSize.width, height: canvasSize.height };
+        const placed = placeNode({
+          desired: { x: visible.x + 40, y: visible.y + 40 },
+          size: CLASSIC_PANEL_SIZE,
+          existing: Object.values(graph.nodes).map((node) => ({
+            x: node.position.x,
+            y: node.position.y,
+            ...nodeSize(node.moduleType),
+          })),
+          visible,
+          canvas: canvasSize,
+        });
+        // Bring it into view. `placeNode` guarantees a spot inside the visible
+        // region, and scrolling makes that true on screen as well as on paper.
+        requestAnimationFrame(() => {
+          viewport?.scrollTo({ left: placed.x * zoom - 40, top: placed.y * zoom - 40 });
+        });
+        return placed;
+      }),
+      checked: classicAt !== null,
+    },
   };
 
   useEffect(() => () => runtimeRef.current?.stop(), []);
-  if (classic) {
-    return <Suspense fallback={<div className="mm-classic-loading">Loading classic M…</div>}>
-      <ClassicView
-        onExit={() => setClassic(false)}
-        themeId={themeId} onSelectTheme={setThemeId}
-        kitId={kitId} onSelectKit={setKitId}
-      />
-    </Suspense>;
-  }
 
   return <SoundPoolContext.Provider value={{ assets, preview: playAsset }}>
   <KitContext.Provider value={kitId}>
@@ -2238,6 +2267,15 @@ export function ModularApp() {
               cableDrag.direction,
             )} />}
         </svg>
+        {classicAt && <ClassicPanel
+          x={classicAt.x} y={classicAt.y} zoom={zoom}
+          stackIndex={2 + Object.keys(graph.nodes).length + 1}
+          themeId={themeId} onSelectTheme={setThemeId}
+          kitId={kitId} onSelectKit={setKitId}
+          onMove={(x, y) => setClassicAt({ x, y })}
+          onRaise={() => {}}
+          onClose={() => setClassicAt(null)}
+        />}
         {Object.values(graph.nodes).map((node) => <NodeFace key={node.id} node={node}
           zoom={zoom} selected={selectedNodeId === node.id} pendingConnection={pendingConnection}
           dispatch={dispatch} onCommand={handleNodeCommand}
