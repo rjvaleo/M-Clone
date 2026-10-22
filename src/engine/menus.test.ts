@@ -137,7 +137,7 @@ describe("the Variables menu", () => {
 describe("the Windows menu", () => {
   it("starts with Close Edit Windows, ahead of the window list", () => {
     // "Close Edit Windows merely closes any edit windows you have open."
-    expect(menuItemLabels(WINDOWS_MENU_ITEMS)).toEqual(["Close Edit Windows"]);
+    expect(menuItemLabels(WINDOWS_MENU_ITEMS)).toEqual(["Close Edit Windows", "Open All Windows", "New Note Window", "Tidy Windows"]);
   });
 });
 

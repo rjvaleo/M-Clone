@@ -20,4 +20,9 @@ describe("classic conductor appearance", () => {
     expect(layout.bottomColumns[7]).toBeGreaterThanOrEqual(40);
     expect(layout.tempoNumericalWidth).toBeGreaterThanOrEqual(43);
   });
+
+  it("lands exactly on the original 226 x 104 window at half scale", () => {
+    const layout = classicConductorLayout();
+    expect([layout.width / 2, layout.height / 2]).toEqual([226, 104]);
+  });
 });

@@ -10,8 +10,8 @@
 // drawing of that position's actual contents, laid out like its edit window,
 // four rows deep. Reading a Position at a glance is the whole point.
 //
-// Everything is drawn 1-bit in a 40x28 box on integer coordinates. Shapes paint
-// in `currentColor` so the Active Position can invert the whole cell.
+// Everything is drawn as smooth vector shapes in a 40x28 box. Shapes paint in
+// `currentColor` so the Active Position can invert the whole cell.
 
 import { useId } from "react";
 import type { NoteOrderMix, VelocityRange } from "../engine/types";
@@ -26,13 +26,13 @@ const ROW_H = H / ROWS; // 7px per Voice
 const midY = (voice: number) => voice * ROW_H + ROW_H / 2;
 
 /**
- * The dither pattern has to live inside each thumbnail's own <svg>, with its
+ * The half-tone fill has to live inside each thumbnail's own <svg>, with its
  * own id — `currentColor` resolves against the element that owns the pattern,
- * so a single shared definition would freeze every dither at the first cell's
+ * so a single shared definition would freeze every fill at the first cell's
  * colour and stop the Active Position from inverting.
  */
 function Box({ children }: { children: (dither: string) => React.ReactNode }) {
-  const id = `umini-dither-${useId().replace(/:/g, "")}`;
+  const id = `umini-tone-${useId().replace(/:/g, "")}`;
   return (
     <svg
       className="umini__art"
@@ -40,15 +40,13 @@ function Box({ children }: { children: (dither: string) => React.ReactNode }) {
       // Stretch to the cell rather than letterbox: these are schematic
       // drawings, and filling the cell is what makes the four Voice rows read.
       preserveAspectRatio="none"
-      shapeRendering="crispEdges"
       fill="currentColor"
       aria-hidden="true"
       focusable="false"
     >
       <defs>
-        <pattern id={id} width={2} height={2} patternUnits="userSpaceOnUse">
-          <rect width={1} height={1} fill="currentColor" />
-          <rect x={1} y={1} width={1} height={1} fill="currentColor" />
+        <pattern id={id} width={1} height={1} patternUnits="userSpaceOnUse">
+          <rect width={1} height={1} fill="currentColor" fillOpacity={0.4} />
         </pattern>
       </defs>
       {children(`url(#${id})`)}

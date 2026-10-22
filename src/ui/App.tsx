@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Unified } from "./Unified";
+import { mTheme, type MTheme } from "./mTheme";
 import {
   CHANNEL_THEME_PRESETS,
   channelThemeVariables,
@@ -9,6 +10,7 @@ import {
 } from "../engine/theme";
 import { clampWorkspaceZoom, workspaceLayout } from "../engine/workspace";
 import { WorkspaceScaleProvider } from "./WorkspaceScale";
+import { MLayoutProvider } from "./MLayoutContext";
 import { useM } from "../state/store";
 import {
   needsDownloadName,
@@ -34,7 +36,7 @@ import {
   copiedNumericalValue, draggedNumericalValue, setNumericalInput,
 } from "./numericalgesture";
 
-type Theme = "light" | "dark";
+type Theme = MTheme;
 
 type Handler = { run: () => void; enabled?: boolean; hint?: string };
 
@@ -116,8 +118,10 @@ function useElementSize() {
  * Absent — which is how M-Clone's own entry point mounts this — nothing about
  * the app changes.
  */
-export function App({ onExitToPatch, extraControls }: {
+export function App({ onExitToPatch, extraControls, colorScheme }: {
   onExitToPatch?: () => void;
+  /** Inside idMLab: the canvas theme's light or dark, which M's windows follow. */
+  colorScheme?: MTheme;
   /** Rendered at the right of the menu bar. idMLab puts its theme and kit
    *  pickers here, so the classic view can be re-skinned from inside itself. */
   extraControls?: React.ReactNode;
@@ -130,7 +134,7 @@ export function App({ onExitToPatch, extraControls }: {
       return 100;
     }
   });
-  const [theme, setTheme] = useState<Theme>(() => {
+  const [ownTheme, setTheme] = useState<Theme>(() => {
     try {
       return (localStorage.getItem("mclone.theme") as Theme) ?? "light";
     } catch {
@@ -182,14 +186,17 @@ export function App({ onExitToPatch, extraControls }: {
   const [saveName, setSaveName] = useState("Untitled");
   const [fileActionAfterSave, setFileActionAfterSave] = useState<"new" | "open" | null>(null);
 
+  const { theme, ownSwitch } = mTheme(colorScheme, ownTheme);
   useEffect(() => {
     document.body.classList.toggle("dark-bg", theme === "dark");
+  }, [theme]);
+  useEffect(() => {
     try {
-      localStorage.setItem("mclone.theme", theme);
+      localStorage.setItem("mclone.theme", ownTheme);
     } catch {
       // ignore storage failures
     }
-  }, [theme]);
+  }, [ownTheme]);
 
   useEffect(() => {
     try {
@@ -302,6 +309,18 @@ export function App({ onExitToPatch, extraControls }: {
         run: () => window.dispatchEvent(new CustomEvent("mclone:close-edit-windows")),
         hint: "Close every open edit window",
       },
+      openAllWindows: {
+        run: () => window.dispatchEvent(new CustomEvent("mclone:open-all-windows")),
+        hint: "Open every M window",
+      },
+      newNoteWindow: {
+        run: () => window.dispatchEvent(new CustomEvent("mclone:new-note-window")),
+        hint: "Open another note window on the selected track",
+      },
+      tidyWindows: {
+        run: () => window.dispatchEvent(new CustomEvent("mclone:tidy-windows")),
+        hint: "Put every moved window back in the arrangement",
+      },
     }),
     "separator",
     ...APP_WINDOWS.map((item) => ({
@@ -322,12 +341,13 @@ export function App({ onExitToPatch, extraControls }: {
   // Zoom and skin are this build's own, not M's, so they sit apart from the
   // manual's options rather than pretending to be among them.
   const viewItems: MenuItem[] = [
-    { label: "Zoom Out", run: () => setWorkspaceZoom((v) => clampWorkspaceZoom(v - 10)) },
-    { label: "Zoom In", run: () => setWorkspaceZoom((v) => clampWorkspaceZoom(v + 10)) },
-    { label: "Actual Size", run: () => setWorkspaceZoom(100) },
+    { label: "Actual Size (1×)", checked: workspaceZoom === 100, run: () => setWorkspaceZoom(100) },
+    { label: "2× View", checked: workspaceZoom === 200, run: () => setWorkspaceZoom(200) },
     "separator",
-    { label: "Light Theme", checked: theme === "light", run: () => setTheme("light") },
-    { label: "Dark Theme", checked: theme === "dark", run: () => setTheme("dark") },
+    ...(ownSwitch ? [
+      { label: "Light Theme", checked: theme === "light", run: () => setTheme("light") },
+      { label: "Dark Theme", checked: theme === "dark", run: () => setTheme("dark") },
+    ] : []),
     ...(onExitToPatch
       ? ["separator" as const, { label: "Return to Patch", run: onExitToPatch }]
       : []),
@@ -337,7 +357,7 @@ export function App({ onExitToPatch, extraControls }: {
   const layout = workspaceLayout(viewport.width, viewport.height, workspaceZoom);
 
   return (
-    <div className={"app" + (theme === "dark" ? " theme-dark" : "")}
+    <div className={"app m-skin" + (theme === "dark" ? " theme-dark" : "")}
       onInputCapture={(event) => {
         const input = event.target as HTMLInputElement;
         if (input.tagName === "INPUT" && input.type === "number"
@@ -394,14 +414,13 @@ export function App({ onExitToPatch, extraControls }: {
           {documentName ?? "Untitled"}{isDirty ? " •" : ""}
         </p>
         <div className="app__views">
-          <div className="zoom-control" role="group" aria-label="Application zoom">
-            <button type="button" onClick={() => setWorkspaceZoom((value) => clampWorkspaceZoom(value - 10))}
-              aria-label="Zoom out">−</button>
-            <output aria-label="Application zoom level">{workspaceZoom}%</output>
-            <button type="button" onClick={() => setWorkspaceZoom((value) => clampWorkspaceZoom(value + 10))}
-              aria-label="Zoom in">+</button>
-            <button type="button" onClick={() => setWorkspaceZoom(100)}
-              title="Actual size">1:1</button>
+          <div className="zoom-control" role="group" aria-label="View scale">
+            {([100, 200] as const).map((zoom) => (
+              <button key={zoom} type="button" aria-pressed={workspaceZoom === zoom}
+                className={workspaceZoom === zoom ? "is-on" : undefined}
+                title={zoom === 100 ? "Actual size: windows at their original size" : "Everything exactly twice as large"}
+                onClick={() => setWorkspaceZoom(zoom)}>{zoom / 100}×</button>
+            ))}
           </div>
           <label className="theme-picker">
             <span className="visually-hidden">Channels</span>
@@ -422,7 +441,8 @@ export function App({ onExitToPatch, extraControls }: {
                 onChange={(event) => setChannelColor(index, event.target.value)} />
             ))}
           </div>
-          <button
+          {ownSwitch && <>
+            <button
               className={"vtab" + (theme === "light" ? " vtab--on" : "")}
               onClick={() => setTheme("light")}
             >
@@ -432,8 +452,9 @@ export function App({ onExitToPatch, extraControls }: {
               className={"vtab" + (theme === "dark" ? " vtab--on" : "")}
               onClick={() => setTheme("dark")}
             >
-            Dark
-          </button>
+              Dark
+            </button>
+          </>}
         </div>
       </nav>
 
@@ -483,14 +504,18 @@ export function App({ onExitToPatch, extraControls }: {
           <div className="workspace-logical" style={{
             width: layout.logical.width,
             height: layout.logical.height,
-            transform: `scale(${layout.scale})`,
+            // zoom, not transform: the desktop is laid out again at the new
+            // size, so text and shapes are drawn sharp rather than resampled.
+            zoom: layout.scale,
           }}>
             <WorkspaceScaleProvider value={layout.scale}>
-              <Unified openVoiceColor={(voice) => {
-                document.querySelector<HTMLInputElement>(
-                  `input[aria-label="Voice ${voice + 1} color"]`,
-                )?.click();
-              }} />
+              <MLayoutProvider>
+                <Unified openVoiceColor={(voice) => {
+                  document.querySelector<HTMLInputElement>(
+                    `input[aria-label="Voice ${voice + 1} color"]`,
+                  )?.click();
+                }} />
+              </MLayoutProvider>
             </WorkspaceScaleProvider>
           </div>
         </div>

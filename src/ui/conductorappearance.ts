@@ -18,13 +18,14 @@ export function conductorControlTone(control: ConductorControl): ConductorTone {
 
 export function classicConductorLayout() {
   return {
-    width: 459,
-    height: 214,
-    leftWidth: 265,
-    gridWidth: 194,
-    topHeight: 158,
-    bottomHeight: 56,
-    bottomColumns: [37, 192, 38, 38, 54, 28, 28, 44] as const,
+    // Laid out at twice the original's 226 x 104 and shown at half size.
+    width: 452,
+    height: 208,
+    leftWidth: 260,
+    gridWidth: 192,
+    topHeight: 154,
+    bottomHeight: 54,
+    bottomColumns: [37, 185, 38, 38, 54, 28, 28, 44] as const,
     tempoNumericalWidth: 43,
   };
 }
