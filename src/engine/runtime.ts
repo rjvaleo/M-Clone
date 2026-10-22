@@ -30,7 +30,6 @@ import {
   normalizeSynthSettings,
   type SynthSettings,
 } from "./synth";
-import { cyclicResetVoices } from "./cyclicreset";
 import { clockPulseInterval, metronomeInterval } from "./clockoutput";
 import {
   clockContinue, clockSongPosition, clockStart, clockStop, clockTick,
@@ -75,6 +74,8 @@ export class MRuntime {
   private follower: ClockFollower = createClockFollower();
   private nextClockAt = 0;
   private nextMetronomeAt = 0;
+  /** Tap Conduct: playback may run up to `deadline`; null while frozen. */
+  private tapGate: { deadline: number | null } | null = null;
 
   constructor(
     getState: () => ProjectState,
@@ -333,7 +334,41 @@ export class MRuntime {
     this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? this.ctx.currentTime);
   }
 
+  /**
+   * Enter Tap Conduct. `held` starts it waiting for the second tap ("a beat
+   * for nothing"); otherwise the music keeps going until taps take over.
+   */
+  beginTapConduct(held: boolean): void {
+    this.tapGate = { deadline: held ? Number.NEGATIVE_INFINITY : null };
+  }
+
+  /**
+   * A tap: let one more beat play. If the music was already waiting for this
+   * tap, it continues from where it stopped rather than catching up.
+   */
+  tapConductBeat(beatSec: number): void {
+    if (!this.tapGate) return;
+    const now = this.nowSec();
+    const deadline = this.tapGate.deadline;
+    if (deadline !== null && now > deadline && this.cursors.length > 0) {
+      const earliest = Math.min(...this.cursors.map((cursor) => cursor.nextTimeSec));
+      const shift = Math.max(0, now + 0.02 - earliest);
+      this.cursors = this.cursors.map((cursor) => ({
+        ...cursor,
+        nextTimeSec: cursor.nextTimeSec + shift,
+        originSec: cursor.originSec + shift,
+      }));
+    }
+    this.tapGate = { deadline: now + beatSec };
+  }
+
+  /** Freeze: keep playing at the tapped tempo without waiting for taps. */
+  freezeTapConduct(): void {
+    if (this.tapGate) this.tapGate = { deadline: null };
+  }
+
   stop(): void {
+    this.tapGate = null;
     if (this.timer !== null) {
       this.scheduler.cancel(this.timer);
       this.timer = null;
@@ -382,20 +417,24 @@ export class MRuntime {
     const timing = timingFingerprints(state);
     this.cursors = rebaseChangedTimelines(this.cursors, this.timing, timing);
     this.timing = timing;
-    const windowEnd = now + decision.lookaheadSec;
+    // Tap Conduct: nothing may be planned past the beat the last tap released,
+    // and once that beat has run out the music waits for the next tap.
+    const tapDeadline = this.tapGate?.deadline ?? null;
+    if (tapDeadline !== null && now >= tapDeadline) {
+      this.submitEvents(now + decision.lookaheadSec);
+      return;
+    }
+    const windowEnd = tapDeadline === null
+      ? now + decision.lookaheadSec
+      : Math.min(now + decision.lookaheadSec, tapDeadline);
     // One tempo for the whole tick: the planner and the clock output must not
     // disagree about how fast the music is going.
     const tempo = this.effectiveTempo(state.tempo, now);
     if (tempo !== state.tempo) state = { ...state, tempo };
     this.scheduleClockOutputs(tempo, windowEnd);
     this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? now);
-    const previousCyclic = this.cursors.map((cursor) => cursor.cyclicPos);
-    const { notes, cursors, steps } = planWindow(state, this.cursors, this.rngs, now, windowEnd);
-    const resets = cyclicResetVoices(
-      previousCyclic,
-      cursors.map((cursor) => cursor.cyclicPos),
-      state.cyclicLengths.rhythm,
-    );
+    const { notes, cursors, steps, cyclicResets: resets } =
+      planWindow(state, this.cursors, this.rngs, now, windowEnd);
     this.cursors = cursors;
     this.lifecycle.ingest(notes, this.destinations());
     this.submitEvents(windowEnd);

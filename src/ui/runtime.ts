@@ -10,7 +10,11 @@ let runtime: MRuntime | null = null;
 export function getRuntime(): MRuntime {
   if (!runtime) {
     runtime = new MRuntime(
-      () => useM.getState().project,
+      () => {
+        // Tap Affects Velocity is a live input, not document state.
+        const { project, tapVelocityOffset } = useM.getState();
+        return tapVelocityOffset ? { ...project, velocityOffset: tapVelocityOffset } : project;
+      },
       (notes) => useM.getState().recordMidiNotes(notes),
       {
         onCyclicReset: (voices) => useM.getState().signalCyclicReset(voices),
@@ -60,6 +64,19 @@ export function getRuntime(): MRuntime {
             }
             if (response.type === "sync") {
               runtime?.sync();
+              continue;
+            }
+            if (response.type === "tap-conduct-start") {
+              runtime?.beginTapConduct(response.held);
+              if (response.held) void runtime?.start().then(() => useM.getState().setPlaying(true));
+              continue;
+            }
+            if (response.type === "tap-beat") {
+              runtime?.tapConductBeat(response.beatSec);
+              continue;
+            }
+            if (response.type === "tap-freeze") {
+              runtime?.freezeTapConduct();
               continue;
             }
             if ("voice" in response) {

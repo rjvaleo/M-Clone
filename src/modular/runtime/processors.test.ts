@@ -666,6 +666,42 @@ describe("Note Density processor", () => {
     expect(processor.accepted + processor.rejected).toBe(200);
   });
 
+  it("holds a note through the slot it skips instead of leaving a hole, as Classic does", () => {
+    // M 2.7 p.71: "If a note is not played, ... the previous note will be held
+    // out". A slot whose draw fails still sounds, lengthened by one slot, and
+    // the slot after it is the silent one.
+    const { bus, read, processor } = density(50);
+    const slot = 240;
+    // Two-note chords, so a silent slot has to drop both of its notes; the
+    // last slot carries no legato factor, so its own length stands in.
+    feed(bus, "nd", "notes-in", Array.from({ length: 200 }, (_, i) => [60, 64].map((note) => ({
+      kind: "note-event" as const, atTick: i * slot, durationTicks: 216, gate: i === 199 ? 0 : 0.9,
+      note, velocity: 100, channel: 1,
+    }))).flat());
+    bus.beginNode("nd", 1024);
+    processor.process(window(0, 200 * slot));
+    expect(processor.accepted + processor.rejected).toBe(400);
+    const sounded = new Map(read().map((note) => [note.atTick / slot, note.durationTicks]));
+    const held = [...sounded].filter(([, length]) => length === 216 + slot).map(([i]) => i);
+    expect(held.length).toBeGreaterThan(10);
+    for (const i of held) if (i < 199) expect(sounded.has(i + 1)).toBe(false);
+    for (let i = 0; i < 199; i++) {
+      if (!sounded.has(i + 1)) {
+        expect(!sounded.has(i) || sounded.get(i) === 216 + slot).toBe(true);
+      }
+    }
+  });
+
+  it("holds a note with no legato factor for its own length again", () => {
+    const { bus, read, processor } = density(1);
+    feed(bus, "nd", "notes-in", [
+      { kind: "note-event", atTick: 0, durationTicks: 200, gate: 0, note: 60, velocity: 100, channel: 1 },
+    ]);
+    bus.beginNode("nd", 64);
+    processor.process(window(0, 960));
+    expect(read().map((note) => note.durationTicks)).toEqual([400]);
+  });
+
   it("preserves every field of an accepted note", () => {
     const { bus, read, processor } = density(100);
     feed(bus, "nd", "notes-in", [

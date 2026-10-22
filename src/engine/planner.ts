@@ -2,7 +2,7 @@
 // produce the notes to schedule and the advanced cursors. This is the pure,
 // fully-tested heart of the engine — no audio, no timers, no DOM.
 
-import type { ProjectState, NoteOrderCursor } from "./types";
+import type { ProjectState, NoteOrderCursor, CyclicVariable } from "./types";
 import { Rng } from "./rng";
 import {
   stepDurationSeconds,
@@ -47,6 +47,13 @@ export type PlannedStep = { voice: number; step: number };
 
 export const PPQN = 960;
 
+/**
+ * One counter per Cyclic Variable. M keeps them separate and wraps each at its
+ * own cycle length, which is what lets cycles of different lengths phase
+ * against each other: a 3-step Accent over a 4-step Legato repeats every 12.
+ */
+export type CyclicCounters = Record<CyclicVariable, number>;
+
 export type VoiceCursor = {
   order: NoteOrderCursor;
   /** Real time of the next event — what actually gets scheduled. */
@@ -58,34 +65,41 @@ export type VoiceCursor = {
    * evenly; Time Distortion decides where that lands in real time.
    */
   clockSec: number;
-  cyclicPos: number;
+  cyclicPos: CyclicCounters;
   transportTick: number;
+  /** The last slot's density draw failed, so this slot is held over and silent. */
+  holdNext: boolean;
 };
+
+const cycleLength = (state: ProjectState, kind: CyclicVariable, voice: number): number =>
+  Math.max(1, Math.min(16, state.cyclicLengths[kind][voice]));
+
+/**
+ * The step a counter reads. A counter left past the end of a cycle that has
+ * since been shortened starts again from the first step, as M does.
+ */
+const cycleStep = (state: ProjectState, kind: CyclicVariable, voice: number, counter: number): number =>
+  counter >= cycleLength(state, kind, voice) ? 0 : counter;
+
+function cyclicLevel(
+  state: ProjectState,
+  kind: CyclicVariable,
+  voice: number,
+  step: number,
+  rng: Rng,
+): number {
+  return pickCyclicLevel(state.cyclic[kind][voice][step], rng);
+}
 
 function cyclicMultiplier(
   state: ProjectState,
   kind: "legato" | "rhythm",
   voice: number,
-  position: number,
+  step: number,
   rng: Rng,
 ): number {
-  const cycle = state.cyclic[kind][voice];
-  const length = state.cyclicLengths[kind][voice];
-  const level = pickCyclicLevel(cycle[position % length], rng);
-  const value = state.cyclicValues[kind][level];
+  const value = state.cyclicValues[kind][cyclicLevel(state, kind, voice, step, rng)];
   return kind === "legato" ? value / 100 : value;
-}
-
-function cyclicLevel(
-  state: ProjectState,
-  kind: "accent" | "legato" | "rhythm",
-  voice: number,
-  position: number,
-  rng: Rng,
-): number {
-  const cycle = state.cyclic[kind][voice];
-  const length = state.cyclicLengths[kind][voice];
-  return pickCyclicLevel(cycle[position % length], rng);
 }
 
 /** One fresh cursor per voice, all starting at `startSec`. */
@@ -98,8 +112,9 @@ export function makeCursors(state: ProjectState, startSec: number): VoiceCursor[
       nextTimeSec: startSec + phaseSec,
       originSec: startSec + phaseSec,
       clockSec: 0,
-      cyclicPos: 0,
+      cyclicPos: { accent: 0, legato: 0, rhythm: 0 },
       transportTick: Math.round(phase * PPQN / 96),
+      holdNext: false,
     };
   });
 }
@@ -116,20 +131,17 @@ export function planWindow(
   rng: Rng | readonly Rng[],
   _windowStart: number,
   windowEnd: number,
-): { notes: PlannedNote[]; cursors: VoiceCursor[]; steps: PlannedStep[] } {
+): {
+  notes: PlannedNote[];
+  cursors: VoiceCursor[];
+  steps: PlannedStep[];
+  /** Voices whose Rhythm cycle (of more than one step) began again in this window. */
+  cyclicResets: number[];
+} {
   const notes: PlannedNote[] = [];
   const steps: PlannedStep[] = [];
   const nextCursors: VoiceCursor[] = [];
-
-  // Effective per-voice transposition. Second-Order Transpose stacks the
-  // voices cumulatively (a harmonizer feeding a harmonizer), so each voice
-  // adds the transpositions of the voices above it — building implied chords.
-  const baseTrans = state.voices.map((v) => v.transposition);
-  let effTrans = baseTrans;
-  if (state.secondOrderTranspose) {
-    let acc = 0;
-    effTrans = baseTrans.map((t) => (acc += t));
-  }
+  const cyclicResets: number[] = [];
 
   state.voices.forEach((v, vi) => {
     const voiceRng = Array.isArray(rng) ? rng[vi] : rng as Rng;
@@ -156,6 +168,8 @@ export function planWindow(
     let t = realAt(clockSec);
     let cyclicPos = cursor.cyclicPos;
     let transportTick = cursor.transportTick;
+    let rhythmRestarted = false;
+    let holdNext = cursor.holdNext;
     const baseTicks = PPQN * 4 * v.timeBaseNumerator / v.timeBaseDenominator;
 
     if (outLen <= 0) {
@@ -164,29 +178,54 @@ export function planWindow(
       t = realAt(clockSec);
     } else {
       while (t < windowEnd) {
-        const velocity = velocityForAccent(
+        const step = {
+          accent: cycleStep(state, "accent", vi, cyclicPos.accent),
+          legato: cycleStep(state, "legato", vi, cyclicPos.legato),
+          rhythm: cycleStep(state, "rhythm", vi, cyclicPos.rhythm),
+        };
+        if (step.rhythm === 0 && cycleLength(state, "rhythm", vi) > 1) rhythmRestarted = true;
+        const accented = velocityForAccent(
           v.velocityRange,
-          cyclicLevel(state, "accent", vi, cyclicPos, voiceRng),
+          cyclicLevel(state, "accent", vi, step.accent, voiceRng),
         );
-        const legato = cyclicMultiplier(state, "legato", vi, cyclicPos, voiceRng);
-        const rhythm = cyclicMultiplier(state, "rhythm", vi, cyclicPos, voiceRng);
+        const velocity = accented > 0 && state.velocityOffset
+          ? Math.max(1, Math.min(127, accented + state.velocityOffset))
+          : accented;
+        const legato = cyclicMultiplier(state, "legato", vi, step.legato, voiceRng);
+        const rhythm = cyclicMultiplier(state, "rhythm", vi, step.rhythm, voiceRng);
         const nextClockSec = clockSec + stepDur * rhythm;
         const nextOnsetSec = realAt(nextClockSec);
         const onsetIntervalSec = Math.max(0, nextOnsetSec - t);
+        // Play-Enable only decides whether the step sounds: a muted voice keeps
+        // reading its pattern, so turning it back on finds it in phase.
+        const r = nextMixedStepIndex(v.noteOrderMix, order, outLen, voiceRng);
+        order = r.cursor;
         if (v.playEnabled) {
-          const r = nextMixedStepIndex(v.noteOrderMix, order, outLen, voiceRng);
-          order = r.cursor;
           steps.push({ voice: vi, step: r.index });
           const source =
             r.source === "cyclic" ? pat.scrambledSteps : pat.steps;
-          const step = source[r.index];
-          if (velocity > 0 && step.pitches.length > 0 && gate(v.density, voiceRng)) {
-            for (const p of step.pitches) {
+          const patternStep = source[r.index];
+          // Note Density, as M plays it: a slot whose draw fails still sounds,
+          // held through the next slot, and that next slot is the silent one.
+          // At 0 nothing sounds, which is what the manual promises.
+          let sounds = false;
+          let held = false;
+          if (velocity > 0 && patternStep.pitches.length > 0) {
+            const passed = gate(v.density, voiceRng);
+            sounds = !holdNext && (passed || v.density > 0);
+            held = !passed;
+            holdNext = !passed;
+          } else {
+            holdNext = false;
+          }
+          if (sounds) {
+            const lengthFactor = v.legato * legato + (held ? 1 : 0);
+            for (const p of patternStep.pitches) {
               let n: number;
               if (state.diatonicTranspose) {
-                n = diatonicTranspose(p, state.root, state.scale, effTrans[vi]);
+                n = diatonicTranspose(p, state.root, state.scale, v.transposition);
               } else {
-                n = p + effTrans[vi];
+                n = p + v.transposition;
               }
               if (state.scaleSnap) n = snapToScale(n, state.root, state.scale);
               if (state.chordTones) n = snapToChord(n, state.root, state.scale);
@@ -197,9 +236,9 @@ export function planWindow(
                   velocity,
                   channel,
                   startSec: t,
-                  durationSec: onsetIntervalSec * v.legato * legato,
+                  durationSec: onsetIntervalSec * lengthFactor,
                   atTick: Math.round(transportTick),
-                  durationTicks: Math.max(0, Math.round(baseTicks * rhythm * v.legato * legato)),
+                  durationTicks: Math.max(0, Math.round(baseTicks * rhythm * lengthFactor)),
                   source: r.source,
                   rhythm,
                 });
@@ -210,9 +249,12 @@ export function planWindow(
         clockSec = nextClockSec;
         transportTick += Math.round(baseTicks * rhythm);
         t = nextOnsetSec;
-        cyclicPos = (cyclicPos + 1) % 16;
+        const advance = (kind: CyclicVariable) =>
+          (step[kind] + 1) % cycleLength(state, kind, vi);
+        cyclicPos = { accent: advance("accent"), legato: advance("legato"), rhythm: advance("rhythm") };
       }
     }
+    if (rhythmRestarted) cyclicResets.push(vi);
 
     nextCursors.push({
       order,
@@ -221,8 +263,9 @@ export function planWindow(
       clockSec,
       cyclicPos,
       transportTick,
+      holdNext,
     });
   });
 
-  return { notes, cursors: nextCursors, steps };
+  return { notes, cursors: nextCursors, steps, cyclicResets };
 }
