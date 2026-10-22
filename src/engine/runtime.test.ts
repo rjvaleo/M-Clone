@@ -271,3 +271,114 @@ describe("Tap Conduct gate", () => {
     runtime.stop();
   });
 });
+
+describe("playing through a host's engine", () => {
+  const hostAudio = () => {
+    const context = new FakeAudioContext();
+    const output = { tag: "host output" } as unknown as AudioNode;
+    return { context: context as unknown as AudioContext, output };
+  };
+
+  it("uses the host's AudioContext and output instead of making its own", async () => {
+    const host = hostAudio();
+    const audio = vi.fn(() => host);
+    const runtime = new MRuntime(() => createDefaultProject(), null, { audio });
+    await runtime.start();
+    expect(runtime.context).toBe(host.context);
+    runtime.stop();
+  });
+
+  it("connects its master to the host's output, not to the speakers", async () => {
+    const host = hostAudio();
+    const connect = vi.fn();
+    (host.context as unknown as FakeAudioContext).createGain = () =>
+      ({ gain: { value: 0 }, connect } as unknown as GainNode);
+    const runtime = new MRuntime(() => createDefaultProject(), null, { audio: () => host });
+    await runtime.start();
+    expect(connect).toHaveBeenCalledWith(host.output);
+    expect(connect).not.toHaveBeenCalledWith(host.context.destination);
+    runtime.stop();
+  });
+
+  it("asks the host for audio only when it first needs it, and only once", async () => {
+    const audio = vi.fn(hostAudio);
+    const runtime = new MRuntime(() => createDefaultProject(), null, { audio });
+    expect(audio).not.toHaveBeenCalled();
+    await runtime.start();
+    runtime.stop();
+    await runtime.start();
+    runtime.stop();
+    expect(audio).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens MIDI through the host's access rather than asking the browser itself", async () => {
+    const access = {
+      inputs: new Map(), outputs: new Map(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    } as unknown as MIDIAccess;
+    const midiAccess = vi.fn(async () => access);
+    const runtime = new MRuntime(() => createDefaultProject(), null, { audio: hostAudio, midiAccess });
+    await runtime.midiPorts().enable();
+    expect(midiAccess).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("sending M's tracks to the canvas", () => {
+  const hostAudio = () => ({
+    context: new FakeAudioContext() as unknown as AudioContext,
+    output: {} as AudioNode,
+  });
+
+  it("hands every note to the canvas, voice by voice, at the time it was planned", async () => {
+    const sent: { type: string; voice: number; note: number; atSec: number }[] = [];
+    let now = 0;
+    const scheduler: SchedulerDriver = {
+      repeat: (fn) => { tick = fn; return 1 as unknown as ReturnType<SchedulerDriver["repeat"]>; },
+      once: () => 2 as unknown as ReturnType<SchedulerDriver["once"]>,
+      cancel: () => {},
+    };
+    let tick = () => {};
+    const runtime = new MRuntime(() => createDefaultProject(), null, {
+      audio: hostAudio,
+      clock: { nowSec: () => now },
+      scheduler,
+      canvas: {
+        send: (events) => {
+          for (const event of events) {
+            if (event.type === "note-on" || event.type === "note-off") {
+              sent.push({ type: event.type, voice: event.voice, note: event.note, atSec: event.atSec });
+            }
+          }
+        },
+        panic: () => {},
+        routedVoices: () => new Set([0, 1, 2, 3]),
+      },
+    });
+    await runtime.start();
+    for (let step = 0; step < 40; step++) { now += 0.025; tick(); }
+    runtime.stop();
+    const ons = sent.filter((event) => event.type === "note-on");
+    expect(ons.length).toBeGreaterThan(0);
+    expect(ons.every((event) => event.voice >= 0 && event.voice < 4)).toBe(true);
+  });
+
+  it("silences M's own synth on a routed track and leaves the others playing it", async () => {
+    const runtime = new MRuntime(() => createDefaultProject(), null, {
+      audio: hostAudio,
+      canvas: { send: () => {}, panic: () => {}, routedVoices: () => new Set([1]) },
+    });
+    expect(runtime.synthPlaysVoice(0)).toBe(true);
+    expect(runtime.synthPlaysVoice(1)).toBe(false);
+  });
+
+  it("silences the canvas players on stop", async () => {
+    const panic = vi.fn();
+    const runtime = new MRuntime(() => createDefaultProject(), null, {
+      audio: hostAudio,
+      canvas: { send: () => {}, panic, routedVoices: () => new Set() },
+    });
+    await runtime.start();
+    runtime.stop();
+    expect(panic).toHaveBeenCalled();
+  });
+});

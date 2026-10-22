@@ -62,7 +62,12 @@ import { createNode, moduleRegistry } from "../registry/registry";
 import { applyTheme, DEFAULT_THEME_ID, themeMeta, type ThemeId } from "../theme/themes";
 import { ThemePicker } from "./ThemePicker";
 import { MenuBar, type MenuActions } from "./MenuBar";
-import { ClassicPanel, CLASSIC_PANEL_SIZE } from "./ClassicPanel";
+import { MFaceHostContext, MNodeFace, readMNodeSize } from "./MNodeFace";
+import { M_NODE_TYPE, findMNode, routedTracks, trackTargets } from "./mNode";
+import { canAddModule } from "../model/limits";
+import { setRuntimeHost } from "../../ui/runtime";
+import { useM } from "../../state/store";
+import { shareMidiAccess } from "./midisession";
 import { CyclicGrid } from "./CyclicGrid";
 import { executeRuntimeCommand, queueRuntimeParameter } from "./runtimebridge";
 import {
@@ -144,6 +149,11 @@ function sameAnchors(a: Record<string, Point>, b: Record<string, Point>): boolea
   return true;
 }
 
+/** One MIDI access for the canvas and for M, so the browser is asked once. */
+const browserMidiAccess = typeof navigator !== "undefined" && typeof navigator.requestMIDIAccess === "function"
+  ? shareMidiAccess(() => navigator.requestMIDIAccess({ sysex: false }))
+  : null;
+
 const FACE_SIZES = {
   compact: { width: 520, height: 330 },
   editor: { width: 900, height: 650 },
@@ -154,8 +164,9 @@ const FACE_SIZES = {
 // working out how much canvas the patch occupies. Modules render to their
 // content, so the real height is whatever the face comes to.
 
-const nodeSize = (moduleType: string) =>
-  FACE_SIZES[moduleRegistry.get(moduleType)?.layout ?? "utility"];
+const nodeSize = (moduleType: string) => moduleType === M_NODE_TYPE
+  ? readMNodeSize()
+  : FACE_SIZES[moduleRegistry.get(moduleType)?.layout ?? "utility"];
 
 const STORAGE_KEYS = {
   theme: "m.modular.theme",
@@ -840,6 +851,7 @@ function CustomFace({ element, node, setParameter, setParameters, status }: {
       setParameters={setParameters} currentStep={playingStep(status.cursor)}
       storageId={storage} lengthId={`${sequence}-length`} showPresets={false} />;
   }
+  if (element.id === "m-app") return <MNodeFace />;
   if (element.id === "cyclic-grid") {
     return <CyclicGrid node={node} setParameter={setParameter}
       setParameters={setParameters} currentStep={playingStep(status.cursor)} />;
@@ -1134,14 +1146,6 @@ export function ModularApp() {
   /** Which audio backend is actually rendering, for the status bar. */
   const [engineKind, setEngineKind] = useState<RackEngineChoice>("web-audio");
   const [message, setMessage] = useState("idMLab graph ready");
-  /**
-   * Classic M, placed on the canvas rather than replacing it.
-   *
-   * `null` means closed. Opening it puts the panel near the middle of the
-   * visible canvas rather than at the origin, so it lands where the user is
-   * looking instead of somewhere they have to go and find.
-   */
-  const [classicAt, setClassicAt] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; graphX: number; graphY: number } | null>(null);
   // The menu opens empty every time: a remembered query is a menu that
   // silently hides most of itself the next time it is opened.
@@ -1282,6 +1286,10 @@ export function ModularApp() {
     if (!selectedNodeId) return;
     const source = graph.nodes[selectedNodeId];
     if (!source) return;
+    if (!canAddModule(graph, source.moduleType)) {
+      setMessage(`Only one ${source.label} per canvas`);
+      return;
+    }
     const id = `${source.moduleType.split('.').pop()}-${nextId.current++}`;
     const duplicate = structuredClone(source);
     duplicate.id = id;
@@ -1524,6 +1532,11 @@ export function ModularApp() {
 
   const addNode = (moduleType: string) => {
     if (!menu) return;
+    if (!canAddModule(graph, moduleType)) {
+      setMessage(`Only one ${moduleRegistry.get(moduleType)?.label ?? moduleType} per canvas`);
+      setMenu(null);
+      return;
+    }
     const moduleTypeParts = moduleType.split('.');
     const id = `${moduleTypeParts[moduleTypeParts.length - 1]}-${nextId.current++}`;
     const viewport = viewportRef.current;
@@ -1751,7 +1764,7 @@ export function ModularApp() {
       // of it become unreachable rather than merely awkward.
       const element = event.target as Element | null;
       if (element?.closest?.(
-        ".mm-module-menu, .mm-pool, .mm-theme-menu, .mm-theme-studio, .mm-note-roll__view",
+        ".mm-module-menu, .mm-pool, .mm-theme-menu, .mm-theme-studio, .mm-note-roll__view, .mm-m-face",
       )) return;
       event.preventDefault();
       event.stopPropagation();
@@ -1837,8 +1850,8 @@ export function ModularApp() {
       clock: presentationClock,
       wakeIntervalMs: 25,
     });
-    const requestAccess = typeof navigator.requestMIDIAccess === "function"
-      ? async () => await navigator.requestMIDIAccess({ sysex: false }) as unknown as MidiAccessLike
+    const requestAccess = browserMidiAccess
+      ? async () => await browserMidiAccess() as unknown as MidiAccessLike
       : null;
     const midiSession = new BrowserMidiSession(runtime, presentationClock, requestAccess);
     runtimeRef.current = runtime;
@@ -1957,6 +1970,63 @@ export function ModularApp() {
     });
     return engine;
   }, [refreshAssets]);
+
+  // M plays through this canvas: its sound joins the mix, it shares the MIDI
+  // access, and each track's notes go to the modules cabled to its output.
+  // Set on first render, before M's face mounts and makes its runtime.
+  const graphRef = useRef(graph);
+  graphRef.current = graph;
+  const startAudioRef = useRef(startAudio);
+  startAudioRef.current = startAudio;
+  useState(() => {
+    const mTargets = () => {
+      const current = graphRef.current;
+      const m = findMNode(current);
+      return m ? trackTargets(current, m) : new Map<number, string[]>();
+    };
+    setRuntimeHost({
+      audio: () => {
+        const engine = startAudioRef.current();
+        return engine ? {
+          context: engine.audioContext as unknown as AudioContext,
+          output: engine.input as unknown as AudioNode,
+        } : null;
+      },
+      ...(browserMidiAccess ? { midiAccess: browserMidiAccess } : {}),
+      canvas: {
+        send: (events) => {
+          const engine = audioRef.current;
+          if (!engine) return;
+          const targets = mTargets();
+          for (const event of events) {
+            if (event.type !== "note-on" && event.type !== "note-off") continue;
+            for (const nodeId of targets.get(event.voice) ?? []) engine.playOnNode(nodeId, event);
+          }
+        },
+        panic: () => {
+          const engine = audioRef.current;
+          if (!engine) return;
+          for (const nodeIds of mTargets().values()) for (const nodeId of nodeIds) engine.silenceNode(nodeId);
+        },
+        routedVoices: () => {
+          const current = graphRef.current;
+          const m = findMNode(current);
+          return m ? routedTracks(current, m) : new Set<number>();
+        },
+      },
+    });
+  });
+  // One transport: M's Play and Stop run the canvas too, at M's tempo.
+  useEffect(() => useM.subscribe((state, previous) => {
+    const runtime = runtimeRef.current;
+    if (!runtime || !findMNode(graphRef.current)) return;
+    if (state.project.tempo !== previous.project.tempo || state.isPlaying !== previous.isPlaying) {
+      runtime.tempoMap.setTempoAt(runtime.positionTick, state.project.tempo);
+    }
+    if (state.isPlaying === previous.isPlaying) return;
+    if (state.isPlaying) runtime.start();
+    else runtime.stop();
+  }), []);
 
   const toggleAudio = useCallback(() => {
     if (!audioRef.current) {
@@ -2120,6 +2190,46 @@ export function ModularApp() {
   const nudgeZoom = (delta: number) =>
     setZoom((value) => Math.min(1.1, Math.max(0.12, Math.round((value + delta) * 100) / 100)));
 
+  // View › Classic M: go to the canvas's M, or put one on it.
+  const showM = () => {
+    const viewport = viewportRef.current;
+    const reveal = (at: { x: number; y: number }) => requestAnimationFrame(() => {
+      viewport?.scrollTo({ left: at.x * zoom - 40, top: at.y * zoom - 40 });
+    });
+    const existing = findMNode(graph);
+    if (existing) {
+      setSelectedNodeId(existing);
+      setSelectedEdgeId(null);
+      bringToFront(existing);
+      reveal(graph.nodes[existing].position);
+      return;
+    }
+    const visible = viewport
+      ? visibleRegion({
+        left: viewport.scrollLeft,
+        top: viewport.scrollTop,
+        width: viewport.clientWidth,
+        height: viewport.clientHeight,
+      }, zoom)
+      : { x: 0, y: 0, width: canvasSize.width, height: canvasSize.height };
+    const position = placeNode({
+      desired: { x: visible.x + 40, y: visible.y + 40 },
+      size: readMNodeSize(),
+      existing: Object.values(graph.nodes).map((node) => ({
+        x: node.position.x,
+        y: node.position.y,
+        ...nodeSize(node.moduleType),
+      })),
+      visible,
+      canvas: canvasSize,
+    });
+    const id = `m-${nextId.current++}`;
+    dispatch({ type: "add-node", node: createNode(M_NODE_TYPE, id, position) });
+    setSelectedNodeId(id);
+    setSelectedEdgeId(null);
+    bringToFront(id);
+    reveal(position);
+  };
   const menuActions: MenuActions = {
     new: { run: () => loadGraph(starterGraph()) },
     template1: { run: () => loadGraph(streamTemplate(1)) },
@@ -2146,49 +2256,14 @@ export function ModularApp() {
     zoomReset: { run: () => setZoom(1) },
     hand: { run: () => setHandMode((value) => !value), checked: handMode },
     sounds: { run: () => setPoolOpen((value) => !value), checked: poolOpen },
-    classicView: {
-      run: () => setClassicAt((at) => {
-        if (at) return null;
-        const viewport = viewportRef.current;
-        // Placed by the same rule as a new module: fully visible, clear of the
-        // chrome, and not on top of anything already there.
-        const visible = viewport
-          ? visibleRegion(
-            {
-              left: viewport.scrollLeft,
-              top: viewport.scrollTop,
-              width: viewport.clientWidth,
-              height: viewport.clientHeight,
-            },
-            zoom,
-          )
-          : { x: 0, y: 0, width: canvasSize.width, height: canvasSize.height };
-        const placed = placeNode({
-          desired: { x: visible.x + 40, y: visible.y + 40 },
-          size: CLASSIC_PANEL_SIZE,
-          existing: Object.values(graph.nodes).map((node) => ({
-            x: node.position.x,
-            y: node.position.y,
-            ...nodeSize(node.moduleType),
-          })),
-          visible,
-          canvas: canvasSize,
-        });
-        // Bring it into view. `placeNode` guarantees a spot inside the visible
-        // region, and scrolling makes that true on screen as well as on paper.
-        requestAnimationFrame(() => {
-          viewport?.scrollTo({ left: placed.x * zoom - 40, top: placed.y * zoom - 40 });
-        });
-        return placed;
-      }),
-      checked: classicAt !== null,
-    },
+    classicView: { run: showM, checked: findMNode(graph) !== null },
   };
 
   useEffect(() => () => runtimeRef.current?.stop(), []);
 
   return <SoundPoolContext.Provider value={{ assets, preview: playAsset }}>
   <KitContext.Provider value={kitId}>
+  <MFaceHostContext.Provider value={{ themeId, onSelectTheme: setThemeId, kitId, onSelectKit: setKitId, zoom }}>
   <main className="mm-app" onClick={() => setMenu(null)}>
     <input
       ref={openInputRef}
@@ -2267,15 +2342,6 @@ export function ModularApp() {
               cableDrag.direction,
             )} />}
         </svg>
-        {classicAt && <ClassicPanel
-          x={classicAt.x} y={classicAt.y} zoom={zoom}
-          stackIndex={2 + Object.keys(graph.nodes).length + 1}
-          themeId={themeId} onSelectTheme={setThemeId}
-          kitId={kitId} onSelectKit={setKitId}
-          onMove={(x, y) => setClassicAt({ x, y })}
-          onRaise={() => {}}
-          onClose={() => setClassicAt(null)}
-        />}
         {Object.values(graph.nodes).map((node) => <NodeFace key={node.id} node={node}
           zoom={zoom} selected={selectedNodeId === node.id} pendingConnection={pendingConnection}
           dispatch={dispatch} onCommand={handleNodeCommand}
@@ -2332,6 +2398,7 @@ export function ModularApp() {
     /> : null}
     <footer className="mm-status-bar"><span>{message}</span><span>{Object.keys(graph.nodes).length} nodes · {Object.keys(graph.edges).length} cable{audioOn ? ` · ${audioNodes} audio · ${engineKind === "rust" ? "Rust" : "Web Audio"}` : ""}{rackReport ? ` · ${rackReport.modules} in engine · ${rackReport.samples} sample${rackReport.samples === 1 ? "" : "s"}` : ""}</span></footer>
   </main>
+  </MFaceHostContext.Provider>
   </KitContext.Provider>
   </SoundPoolContext.Provider>;
 }

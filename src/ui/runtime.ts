@@ -4,8 +4,29 @@
 import { MRuntime } from "../engine/runtime";
 import { useM } from "../state/store";
 import { decodeMidiMessage, isChannelMessage, mapAssignedInputChannel } from "../engine/midiinput";
+import type { CanvasOutput } from "../engine/outputs/canvas";
 
 let runtime: MRuntime | null = null;
+
+/**
+ * What a host engine lends M: idMLab's audio context and mix, its MIDI
+ * access, and its sound modules for M's tracks. Without a host M plays on its
+ * own, as the standalone app does.
+ */
+export type RuntimeHost = {
+  audio?: () => { context: AudioContext; output: AudioNode } | null;
+  midiAccess?: () => Promise<MIDIAccess>;
+  canvas?: CanvasOutput;
+};
+
+let host: RuntimeHost | null = null;
+
+/** Set before M first plays. A runtime made earlier is stopped and replaced. */
+export function setRuntimeHost(next: RuntimeHost | null): void {
+  host = next;
+  runtime?.stop();
+  runtime = null;
+}
 
 export function getRuntime(): MRuntime {
   if (!runtime) {
@@ -97,6 +118,9 @@ export function getRuntime(): MRuntime {
             syncRatioDirection: state.syncRatioDirection,
           };
         },
+        ...(host?.audio ? { audio: host.audio } : {}),
+        ...(host?.midiAccess ? { midiAccess: host.midiAccess } : {}),
+        ...(host?.canvas ? { canvas: host.canvas } : {}),
       },
     );
   }

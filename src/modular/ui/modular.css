@@ -808,59 +808,24 @@ button { cursor: pointer; }
 
 
 /*
- * Classic M, as a panel on the canvas.
+ * M, as a node.
  *
- * It sits inside `.mm-canvas`, so it pans and zooms with the modules. The body
- * is a clipping box: M lays itself out against its own 640x480 workspace and
- * would otherwise spill past the panel edge rather than scroll inside it.
+ * The face is a clipping box sized by hand: M lays itself out against its own
+ * workspace and would otherwise spill past the node rather than scroll inside
+ * it. No padding and no section frame, so M's windows sit right on the node.
  */
-.mm-classic-panel {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  /* The same surface tokens `.mm-node` uses, so M sits on the canvas looking
-     like the other objects on it rather than like a floating dialog. */
-  background: var(--s-card);
-  border: 1px solid var(--bd-200);
-  border-radius: 9px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
-  overflow: hidden;
-}
-.mm-classic-panel.is-dragging { user-select: none; }
-
-.mm-classic-panel__bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  /* A generous grab strip. The first version was 33px tall on a 760px panel,
-     which meant most attempts to move M missed and panned the canvas instead. */
-  padding: 12px 10px 12px 14px;
-  background: var(--s-raised, var(--s-card));
-  border-bottom: 1px solid var(--bd-200);
-  cursor: grab;
-  flex: 0 0 auto;
+.mm-node[data-module-type="m.m"] { max-width: none; }
+.mm-node[data-module-type="m.m"] .mm-node__face { padding: 0; }
+.mm-node[data-module-type="m.m"] .mm-node-section { border: 0; border-radius: 0; }
+.mm-m-face { position: relative; display: flex; cursor: auto; }
+.mm-m-face__body { flex: 1 1 auto; overflow: auto; position: relative; }
+/* The lower-right corner resizes the face. */
+.mm-m-face__resize {
+  position: absolute; right: 0; bottom: 0; z-index: 2;
+  width: 16px; height: 16px;
+  cursor: nwse-resize;
   touch-action: none;
+  background:
+    linear-gradient(135deg, transparent 0 55%, var(--bd-300, var(--bd-200)) 55% 62%,
+      transparent 62% 72%, var(--bd-300, var(--bd-200)) 72% 79%, transparent 79%);
 }
-.mm-classic-panel.is-dragging .mm-classic-panel__bar { cursor: grabbing; }
-
-.mm-classic-panel__title {
-  font-size: 0.74rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--tx-900, var(--mm-text));
-  font-weight: 600;
-}
-.mm-classic-panel__bar button {
-  margin-left: auto;
-  background: none;
-  border: none;
-  color: var(--tx-500, var(--mm-text));
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 2px 6px;
-}
-.mm-classic-panel__bar button:hover { color: var(--tx-900, var(--mm-text)); }
-
-/* M owns everything below the bar, and scrolls inside it. */
-.mm-classic-panel__body { flex: 1 1 auto; overflow: auto; position: relative; }

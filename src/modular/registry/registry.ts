@@ -10,6 +10,7 @@ import type {
 import { CLASSIC_MODULES } from "./classicModules";
 import { AUDIO_MODULES } from "./audioModules";
 import { PLAYER_MODULES } from "./playerModules";
+import { M_MODULE } from "./mModule";
 import { PRESET_SLOTS } from "./descriptorKit";
 
 const numberParameter = (
@@ -968,7 +969,8 @@ const PATTERN_EDITOR: ModuleDescriptor = {
 export type ModuleRegistry = ReadonlyMap<ModuleTypeId, ModuleDescriptor>;
 
 export const moduleRegistry: ModuleRegistry = new Map(
-  [...CLASSIC_MODULES,
+  [M_MODULE,
+    ...CLASSIC_MODULES,
     ...AUDIO_MODULES,
     ...PLAYER_MODULES,
     PATTERN_EDITOR,
