@@ -39,6 +39,22 @@ const bindingsFromNodes = (nodes: readonly NodeInstance[]): MidiBinding[] =>
   }));
 
 /** Owns browser MIDI permission and one output adapter per MIDI Output node. */
+/**
+ * One MIDI access for the whole app. idMLab's outputs and M's own ports ask
+ * through this, so the browser is asked once. A refusal is not remembered, so
+ * a later click can still grant it.
+ */
+export function shareMidiAccess<T>(request: () => Promise<T>): () => Promise<T> {
+  let pending: Promise<T> | null = null;
+  return () => {
+    pending ??= request().catch((error: unknown) => {
+      pending = null;
+      throw error;
+    });
+    return pending;
+  };
+}
+
 export class BrowserMidiSession {
   private readonly runtime: ModularRuntime;
   private readonly clock: PresentationClock;

@@ -322,3 +322,42 @@ describe("Registry-declared smoothing", () => {
     expect(lookups).toBe(2);
   });
 });
+
+describe("playing a note on a node from outside the graph", () => {
+  const synthPatch = (): GraphDocument => {
+    const document = emptyGraph();
+    document.nodes.syn = createNode("m.synth", "syn", { x: 0, y: 0 });
+    document.nodes.out = createNode("m.audio-output", "out", { x: 0, y: 0 });
+    document.edges.e1 = {
+      id: "e1", from: { nodeId: "syn", portId: "audio-out" }, to: { nodeId: "out", portId: "audio-in" }, enabled: true,
+    };
+    return document;
+  };
+
+  it("plays on the node's own player, at the audio time given", () => {
+    const { engine, context } = rig();
+    engine.update(synthPatch());
+    expect(engine.playOnNode("syn", { type: "note-on", note: 60, velocity: 100, atSec: context.currentTime + 0.1 })).toBe(true);
+    expect(engine.playOnNode("syn", { type: "note-off", note: 60, velocity: 0, atSec: context.currentTime + 0.3 })).toBe(true);
+  });
+
+  it("reports a node that cannot play notes", () => {
+    const { engine } = rig();
+    engine.update(synthPatch());
+    expect(engine.playOnNode("out", { type: "note-on", note: 60, velocity: 100, atSec: 0 })).toBe(false);
+    expect(engine.playOnNode("missing", { type: "note-on", note: 60, velocity: 100, atSec: 0 })).toBe(false);
+  });
+
+  it("silences one node's notes without muting the rest of the mix", () => {
+    const { engine } = rig();
+    engine.update(synthPatch());
+    expect(engine.silenceNode("syn")).toBe(true);
+    expect(engine.silenceNode("out")).toBe(false);
+  });
+
+  it("lends its context and master input, so another engine can play into the same mix", () => {
+    const { engine, context } = rig();
+    expect(engine.audioContext).toBe(context);
+    expect(engine.input).toBeDefined();
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { BrowserMidiSession, type MidiAccessLike } from "./midisession";
+import { BrowserMidiSession, shareMidiAccess, type MidiAccessLike } from "./midisession";
 import { PresentationClock } from "../runtime/skew";
 import { createNode, moduleRegistry } from "../registry/registry";
 import { ModularRuntime } from "../runtime/engine";
@@ -137,5 +137,27 @@ describe("browser MIDI session", () => {
     session.dispose();
     expect(access.onstatechange).toBeNull();
     expect(remove).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("sharing one MIDI access", () => {
+  it("asks the browser once, however many parts of the app want MIDI", async () => {
+    const access = { outputs: new Map(), onstatechange: null };
+    const request = vi.fn(async () => access);
+    const shared = shareMidiAccess(request);
+    const [a, b] = await Promise.all([shared(), shared()]);
+    expect(await shared()).toBe(access);
+    expect(a).toBe(b);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks again after a refusal, so a later click can still grant it", async () => {
+    const access = { outputs: new Map(), onstatechange: null };
+    const request = vi.fn()
+      .mockRejectedValueOnce(new Error("denied"))
+      .mockResolvedValueOnce(access);
+    const shared = shareMidiAccess(request);
+    await expect(shared()).rejects.toThrow("denied");
+    expect(await shared()).toBe(access);
   });
 });

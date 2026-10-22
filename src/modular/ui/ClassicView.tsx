@@ -18,11 +18,12 @@
 import { App } from "../../ui/App";
 import { ThemePicker } from "./ThemePicker";
 import { KIT_IDS, KIT_META, type KitId } from "../theme/kits/types";
-import type { ThemeId } from "../theme/themes";
+import { themeMeta, type ThemeId } from "../theme/themes";
 import "../../styles.css";
 
 export function ClassicView({ onExit, themeId, onSelectTheme, kitId, onSelectKit }: {
-  onExit: () => void;
+  /** Only for a host M can be left for; the M node has none. */
+  onExit?: () => void;
   themeId: ThemeId;
   onSelectTheme: (id: ThemeId) => void;
   kitId: KitId;
@@ -31,6 +32,7 @@ export function ClassicView({ onExit, themeId, onSelectTheme, kitId, onSelectKit
   return (
     <App
       onExitToPatch={onExit}
+      colorScheme={themeMeta(themeId).colorScheme}
       // The same two pickers the patch view carries. Without them you could
       // reach the classic interface and then have no way to re-skin it, which
       // is the one thing the theme engine is here to do.

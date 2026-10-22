@@ -9,6 +9,7 @@ import { Rng } from "./rng";
 import type { ProjectState } from "./types";
 import type { OutputSink } from "./outputs/types";
 import { SynthSink } from "./outputs/synth";
+import { CanvasSink, type CanvasOutput } from "./outputs/canvas";
 import { MidiPortRegistry, MidiSink, type MidiChannelMode } from "./outputs/webmidi";
 import { NoteLifecycle, type OutputDestination } from "./events";
 import {
@@ -76,6 +77,10 @@ export class MRuntime {
   private nextMetronomeAt = 0;
   /** Tap Conduct: playback may run up to `deadline`; null while frozen. */
   private tapGate: { deadline: number | null } | null = null;
+  private hostAudio: (() => { context: AudioContext; output: AudioNode } | null) | null;
+  private midiAccess: (() => Promise<MIDIAccess>) | null;
+  private canvasOutput: CanvasOutput | null;
+  private canvas: CanvasSink | null;
 
   constructor(
     getState: () => ProjectState,
@@ -92,6 +97,16 @@ export class MRuntime {
         useMetronome: boolean; sendClock: boolean; externalClock: boolean;
     syncRatio: number; syncRatioDirection: "out" | "in";
       };
+      /**
+       * A host engine's audio (idMLab's): its context, and the node M's sound
+       * goes into. Asked for once, when M first needs audio. Without it M
+       * makes its own context and plays straight to the speakers.
+       */
+      audio?: () => { context: AudioContext; output: AudioNode } | null;
+      /** A host's MIDI access, so M shares its ports instead of asking the browser again. */
+      midiAccess?: () => Promise<MIDIAccess>;
+      /** A host's sound modules, which M's tracks can be cabled to. */
+      canvas?: CanvasOutput;
     } = {},
   ) {
     this.getState = getState;
@@ -102,6 +117,10 @@ export class MRuntime {
     this.onMidiMessage = options.onMidiMessage ?? null;
     this.onTransportSent = options.onTransportSent ?? null;
     this.onPlannedSteps = options.onPlannedSteps ?? null;
+    this.hostAudio = options.audio ?? null;
+    this.midiAccess = options.midiAccess ?? null;
+    this.canvasOutput = options.canvas ?? null;
+    this.canvas = options.canvas ? new CanvasSink(options.canvas) : null;
     this.getPerformanceSettings = options.getPerformanceSettings ?? (() => ({
       useMetronome: false, sendClock: false, externalClock: false,
       syncRatio: 4, syncRatioDirection: "out",
@@ -115,10 +134,11 @@ export class MRuntime {
   /** Create audio graph lazily (must follow a user gesture). */
   private ensure(): AudioContext {
     if (!this.ctx) {
-      const ctx = new AudioContext();
+      const host = this.hostAudio?.();
+      const ctx = host?.context ?? new AudioContext();
       const master = ctx.createGain();
       master.gain.value = 1;
-      master.connect(ctx.destination);
+      master.connect(host?.output ?? ctx.destination);
       this.ctx = ctx;
       this.master = master;
       this.synth = new SynthSink(ctx, master);
@@ -132,6 +152,7 @@ export class MRuntime {
     const list: OutputSink[] = [];
     if (this.synthEnabled && this.synth) list.push(this.synth);
     if (this.midi && this.midi.hasOutput()) list.push(this.midi);
+    if (this.canvas) list.push(this.canvas);
     return list;
   }
 
@@ -182,7 +203,9 @@ export class MRuntime {
 
   midiPorts(): MidiPortRegistry {
     this.ensure();
-    if (!this.midiRegistry) this.midiRegistry = new MidiPortRegistry(this.midi!, this.onMidiMessage);
+    if (!this.midiRegistry) {
+      this.midiRegistry = new MidiPortRegistry(this.midi!, this.onMidiMessage, this.midiAccess ?? undefined);
+    }
     return this.midiRegistry;
   }
 
@@ -209,6 +232,11 @@ export class MRuntime {
     this.synthSettings = settings.map(normalizeSynthSettings);
     this.synthEnabled = this.synthSettings.some((patch) => patch.enabled);
     this.synth?.setSettings(this.synthSettings);
+  }
+
+  /** False for a voice cabled to a canvas module: its sound has moved there. */
+  synthPlaysVoice(voice: number): boolean {
+    return !this.canvasOutput?.routedVoices().has(voice);
   }
 
   setMasterVolume(v: number): void {
@@ -295,6 +323,7 @@ export class MRuntime {
     this.synth?.panic();
     this.midi?.cancelScheduled();
     this.midi?.panic();
+    this.canvas?.panic();
     this.lifecycle.reset();
   }
 
@@ -378,6 +407,7 @@ export class MRuntime {
     this.synth?.cancelScheduled();
     this.midi?.cancelScheduled();
     this.midi?.panic();
+    this.canvas?.panic();
     this.lifecycle.reset();
     this.pausedAt = null;
     if (this.getPerformanceSettings().sendClock) {
@@ -542,7 +572,12 @@ export class MRuntime {
     const filtered = dropLateAttacks(events, now, 0.02);
     this.scheduling.recordDroppedEvents(filtered.dropped);
     this.scheduling.observeBatch(filtered.events, now);
-    for (const sink of this.sinks()) sink.scheduleBatch(filtered.events);
+    const routed = this.canvasOutput?.routedVoices();
+    for (const sink of this.sinks()) {
+      sink.scheduleBatch(sink === this.synth && routed?.size
+        ? filtered.events.filter((event) => !routed.has(event.voice))
+        : filtered.events);
+    }
   }
 
   private recoverFromStall(now: number): void {
