@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
+import { CLASSIC_WINDOW_SIZES } from "./classicWindows";
 import { POSITION_LABELS } from "../engine/variables";
 import type { CyclicVariable } from "../engine/types";
 import { useM } from "../state/store";
 import { cyclicLengthFromStepIndex, normalizeCyclicStep } from "../engine/cyclic";
 import { useWindowContextMenu } from "./windowlauncher";
 import { useDraggable } from "./useDraggable";
+import { useMLayoutWidth } from "./MLayoutContext";
 import { focusWindowPointerDown } from "./windowfocus";
 import { voiceColorClass } from "./voicecolor";
 import { classicCyclicSideLayout } from "./cycliclayout";
@@ -37,6 +39,7 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
   const { ref, pos, z, onPointerDown: onTitleDown, bringToFront } = useDraggable(
     "cyclic-editor", { x: 96, y: 54 }, { autoPlace: true },
   );
+  const fit = useMLayoutWidth("cyclic-editor");
   const [modernPositions, setModernPositions] = useState<Record<CyclicVariable, number>>({
     rhythm: activePositions.rhythm,
     legato: activePositions.legato,
@@ -124,7 +127,10 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
 
   return (
     <section ref={ref} className={`cyced uwin cyced--${view} movable`} aria-label="Cyclic Editor"
-      style={{ left: pos.x, top: pos.y, zIndex: z }}
+      style={{
+        left: pos.x, top: pos.y, zIndex: z,
+        ...(view === "classic" ? { width: "max-content", height: "auto" } : {}),
+      }}
       onPointerDownCapture={(event) => focusWindowPointerDown(event, bringToFront)}
       onContextMenu={context.onContextMenu}>
       {context.menu}
@@ -134,7 +140,14 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
         <span className="uwin__note">{view === "classic" ? "Classic" : "Modern"}</span>
         <button className="uwin__close" onClick={onClose} aria-label="Close Cyclic Editor">×</button>
       </header>
-      {view === "classic" ? <div className="cyced__body">
+      {view === "classic" ? <div className="cyced__body" style={{
+        // The original window's size at 1x, laid out at 1.6x and zoomed by 0.625;
+        // in the M node, zoomed a little more to fill its column.
+        width: CLASSIC_WINDOW_SIZES.cyclicEditor.width / 0.625,
+        height: CLASSIC_WINDOW_SIZES.cyclicEditor.height / 0.625,
+        overflow: "hidden",
+        ...(fit ? { zoom: (fit - 2) / (CLASSIC_WINDOW_SIZES.cyclicEditor.width / 0.625) } : {}),
+      }}>
         {voiceGrids(kind, position)}
         <aside className="cyced__side" style={classicCyclicSideLayout()}>
           <div className="cyced__descriptor">

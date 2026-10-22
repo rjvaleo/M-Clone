@@ -33,6 +33,7 @@ import { usePatternMenus } from "./patternMenus";
 import { editorSoundAllowed } from "./editorsound";
 import { isLegacyClearKey } from "./editorkeys";
 import { focusWindowPointerDown } from "./windowfocus";
+import { DEFAULT_PADS, drumLanes, showsDrumLanes } from "./drumLanes";
 import { clearSteps } from "../engine/patterncmd";
 import type { ChordMode, InsertMode } from "../engine/types";
 import {
@@ -58,6 +59,8 @@ const CELL_W = 10;
 const CELL_H = 8;
 const MIN_PITCH = 24; // C1
 const MAX_PITCH = 108; // C8
+/** Drum lanes are taller than keyboard rows so each can carry its pad's name. */
+const LANE_H = 14;
 const BLACK = new Set([1, 3, 6, 8, 10]);
 /**
  * The two places where white keys touch on a chromatic run. The keyboard is
@@ -154,8 +157,20 @@ function PictureCell<T extends string>({
   );
 }
 
-export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
-  const selectedVoice = useM((s) => s.selectedVoice);
+/**
+ * The first Pattern Editor ("pattern-editor") edits M's selected voice, as in
+ * the original. Extra note windows pass their own `voice` and `windowId`, keep
+ * their own region selection, and leave the keyboard shortcuts to the first.
+ */
+export function PatternEditor({ onClose, windowId = "pattern-editor", voice, onVoiceChange }: {
+  onClose?: () => void;
+  windowId?: string;
+  voice?: number;
+  onVoiceChange?: (voice: number) => void;
+} = {}) {
+  const isMain = windowId === "pattern-editor";
+  const storeVoice = useM((s) => s.selectedVoice);
+  const selectedVoice = voice ?? storeVoice;
   const voices = useM((s) => s.project.voices);
   const patterns = useM((s) => s.project.patterns);
   const paintStep = useM((s) => s.paintStep);
@@ -177,15 +192,21 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
   const [tool, setTool] = useState<ToolId>("select");
   const [topPitch, setTopPitch] = useState(84); // C6 at the top
   const [startStep, setStartStep] = useState(0);
-  const [viewW, setViewW] = useState(250);
-  const [viewH, setViewH] = useState(160);
+  // 42 steps wide fills the M node's side column (M_SIDE_WIDTH), and the full
+  // C1–C8 range tall makes it the largest window, as the one M is played from.
+  const [viewW, setViewW] = useState(420);
+  const [viewH, setViewH] = useState((MAX_PITCH - MIN_PITCH + 1) * CELL_H);
   // Patterns shown behind the edited one (shift-click a View number).
   const [ghosts, setGhosts] = useState<number[]>([]);
   // The Selector's region. `point` marks a Pointwise selection — a click with
   // no drag, which draws a triangle instead of a span. It lives in the store
   // so the global Edit and Pattern menus can act on it too.
-  const region = useM((s) => s.editorRegion);
-  const setRegion = useM((s) => s.setEditorRegion);
+  const storeRegion = useM((s) => s.editorRegion);
+  const setStoreRegion = useM((s) => s.setEditorRegion);
+  const [ownRegion, setOwnRegion] = useState<{ from: number; to: number; point: boolean } | null>(null);
+  const region = isMain ? storeRegion : ownRegion;
+  const setRegion = isMain ? setStoreRegion : setOwnRegion;
+  const [allPads, setAllPads] = useState(false);
   const [legend, setLegend] = useState<{ step: number; pitch: number } | null>(null);
   const range = useM((s) => s.midiEditRange);
   const counter = useM((s) => s.midiEditCounter);
@@ -199,7 +220,7 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
   const hold = useHoldRepeat();
 
   const { ref, pos, z, onPointerDown: onTitleDown, bringToFront } = useDraggable(
-    "pattern-editor", { x: 42, y: 38 }, { autoPlace: true },
+    windowId, { x: 42, y: 38 }, { autoPlace: true },
   );
 
   const cols = clamp(Math.round(viewW / CELL_W), 8, 96);
@@ -207,10 +228,13 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
   const top = clamp(topPitch, MIN_PITCH + rows - 1, MAX_PITCH);
   const start = clamp(startStep, 0, Math.max(0, pattern.maxSize - cols));
 
-  const pitches = Array.from({ length: rows }, (_, i) => top - i);
+  // A Pattern in Drum mode draws named pad lanes; otherwise a keyboard's rows.
+  const lanes = showsDrumLanes(pattern) ? drumLanes(pattern, DEFAULT_PADS, allPads) : null;
+  const rowH = lanes ? LANE_H : CELL_H;
+  const pitches = lanes ? lanes.map((lane) => lane.pitch) : Array.from({ length: rows }, (_, i) => top - i);
   const steps = Array.from({ length: cols }, (_, i) => start + i);
   const gridW = cols * CELL_W;
-  const gridH = rows * CELL_H;
+  const gridH = pitches.length * rowH;
   // Width of the black-ruled portion: everything up to the Pattern's last step.
   const inkW = clamp(len - start, 0, cols) * CELL_W;
 
@@ -231,7 +255,7 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
    */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.metaKey || e.ctrlKey) return;
+      if (!isMain || e.repeat || e.metaKey || e.ctrlKey) return;
       const el = e.target as HTMLElement | null;
       if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
       if (isLegacyClearKey(e.key)) {
@@ -426,13 +450,30 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
     const x0 = e.clientX, y0 = e.clientY, w0 = viewW, h0 = viewH;
     drag((ev) => {
       setViewW(clamp(w0 + ev.clientX - x0, 200, 960));
-      setViewH(clamp(h0 + ev.clientY - y0, 96, 560));
+      setViewH(clamp(h0 + ev.clientY - y0, 96, (MAX_PITCH - MIN_PITCH + 1) * CELL_H));
     });
   };
 
   /* ---- Reference Keyboards ---- */
 
-  const Keyboard = ({ side }: { side: "left" | "right" }) => (
+  // In Drum mode the left keyboard becomes the lane names and the right one a
+  // column of pad triggers.
+  const Lanes = ({ side }: { side: "left" | "right" }) => (
+    <div className={`pelanes pelanes--${side}`} style={{ height: gridH }}>
+      {lanes!.map((lane) => (
+        <button key={lane.pitch} className="pelane" style={{ height: LANE_H }}
+          title={`${lane.name} (${midiToName(lane.pitch)})`}
+          aria-label={side === "left" ? `Play ${lane.name}` : `Trigger ${lane.name}`}
+          onPointerDown={() => audition([lane.pitch])}>
+          {side === "left" && <><span className="pelane__name">{lane.name}</span>
+            {lane.choke > 0 && <span className="pelane__choke">ch{lane.choke}</span>}</>}
+          {side === "right" && "▸"}
+        </button>
+      ))}
+    </div>
+  );
+
+  const Keyboard = ({ side }: { side: "left" | "right" }) => lanes ? <Lanes side={side} /> : (
     <div className={`pekeys pekeys--${side}`} style={{ height: gridH }}>
       {pitches.map((pitch) => {
         const pc = ((pitch % 12) + 12) % 12;
@@ -454,13 +495,15 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
     </div>
   );
 
-  const noteReadout = midiToName(legend ? legend.pitch : top);
+  const noteReadout = lanes
+    ? (legend ? lanes.find((lane) => lane.pitch === legend.pitch)?.name ?? "" : "Drums")
+    : midiToName(legend ? legend.pitch : top);
 
   return (
     <section
       ref={ref}
       className="peditor-host movable"
-      aria-label="Pattern Editor"
+      aria-label={isMain ? "Pattern Editor" : `Pattern Editor, Track ${selectedVoice + 1}`}
       style={{ left: pos.x, top: pos.y, zIndex: z }}
       onPointerDownCapture={(event) => focusWindowPointerDown(event, bringToFront)}
       onContextMenu={context.onContextMenu}
@@ -470,7 +513,9 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
       <div className="uwin__title movable__handle" onPointerDown={onTitleDown}>
         <span className="uwin__name">Pattern Editor</span>
         <span className="uwin__slash">/</span>
-        <span className="uwin__note">group {String.fromCharCode(97 + patternGroup)}</span>
+        <span className="uwin__note">{isMain ? "" : `Track ${selectedVoice + 1} · `}group {String.fromCharCode(97 + patternGroup)}{lanes ? " · drum lanes" : ""}</span>
+        {lanes && <button className={"petool pelanes__all" + (allPads ? " petool--on" : "")}
+          aria-pressed={allPads} title="Show all 16 pads" onClick={() => setAllPads((v) => !v)}>All pads</button>}
         {onClose && <button className="uwin__close" onClick={onClose}
           aria-label="Close Pattern Editor">×</button>}
         <div className="peditor__tools" role="group" aria-label="Step Editing Tools">
@@ -556,7 +601,7 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
 
       {/* Row 2 — keyboards, Editing Grid, Mode Selector rows */}
       <div className="perow perow--body">
-        <div className="pesidecol">
+        <div className={"pesidecol" + (lanes ? " pesidecol--lanes" : "")}>
           <span className="penote">{noteReadout}</span>
           <Keyboard side="left" />
         </div>
@@ -581,7 +626,7 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
           )}
 
           {pitches.map((pitch) => (
-            <div key={pitch} className="pegrid__row" style={{ height: CELL_H }}>
+            <div key={pitch} className="pegrid__row" style={{ height: rowH }}>
               {steps.map((step) => {
                 const st = pattern.steps[step];
                 const on = st ? st.pitches.includes(pitch) : false;
@@ -597,7 +642,7 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
                     className={
                       "pecell" + (on ? " pecell--on" : ghost ? " pecell--ghost" : "")
                     }
-                    style={{ width: CELL_W, height: CELL_H }}
+                    style={{ width: CELL_W, height: rowH }}
                     data-step={step}
                     data-pitch={pitch}
                     aria-label={`${midiToName(pitch)} step ${step + 1}`}
@@ -621,7 +666,7 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
               <span
                 className="pelegend pelegend--h"
                 aria-hidden="true"
-                style={{ top: (top - legend.pitch) * CELL_H }}
+                style={{ top: (lanes ? pitches.indexOf(legend.pitch) : top - legend.pitch) * rowH }}
               />
             </>
           )}
@@ -647,6 +692,8 @@ export function PatternEditor({ onClose }: { onClose?: () => void } = {}) {
                       setGhosts((g) =>
                         g.includes(i) ? g.filter((x) => x !== i) : [...g, i],
                       );
+                    } else if (onVoiceChange) {
+                      onVoiceChange(i);
                     } else {
                       selectVoice(i);
                     }
