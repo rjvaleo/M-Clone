@@ -168,10 +168,55 @@ describe("planWindow — density and enable", () => {
     expect(next[0].nextTimeSec).toBeCloseTo(1.0, 9);
   });
 
+  it("holds the previous note through a skipped slot instead of leaving a hole", () => {
+    // M 2.7 p.71: "If a note is not played, ... the previous note will be held
+    // out". A slot whose density draw fails still sounds, held for one more
+    // slot, and the slot after it is the one left silent.
+    const st = project([pattern("p", [[60], [62], [64], [65]])], [voice({ legato: 1 })]);
+    st.cyclic.legato[0] = Array(16).fill(4); // 100%: a note fills its slot
+    let fails = 0;
+    const rng = { next: () => 0.5, int: () => 0, chance: (p: number) => {
+      fails++;
+      return fails !== 2 ? true : p > 1; // only the second draw fails
+    }, pickIndexAvoiding: () => 0 } as unknown as Rng;
+    st.voices[0].density = 0.5;
+    const { notes } = planWindow(st, makeCursors(st, 0), rng, 0, 2);
+    expect(notes.map((n) => [n.note, n.startSec, n.durationSec])).toEqual([
+      [60, 0, 0.5],
+      [62, 0.5, 1], // its draw failed: held through the next slot
+      [65, 1.5, 0.5], // 64's slot is the one left silent
+    ]);
+  });
+
+  it("adds the tap velocity offset to every sounding note, clamped to 1..127", () => {
+    const st = project([pattern("p", [[60], [62]])], [voice({ velocityRange: { low: 100, high: 100 } })]);
+    st.cyclic.accent[0] = [2, 0, ...Array(14).fill(2)];
+    const louder = planWindow({ ...st, velocityOffset: 20 }, makeCursors(st, 0), new Rng(1), 0, 1.4);
+    expect(louder.notes.map((n) => n.velocity)).toEqual([120, 120]); // accent 0 stays silent
+    const clipped = planWindow({ ...st, velocityOffset: 60 }, makeCursors(st, 0), new Rng(1), 0, 0.4);
+    expect(clipped.notes[0].velocity).toBe(127);
+    const floor = planWindow({ ...st, velocityOffset: -200 }, makeCursors(st, 0), new Rng(1), 0, 0.4);
+    expect(floor.notes[0].velocity).toBe(1);
+  });
+
   it("emits nothing for a disabled voice", () => {
     const st = project([pattern("p", [[60]])], [voice({ playEnabled: false })]);
     const { notes } = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 1.0);
     expect(notes).toHaveLength(0);
+  });
+
+  it("keeps a muted voice stepping through its pattern, so it returns in phase", () => {
+    // In M, Play-Enable only decides whether a note sounds; the voice keeps
+    // reading its pattern underneath, the way a muted mixer channel keeps playing.
+    const st = project([pattern("p", [[60], [62], [64], [65]])], [voice({ playEnabled: false })]);
+    const muted = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 0.9);
+    expect(muted.notes).toHaveLength(0);
+    expect(muted.steps).toHaveLength(0);
+    const unmuted = planWindow(
+      { ...st, voices: [{ ...st.voices[0], playEnabled: true }] },
+      muted.cursors, new Rng(1), 0.9, 1.9,
+    );
+    expect(unmuted.notes.map((n) => n.note)).toEqual([64, 65]);
   });
 
   it("keeps a disabled voice in tempo (advances its clock)", () => {
@@ -214,7 +259,9 @@ describe("planWindow — harmonic options", () => {
     expect(notes[0].note).toBe(64);
   });
 
-  it("second-order transpose stacks voices cumulatively", () => {
+  it("leaves each voice's own transposition alone under second-order transpose", () => {
+    // Second Order Transpose is a Keyboard Transpose rule (handled where the
+    // keyboard note arrives), not a stacking of voices on one another.
     const st = project(
       [pattern("a", [[60]]), pattern("b", [[60]])],
       [
@@ -226,7 +273,7 @@ describe("planWindow — harmonic options", () => {
     const { notes } = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 0.5);
     const byCh = Object.fromEntries(notes.map((n) => [n.channel, n.note]));
     expect(byCh[1]).toBe(64); // 60 + 4
-    expect(byCh[2]).toBe(67); // 60 + (4 + 3)
+    expect(byCh[2]).toBe(63); // 60 + 3, not 60 + (4 + 3)
   });
 
   it("chord-tone targeting snaps to the tonic triad", () => {
@@ -329,7 +376,7 @@ describe("planWindow — cyclic variables", () => {
     };
     const first = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 0.3);
     expect(first.notes.map((n) => n.startSec)).toEqual([0, 0.25]);
-    expect(first.cursors[0].cyclicPos).toBe(2);
+    expect(first.cursors[0].cyclicPos.rhythm).toBe(2);
     const second = planWindow(st, first.cursors, new Rng(1), 0.3, 1.5);
     expect(second.notes[0].startSec).toBeCloseTo(1.25, 9);
   });
@@ -368,6 +415,61 @@ describe("planWindow — cyclic variables", () => {
     const { notes } = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 0.6);
     expect(notes[0].durationSec).toBeCloseTo(2, 9);
     expect(notes[1].startSec).toBeCloseTo(0.5, 9);
+  });
+
+  it("runs each cyclic variable on its own counter, seamlessly past 16 steps", () => {
+    // M keeps a separate counter per cycle that wraps at that cycle's length.
+    // A 3-step Accent cycle must keep its 3-beat shape forever, not restart
+    // every 16 notes.
+    const st = project([pattern("p", [[60]])], [
+      voice({ velocityRange: { low: 1, high: 100 } }),
+    ]);
+    st.cyclic.accent[0] = [4, 1, 1, ...Array(13).fill(2)];
+    st.cyclicLengths.accent[0] = 3;
+    const { notes } = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 10.4);
+    expect(notes).toHaveLength(21);
+    expect(notes.map((n) => n.velocity)).toEqual(
+      Array.from({ length: 21 }, (_, i) => (i % 3 === 0 ? 100 : 1)),
+    );
+  });
+
+  it("phases cycles of different lengths against each other", () => {
+    const st = project([pattern("p", [[60]])], [
+      voice({ velocityRange: { low: 1, high: 100 }, legato: 1 }),
+    ]);
+    st.cyclic.accent[0] = [4, 1, 1, ...Array(13).fill(2)];
+    st.cyclicLengths.accent[0] = 3;
+    st.cyclic.legato[0] = [4, 0, 0, 0, ...Array(12).fill(2)];
+    st.cyclicLengths.legato[0] = 4;
+    const { notes } = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 12);
+    const shape = notes.map((n) => `${n.velocity === 100 ? "A" : "a"}${n.durationSec > 0.4 ? "L" : "s"}`);
+    // The combined shape repeats every lcm(3, 4) = 12 notes.
+    expect(shape.slice(0, 12)).toEqual(shape.slice(12, 24));
+    expect(shape.slice(0, 4)).toEqual(["AL", "as", "as", "As"]);
+  });
+
+  it("restarts a counter that is past a shortened cycle's end", () => {
+    const st = project([pattern("p", [[60]])], [
+      voice({ velocityRange: { low: 1, high: 100 } }),
+    ]);
+    st.cyclic.accent[0] = [4, 1, 1, 1, 1, ...Array(11).fill(2)];
+    st.cyclicLengths.accent[0] = 5;
+    const first = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 1.9);
+    expect(first.cursors[0].cyclicPos.accent).toBe(4);
+    st.cyclicLengths.accent[0] = 2;
+    const second = planWindow(st, first.cursors, new Rng(1), 2, 2.9);
+    expect(second.notes.map((n) => n.velocity)).toEqual([100, 1]);
+  });
+
+  it("reports a Voice whose Rhythm cycle restarted in the window", () => {
+    const st = project([pattern("p", [[60]])], [voice(), voice()]);
+    st.cyclicLengths.rhythm = [2, 1];
+    const first = planWindow(st, makeCursors(st, 0), new Rng(1), 0, 0.1);
+    expect(first.cyclicResets).toEqual([0]);
+    const second = planWindow(st, first.cursors, new Rng(1), 0.1, 0.6);
+    expect(second.cyclicResets).toEqual([]);
+    const third = planWindow(st, second.cursors, new Rng(1), 0.6, 1.1);
+    expect(third.cyclicResets).toEqual([0]);
   });
 
   it("chooses cyclic range levels deterministically during playback", () => {
@@ -446,7 +548,7 @@ describe("makeCursors", () => {
     expect(cursors).toHaveLength(2);
     expect(cursors[0].nextTimeSec).toBe(2.5);
     expect(cursors[0].order).toEqual({ pos: 0, last: -1, bval: 0.5 });
-    expect(cursors[0].cyclicPos).toBe(0);
+    expect(cursors[0].cyclicPos).toEqual({ accent: 0, legato: 0, rhythm: 0 });
     expect(cursors[0]).not.toHaveProperty("cyclicOrder");
   });
 });

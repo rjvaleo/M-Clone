@@ -123,7 +123,26 @@ export const MAX_PATTERN_STEPS = 999;
 export type MidiInputResponse =
   | { type: "echo"; voice: number; note: number; velocity: number; channels?: number[] }
   | { type: "start" | "stop" | "sync" }
-  | { type: "step"; voice: number; note: number; velocity: number };
+  | { type: "step"; voice: number; note: number; velocity: number }
+  /** First Tap Conduct key: start (held for "a beat for nothing") or, if playing, take over. */
+  | { type: "tap-conduct-start"; held: boolean }
+  /** A later tap: release one beat of this length, then wait for the next tap. */
+  | { type: "tap-beat"; beatSec: number }
+  /** Freeze, Accelerando or Decelerando in Tap Conduct: keep playing without taps. */
+  | { type: "tap-freeze" };
+
+/**
+ * Tap tempo from the time between two taps, as M computes it: the interval is
+ * held to 59 ms..1.5 s and read as one Sync Ratio unit (a quarter note at 4).
+ */
+function tapTempo(intervalSec: number, syncRatio: number): { tempo: number; beatSec: number } {
+  const beatSec = Math.max(0.059, Math.min(1.5, intervalSec));
+  const tempo = (60 * 4) / (Math.max(1, syncRatio) * beatSec);
+  return { tempo: Math.max(1, Math.min(255, Math.round(tempo))), beatSec };
+}
+
+/** Tap Affects Velocity: the offset the key's velocity gives every note. */
+const tapOffset = (velocity: number) => Math.trunc((velocity - 64) / 2);
 
 function isPositionVar(key: keyof VoiceState): key is PositionVarId {
   return (POSITION_VARS as string[]).includes(key as string);
@@ -290,6 +309,10 @@ export type MStore = {
   midiChordNotes: number[][];
   inputControlCode: InputControlCode | null;
   inputControlTapAt: number | null;
+  /** Tap Conduct is running: taps, not the clock, release each beat. */
+  tapConducting: boolean;
+  /** Tap Affects Velocity's live offset; cleared on Stop, never saved. */
+  tapVelocityOffset: number;
   stepAdvanceCounters: number[];
   setMidiEditState: (range: { from: number; to: number }, counter: number) => void;
   setVoiceInput: (voice: number, values: Partial<Pick<VoiceState,
@@ -686,6 +709,8 @@ export const useM = create<MStore>((set, get) => ({
   midiChordNotes: [[], [], [], []],
   inputControlCode: null,
   inputControlTapAt: null,
+  tapConducting: false,
+  tapVelocityOffset: 0,
   stepAdvanceCounters: [0, 0, 0, 0],
 
   setMidiEditState: (range, counter) => set({
@@ -866,22 +891,31 @@ export const useM = create<MStore>((set, get) => ({
           if (get().snapshotMode === "idle") get().beginHold(); else get().doHold();
         } else if (action.type === "stop-slideshow") get().stopSlideshow();
         else if (action.type === "edit-snapshot") get().editCurrentSnapshot();
-        else if (action.type === "accelerando") get().setTempo(Math.min(999, get().project.tempo + 1));
-        else if (action.type === "decelerando") get().setTempo(Math.max(1, get().project.tempo - 1));
-        else if (action.type === "tap-tempo" || action.type === "tap-conduct") {
+        else if (action.type === "accelerando" || action.type === "decelerando"
+          || action.type === "freeze-tempo") {
+          // M's Freeze family: each keeps Tap Conduct playing without taps;
+          // Accelerando and Decelerando also move the tempo 3 BPM (5..240).
+          const delta = action.type === "accelerando" ? 3 : action.type === "decelerando" ? -3 : 0;
+          if (delta !== 0) get().setTempo(Math.max(5, Math.min(240, get().project.tempo + delta)));
+          if (get().tapConducting) {
+            if (get().options.tapAffectsVelocity) set({ tapVelocityOffset: tapOffset(message.velocity) });
+            responses.push({ type: "tap-freeze" });
+          }
+        } else if (action.type === "tap-tempo" || action.type === "tap-conduct") {
           const now = nowSeconds();
           const previous = get().inputControlTapAt;
-          if (previous !== null && now > previous) get().setTempo(Math.max(1, Math.min(999, 60 / (now - previous))));
           set({ inputControlTapAt: now });
-          if (action.type === "tap-conduct") responses.push({ type: "start" });
-          if (get().options.tapAffectsVelocity) {
-            const scale = Math.max(0.1, message.velocity / 64);
-            set((s) => ({ project: { ...s.project, voices: s.project.voices.map((voice) => ({
-              ...voice, velocityRange: {
-                low: Math.min(127, Math.round(voice.velocityRange.low * scale)),
-                high: Math.min(127, Math.round(voice.velocityRange.high * scale)),
-              },
-            })) } }));
+          const tapped = previous !== null && now > previous
+            ? tapTempo(now - previous, get().syncRatio) : null;
+          if (tapped) get().setTempo(tapped.tempo);
+          if (action.type === "tap-conduct") {
+            if (get().options.tapAffectsVelocity) set({ tapVelocityOffset: tapOffset(message.velocity) });
+            if (!get().tapConducting) {
+              set({ tapConducting: true });
+              responses.push({ type: "tap-conduct-start", held: !get().isPlaying });
+            } else if (tapped) {
+              responses.push({ type: "tap-beat", beatSec: tapped.beatSec });
+            }
           }
         } else if (action.type === "step-all") {
           for (let voice = 0; voice < 4; voice++) advance(voice);
@@ -902,8 +936,15 @@ export const useM = create<MStore>((set, get) => ({
           responses.push({ type: "echo", voice: voiceIndex, note: message.note, velocity: message.velocity });
         }
         if (voice.inputUse === "keyboard-transpose" && message.type === "note-on") {
+          // C3 (note 60) is no transposition, limited to 30 semitones either
+          // way. Second Order Transpose adds the Transposition Variable's own
+          // setting for the voice, so its relative transpositions survive.
+          const keyed = Math.max(-30, Math.min(30, message.note - 60));
+          const relative = project.secondOrderTranspose
+            ? Number(s.positions.transposition.slots[s.positions.transposition.active][voiceIndex])
+            : 0;
           project = { ...project, voices: project.voices.map((entry, index) =>
-            index === voiceIndex ? { ...entry, transposition: message.note - 60 } : entry) };
+            index === voiceIndex ? { ...entry, transposition: keyed + relative } : entry) };
           continue;
         }
         if (voice.inputUse !== "record") continue;
@@ -969,6 +1010,8 @@ export const useM = create<MStore>((set, get) => ({
       ...(playing && !s.isPlaying
         ? { midiViewEvents: [], midiViewTransport: [], midiViewNextId: 0 }
         : {}),
+      // Stop ends Tap Conduct and drops its velocity offset, as in M.
+      ...(playing ? {} : { tapConducting: false, tapVelocityOffset: 0, inputControlTapAt: null }),
     }));
   },
 

@@ -357,8 +357,10 @@ const CHORD_QUANTIZER = defineModule({
 });
 
 /**
- * Classic Second-Order Transpose, without the fixed four lanes: each stream
- * adds the transpositions of the streams before it, building implied chords.
+ * Cumulative transposition: each stream adds the transpositions of the
+ * streams before it, building implied chords. This is an idMLab invention, not
+ * Classic's Second-Order Transpose, which only keeps a voice's Transposition
+ * Variable offset while that voice is transposed from the MIDI keyboard.
  */
 const CUMULATIVE_TRANSPOSE = defineModule({
   type: "m.cumulative-transpose",

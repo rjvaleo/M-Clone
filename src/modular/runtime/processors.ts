@@ -638,6 +638,10 @@ export class NoteDensityProcessor extends BaseProcessor {
   private acceptedCount = 0;
   private rejectedCount = 0;
   private readonly densityMatcher = new TickControlMatcher();
+  /** The tick of a slot whose draw failed: the next slot after it is silent. */
+  private holdFromTick: Tick | null = null;
+  /** The slot being kept silent, so every note of its chord is dropped. */
+  private silentTick: Tick | null = null;
 
   constructor(build: ProcessorBuild) {
     super(build, "density");
@@ -658,13 +662,33 @@ export class NoteDensityProcessor extends BaseProcessor {
     for (let i = 0; i < notes.count; i++) {
       const note = notes.items[i];
       const density = clamp(this.densityMatcher.valueAt(note.atTick, baseDensity), 0, 100) / 100;
-      if (randomUnit(this.key, note.atTick, 0) >= density) {
+      const failed = randomUnit(this.key, note.atTick, 0) >= density;
+      // Classic's Note Density: a slot whose draw fails still sounds, held
+      // through the next slot, and that next slot is the silent one. Its own
+      // draw decides whether the slot after it is silent too.
+      if (this.silentTick === note.atTick) {
+        this.rejectedCount += 1;
+        continue;
+      }
+      if (this.holdFromTick !== null && note.atTick > this.holdFromTick) {
+        this.silentTick = note.atTick;
+        this.holdFromTick = failed ? note.atTick : null;
+        this.rejectedCount += 1;
+        continue;
+      }
+      if (density <= 0) {
         this.rejectedCount += 1;
         continue;
       }
       const message = this.bus.acquire();
       if (!message) return;
       copyNote(message, note);
+      if (failed) {
+        this.holdFromTick = note.atTick;
+        // The note's own slot, recovered from its legato-shaped length.
+        const slot = note.gate > 0 ? note.durationTicks / note.gate : note.durationTicks;
+        message.durationTicks = Math.max(1, Math.round(note.durationTicks + slot));
+      }
       this.acceptedCount += 1;
       this.bus.publish("notes-out", message);
     }
@@ -675,6 +699,8 @@ export class NoteDensityProcessor extends BaseProcessor {
   reset(_atTick: Tick): void {
     this.acceptedCount = 0;
     this.rejectedCount = 0;
+    this.holdFromTick = null;
+    this.silentTick = null;
     this.densityMatcher.clear();
   }
 

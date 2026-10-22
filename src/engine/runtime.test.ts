@@ -223,3 +223,51 @@ describe("following an external transport", () => {
     expect(runtime.followedTempo()).toBeCloseTo(120, 0);
   });
 })
+
+describe("Tap Conduct gate", () => {
+  it("waits for a beat for nothing, releases one beat per tap, and runs free when frozen", async () => {
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    let wake: (() => void) | null = null;
+    const scheduler: SchedulerDriver = {
+      repeat: (callback) => (wake = callback, callback),
+      once: (callback) => callback,
+      cancel: vi.fn(),
+    };
+    let now = 0;
+    const clock: ClockDriver = { nowSec: () => now };
+    const published: number[] = [];
+    const project = createDefaultProject();
+    project.cyclic.accent = project.cyclic.accent.map((cycle) => cycle.map(() => 2));
+    const runtime = new MRuntime(
+      () => project,
+      (notes) => published.push(...notes.map((note) => note.startSec)),
+      { scheduler, clock },
+    );
+    runtime.setSynthEnabled(false);
+    const run = (until: number) => {
+      for (; now < until; now = Math.round((now + 0.025) * 1000) / 1000) wake!();
+    };
+
+    runtime.beginTapConduct(true);
+    await runtime.start();
+    run(1);
+    expect(published).toEqual([]); // the first tap only starts the count
+
+    runtime.tapConductBeat(0.5); // second tap at 1.0 s: one beat may play
+    run(2.2);
+    expect(published.length).toBeGreaterThan(0);
+    expect(published.every((at) => at >= 1 && at < 1.5)).toBe(true);
+
+    const heldCount = published.length;
+    runtime.tapConductBeat(0.5); // a late tap picks up where the music stopped
+    run(2.7);
+    const resumed = published.slice(heldCount);
+    expect(resumed.length).toBeGreaterThan(0);
+    expect(resumed.every((at) => at >= 2.2 && at < 2.7)).toBe(true);
+
+    runtime.freezeTapConduct();
+    run(4);
+    expect(Math.max(...published)).toBeGreaterThan(3.5);
+    runtime.stop();
+  });
+});
