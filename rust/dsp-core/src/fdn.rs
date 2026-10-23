@@ -59,6 +59,8 @@ pub struct Fdn {
     rt60: f32,
     rt60_high: f32,
     infinite: bool,
+    /// Even lines less odd ones, from the last sample: a stereo module's side.
+    side: f32,
 }
 
 impl Fdn {
@@ -104,6 +106,7 @@ impl Fdn {
             rt60: 2.0,
             rt60_high: 2.0,
             infinite: false,
+            side: 0.0,
         };
         fdn.set_mod_rate(0.5);
         fdn.recompute();
@@ -121,6 +124,7 @@ impl Fdn {
         for d in &mut self.damping {
             d.clear();
         }
+        self.side = 0.0;
     }
 
     /// Target RT60 in seconds, and the RT60 the top of the spectrum should get.
@@ -231,6 +235,7 @@ impl Fdn {
         let input = input * self.input_scale;
         let count = self.lines.len();
         let mut sum = 0.0f32;
+        let mut side = 0.0f32;
 
         for i in 0..count {
             let modulation = if self.mod_depth_samples > 0.0 {
@@ -250,6 +255,7 @@ impl Fdn {
             let damped = self.damping[i].process(raw) * self.gains[i];
             self.scratch[i] = damped;
             sum += damped;
+            side += if i % 2 == 0 { damped } else { -damped };
         }
 
         match self.matrix {
@@ -285,7 +291,16 @@ impl Fdn {
             }
         }
 
+        self.side = side * (1.0 / (count as f32).sqrt());
         sum * (1.0 / (count as f32).sqrt())
+    }
+
+    /// The even lines less the odd ones at the last sample, scaled like the
+    /// sum `process` returns: the side of a stereo tank whose mid is that sum.
+    /// The lines are mutually decorrelated, so the two are too.
+    #[inline]
+    pub fn side(&self) -> f32 {
+        self.side
     }
 
     /// Read one line's current output, for stereo taps.

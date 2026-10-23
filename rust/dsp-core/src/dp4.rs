@@ -186,6 +186,8 @@ pub struct Dp4Reverb {
     definition: DiffuserChain,
     tank: Fdn,
     output_filter: OnePole,
+    /// The output filter again, for the side.
+    side_filter: OnePole,
 
     pre_echoes: [PreEcho; PRE_ECHO_COUNT],
     early_refs: [EarlyRef; EARLY_REF_COUNT],
@@ -242,6 +244,7 @@ impl Dp4Reverb {
             diffusion2,
             definition,
             tank,
+            side_filter: output_filter,
             output_filter,
             pre_echoes: [pre_echo(0), pre_echo(1)],
             early_refs: [early_ref(0), early_ref(1), early_ref(2), early_ref(3)],
@@ -288,6 +291,7 @@ impl Dp4Reverb {
         self.damping = clamp(amount, 0.0, 1.0);
         let hz = damping_hz(self.damping);
         self.output_filter.set_cutoff(hz, self.sample_rate);
+        self.side_filter.set_cutoff(hz, self.sample_rate);
     }
 
     /// The input lowpass — a tone control on what enters the reverb.
@@ -352,6 +356,7 @@ impl Dp4Reverb {
         self.definition.clear();
         self.tank.clear();
         self.output_filter.clear();
+        self.side_filter.clear();
         for echo in &mut self.pre_echoes {
             echo.line.clear();
         }
@@ -360,8 +365,18 @@ impl Dp4Reverb {
         }
     }
 
+    /// One sample, mono: the tank's summed output and the pre-echoes.
     #[inline]
     pub fn process(&mut self, input: f32) -> f32 {
+        let (left, right) = self.process_stereo(input);
+        (left + right) * 0.5
+    }
+
+    /// One sample in, a stereo pair out: the mono output as the mid, the
+    /// tank's side around it through the same output filter. The pre-echoes
+    /// are centred.
+    #[inline]
+    pub fn process_stereo(&mut self, input: f32) -> (f32, f32) {
         let entered = self.bandwidth.process(input);
         self.predelay.push(entered);
         let delayed = self.predelay.read(self.predelay_samples);
@@ -390,7 +405,8 @@ impl Dp4Reverb {
 
         let shaped = self.definition.process(to_tank);
         let tail = self.output_filter.process(self.tank.process(shaped));
-        tail + direct
+        let side = self.side_filter.process(self.tank.side());
+        (tail + direct + side, tail + direct - side)
     }
 }
 

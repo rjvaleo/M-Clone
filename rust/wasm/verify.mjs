@@ -256,5 +256,92 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   check("freeing nothing is not fatal", true);
 }
 
+// ---- stereo through the mixer, a reverb and the DP/4 ------------------------
+// The modules that let Rust become the default, through the real ABI: the
+// mixer's channels on their own port pairs, a reverb that plays back wide, and
+// the four-unit DP/4 built from a packed variant.
+{
+  const MIXER = 16;
+  const REVERB = 8;
+  const DP4_MACHINE = 18;
+  const mixerLevel = (channel) => channel * 4;
+  const mixerPan = (channel) => channel * 4 + 1;
+  const MIXER_FADE = 16;
+  const REVERB_PARAM = { MIX: 3, LEVEL: 4 };
+  const DP4_FADE = 24;
+
+  // Views are made per call: adding a module can grow linear memory, which
+  // detaches every view made before it.
+  const sides = (blocks, skip = 0) => {
+    for (let b = 0; b < skip; b++) api.process_quantum();
+    const left = new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM);
+    const right = new Float32Array(api.memory.buffer, api.output_ptr() + QUANTUM * 4, QUANTUM);
+    let l = 0;
+    let r = 0;
+    for (let b = 0; b < blocks; b++) {
+      api.process_quantum();
+      for (let i = 0; i < QUANTUM; i++) {
+        l = Math.max(l, Math.abs(left[i]));
+        r = Math.max(r, Math.abs(right[i]));
+      }
+    }
+    return [l, r];
+  };
+
+  api.init(SAMPLE_RATE);
+  const synth = u32(api.add_module(KIND.SYNTH));
+  const mixer = u32(api.add_module(MIXER));
+  const out = u32(api.add_module(KIND.AUDIO_OUTPUT));
+  check("built a mixer", mixer !== NO_MODULE);
+  // Channel 2 is ports 2 and 3.
+  check("synth → mixer channel 2",
+    api.connect(synth, 0, mixer, 2) === 1 && api.connect(synth, 1, mixer, 3) === 1);
+  check("mixer → output", api.connect(mixer, 0, out, 0) === 1 && api.connect(mixer, 1, out, 1) === 1);
+  api.set_io(NO_MODULE, out);
+  api.set_param(synth, SYNTH_PARAM.LEVEL, 1.0);
+  api.set_param(mixer, MIXER_FADE, 1.0);
+  api.set_param(mixer, mixerLevel(1), 1.0);
+  api.set_param(mixer, mixerPan(1), -1.0);
+  api.note_on(synth, 60, 1.0, 0.0);
+  // Past the pan's glide from the centre.
+  const [dryL, dryR] = sides(32, 32);
+  check("a hard-left mixer channel sounds on the left only", dryL > 0.01 && dryR < 1e-6,
+    `L ${dryL.toFixed(4)} R ${dryR.toFixed(6)}`);
+
+  const reverb = u32(api.add_module(REVERB));
+  api.disconnect(mixer, 0, out, 0);
+  api.disconnect(mixer, 1, out, 1);
+  for (const port of [0, 1]) {
+    api.connect(mixer, port, reverb, port);
+    api.connect(reverb, port, out, port);
+  }
+  api.set_param(reverb, REVERB_PARAM.MIX, 1.0);
+  api.set_param(reverb, REVERB_PARAM.LEVEL, 1.0);
+  const [wetL, wetR] = sides(200);
+  check("the reverb plays a left-only sound back on both sides", wetL > 1e-3 && wetR > 1e-3,
+    `L ${wetL.toFixed(4)} R ${wetR.toFixed(4)}`);
+  api.all_notes_off(synth);
+
+  api.init(SAMPLE_RATE);
+  const voice = u32(api.add_module(KIND.SYNTH));
+  // The descriptor's defaults: config 1, A→B serial, C→D parallel, AB↔CD
+  // serial; large plate, small room, hall, small plate.
+  const variant = 0 | (0 << 2) | (1 << 4) | (0 << 6) | (1 << 7) | (2 << 10) | (4 << 13) | (0 << 16);
+  const dp4 = u32(api.add_module_variant(DP4_MACHINE, variant));
+  const master = u32(api.add_module(KIND.AUDIO_OUTPUT));
+  check("built the DP/4 machine from a packed variant", dp4 !== NO_MODULE);
+  check("synth → DP/4 in 1 → out 1 and 2",
+    api.connect(voice, 0, dp4, 0) === 1 &&
+      api.connect(dp4, 0, master, 0) === 1 &&
+      api.connect(dp4, 1, master, 1) === 1);
+  api.set_io(NO_MODULE, master);
+  api.set_param(voice, SYNTH_PARAM.LEVEL, 1.0);
+  api.set_param(dp4, DP4_FADE, 1.0);
+  api.note_on(voice, 64, 1.0, 0.0);
+  const [dpL, dpR] = sides(64);
+  check("the DP/4 sounds on both of its first outputs", dpL > 0.01 && dpR > 0.01,
+    `L ${dpL.toFixed(4)} R ${dpR.toFixed(4)}`);
+}
+
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);
