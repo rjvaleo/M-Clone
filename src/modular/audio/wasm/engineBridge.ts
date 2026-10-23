@@ -633,6 +633,35 @@ const asModuleId = (raw: number): number | undefined => {
   return id === NO_MODULE ? undefined : id;
 };
 
+/**
+ * Names a structural string stands for, as the numbers Rust reads.
+ *
+ * Web Audio rebuilds for these, so they travel as structure; Rust takes them as
+ * values. The numbers are the Rust enums', not the descriptor's option order —
+ * `SYNTH_WAVES` lists sawtooth first, `Wave` in osc.rs starts at sine.
+ */
+const WAVE: Readonly<Record<string, number>> = { sine: 0, triangle: 1, sawtooth: 2, square: 3, pulse: 4 };
+export const STRUCTURAL_NAMES: Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, number>>>>>> = {
+  "m.synth": { "osc1-wave": WAVE, "osc2-wave": WAVE, "osc3-wave": WAVE },
+};
+
+/**
+ * Every value a spec gives the engine: its parameters, and the structural
+ * values Rust takes as plain values — numbers and switches as they are, names
+ * through `STRUCTURAL_NAMES`. A structure change rebuilds the module first, so
+ * these always land on the module built from them.
+ */
+const valuesFor = (spec: AudioNodeSpec): Record<string, number> => {
+  const values: Record<string, number> = {};
+  const names = STRUCTURAL_NAMES[spec.moduleType] ?? {};
+  for (const [name, value] of Object.entries(spec.structure)) {
+    if (typeof value === "number" && Number.isFinite(value)) values[name] = value;
+    else if (typeof value === "boolean") values[name] = value ? 1 : 0;
+    else if (typeof value === "string" && names[name]?.[value] !== undefined) values[name] = names[name][value];
+  }
+  return { ...values, ...spec.parameters };
+};
+
 /** What a module was built from. Changing any of it means rebuilding. */
 const structureKey = (spec: AudioNodeSpec): string =>
   `${spec.moduleType}|${JSON.stringify(spec.structure)}`;
@@ -1022,7 +1051,7 @@ export class WasmRack {
 
   private applyParameters(spec: AudioNodeSpec, built: Built): void {
     const indices = PARAM_INDICES[spec.moduleType] ?? {};
-    for (const [name, value] of Object.entries(spec.parameters)) {
+    for (const [name, value] of Object.entries(valuesFor(spec))) {
       const index = indices[name];
       // A parameter the module does not have is not an error: the document may
       // be newer than the engine, or the control may be Web-Audio-only still.
