@@ -57,6 +57,9 @@ export const MODULE_KINDS: Readonly<Record<string, number>> = {
   "m.percussion": 13,
   "m.looper": 14,
   "m.granular": 15,
+  "m.audio-mixer": 16,
+  "m.audio-widener": 17,
+  "m.audio-dp4": 18,
 };
 
 /**
@@ -88,8 +91,41 @@ const VARIANT_FIELD: Readonly<Record<string, string>> = {
   "m.looper": "time-stretch",
 };
 
+const DP4_ALGORITHMS = STRUCTURAL_VARIANTS["m.audio-dp4-reverb"];
+const DP4_PAIR_ROUTINGS = ["serial", "parallel", "feedback1", "feedback2"];
+
+/**
+ * The four-unit DP/4's whole structure in one number, laid out as
+ * `Dp4Machine::variant` in Rust: config − 1 in two bits, the AB and CD
+ * routings in two each, AB↔CD in one, then each unit's algorithm in three.
+ * Anything unrecognised builds the descriptor's default.
+ */
+function dp4Variant(structure: Record<string, unknown>): number {
+  const pick = (options: readonly string[], value: unknown, fallback: number): number => {
+    const index = options.indexOf(String(value ?? ""));
+    return index < 0 ? fallback : index;
+  };
+  const config = Math.round(Number(structure["source-config"] ?? 1));
+  const configBits = [1, 2, 3, 4].includes(config) ? config - 1 : 0;
+  const defaults = { a: 1, b: 2, c: 4, d: 0 };
+  const units = (["a", "b", "c", "d"] as const).map((unit) =>
+    pick(DP4_ALGORITHMS, structure[`unit-${unit}-algorithm`], defaults[unit]),
+  );
+  return (
+    configBits |
+    (pick(DP4_PAIR_ROUTINGS, structure["ab-routing"], 0) << 2) |
+    (pick(DP4_PAIR_ROUTINGS, structure["cd-routing"], 1) << 4) |
+    (pick(["serial", "parallel"], structure["abcd-routing"], 0) << 6) |
+    (units[0] << 7) |
+    (units[1] << 10) |
+    (units[2] << 13) |
+    (units[3] << 16)
+  );
+}
+
 /** The variant number for a spec, or 0 where the module has none. */
 export function variantOf(moduleType: string, structure: Record<string, unknown>): number {
+  if (moduleType === "m.audio-dp4") return dp4Variant(structure);
   const options = STRUCTURAL_VARIANTS[moduleType];
   if (!options) return 0;
   const field = VARIANT_FIELD[moduleType];
@@ -313,6 +349,29 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     [AUDIO_MUTE_PARAM]: 9,
     pan: 10,
   },
+  // `Mixer` in Rust: four controls per channel, then the fade.
+  "m.audio-mixer": {
+    ...Object.fromEntries([1, 2, 3, 4].flatMap((channel) => {
+      const base = (channel - 1) * 4;
+      return [
+        [`level-${channel}`, base],
+        [`pan-${channel}`, base + 1],
+        [`mute-${channel}`, base + 2],
+        [`solo-${channel}`, base + 3],
+      ];
+    })),
+    level: 16,
+  },
+  "m.audio-widener": { width: 0, crossover: 1, level: 2 },
+  // `Dp4Machine`: six controls per unit, then the fade.
+  "m.audio-dp4": {
+    ...Object.fromEntries((["a", "b", "c", "d"] as const).flatMap((unit, index) =>
+      ["mix", "volume", "decay-seconds", "pre-delay-seconds", "hf-damping", "hf-bandwidth"].map(
+        (control, offset) => [`unit-${unit}-${control}`, index * 6 + offset],
+      ),
+    )),
+    level: 24,
+  },
   "m.granular": {
     "grain-size": 0,
     "grain-spacing": 1,
@@ -349,6 +408,9 @@ const FADE_HANDLE: Readonly<Record<string, number | undefined>> = {
   "m.percussion": PARAM_INDICES["m.percussion"].level,
   "m.looper": PARAM_INDICES["m.looper"].level,
   "m.granular": PARAM_INDICES["m.granular"].level,
+  "m.audio-mixer": PARAM_INDICES["m.audio-mixer"].level,
+  "m.audio-widener": PARAM_INDICES["m.audio-widener"].level,
+  "m.audio-dp4": PARAM_INDICES["m.audio-dp4"].level,
 };
 
 /** Modules that take notes. Everything else inherits the trait's no-op. */
@@ -379,6 +441,11 @@ const TAKES_AUDIO_INPUT: ReadonlySet<string> = new Set([
   "m.audio-compressor",
   "m.audio-limiter",
   "m.audio-bitcrusher",
+  "m.audio-widener",
+  // The DP/4 hears the host on its first input, as a rack's effect would. The
+  // mixer is left out: its four channels are what a person patches, and a
+  // first channel that quietly carried the live input would be a surprise.
+  "m.audio-dp4",
 ]);
 
 /**
@@ -386,22 +453,13 @@ const TAKES_AUDIO_INPUT: ReadonlySet<string> = new Set([
  * derive the gap by diffing two tables.
  *
  * These are skipped by `update` and render silence on this backend while
- * working on Web Audio. Allowed during the migration; not allowed to be a
- * surprise. `engineBridge.test.ts` fails if this list stops matching reality
- * in either direction.
+ * working on Web Audio. Empty since the mixer, the widener and the four-unit
+ * DP/4 were ported, which is what let Rust become the default; a module added
+ * to the registry before its Rust half has to be listed here.
+ * `engineBridge.test.ts` fails if this list stops matching reality in either
+ * direction.
  */
-export const NOT_YET_IN_RUST: readonly string[] = [
-  // The four-unit DP/4 itself, as opposed to `m.audio-dp4-reverb` and
-  // `m.audio-dp4-nonlin`, which are ported. Four ins, four outs and a routing
-  // matrix, where every other module in the engine is mono in and mono out —
-  // so it needs multi-port support before it needs DSP.
-  "m.audio-dp4",
-  // The stereo widener and the mixer, added with the true-stereo FDN work on
-  // the branch that had no Rust bridge to register them with. Both run on Web
-  // Audio today; neither has a Rust module yet.
-  "m.audio-widener",
-  "m.audio-mixer",
-];
+export const NOT_YET_IN_RUST: readonly string[] = [];
 
 /**
  * Descriptor parameters that deliberately have no index, and why.
@@ -444,6 +502,17 @@ export const PARAMS_HANDLED_ELSEWHERE: Readonly<Record<string, Readonly<Record<s
       "add_module_variant rather than moving a value",
   },
   "m.granular": { "asset-id": "audio, not a value; reaches the engine via set_sample_slot" },
+  "m.audio-mixer": { mute: "structural; becomes the spec's bypass" },
+  "m.audio-widener": { mute: "structural; becomes the spec's bypass" },
+  "m.audio-dp4": {
+    mute: "structural; becomes the spec's bypass",
+    ...Object.fromEntries(
+      [
+        "source-config", "ab-routing", "cd-routing", "abcd-routing",
+        "unit-a-algorithm", "unit-b-algorithm", "unit-c-algorithm", "unit-d-algorithm",
+      ].map((id) => [id, "structural; packed into add_module_variant"]),
+    ),
+  },
   "m.synth": {
     mute: "structural; becomes the spec's bypass",
     matrix: "96 cells; reaches the engine one at a time via set_modulation",
@@ -484,20 +553,44 @@ export const ENGINE_ONLY_PARAMS: ReadonlySet<string> = new Set([
   "mod-wheel",
 ]);
 
-/**
- * How many channels a module type carries on its audio ports.
- *
- * Stereo is wired as two cables rather than one wide one, because the engine's
- * ports are per-channel — which is also what lets a patch take just the left
- * side of something when it wants to.
- */
-const STEREO: ReadonlySet<string> = new Set([
-  "m.synth", "m.audio-output", "m.percussion", "m.looper", "m.granular",
-]);
+/** Where one document port lands among a module's engine ports. */
+export type PortSpan = { readonly base: number; readonly channels: 1 | 2 };
 
-/** The channel count two connected module types agree on. */
-export const cableChannels = (from: string, to: string): number =>
-  STEREO.has(from) && STEREO.has(to) ? 2 : 1;
+/** Every module's audio is a stereo pair on engine ports 0 and 1… */
+const STEREO_PAIR: PortSpan = { base: 0, channels: 2 };
+
+/** …except the two with several inputs of their own. */
+const MULTI_PORT: Readonly<Record<string, Readonly<Record<string, PortSpan>>>> = {
+  // Four stereo channels, on ports 0–1, 2–3, 4–5 and 6–7.
+  "m.audio-mixer": Object.fromEntries(
+    [1, 2, 3, 4].map((n) => [`audio-in-${n}`, { base: (n - 1) * 2, channels: 2 } as PortSpan]),
+  ),
+  // Four mono ins and four mono outs: the machine's paths are independent.
+  "m.audio-dp4": Object.fromEntries(
+    [1, 2, 3, 4].flatMap((n) => [
+      [`audio-in-${n}`, { base: n - 1, channels: 1 } as PortSpan],
+      [`audio-out-${n}`, { base: n - 1, channels: 1 } as PortSpan],
+    ]),
+  ),
+};
+
+export const portSpan = (moduleType: string, portId: string): PortSpan =>
+  MULTI_PORT[moduleType]?.[portId] ?? STEREO_PAIR;
+
+/**
+ * The engine cables one document cable becomes, as `[from, to]` port pairs.
+ *
+ * Side for side between two stereo ends. A mono end on a stereo input feeds
+ * both of its sides; a stereo end into a mono input sums its two, which is
+ * what several cables into one engine port do.
+ */
+export const enginePorts = (from: PortSpan, to: PortSpan): [number, number][] => {
+  if (from.channels === to.channels) {
+    return Array.from({ length: from.channels }, (_, i) => [from.base + i, to.base + i]);
+  }
+  if (from.channels === 1) return [[from.base, to.base], [from.base, to.base + 1]];
+  return [[from.base, to.base], [from.base + 1, to.base]];
+};
 
 /** The `.wasm` exports, exactly as `rust/wasm/src/lib.rs` declares them. */
 export interface EngineExports {
@@ -543,6 +636,8 @@ const asModuleId = (raw: number): number | undefined => {
 /** What a module was built from. Changing any of it means rebuilding. */
 const structureKey = (spec: AudioNodeSpec): string =>
   `${spec.moduleType}|${JSON.stringify(spec.structure)}`;
+
+type Cable = { from: number; fromPort: number; to: number; toPort: number };
 
 type Built = {
   moduleId: number;
@@ -628,7 +723,7 @@ export class WasmRack {
    * comes from a module no plan mentions, so a node-keyed mirror could not
    * represent it.
    */
-  private readonly cables = new Map<string, { from: number; to: number; port: number }>();
+  private readonly cables = new Map<string, Cable>();
   private readonly unsupportedTypes = new Set<string>();
   private outputModuleId: number | undefined;
   /** Asset hash to engine slot, as the main thread assigned them. */
@@ -936,46 +1031,48 @@ export class WasmRack {
       this.engine.set_param(built.moduleId, index, value);
       built.parameters[name] = value;
     }
+    // The plan carries the mix as `wet` rather than among the parameters (the
+    // Web Audio shell crossfades it itself), so it is sent on its own here.
+    const mix = indices[AUDIO_MIX_PARAM];
+    if (mix !== undefined && built.parameters[AUDIO_MIX_PARAM] !== spec.wet) {
+      this.engine.set_param(built.moduleId, mix, spec.wet);
+      built.parameters[AUDIO_MIX_PARAM] = spec.wet;
+    }
   }
 
   private rewire(plan: AudioPlan): void {
-    const wanted = new Map<string, { from: number; to: number; port: number }>();
-    /**
-     * One document cable becomes one engine cable per channel.
-     *
-     * Two mono cables rather than one stereo one, because the engine's ports
-     * are per-channel — which is also what lets a patch take only the left side
-     * of something when that is what it wants.
-     */
-    const want = (from: number, to: number, channels: number): void => {
-      for (let port = 0; port < channels; port += 1) {
-        wanted.set(`${from}:${port}→${to}:${port}`, { from, to, port });
+    const wanted = new Map<string, Cable>();
+    const want = (from: number, to: number, ports: [number, number][]): void => {
+      for (const [fromPort, toPort] of ports) {
+        wanted.set(`${from}:${fromPort}→${to}:${toPort}`, { from, fromPort, to, toPort });
       }
     };
 
     for (const connection of plan.connections) {
       // A cable to a module that was never built is dropped rather than
-      // half-patched — during the migration this is the common case.
+      // half-patched.
       const from = this.moduleIdOf(connection.from.nodeId);
       const to = this.moduleIdOf(connection.to.nodeId);
       if (from === undefined || to === undefined) continue;
-      const fromType = this.moduleTypeOf(connection.from.nodeId) ?? "";
-      const toType = this.moduleTypeOf(connection.to.nodeId) ?? "";
-      want(from, to, cableChannels(fromType, toType));
+      const fromSpan = portSpan(this.moduleTypeOf(connection.from.nodeId) ?? "", connection.from.portId);
+      const toSpan = portSpan(this.moduleTypeOf(connection.to.nodeId) ?? "", connection.to.portId);
+      want(from, to, enginePorts(fromSpan, toSpan));
     }
 
-    // The host feed is mono; it lands on port 0 and the module widens it.
-    for (const moduleId of this.openInputs(plan)) want(this.hostInputId, moduleId, 1);
+    // The host feed is mono; it reaches both sides of the module's input.
+    for (const moduleId of this.openInputs(plan)) {
+      want(this.hostInputId, moduleId, enginePorts({ base: 0, channels: 1 }, STEREO_PAIR));
+    }
 
     for (const [key, cable] of this.cables) {
       if (wanted.has(key)) continue;
-      this.engine.disconnect(cable.from, cable.port, cable.to, cable.port);
+      this.engine.disconnect(cable.from, cable.fromPort, cable.to, cable.toPort);
       this.cables.delete(key);
     }
 
     for (const [key, cable] of wanted) {
       if (this.cables.has(key)) continue;
-      this.engine.connect(cable.from, cable.port, cable.to, cable.port);
+      this.engine.connect(cable.from, cable.fromPort, cable.to, cable.toPort);
       this.cables.set(key, cable);
     }
   }

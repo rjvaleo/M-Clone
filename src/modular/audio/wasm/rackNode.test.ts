@@ -39,21 +39,23 @@ const plan = (generation: number): AudioPlan => ({
 });
 
 describe("Choosing an engine", () => {
-  it("stays on Web Audio unless asked", () => {
-    // The Rust path is opt-in for as long as it is the newer of the two.
-    expect(preferredEngine("")).toBe("web-audio");
-    expect(preferredEngine("?theme=dark")).toBe("web-audio");
-  });
-
-  it("switches to Rust when the query string says so", () => {
+  it("runs on Rust unless asked otherwise", () => {
+    // Rust is the default: every audio module has its Rust half, and the
+    // effects and sound engines still to come exist only there.
+    expect(preferredEngine("")).toBe("rust");
+    expect(preferredEngine("?theme=dark")).toBe("rust");
     expect(preferredEngine("?engine=rust")).toBe("rust");
-    expect(preferredEngine("?theme=dark&engine=rust")).toBe("rust");
   });
 
-  it("ignores a value it does not recognise", () => {
-    // A typo has to land on the path that works, not on neither.
-    expect(preferredEngine("?engine=rustt")).toBe("web-audio");
-    expect(preferredEngine("?engine=")).toBe("web-audio");
+  it("goes back to Web Audio when the query string says so", () => {
+    expect(preferredEngine("?engine=web-audio")).toBe("web-audio");
+    expect(preferredEngine("?theme=dark&engine=webaudio")).toBe("web-audio");
+  });
+
+  it("treats a value it does not recognise as the default", () => {
+    // Safe either way: a Rust engine that cannot load falls back to Web Audio.
+    expect(preferredEngine("?engine=rustt")).toBe("rust");
+    expect(preferredEngine("?engine=")).toBe("rust");
   });
 });
 

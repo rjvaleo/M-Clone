@@ -20,14 +20,15 @@ export type RackEngineChoice = "web-audio" | "rust";
 /**
  * Read the engine choice out of a query string.
  *
- * Opt-in, and deliberately not persisted: while the Rust path is the newer of
- * the two, someone who lands on a broken build should get the working one back
- * by removing a parameter rather than by finding a setting. An unrecognised
- * value is Web Audio — a typo has to land on the path that works.
+ * Rust unless the page asks for Web Audio with `?engine=web-audio`: every
+ * audio module has its Rust half now, and the shared effects and the sound
+ * engines arriving next exist only there. Choosing Rust is safe on a build
+ * where it cannot load — `useRustEngine` falls back to Web Audio and says so —
+ * so an unrecognised value takes the default rather than the fallback.
  */
 export const preferredEngine = (search: string): RackEngineChoice => {
   const value = new URLSearchParams(search).get("engine");
-  return value === "rust" ? "rust" : "web-audio";
+  return value === "web-audio" || value === "webaudio" ? "web-audio" : "rust";
 };
 
 /** Just enough of `AudioWorkletNode` to talk to, so this stays testable. */

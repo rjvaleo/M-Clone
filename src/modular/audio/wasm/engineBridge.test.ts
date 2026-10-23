@@ -559,7 +559,8 @@ describe("The plan-to-engine bridge", () => {
       plan([node("g", "m.audio-gain", { gain: 0.5 }), node("out", "m.audio-output", {})], [], 2),
     );
 
-    expect(engine.of("disconnect")).toHaveLength(1);
+    // Both sides of the stereo pair.
+    expect(engine.of("disconnect")).toHaveLength(2);
     expect([...engine.cables]).not.toContain(documentCable);
     expect(rack.moduleIdOf("g")).not.toBeUndefined();
     expect(rack.moduleIdOf("out")).not.toBeUndefined();
@@ -922,14 +923,50 @@ describe("Stereo cabling", () => {
     expect(engine.cables.has(`${s}:1→${out}:1`)).toBe(true);
   });
 
-  it("wires one port when either end is mono", () => {
+  it("wires both sides through the effects, which are stereo now", () => {
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
-    rack.update(plan([node("g", "m.audio-gain"), node("out", "m.audio-output")], [wire("g", "out")]));
-    const g = rack.moduleIdOf("g");
-    const out = rack.moduleIdOf("out");
-    expect(engine.cables.has(`${g}:0→${out}:0`)).toBe(true);
-    expect(engine.cables.has(`${g}:1→${out}:1`)).toBe(false);
+    rack.update(plan([node("s", "m.synth"), node("d", "m.audio-delay"), node("out", "m.audio-output")], [wire("s", "d"), wire("d", "out")]));
+    const [s, d, out] = ["s", "d", "out"].map((id) => rack.moduleIdOf(id));
+    for (const port of [0, 1]) {
+      expect(engine.cables.has(`${s}:${port}→${d}:${port}`)).toBe(true);
+      expect(engine.cables.has(`${d}:${port}→${out}:${port}`)).toBe(true);
+    }
+  });
+
+  it("lands each mixer input on its own pair of engine ports", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("m", "m.audio-mixer")], [
+      { from: { nodeId: "s", portId: "audio-out" }, to: { nodeId: "m", portId: "audio-in-3" } },
+    ]));
+    const [s, m] = ["s", "m"].map((id) => rack.moduleIdOf(id));
+    expect(engine.cables.has(`${s}:0→${m}:4`)).toBe(true);
+    expect(engine.cables.has(`${s}:1→${m}:5`)).toBe(true);
+    expect(engine.cable_count()).toBe(2);
+  });
+
+  it("sums a stereo source into a DP/4 input, and spreads a DP/4 output to both sides", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("dp", "m.audio-dp4"), node("out", "m.audio-output")], [
+      { from: { nodeId: "s", portId: "audio-out" }, to: { nodeId: "dp", portId: "audio-in-2" } },
+      { from: { nodeId: "dp", portId: "audio-out-3" }, to: { nodeId: "out", portId: "audio-in" } },
+    ]));
+    const [s, dp, out] = ["s", "dp", "out"].map((id) => rack.moduleIdOf(id));
+    expect(engine.cables.has(`${s}:0→${dp}:1`)).toBe(true);
+    expect(engine.cables.has(`${s}:1→${dp}:1`)).toBe(true);
+    expect(engine.cables.has(`${dp}:2→${out}:0`)).toBe(true);
+    expect(engine.cables.has(`${dp}:2→${out}:1`)).toBe(true);
+  });
+
+  it("feeds the host's input to both sides of a stereo effect", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("d", "m.audio-delay")]));
+    const d = rack.moduleIdOf("d");
+    const host = [...engine.cables].filter((cable) => cable.endsWith(`→${d}:0`) || cable.endsWith(`→${d}:1`));
+    expect(host).toHaveLength(2);
   });
 
   it("hands back left and right as distinct views of one buffer", () => {
@@ -1025,5 +1062,77 @@ describe("The descriptor-to-engine parameter contract", () => {
       .map((descriptor) => descriptor.type)
       .filter((type) => MODULE_KINDS[type] === undefined);
     expect(unbuildable).toEqual(NOT_YET_IN_RUST);
+  });
+});
+
+describe("The dry/wet mix", () => {
+  // The plan carries an effect's mix as `wet`, not among its parameters, so a
+  // bridge that only walks `parameters` never moves the mix knob in Rust.
+  it("reaches the engine's mix index", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("d", "m.audio-delay", {}, { wet: 0.25 })]));
+    const id = rack.moduleIdOf("d")!;
+    expect(engine.params.get(`${id}.${PARAM_INDICES["m.audio-delay"].mix}`)).toBe(0.25);
+  });
+
+  it("follows the knob without rebuilding the module", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("d", "m.audio-delay", {}, { wet: 0.25 })]));
+    rack.update(plan([node("d", "m.audio-delay", {}, { wet: 0.75 })], [], 2));
+    const id = rack.moduleIdOf("d")!;
+    expect(engine.params.get(`${id}.${PARAM_INDICES["m.audio-delay"].mix}`)).toBe(0.75);
+    expect(engine.of("remove")).toEqual([]);
+  });
+
+  it("sends nothing for a module with no mix", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth", {}, { wet: 0.5 })]));
+    const id = rack.moduleIdOf("s")!;
+    const sent = engine.of("param").filter((call) => call.startsWith(`param:${id}.`));
+    expect(sent.every((call) => !call.endsWith("=0.5"))).toBe(true);
+  });
+});
+
+describe("The modules ported for the Rust default", () => {
+  it("builds the mixer, the widener and the DP/4 machine", () => {
+    expect(MODULE_KINDS["m.audio-mixer"]).toBe(16);
+    expect(MODULE_KINDS["m.audio-widener"]).toBe(17);
+    expect(MODULE_KINDS["m.audio-dp4"]).toBe(18);
+    expect(NOT_YET_IN_RUST).toEqual([]);
+  });
+
+  it("sends each mixer channel's controls to its own stride", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("m", "m.audio-mixer", { "level-3": 1.5, "pan-3": -0.5, "solo-2": 1 })]));
+    const m = rack.moduleIdOf("m")!;
+    expect(engine.params.get(`${m}.8`)).toBe(1.5);
+    expect(engine.params.get(`${m}.9`)).toBe(-0.5);
+    expect(engine.params.get(`${m}.7`)).toBe(1);
+    expect(engine.params.get(`${m}.16`)).toBe(1);
+  });
+
+  it("packs the DP/4's configuration into its build variant", () => {
+    // The layout of `Dp4Machine::variant` in Rust: config − 1, AB, CD, AB↔CD,
+    // then each unit's algorithm in three bits.
+    const variant = variantOf("m.audio-dp4", {
+      "source-config": 3,
+      "ab-routing": "feedback1",
+      "cd-routing": "parallel",
+      "abcd-routing": "parallel",
+      "unit-a-algorithm": "hall",
+      "unit-b-algorithm": "large-room",
+      "unit-c-algorithm": "small-room",
+      "unit-d-algorithm": "large-plate",
+    });
+    expect(variant).toBe(2 | (2 << 2) | (1 << 4) | (1 << 6) | (4 << 7) | (3 << 10) | (2 << 13) | (1 << 16));
+    // A document from a newer build still makes a sound: names this one does
+    // not know build the defaults.
+    expect(variantOf("m.audio-dp4", { "source-config": 9, "unit-a-algorithm": "cathedral" }))
+      .toBe(variantOf("m.audio-dp4", {}));
+    expect(variantOf("m.audio-dp4", {})).toBe(0 | (0 << 2) | (1 << 4) | (0 << 6) | (1 << 7) | (2 << 10) | (4 << 13) | (0 << 16));
   });
 });

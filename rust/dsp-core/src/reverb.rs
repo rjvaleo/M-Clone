@@ -70,6 +70,9 @@ pub struct Blackhole {
     tank: Fdn,
     low_shelf: Biquad,
     high_shelf: Biquad,
+    /// The same shelves for the side, so it has the mid's tone.
+    side_low: Biquad,
+    side_high: Biquad,
     onset: EnvelopeFollower,
     slow: EnvelopeFollower,
     swell_ramp: f32,
@@ -95,6 +98,8 @@ impl Blackhole {
             tank: Fdn::new(8, sample_rate, MixMatrix::Hadamard),
             low_shelf: Biquad::identity(),
             high_shelf: Biquad::identity(),
+            side_low: Biquad::identity(),
+            side_high: Biquad::identity(),
             onset: EnvelopeFollower::new(),
             slow: EnvelopeFollower::new(),
             swell_ramp: 1.0,
@@ -159,6 +164,8 @@ impl Blackhole {
         let s = 1.0 + 2.0 * self.resonance.powf(1.5);
         self.low_shelf.set(BiquadKind::LowShelf, BLACKHOLE_LOW_HZ, s, low_db, self.sample_rate);
         self.high_shelf.set(BiquadKind::HighShelf, BLACKHOLE_HIGH_HZ, s, high_db, self.sample_rate);
+        self.side_low.set(BiquadKind::LowShelf, BLACKHOLE_LOW_HZ, s, low_db, self.sample_rate);
+        self.side_high.set(BiquadKind::HighShelf, BLACKHOLE_HIGH_HZ, s, high_db, self.sample_rate);
     }
 
     pub fn set_modulation(&mut self, depth: f32, rate: f32) {
@@ -190,13 +197,29 @@ impl Blackhole {
         self.tank.clear();
         self.low_shelf.clear();
         self.high_shelf.clear();
+        self.side_low.clear();
+        self.side_high.clear();
         self.onset.clear();
         self.slow.clear();
         self.feedback_state = 0.0;
     }
 
+    /// One sample, mono: the tank's summed output, as it always was.
     #[inline]
     pub fn process(&mut self, input: f32) -> f32 {
+        ceiling(self.mid_side(input).0)
+    }
+
+    /// One sample in, a stereo pair out: that sum as the mid, and the tank's
+    /// side around it, shelved the same way.
+    #[inline]
+    pub fn process_stereo(&mut self, input: f32) -> (f32, f32) {
+        let (mid, side) = self.mid_side(input);
+        (ceiling(mid + side), ceiling(mid - side))
+    }
+
+    #[inline]
+    fn mid_side(&mut self, input: f32) -> (f32, f32) {
         // Onset detection — the thing the browser build could not do, and the
         // reason its inverse mode was an approximation rather than a reverse.
         let fast = self.onset.process(input);
@@ -248,18 +271,24 @@ impl Blackhole {
             1.0
         };
         let out = shaped * envelope;
+        let side = self.side_high.process(self.side_low.process(self.tank.side())) * envelope;
 
-        // Output ceiling.
-        //
-        // Not a substitute for the gain staging above it — that work is what
-        // keeps ordinary settings near unity. This exists because the extremes
-        // are reachable and legitimate: a tiny tank with a six-second decay and
-        // a +12 dB shelf is a real request, and it lands around 116× before
-        // anything bounds it. `tanh(x/8)·8` is within 0.5% of linear at unity
-        // and hard-bounded at 8, so the sound is untouched where it matters and
-        // the speakers are safe where it does not.
-        (out / 8.0).tanh() * 8.0
+        (out, side)
     }
+}
+
+/// Output ceiling.
+///
+/// Not a substitute for the gain staging above it — that work is what
+/// keeps ordinary settings near unity. This exists because the extremes
+/// are reachable and legitimate: a tiny tank with a six-second decay and
+/// a +12 dB shelf is a real request, and it lands around 116× before
+/// anything bounds it. `tanh(x/8)·8` is within 0.5% of linear at unity
+/// and hard-bounded at 8, so the sound is untouched where it matters and
+/// the speakers are safe where it does not.
+#[inline]
+fn ceiling(x: f32) -> f32 {
+    (x / 8.0).tanh() * 8.0
 }
 
 #[cfg(test)]

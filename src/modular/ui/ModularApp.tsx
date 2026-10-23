@@ -1993,11 +1993,10 @@ export function ModularApp() {
     // owns synchronisation now, and it runs on both triggers.
     void engine.start().then(async () => {
       refreshAssets();
-      // The Rust rack is opt-in via `?engine=rust` and deliberately not
-      // persisted: someone who lands on a broken build gets the working
-      // backend back by removing a parameter rather than by finding a
-      // setting. Attached after `start()` because a worklet node on a
-      // suspended context never pulls.
+      // The Rust rack is the default; `?engine=web-audio` asks for the
+      // browser's own nodes instead, and a build where the rack cannot load
+      // falls back to them by itself. Attached after `start()` because a
+      // worklet node on a suspended context never pulls.
       if (preferredEngine(window.location.search) === "rust") {
         const attached = await engine.useRustEngine();
         setEngineKind(engine.engineKind);

@@ -602,13 +602,16 @@ impl Module for BlackholeVerb {
         ];
         self.sync(&raw);
 
-        let input = ports.input(0);
-        let wet = self.verb.process(input);
+        // The tank hears the sum and plays back wide; the dry sound keeps its
+        // own image.
+        let dry = [ports.input(0), ports.input(1)];
+        let (left, right) = self.verb.process_stereo(0.5 * (dry[0] + dry[1]));
         let mix = self.mix.follow(clamp(ports.param(Self::MIX), 0.0, 1.0));
         let level = self.level.follow(clamp(ports.param(Self::LEVEL), 0.0, 1.0));
         let muted = ports.param(Self::MUTE) >= 0.5;
-        let mixed = input * (1.0 - mix) + wet * mix;
-        ports.output(0, if muted { 0.0 } else { mixed * level });
+        let out = [(dry[0], left), (dry[1], right)]
+            .map(|(d, w)| if muted { 0.0 } else { (d * (1.0 - mix) + w * mix) * level });
+        output_stereo(ports, out);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -629,12 +632,8 @@ impl Module for BlackholeVerb {
         self.level.reset();
     }
 
-    fn input_count(&self) -> usize {
-        1
-    }
-    fn output_count(&self) -> usize {
-        1
-    }
+    fn input_count(&self) -> usize { 2 }
+    fn output_count(&self) -> usize { 2 }
     fn param_count(&self) -> usize {
         Self::PARAM_COUNT
     }
@@ -702,6 +701,75 @@ impl Shell {
         }
         (dry * (1.0 - mix) + wet * mix) * level
     }
+
+    /// `finish` for a stereo pair: one step of each glide, both sides blended.
+    #[inline]
+    fn finish_stereo(&mut self, ports: &Ports, dry: [f32; 2], wet: [f32; 2], mix_index: usize) -> [f32; 2] {
+        let mix = self.mix.follow(clamp(ports.param(mix_index), 0.0, 1.0));
+        let level = self.level.follow(clamp(ports.param(mix_index + 1), 0.0, 1.0));
+        if ports.param(mix_index + 2) >= 0.5 {
+            return [0.0; 2];
+        }
+        [0, 1].map(|side| (dry[side] * (1.0 - mix) + wet[side] * mix) * level)
+    }
+}
+
+/// Write a stereo pair to outputs 0 and 1.
+#[inline]
+fn output_stereo(ports: &mut Ports, out: [f32; 2]) {
+    ports.output(0, out[0]);
+    ports.output(1, out[1]);
+}
+
+/// The side further from zero, for a detector both sides share — linked
+/// dynamics, so a loud left ducks the right with it and the image holds still.
+#[inline]
+fn louder(pair: [f32; 2]) -> f32 {
+    if pair[0].abs() >= pair[1].abs() { pair[0] } else { pair[1] }
+}
+
+/// Two of a mono effect, one on each side, both reading the module's
+/// parameters.
+///
+/// Exactly stereo for the effects whose sides should not hear each other — a
+/// delay, an EQ, a crusher. The reverbs and the dynamics are stereo in their
+/// own ways instead: a tank fed the sum and read out wide, and one gain for
+/// both sides.
+pub struct DualMono<M> {
+    sides: [M; 2],
+}
+
+impl<M> DualMono<M> {
+    pub fn new(make: impl Fn() -> M) -> Self {
+        Self { sides: [make(), make()] }
+    }
+}
+
+impl<M: Module> Module for DualMono<M> {
+    fn process(&mut self, ctx: &ProcessContext, ports: &mut Ports) {
+        for (side, module) in self.sides.iter_mut().enumerate() {
+            let inputs = ports.inputs.get(side..side + 1).unwrap_or(&[]);
+            let Some(outputs) = ports.outputs.get_mut(side..side + 1) else { continue };
+            module.process(ctx, &mut Ports { inputs, outputs, params: ports.params });
+        }
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        for module in &mut self.sides {
+            module.set_sample_rate(sample_rate);
+        }
+    }
+
+    fn reset(&mut self) {
+        for module in &mut self.sides {
+            module.reset();
+        }
+    }
+
+    fn input_count(&self) -> usize { 2 }
+    fn output_count(&self) -> usize { 2 }
+    fn param_count(&self) -> usize { self.sides[0].param_count() }
+    fn param_default(&self, index: usize) -> f32 { self.sides[0].param_default(index) }
 }
 
 /// `m.audio-dp4-reverb` — the plate, room and hall algorithms.
@@ -809,10 +877,10 @@ impl Module for Dp4ReverbModule {
             *slot = ports.param(index);
         }
         self.sync(&raw);
-        let dry = ports.input(0);
-        let wet = self.verb.process(dry);
-        let out = self.shell.finish(ports, dry, wet, Self::MIX);
-        ports.output(0, out);
+        let dry = [ports.input(0), ports.input(1)];
+        let (left, right) = self.verb.process_stereo(0.5 * (dry[0] + dry[1]));
+        let out = self.shell.finish_stereo(ports, dry, [left, right], Self::MIX);
+        output_stereo(ports, out);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -826,8 +894,8 @@ impl Module for Dp4ReverbModule {
         self.shell.reset();
     }
 
-    fn input_count(&self) -> usize { 1 }
-    fn output_count(&self) -> usize { 1 }
+    fn input_count(&self) -> usize { 2 }
+    fn output_count(&self) -> usize { 2 }
     fn param_count(&self) -> usize { Self::PARAM_COUNT }
 
     fn param_default(&self, index: usize) -> f32 {
@@ -1039,6 +1107,7 @@ impl Module for DelayModule {
 pub struct ReverbModule {
     tank: Fdn,
     damping: OnePole,
+    side_damping: OnePole,
     shell: Shell,
     sample_rate: f32,
     seen_decay: f32,
@@ -1062,6 +1131,7 @@ impl ReverbModule {
         damping.set_cutoff(8_000.0, rate);
         Self {
             tank,
+            side_damping: damping,
             damping,
             shell: Shell::new(0.3),
             sample_rate: rate,
@@ -1084,12 +1154,14 @@ impl Module for ReverbModule {
         if hz != self.seen_damping {
             self.seen_damping = hz;
             self.damping.set_cutoff(hz, self.sample_rate);
+            self.side_damping.set_cutoff(hz, self.sample_rate);
         }
 
-        let dry = ports.input(0);
-        let wet = self.damping.process(self.tank.process(dry));
-        let out = self.shell.finish(ports, dry, wet, Self::MIX);
-        ports.output(0, out);
+        let dry = [ports.input(0), ports.input(1)];
+        let mid = self.damping.process(self.tank.process(0.5 * (dry[0] + dry[1])));
+        let side = self.side_damping.process(self.tank.side());
+        let out = self.shell.finish_stereo(ports, dry, [mid + side, mid - side], Self::MIX);
+        output_stereo(ports, out);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -1103,11 +1175,12 @@ impl Module for ReverbModule {
     fn reset(&mut self) {
         self.tank.clear();
         self.damping.clear();
+        self.side_damping.clear();
         self.shell.reset();
     }
 
-    fn input_count(&self) -> usize { 1 }
-    fn output_count(&self) -> usize { 1 }
+    fn input_count(&self) -> usize { 2 }
+    fn output_count(&self) -> usize { 2 }
     fn param_count(&self) -> usize { Self::PARAM_COUNT }
 
     fn param_default(&self, index: usize) -> f32 {
@@ -1284,12 +1357,12 @@ impl Module for CompressorModule {
             );
         }
 
-        let dry = ports.input(0);
-        let env = self.follower.process(dry);
+        let dry = [ports.input(0), ports.input(1)];
+        let env = self.follower.process(louder(dry));
         let makeup = clamp(ports.param(Self::MAKEUP_GAIN), 0.0, 4.0);
-        let wet = dry * self.computer.gain_linear(env) * makeup;
-        let out = self.shell.finish(ports, dry, wet, Self::MIX);
-        ports.output(0, out);
+        let gain = self.computer.gain_linear(env) * makeup;
+        let out = self.shell.finish_stereo(ports, dry, dry.map(|d| d * gain), Self::MIX);
+        output_stereo(ports, out);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -1303,8 +1376,8 @@ impl Module for CompressorModule {
         self.shell.reset();
     }
 
-    fn input_count(&self) -> usize { 1 }
-    fn output_count(&self) -> usize { 1 }
+    fn input_count(&self) -> usize { 2 }
+    fn output_count(&self) -> usize { 2 }
     fn param_count(&self) -> usize { Self::PARAM_COUNT }
 
     fn param_default(&self, index: usize) -> f32 {
@@ -1377,11 +1450,11 @@ impl Module for LimiterModule {
             self.follower.set_times(0.0005, clamp(raw[1], 0.001, 1.0), self.sample_rate);
         }
 
-        let dry = ports.input(0);
-        let env = self.follower.process(dry);
-        let wet = dry * self.computer.gain_linear(env);
-        let out = self.shell.finish(ports, dry, wet, Self::MIX);
-        ports.output(0, out);
+        let dry = [ports.input(0), ports.input(1)];
+        let env = self.follower.process(louder(dry));
+        let gain = self.computer.gain_linear(env);
+        let out = self.shell.finish_stereo(ports, dry, dry.map(|d| d * gain), Self::MIX);
+        output_stereo(ports, out);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -1395,8 +1468,8 @@ impl Module for LimiterModule {
         self.shell.reset();
     }
 
-    fn input_count(&self) -> usize { 1 }
-    fn output_count(&self) -> usize { 1 }
+    fn input_count(&self) -> usize { 2 }
+    fn output_count(&self) -> usize { 2 }
     fn param_count(&self) -> usize { Self::PARAM_COUNT }
 
     fn param_default(&self, index: usize) -> f32 {
@@ -1894,6 +1967,437 @@ impl Module for GranularModule {
     }
 }
 
+/// `m.audio-mixer` — four stereo channels, each with a level, a pan, a mute
+/// and a solo, summed to one stereo out.
+///
+/// Inputs are pairs: channel `c` is ports `2c` (left) and `2c + 1` (right). The
+/// pan is Web Audio's StereoPanner on a stereo input — a balance, unity at the
+/// centre, folding the far side in as it turns — so a patch sounds the same on
+/// both backends. Solo belongs to the whole strip: any channel soloed silences
+/// every channel that is not, and un-soloing restores the levels exactly.
+pub struct Mixer {
+    gains: [Tracked; Self::CHANNELS],
+    pans: [Tracked; Self::CHANNELS],
+    fade: Tracked,
+}
+
+impl Mixer {
+    pub const CHANNELS: usize = 4;
+    const STRIDE: usize = 4;
+    /// The rack's fade handle, after the sixteen channel controls.
+    pub const FADE: usize = Self::CHANNELS * Self::STRIDE;
+    pub const PARAM_COUNT: usize = Self::FADE + 1;
+    pub const DEFAULT_LEVEL: f32 = 0.8;
+
+    pub const fn level(channel: usize) -> usize { channel * Self::STRIDE }
+    pub const fn pan(channel: usize) -> usize { channel * Self::STRIDE + 1 }
+    pub const fn mute(channel: usize) -> usize { channel * Self::STRIDE + 2 }
+    pub const fn solo(channel: usize) -> usize { channel * Self::STRIDE + 3 }
+}
+
+impl Default for Mixer {
+    fn default() -> Self {
+        Self {
+            gains: [(); Self::CHANNELS].map(|_| Tracked::new(Self::DEFAULT_LEVEL)),
+            pans: [(); Self::CHANNELS].map(|_| Tracked::new(0.0)),
+            fade: Tracked::new(0.0),
+        }
+    }
+}
+
+impl Module for Mixer {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let soloed = |c: usize| ports.param(Self::solo(c)) >= 0.5;
+        let any_solo = (0..Self::CHANNELS).any(soloed);
+        let mut out = [0.0f32; 2];
+        for c in 0..Self::CHANNELS {
+            let silent = ports.param(Self::mute(c)) >= 0.5 || (any_solo && !soloed(c));
+            let level = if silent { 0.0 } else { clamp(ports.param(Self::level(c)), 0.0, 2.0) };
+            let gain = self.gains[c].follow(level);
+            let pan = self.pans[c].follow(clamp(ports.param(Self::pan(c)), -1.0, 1.0));
+            let (l, r) = (ports.input(2 * c) * gain, ports.input(2 * c + 1) * gain);
+            let x = if pan <= 0.0 { pan + 1.0 } else { pan } * core::f32::consts::FRAC_PI_2;
+            let (towards_left, towards_right) = (x.cos(), x.sin());
+            if pan <= 0.0 {
+                out[0] += l + r * towards_left;
+                out[1] += r * towards_right;
+            } else {
+                out[0] += l * towards_left;
+                out[1] += r + l * towards_right;
+            }
+        }
+        let fade = self.fade.follow(clamp(ports.param(Self::FADE), 0.0, 1.0));
+        output_stereo(ports, out.map(|v| v * fade));
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        for t in self.gains.iter_mut().chain(self.pans.iter_mut()) {
+            t.set_sample_rate(sample_rate);
+        }
+        self.fade.set_sample_rate(sample_rate);
+    }
+
+    fn reset(&mut self) {
+        for t in self.gains.iter_mut().chain(self.pans.iter_mut()) {
+            t.reset();
+        }
+        self.fade.reset();
+    }
+
+    fn input_count(&self) -> usize { 2 * Self::CHANNELS }
+    fn output_count(&self) -> usize { 2 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        if index < Self::FADE && index.is_multiple_of(Self::STRIDE) { Self::DEFAULT_LEVEL } else { 0.0 }
+    }
+}
+
+/// `m.audio-widener` — mid/side width, with the bass left centred.
+///
+/// `M = (L + R)/2`, `S = (L − R)/2`; the side is high-passed at the crossover
+/// and scaled by the width, then `L = M + S`, `R = M − S`. Below the crossover
+/// the sound stays mono at every width, which is the point of it, so it is not
+/// a null at width 1 — a patch that wants a bypass mutes it.
+pub struct Widener {
+    width: Tracked,
+    crossover: Tracked,
+    fade: Tracked,
+    highpass: Biquad,
+    seen_crossover: f32,
+    sample_rate: f32,
+}
+
+impl Widener {
+    pub const WIDTH: usize = 0;
+    pub const CROSSOVER: usize = 1;
+    pub const FADE: usize = 2;
+    pub const PARAM_COUNT: usize = 3;
+    pub const MAX_WIDTH: f32 = 2.0;
+    pub const DEFAULT_CROSSOVER_HZ: f32 = 120.0;
+
+    pub fn new(sample_rate: f32) -> Self {
+        let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
+        Self {
+            width: Tracked::new(1.0),
+            crossover: Tracked::new(Self::DEFAULT_CROSSOVER_HZ),
+            fade: Tracked::new(0.0),
+            highpass: Biquad::identity(),
+            seen_crossover: f32::NAN,
+            sample_rate: rate,
+        }
+    }
+}
+
+impl Module for Widener {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let hz = self.crossover.follow(clamp(ports.param(Self::CROSSOVER), 20.0, 500.0));
+        if hz != self.seen_crossover {
+            self.seen_crossover = hz;
+            self.highpass.set(BiquadKind::HighPass, hz, core::f32::consts::FRAC_1_SQRT_2, 0.0, self.sample_rate);
+        }
+        let width = self.width.follow(clamp(ports.param(Self::WIDTH), 0.0, Self::MAX_WIDTH));
+        let (l, r) = (ports.input(0), ports.input(1));
+        let mid = 0.5 * (l + r);
+        let side = self.highpass.process(0.5 * (l - r)) * width;
+        let fade = self.fade.follow(clamp(ports.param(Self::FADE), 0.0, 1.0));
+        output_stereo(ports, [(mid + side) * fade, (mid - side) * fade]);
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.sample_rate = sample_rate;
+        self.width.set_sample_rate(sample_rate);
+        self.crossover.set_sample_rate(sample_rate);
+        self.fade.set_sample_rate(sample_rate);
+        self.seen_crossover = f32::NAN;
+    }
+
+    fn reset(&mut self) {
+        self.width.reset();
+        self.crossover.reset();
+        self.fade.reset();
+        self.highpass.clear();
+    }
+
+    fn input_count(&self) -> usize { 2 }
+    fn output_count(&self) -> usize { 2 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::WIDTH => 1.0,
+            Self::CROSSOVER => Self::DEFAULT_CROSSOVER_HZ,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.audio-dp4` — the four-unit DP/4: four reverb units in two pairs, wired
+/// by the front panel's configuration and routings.
+///
+/// The configuration, the three routings and each unit's algorithm decide the
+/// graph, so they arrive packed into the build variant (see `variant`) and a
+/// change rebuilds the module. What moves is each unit's mix, volume, decay,
+/// pre-delay, damping and bandwidth. Mirrors `createDp4Machine` in `dp4.ts`:
+///
+/// - a pair is serial (A → B), parallel (A + B) or one of the feedback modes,
+///   where B's output returns through ×0.45, a −6 dB limiter and a 20 ms delay
+///   to A's input;
+/// - config 1 feeds input 1 to both pairs and AB↔CD is serial or parallel;
+///   configs 2–4 keep the pairs apart, AB on outputs 1–2 and CD on 3–4;
+/// - a unit is `(dry·(1 − mix) + wet·mix)·volume`, the DP/4's straight blend.
+pub struct Dp4Machine {
+    units: [Dp4Reverb; 4],
+    seen: [[f32; 4]; 4],
+    mix: [Tracked; 4],
+    volume: [Tracked; 4],
+    loops: [Dp4Loop; 2],
+    fade: Tracked,
+    config: u32,
+    pairs: [u32; 2],
+    linked_serial: bool,
+    variant: u32,
+}
+
+/// A feedback pair's return path.
+///
+/// B's output returns to A through ×0.45, a limiter at −6 dB and 20 ms of
+/// delay. The limiter alone bounds what each pass sends, not what the units'
+/// tanks hold: at a long decay a tank barely loses energy, so a steady send
+/// accumulates without end — the "blow up" the DP/4's manual warns about,
+/// reached by any hall past a few tens of seconds. So the send also ducks:
+/// while the pair stays over the threshold it falls toward silence within
+/// about 50 ms, and it comes back over a second once the pair is under. The
+/// Web Audio build has the limiter only.
+struct Dp4Loop {
+    line: DelayLine,
+    follower: EnvelopeFollower,
+    samples: f32,
+    duck: f32,
+    duck_down: f32,
+    duck_up: f32,
+}
+
+impl Dp4Loop {
+    const SECONDS: f32 = 0.02;
+    const GAIN: f32 = 0.45;
+    const THRESHOLD: f32 = 0.501_187_2;
+    const LIMIT: GainComputer = GainComputer { threshold_db: -6.0, ratio: 20.0, mode: DynamicsMode::Compress, knee_db: 0.0 };
+
+    fn new(sample_rate: f32) -> Self {
+        let mut follower = EnvelopeFollower::new();
+        follower.set_times(0.001, 0.1, sample_rate);
+        Self {
+            line: DelayLine::new(Self::SECONDS + 0.01, sample_rate),
+            follower,
+            samples: Self::SECONDS * sample_rate,
+            duck: 1.0,
+            duck_down: (-1.0 / (0.05 * sample_rate)).exp(),
+            duck_up: 1.0 / sample_rate,
+        }
+    }
+
+    /// What returns to A this sample.
+    fn read(&self) -> f32 {
+        self.line.read(self.samples)
+    }
+
+    /// Send B's output round the loop.
+    fn send(&mut self, b: f32) {
+        let tapped = b * Self::GAIN;
+        let env = self.follower.process(tapped);
+        self.duck = if env > Self::THRESHOLD {
+            self.duck * self.duck_down
+        } else {
+            (self.duck + self.duck_up).min(1.0)
+        };
+        self.line.push(tapped * Self::LIMIT.gain_linear(env) * self.duck);
+    }
+
+    fn clear(&mut self) {
+        self.line.clear();
+        self.follower.clear();
+        self.duck = 1.0;
+    }
+}
+
+impl Dp4Machine {
+    pub const MIX: usize = 0;
+    pub const VOLUME: usize = 1;
+    pub const DECAY: usize = 2;
+    pub const PREDELAY: usize = 3;
+    pub const HF_DAMPING: usize = 4;
+    pub const HF_BANDWIDTH: usize = 5;
+    const STRIDE: usize = 6;
+    pub const FADE: usize = 4 * Self::STRIDE;
+    pub const PARAM_COUNT: usize = Self::FADE + 1;
+
+    const SERIAL: u32 = 0;
+    const PARALLEL: u32 = 1;
+
+    /// One unit's control, units 0–3 being A–D.
+    pub const fn param(unit: usize, control: usize) -> usize {
+        unit * Self::STRIDE + control
+    }
+
+    /// Pack the structure: config 1–4, the AB and CD routings (serial,
+    /// parallel, feedback 1, feedback 2), AB↔CD (serial, parallel) and each
+    /// unit's algorithm, in `Dp4Algorithm`'s order.
+    pub const fn variant(config: u32, ab: u32, cd: u32, abcd: u32, algorithms: [u32; 4]) -> u32 {
+        (config.saturating_sub(1) & 3)
+            | (ab & 3) << 2
+            | (cd & 3) << 4
+            | (abcd & 1) << 6
+            | (algorithms[0] & 7) << 7
+            | (algorithms[1] & 7) << 10
+            | (algorithms[2] & 7) << 13
+            | (algorithms[3] & 7) << 16
+    }
+
+    pub const fn unpack(variant: u32) -> (u32, u32, u32, u32, [u32; 4]) {
+        (
+            (variant & 3) + 1,
+            (variant >> 2) & 3,
+            (variant >> 4) & 3,
+            (variant >> 6) & 1,
+            [(variant >> 7) & 7, (variant >> 10) & 7, (variant >> 13) & 7, (variant >> 16) & 7],
+        )
+    }
+
+    pub fn new(variant: u32, sample_rate: f32) -> Self {
+        let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
+        let (config, ab, cd, abcd, algorithms) = Self::unpack(variant);
+        Self {
+            units: algorithms.map(|a| Dp4Reverb::new(Dp4Algorithm::from_u32(a), rate)),
+            seen: [[f32::NAN; 4]; 4],
+            mix: [(); 4].map(|_| Tracked::new(0.4)),
+            volume: [(); 4].map(|_| Tracked::new(0.8)),
+            loops: [Dp4Loop::new(rate), Dp4Loop::new(rate)],
+            fade: Tracked::new(0.0),
+            config,
+            pairs: [ab, cd],
+            linked_serial: config == 1 && abcd == Self::SERIAL,
+            variant,
+        }
+    }
+
+    /// One unit: the straight blend, then its volume.
+    fn unit(&mut self, index: usize, ports: &Ports, input: f32) -> f32 {
+        let at = |control: usize| ports.param(Self::param(index, control));
+        let raw = [at(Self::DECAY), at(Self::PREDELAY), at(Self::HF_DAMPING), at(Self::HF_BANDWIDTH)];
+        let seen = self.seen[index];
+        let verb = &mut self.units[index];
+        if raw[0] != seen[0] {
+            verb.set_decay_seconds(raw[0]);
+        }
+        if raw[1] != seen[1] {
+            verb.set_predelay_seconds(raw[1]);
+        }
+        if raw[2] != seen[2] {
+            verb.set_hf_damping(raw[2]);
+        }
+        if raw[3] != seen[3] {
+            verb.set_hf_bandwidth(raw[3]);
+        }
+        self.seen[index] = raw;
+        let wet = verb.process(input);
+        let mix = self.mix[index].follow(clamp(at(Self::MIX), 0.0, 1.0));
+        let volume = self.volume[index].follow(clamp(at(Self::VOLUME), 0.0, 1.0));
+        (input * (1.0 - mix) + wet * mix) * volume
+    }
+
+    /// A pair, from its entry to its exit.
+    fn pair(&mut self, which: usize, ports: &Ports, entry: f32) -> f32 {
+        let (first, second) = (2 * which, 2 * which + 1);
+        match self.pairs[which] {
+            Self::PARALLEL => self.unit(first, ports, entry) + self.unit(second, ports, entry),
+            Self::SERIAL => {
+                let a = self.unit(first, ports, entry);
+                self.unit(second, ports, a)
+            }
+            // Both feedback modes return to A's input, as the Web Audio build
+            // wires them.
+            _ => {
+                let returned = self.loops[which].read();
+                let a = self.unit(first, ports, entry + returned);
+                let b = self.unit(second, ports, a);
+                self.loops[which].send(b);
+                b
+            }
+        }
+    }
+}
+
+impl Module for Dp4Machine {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let x = [0, 1, 2, 3].map(|port| ports.input(port));
+        // Which inputs reach which pair, per the configuration diagram.
+        let (ab_in, cd_in) = match self.config {
+            1 => (x[0], x[0]),
+            2 => (x[0], x[2]),
+            3 => (x[0] + x[1], x[2]),
+            _ => (x[0] + x[1], x[2] + x[3]),
+        };
+        let ab = self.pair(0, ports, ab_in);
+        let fade = self.fade.follow(clamp(ports.param(Self::FADE), 0.0, 1.0));
+        let out = if self.config == 1 {
+            let both = if self.linked_serial {
+                self.pair(1, ports, cd_in + ab)
+            } else {
+                ab + self.pair(1, ports, cd_in)
+            };
+            [both, both, 0.0, 0.0]
+        } else {
+            let cd = self.pair(1, ports, cd_in);
+            [ab, ab, cd, cd]
+        };
+        for (port, value) in out.into_iter().enumerate() {
+            ports.output(port, value * fade);
+        }
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        // The units size their tanks at construction, so a new rate is a
+        // rebuild — off the audio thread, as the trait promises.
+        *self = Self::new(self.variant, sample_rate);
+        for t in self.mix.iter_mut().chain(self.volume.iter_mut()) {
+            t.set_sample_rate(sample_rate);
+        }
+        self.fade.set_sample_rate(sample_rate);
+    }
+
+    fn reset(&mut self) {
+        for unit in &mut self.units {
+            unit.clear();
+        }
+        for t in self.mix.iter_mut().chain(self.volume.iter_mut()) {
+            t.reset();
+        }
+        for l in &mut self.loops {
+            l.clear();
+        }
+        self.fade.reset();
+    }
+
+    fn input_count(&self) -> usize { 4 }
+    fn output_count(&self) -> usize { 4 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        if index >= Self::FADE {
+            return 0.0;
+        }
+        match index % Self::STRIDE {
+            Self::MIX => 0.4,
+            Self::VOLUME => 0.8,
+            Self::DECAY => 2.0,
+            Self::HF_DAMPING => 0.2,
+            Self::HF_BANDWIDTH => 0.8,
+            _ => 0.0,
+        }
+    }
+}
+
 /// Every module the host can name, so the shim never matches on strings.
 ///
 /// The discriminants are part of the wire protocol between TypeScript and
@@ -1917,6 +2421,9 @@ pub enum ModuleKind {
     Percussion = 13,
     Looper = 14,
     Granular = 15,
+    Mixer = 16,
+    Widener = 17,
+    Dp4Machine = 18,
 }
 
 impl ModuleKind {
@@ -1938,6 +2445,9 @@ impl ModuleKind {
             13 => Some(Self::Percussion),
             14 => Some(Self::Looper),
             15 => Some(Self::Granular),
+            16 => Some(Self::Mixer),
+            17 => Some(Self::Widener),
+            18 => Some(Self::Dp4Machine),
             _ => None,
         }
     }
@@ -1964,25 +2474,28 @@ impl ModuleKind {
     pub fn build_variant_at(self, variant: u32, sample_rate: f32) -> Box<dyn Module> {
         match self {
             Self::HostInput => Box::<HostInput>::default(),
-            Self::Gain => Box::<Gain>::default(),
+            Self::Gain => Box::new(DualMono::new(Gain::default)),
             Self::AudioOutput => Box::<AudioOutput>::default(),
             Self::Synth => Box::new(Synth::new(sample_rate)),
             Self::Blackhole => Box::new(BlackholeVerb::new(sample_rate)),
             Self::Dp4Reverb => {
                 Box::new(Dp4ReverbModule::new(Dp4Algorithm::from_u32(variant), sample_rate))
             }
-            Self::Dp4NonLin => {
-                Box::new(Dp4NonLinModule::new(NonLinVariant::from_u32(variant), sample_rate))
-            }
-            Self::Delay => Box::new(DelayModule::new(sample_rate)),
+            Self::Dp4NonLin => Box::new(DualMono::new(|| {
+                Dp4NonLinModule::new(NonLinVariant::from_u32(variant), sample_rate)
+            })),
+            Self::Delay => Box::new(DualMono::new(|| DelayModule::new(sample_rate))),
             Self::Reverb => Box::new(ReverbModule::new(sample_rate)),
-            Self::Eq => Box::new(EqModule::new(sample_rate)),
+            Self::Eq => Box::new(DualMono::new(|| EqModule::new(sample_rate))),
             Self::Compressor => Box::new(CompressorModule::new(sample_rate)),
             Self::Limiter => Box::new(LimiterModule::new(sample_rate)),
-            Self::Bitcrusher => Box::new(BitcrusherModule::new(sample_rate)),
+            Self::Bitcrusher => Box::new(DualMono::new(|| BitcrusherModule::new(sample_rate))),
             Self::Percussion => Box::new(PercussionModule::new(sample_rate)),
             Self::Looper => Box::new(LooperModule::new_variant(sample_rate, variant)),
             Self::Granular => Box::new(GranularModule::new(sample_rate)),
+            Self::Mixer => Box::<Mixer>::default(),
+            Self::Widener => Box::new(Widener::new(sample_rate)),
+            Self::Dp4Machine => Box::new(Dp4Machine::new(variant, sample_rate)),
         }
     }
 
@@ -2481,8 +2994,8 @@ mod tests {
     fn blackhole_exposes_every_parameter_its_descriptor_declares() {
         let module = ModuleKind::Blackhole.build();
         assert_eq!(module.param_count(), BlackholeVerb::PARAM_COUNT);
-        assert_eq!(module.input_count(), 1);
-        assert_eq!(module.output_count(), 1);
+        assert_eq!(module.input_count(), 2);
+        assert_eq!(module.output_count(), 2);
     }
 
     #[test]
@@ -3035,5 +3548,354 @@ mod tests {
         // Only the fade handle is opened; gain is never written.
         engine.set_param(unwritten, Gain::LEVEL, 1.0);
         assert!((steady(&mut engine, input, output, 0.3) - 0.3).abs() < 1e-6);
+    }
+
+    // ---- stereo effects ------------------------------------------------------
+
+    /// Every effect and the index of its MIX, Blackhole and Gain included. Gain
+    /// has no mix; its LEVEL stands in, so only the wet tests use it.
+    const STEREO_EFFECTS: [(ModuleKind, usize); 10] = [
+        (ModuleKind::Gain, usize::MAX),
+        (ModuleKind::Blackhole, BlackholeVerb::MIX),
+        (ModuleKind::Dp4Reverb, Dp4ReverbModule::MIX),
+        (ModuleKind::Dp4NonLin, Dp4NonLinModule::MIX),
+        (ModuleKind::Delay, DelayModule::MIX),
+        (ModuleKind::Reverb, ReverbModule::MIX),
+        (ModuleKind::Eq, EqModule::MIX),
+        (ModuleKind::Compressor, CompressorModule::MIX),
+        (ModuleKind::Limiter, LimiterModule::MIX),
+        (ModuleKind::Bitcrusher, BitcrusherModule::MIX),
+    ];
+
+    /// Two host inputs into an effect's two inputs, its two outputs into the
+    /// master's two, with the fade opened.
+    fn stereo_chain(kind: ModuleKind, mix: usize) -> (Engine, [u32; 2], u32, u32) {
+        let mut engine = Engine::new(RATE);
+        let left = engine.add(ModuleKind::HostInput.build());
+        let right = engine.add(ModuleKind::HostInput.build());
+        let fx = engine.add(kind.build());
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        for (side, input) in [left, right].into_iter().enumerate() {
+            let port = side as u8;
+            engine.connect(PortRef { module: input, port: 0 }, PortRef { module: fx, port });
+            engine.connect(PortRef { module: fx, port }, PortRef { module: output, port });
+        }
+        let level = if kind == ModuleKind::Gain { Gain::LEVEL } else { mix + 1 };
+        engine.set_param(fx, level, 1.0);
+        (engine, [left, right], fx, output)
+    }
+
+    /// Feed `left` and `right` for `samples`, returning each side's output.
+    fn render_stereo(
+        engine: &mut Engine,
+        inputs: [u32; 2],
+        output: u32,
+        samples: usize,
+        mut feed: impl FnMut(usize) -> (f32, f32),
+    ) -> (Vec<f32>, Vec<f32>) {
+        let (mut l, mut r) = (Vec::with_capacity(samples), Vec::with_capacity(samples));
+        for n in 0..samples {
+            let (a, b) = feed(n);
+            engine.set_param(inputs[0], HostInput::SAMPLE, a);
+            engine.set_param(inputs[1], HostInput::SAMPLE, b);
+            engine.process();
+            l.push(engine.output_of(output, 0));
+            r.push(engine.output_of(output, 1));
+        }
+        (l, r)
+    }
+
+    fn energy(x: &[f32]) -> f32 {
+        x.iter().map(|v| v * v).sum()
+    }
+
+    #[test]
+    fn every_effect_is_stereo_in_and_out() {
+        for (kind, _) in STEREO_EFFECTS {
+            let module = kind.build();
+            assert_eq!((module.input_count(), module.output_count()), (2, 2), "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn every_effect_keeps_a_left_only_sound_on_the_left_when_dry() {
+        for (kind, mix) in STEREO_EFFECTS.into_iter().skip(1) {
+            let (mut engine, inputs, fx, output) = stereo_chain(kind, mix);
+            engine.set_param(fx, mix, 0.0);
+            settle(&mut engine);
+            let (l, r) = render_stereo(&mut engine, inputs, output, 4_800, |_| (0.5, 0.0));
+            assert!((l[4_799] - 0.5).abs() < 1e-3, "{kind:?} left {}", l[4_799]);
+            assert!(r.iter().all(|v| v.abs() < 1e-6), "{kind:?} leaked dry to the right");
+        }
+    }
+
+    #[test]
+    fn the_dual_mono_effects_keep_the_sides_apart_when_wet() {
+        for kind in [ModuleKind::Gain, ModuleKind::Delay, ModuleKind::Eq, ModuleKind::Bitcrusher, ModuleKind::Dp4NonLin] {
+            let mix = STEREO_EFFECTS.iter().find(|(k, _)| *k == kind).unwrap().1;
+            let (mut engine, inputs, fx, output) = stereo_chain(kind, mix);
+            if kind != ModuleKind::Gain {
+                engine.set_param(fx, mix, 1.0);
+            }
+            settle(&mut engine);
+            let (l, r) = render_stereo(&mut engine, inputs, output, 24_000, |n| {
+                (if n % 480 == 0 { 0.8 } else { 0.0 }, 0.0)
+            });
+            assert!(energy(&l) > 1e-4, "{kind:?} made no sound on the left");
+            assert!(energy(&r) < 1e-9, "{kind:?} leaked {} to the right", energy(&r));
+        }
+    }
+
+    #[test]
+    fn the_compressor_and_limiter_duck_both_sides_together() {
+        // Linked: a loud left pulls the quiet right down by the same amount,
+        // so the image does not swing toward the quieter side.
+        for (kind, mix) in [(ModuleKind::Compressor, CompressorModule::MIX), (ModuleKind::Limiter, LimiterModule::MIX)] {
+            let (mut engine, inputs, fx, output) = stereo_chain(kind, mix);
+            engine.set_param(fx, mix, 1.0);
+            if kind == ModuleKind::Compressor {
+                engine.set_param(fx, CompressorModule::THRESHOLD_DB, -30.0);
+                engine.set_param(fx, CompressorModule::RATIO, 8.0);
+                engine.set_param(fx, CompressorModule::MAKEUP_GAIN, 1.0);
+            } else {
+                engine.set_param(fx, LimiterModule::CEILING_DB, -12.0);
+            }
+            settle(&mut engine);
+            let (l, r) = render_stereo(&mut engine, inputs, output, 24_000, |_| (0.9, 0.1));
+            let (gl, gr) = (l[23_999] / 0.9, r[23_999] / 0.1);
+            assert!(gl < 0.95, "{kind:?} did not reduce the loud side: {gl}");
+            assert!((gl - gr).abs() < 1e-3, "{kind:?} left gain {gl}, right gain {gr}");
+        }
+    }
+
+    #[test]
+    fn the_reverbs_spread_a_centred_sound_across_both_sides() {
+        for (kind, mix) in [
+            (ModuleKind::Reverb, ReverbModule::MIX),
+            (ModuleKind::Blackhole, BlackholeVerb::MIX),
+            (ModuleKind::Dp4Reverb, Dp4ReverbModule::MIX),
+        ] {
+            let (mut engine, inputs, fx, output) = stereo_chain(kind, mix);
+            engine.set_param(fx, mix, 1.0);
+            settle(&mut engine);
+            let (l, r) = render_stereo(&mut engine, inputs, output, 48_000, |n| {
+                if n == 0 { (1.0, 1.0) } else { (0.0, 0.0) }
+            });
+            let (el, er) = (energy(&l), energy(&r));
+            assert!(el > 1e-6 && er > 1e-6, "{kind:?} left {el}, right {er}");
+            let cross: f32 = l.iter().zip(&r).map(|(a, b)| a * b).sum();
+            let correlation = cross / (el * er).sqrt();
+            assert!(correlation < 0.9, "{kind:?} is mono in all but name: {correlation}");
+        }
+    }
+
+    // ---- mixer and widener ---------------------------------------------------
+
+    /// Host inputs patched pairwise into a module's inputs, its two outputs into
+    /// the master, with the fade at `fade` opened.
+    fn wide_chain(kind: ModuleKind, pairs: usize, fade: usize) -> (Engine, Vec<u32>, u32, u32) {
+        let mut engine = Engine::new(RATE);
+        let inputs: Vec<u32> = (0..pairs * 2).map(|_| engine.add(ModuleKind::HostInput.build())).collect();
+        let module = engine.add(kind.build());
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        for (port, input) in inputs.iter().enumerate() {
+            engine.connect(PortRef { module: *input, port: 0 }, PortRef { module, port: port as u8 });
+        }
+        for port in 0..2 {
+            engine.connect(PortRef { module, port }, PortRef { module: output, port });
+        }
+        engine.set_param(module, fade, 1.0);
+        (engine, inputs, module, output)
+    }
+
+    /// Hold every input at its value until the glides settle; the master's two sides.
+    fn hold(engine: &mut Engine, inputs: &[u32], output: u32, values: &[f32]) -> (f32, f32) {
+        for _ in 0..(RATE * PARAM_RAMP_SEC * 3.0) as usize {
+            for (input, value) in inputs.iter().zip(values) {
+                engine.set_param(*input, HostInput::SAMPLE, *value);
+            }
+            engine.process();
+        }
+        (engine.output_of(output, 0), engine.output_of(output, 1))
+    }
+
+    #[test]
+    fn the_mixer_and_widener_have_their_wire_numbers() {
+        assert_eq!(ModuleKind::from_u32(16), Some(ModuleKind::Mixer));
+        assert_eq!(ModuleKind::from_u32(17), Some(ModuleKind::Widener));
+        let mixer = ModuleKind::Mixer.build();
+        assert_eq!((mixer.input_count(), mixer.output_count()), (8, 2));
+        let widener = ModuleKind::Widener.build();
+        assert_eq!((widener.input_count(), widener.output_count()), (2, 2));
+    }
+
+    #[test]
+    fn the_mixer_sums_its_channels_at_their_levels() {
+        let (mut engine, inputs, mixer, output) = wide_chain(ModuleKind::Mixer, 4, Mixer::FADE);
+        for channel in 0..4 {
+            engine.set_param(mixer, Mixer::level(channel), 1.0);
+        }
+        engine.set_param(mixer, Mixer::level(2), 0.5);
+        let (l, r) = hold(&mut engine, &inputs, output, &[0.1, 0.1, 0.0, 0.0, 0.2, 0.2, 0.0, 0.3]);
+        assert!((l - 0.2).abs() < 1e-4, "left {l}");
+        assert!((r - 0.5).abs() < 1e-4, "right {r}");
+    }
+
+    #[test]
+    fn the_mixer_pans_like_a_stereo_panner() {
+        // Web Audio's StereoPanner on a stereo input: a balance, unity at the
+        // centre, and a hard pan folds the far side in.
+        let (mut engine, inputs, mixer, output) = wide_chain(ModuleKind::Mixer, 1, Mixer::FADE);
+        engine.set_param(mixer, Mixer::level(0), 1.0);
+        let centred = hold(&mut engine, &inputs, output, &[0.4, 0.4]);
+        assert!((centred.0 - 0.4).abs() < 1e-4 && (centred.1 - 0.4).abs() < 1e-4, "{centred:?}");
+        engine.set_param(mixer, Mixer::pan(0), -1.0);
+        let left = hold(&mut engine, &inputs, output, &[0.4, 0.4]);
+        assert!((left.0 - 0.8).abs() < 1e-3 && left.1.abs() < 1e-4, "{left:?}");
+        engine.set_param(mixer, Mixer::pan(0), 0.5);
+        let half = hold(&mut engine, &inputs, output, &[0.4, 0.4]);
+        let g = (0.5f32 * std::f32::consts::FRAC_PI_2).cos();
+        assert!((half.0 - 0.4 * g).abs() < 1e-3, "{half:?}");
+        assert!((half.1 - (0.4 + 0.4 * (1.0 - g * g).sqrt())).abs() < 1e-3, "{half:?}");
+    }
+
+    #[test]
+    fn mute_and_solo_work_across_the_strip() {
+        let (mut engine, inputs, mixer, output) = wide_chain(ModuleKind::Mixer, 2, Mixer::FADE);
+        engine.set_param(mixer, Mixer::level(0), 1.0);
+        engine.set_param(mixer, Mixer::level(1), 1.0);
+        let both = hold(&mut engine, &inputs, output, &[0.1, 0.1, 0.2, 0.2]).0;
+        assert!((both - 0.3).abs() < 1e-4);
+        engine.set_param(mixer, Mixer::mute(1), 1.0);
+        assert!((hold(&mut engine, &inputs, output, &[0.1, 0.1, 0.2, 0.2]).0 - 0.1).abs() < 1e-4);
+        engine.set_param(mixer, Mixer::mute(1), 0.0);
+        engine.set_param(mixer, Mixer::solo(1), 1.0);
+        assert!((hold(&mut engine, &inputs, output, &[0.1, 0.1, 0.2, 0.2]).0 - 0.2).abs() < 1e-4);
+        engine.set_param(mixer, Mixer::solo(1), 0.0);
+        assert!((hold(&mut engine, &inputs, output, &[0.1, 0.1, 0.2, 0.2]).0 - 0.3).abs() < 1e-4);
+    }
+
+    #[test]
+    fn the_widener_scales_the_side_and_leaves_the_bass_centred() {
+        let side_of = |width: f32, hz: f32| {
+            let (mut engine, inputs, widener, output) = wide_chain(ModuleKind::Widener, 1, Widener::FADE);
+            engine.set_param(widener, Widener::WIDTH, width);
+            settle(&mut engine);
+            let mut side = 0.0f32;
+            for n in 0..48_000 {
+                let x = (std::f32::consts::TAU * hz * n as f32 / RATE).sin();
+                engine.set_param(inputs[0], HostInput::SAMPLE, x);
+                engine.set_param(inputs[1], HostInput::SAMPLE, 0.0);
+                engine.process();
+                if n >= 24_000 {
+                    side = side.max(0.5 * (engine.output_of(output, 0) - engine.output_of(output, 1)).abs());
+                }
+            }
+            side
+        };
+        // A left-only tone is half mid, half side.
+        assert!((side_of(1.0, 2_000.0) - 0.5).abs() < 0.02, "{}", side_of(1.0, 2_000.0));
+        assert!(side_of(0.0, 2_000.0) < 1e-4);
+        assert!((side_of(2.0, 2_000.0) - 1.0).abs() < 0.04);
+        assert!(side_of(2.0, 30.0) < 0.15, "the bass widened: {}", side_of(2.0, 30.0));
+    }
+
+    // ---- the DP/4 machine ----------------------------------------------------
+
+    /// Four host inputs into the machine's four, each output read directly.
+    fn dp4_machine(variant: u32) -> (Engine, Vec<u32>, u32) {
+        let mut engine = Engine::new(RATE);
+        let inputs: Vec<u32> = (0..4).map(|_| engine.add(ModuleKind::HostInput.build())).collect();
+        let machine = engine.add(ModuleKind::Dp4Machine.build_variant_at(variant, RATE));
+        for (port, input) in inputs.iter().enumerate() {
+            engine.connect(PortRef { module: *input, port: 0 }, PortRef { module: machine, port: port as u8 });
+        }
+        engine.set_param(machine, Dp4Machine::FADE, 1.0);
+        (engine, inputs, machine)
+    }
+
+    fn dry_units(engine: &mut Engine, machine: u32) {
+        for unit in 0..4 {
+            engine.set_param(machine, Dp4Machine::param(unit, Dp4Machine::MIX), 0.0);
+            engine.set_param(machine, Dp4Machine::param(unit, Dp4Machine::VOLUME), 1.0);
+        }
+    }
+
+    fn machine_outputs(engine: &mut Engine, inputs: &[u32], machine: u32, values: [f32; 4]) -> [f32; 4] {
+        for _ in 0..(RATE * PARAM_RAMP_SEC * 3.0) as usize {
+            for (input, value) in inputs.iter().zip(values) {
+                engine.set_param(*input, HostInput::SAMPLE, value);
+            }
+            engine.process();
+        }
+        [0, 1, 2, 3].map(|port| engine.output_of(machine, port))
+    }
+
+    #[test]
+    fn the_dp4_machine_has_its_wire_number_and_four_of_each() {
+        assert_eq!(ModuleKind::from_u32(18), Some(ModuleKind::Dp4Machine));
+        let machine = ModuleKind::Dp4Machine.build();
+        assert_eq!((machine.input_count(), machine.output_count()), (4, 4));
+    }
+
+    #[test]
+    fn the_dp4_variant_packs_its_whole_configuration() {
+        let packed = Dp4Machine::variant(3, 2, 1, 1, [4, 3, 2, 1]);
+        assert_eq!(Dp4Machine::unpack(packed), (3, 2, 1, 1, [4, 3, 2, 1]));
+        assert_eq!(Dp4Machine::unpack(0), (1, 0, 0, 0, [0; 4]));
+    }
+
+    #[test]
+    fn a_dry_serial_pair_passes_its_input_and_parallel_doubles_it() {
+        // Config 4, A→B serial, C→D parallel: in 1 reaches AB once through two
+        // dry units; in 3 reaches C and D both.
+        let (mut engine, inputs, machine) = dp4_machine(Dp4Machine::variant(4, 0, 1, 0, [0; 4]));
+        dry_units(&mut engine, machine);
+        let out = machine_outputs(&mut engine, &inputs, machine, [0.25, 0.0, 0.1, 0.0]);
+        assert!((out[0] - 0.25).abs() < 1e-3 && (out[1] - 0.25).abs() < 1e-3, "{out:?}");
+        assert!((out[2] - 0.2).abs() < 1e-3 && (out[3] - 0.2).abs() < 1e-3, "{out:?}");
+    }
+
+    #[test]
+    fn in_config_four_the_pairs_do_not_hear_each_other() {
+        let (mut engine, inputs, machine) = dp4_machine(Dp4Machine::variant(4, 0, 0, 0, [0; 4]));
+        dry_units(&mut engine, machine);
+        let out = machine_outputs(&mut engine, &inputs, machine, [0.0, 0.0, 0.3, 0.0]);
+        assert!(out[0].abs() < 1e-6 && out[1].abs() < 1e-6, "{out:?}");
+        assert!(out[2].abs() > 0.1, "{out:?}");
+    }
+
+    #[test]
+    fn in_config_one_a_serial_machine_runs_ab_into_cd() {
+        // One source feeds both pairs, and AB's output joins it into CD.
+        let (mut engine, inputs, machine) = dp4_machine(Dp4Machine::variant(1, 0, 0, 0, [0; 4]));
+        dry_units(&mut engine, machine);
+        let out = machine_outputs(&mut engine, &inputs, machine, [0.1, 0.0, 0.0, 0.0]);
+        assert!((out[0] - 0.2).abs() < 1e-3 && (out[1] - 0.2).abs() < 1e-3, "{out:?}");
+        assert!(out[2].abs() < 1e-6, "{out:?}");
+    }
+
+    #[test]
+    fn a_feedback_pair_rings_on_and_does_not_run_away() {
+        // At its defaults a looped pair's gain is above one — the DP/4's own
+        // "blow up" — so the loop ducks its send while the pair is over the
+        // limiter's threshold, and the level pumps rather than climbing. The
+        // master's brick wall is what keeps it off the speakers.
+        let (mut engine, inputs, machine) = dp4_machine(Dp4Machine::variant(1, 2, 3, 1, [4; 4]));
+        settle(&mut engine);
+        let mut peak = 0.0f32;
+        let mut late = 0.0f32;
+        for n in 0..(20.0 * RATE) as usize {
+            engine.set_param(inputs[0], HostInput::SAMPLE, if n < 480 { 0.8 } else { 0.0 });
+            engine.process();
+            let v = engine.output_of(machine, 0);
+            assert!(v.is_finite());
+            peak = peak.max(v.abs());
+            if n > (19.0 * RATE) as usize {
+                late = late.max(v.abs());
+            }
+        }
+        assert!(peak < 32.0, "ran away to {peak}");
+        assert!(late > 1e-3, "the loop died: {late}");
     }
 }
