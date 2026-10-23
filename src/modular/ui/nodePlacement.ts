@@ -170,6 +170,6 @@ export function visibleRegion(
 export function isDragSurface(target: Element | null): boolean {
   if (!target) return false;
   return !target.closest(
-    "button, input, select, textarea, label, a, [role='slider'], [contenteditable='true']",
+    "button, input, select, textarea, label, a, [role='slider'], [contenteditable='true'], [data-n4-control='true']",
   );
 }

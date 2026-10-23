@@ -175,6 +175,10 @@ describe("Deciding what starts a drag", () => {
     expect(isDragSurface(fakeElement("div", { contenteditable: "true" }))).toBe(false);
   });
 
+  it("stands aside for a Numerology lane, which is dragged to draw values", () => {
+    expect(isDragSurface(fakeElement("div", { "data-n4-control": "true" }))).toBe(false);
+  });
+
   it("stands aside for anything inside a control", () => {
     const button = fakeElement("button");
     expect(isDragSurface(fakeElement("span", {}, button))).toBe(false);

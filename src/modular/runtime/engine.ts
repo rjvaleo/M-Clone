@@ -257,6 +257,7 @@ export class ModularRuntime {
         budget: plan.eventBudgetPerNode,
         seed: this.options.seed,
         pattern: this.patternProviderFor(runtimeGraph, nodeId),
+        reference: this.referenceProviderFor(runtimeGraph, nodeId),
         sink: this.sink,
       });
       if (processor instanceof TransportProcessor) this.transport = processor;
@@ -290,6 +291,39 @@ export class ModularRuntime {
       if (!source) return EMPTY_PATTERN;
       return patternView(source.parameters);
     };
+  }
+
+  /**
+   * The general form of the pattern reference: for any input port, the live
+   * parameters of whatever is wired into it. Looked up when asked, so a module
+   * always reads its source's current values.
+   */
+  private referenceProviderFor(
+    graph: GraphDocument,
+    nodeId: string,
+  ): (portId: string) => () => ParameterBag | undefined {
+    return (portId) => {
+      const edge = Object.values(graph.edges).find(
+        (candidate) => candidate.enabled && candidate.to.nodeId === nodeId && candidate.to.portId === portId,
+      );
+      if (!edge) return () => undefined;
+      const sourceId = edge.from.nodeId;
+      return () => this.nodes.get(sourceId)?.parameters;
+    };
+  }
+
+  /** Send a face command to one node's processor. True if it was handled. */
+  command(nodeId: string, id: string, args?: JsonValue): boolean {
+    return this.nodes.get(nodeId)?.processor.command?.(id, args) ?? false;
+  }
+
+  /**
+   * Set the tempo the transport plays at, now and from the next Play. Setting
+   * the map alone was lost on Play, which starts a fresh map.
+   */
+  setBaseTempo(bpm: number): void {
+    this.options.tempoBpm = bpm;
+    this.tempo.setTempoAt(this.windowEndTick, bpm);
   }
 
   /** Queue a live control change, landing per the parameter's morph policy. */

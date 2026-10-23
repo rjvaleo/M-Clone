@@ -7,7 +7,8 @@ import { isPlayerModule } from "../audio/players";
 import { connectionError } from "../model/connections";
 import { executeGraphCommand, type GraphCommand } from "../model/commands";
 import { expandStreamNode } from "../model/stream";
-import { CANVAS_SIZE, canvasExtent, centeringOffset, clampZoom, scrollToCenter, stageSize, clampFramePixels, easeZoom, wheelDeltaPixels, zoomByWheel, zoomScrollPosition } from "./viewport";
+import { CANVAS_SIZE, canvasExtent, centeringOffset } from "./viewport";
+import { MAX_ZOOM, MIN_ZOOM, centerOn, clampCameraZoom, fitToBoxes, panBy, screenToCanvas, wheelZoomFactor, zoomAround, type Camera } from "./camera";
 import { isDragSurface, menuPlacement, placeNode, visibleRegion } from "./nodePlacement";
 import { buildMenu, soleMatch } from "./moduleMenu";
 import { parameterControlKind, selectorVariant } from "./parameterControl";
@@ -65,6 +66,10 @@ import { MenuBar, type MenuActions } from "./MenuBar";
 import { MFaceHostContext, MNodeFace, readMNodeSize } from "./MNodeFace";
 import { M_NODE_TYPE, findMNode, routedTracks, trackTargets } from "./mNode";
 import { canAddModule } from "../model/limits";
+import { M_LAB_TYPES } from "../registry/mLabModules";
+import { quantizeMorph, variableLinkUpdates } from "../mlab/links";
+import { MLAB_FACES, MLabHostContext, N4_TITLES } from "./mlab";
+import { N4Header } from "./n4/N4Header";
 import { setRuntimeHost } from "../../ui/runtime";
 import { useM } from "../../state/store";
 import { shareMidiAccess } from "./midisession";
@@ -104,6 +109,7 @@ const MODULE_GROUPS: { family: string; label: string }[] = [
   { family: "transform", label: "Note transforms" },
   { family: "control", label: "Control and conducting" },
   { family: "routing", label: "Routing and output" },
+  { family: "m", label: "M" },
 ];
 
 /**
@@ -171,7 +177,10 @@ const nodeSize = (moduleType: string) => moduleType === M_NODE_TYPE
 const STORAGE_KEYS = {
   theme: "m.modular.theme",
   zoom: "m.modular.zoom",
-  handMode: "m.modular.hand-mode",
+  // The hand tool: a left drag pans even over modules, as holding Space does.
+  // A new key, because the old "hand mode" meant panning the empty canvas,
+  // which is now simply what a drag on the empty canvas does.
+  handMode: "m.modular.hand-tool",
   panLeft: "m.modular.pan-left",
   panTop: "m.modular.pan-top",
 } as const;
@@ -852,6 +861,10 @@ function CustomFace({ element, node, setParameter, setParameters, status }: {
       storageId={storage} lengthId={`${sequence}-length`} showPresets={false} />;
   }
   if (element.id === "m-app") return <MNodeFace />;
+  const MLabFace = MLAB_FACES[element.id];
+  if (MLabFace) {
+    return <MLabFace node={node} setParameter={setParameter} setParameters={setParameters} status={status} />;
+  }
   if (element.id === "cyclic-grid") {
     return <CyclicGrid node={node} setParameter={setParameter}
       setParameters={setParameters} currentStep={playingStep(status.cursor)} />;
@@ -1019,7 +1032,11 @@ function NodeFace({
     </article>;
   }
   const accent = accentVar(descriptor.colorToken);
-  return <article className={`mm-node mm-node--${descriptor.family} mm-node--layout-${descriptor.layout}${selected ? " is-selected" : ""}`}
+  // The M modules are Numerology modules: they wear its header, and its
+  // minimize button folds the body away.
+  const numerology = node.moduleType.startsWith("m.lab-");
+  const collapsed = numerology && node.parameters.collapsed === true;
+  return <article className={`mm-node mm-node--${descriptor.family} mm-node--layout-${descriptor.layout}${selected ? " is-selected" : ""}${node.enabled ? "" : " is-bypassed"}`}
     aria-label={`${node.label} module`}
     // Lets the stylesheet make an exception for one module without inventing a
     // layout class that means "the Note Editor".
@@ -1033,10 +1050,21 @@ function NodeFace({
     // size of what is on it, bounded by the layout's range in the stylesheet.
     style={{ left: node.position.x + drag.x, top: node.position.y + drag.y,
       zIndex: stackIndex, "--mm-accent": accent } as React.CSSProperties}>
-    <header className="mm-node__header">
-      <span>{node.label}</span>
-      <CloseNodeButton label={node.label} onClose={onClose} />
-    </header>
+    {numerology
+      ? <N4Header name={node.label} comment={String(node.parameters.comment ?? "...")} title={N4_TITLES[node.moduleType] ?? descriptor.label}
+        collapsed={collapsed} enabled={node.enabled}
+        onCollapse={() => setParameter("collapsed", !collapsed)}
+        onBypass={() => dispatch({ type: "set-node-details", nodeId: node.id, enabled: !node.enabled })}
+        onRename={(label) => dispatch({ type: "set-node-details", nodeId: node.id, label })}
+        onComment={(comment) => setParameter("comment", comment)}
+        onReset={() => setParameters(Object.fromEntries(descriptor.parameters
+          .filter((parameter) => !["comment", "collapsed"].includes(parameter.id))
+          .map((parameter) => [parameter.id, structuredClone(parameter.defaultValue)])))}
+        onClose={onClose} />
+      : <header className="mm-node__header">
+        <span>{node.label}</span>
+        <CloseNodeButton label={node.label} onClose={onClose} />
+      </header>}
     <div className="mm-node__ports mm-node__ports--input">
       {descriptor.ports.filter((port) => port.direction === "input").map((port) =>
         <button type="button" key={port.id}
@@ -1063,7 +1091,7 @@ function NodeFace({
           <Jack direction="out" connected={connectedPorts.has(`${node.id}:${port.id}`)} />
         </button>)}
     </div>
-    <div className="mm-node__face">
+    {!collapsed && <div className="mm-node__face">
       {descriptor.face.map((section) => <section className="mm-node-section" key={section.id}
         aria-label={section.label}>
         {/*
@@ -1126,7 +1154,7 @@ function NodeFace({
           })}
         </div>
       </section>)}
-    </div>
+    </div>}
   </article>;
 }
 
@@ -1134,11 +1162,22 @@ export function ModularApp() {
   const [graph, setGraph] = useState(starterGraph);
   const [undo, setUndo] = useState<GraphCommand[]>([]);
   const [redo, setRedo] = useState<GraphCommand[]>([]);
-  const zoomRef = useRef(1);
-  const [zoom, setZoom] = useState(() => clampZoom(readStoredNumber(STORAGE_KEYS.zoom, 0.72)));
+  // The camera: where the window sits on the canvas and how far in it is.
+  // ComfyUI's model — one transform, no scrollbars, no edges. See camera.ts.
+  const [camera, setCamera] = useState<Camera>(() => ({
+    left: readStoredNumber(STORAGE_KEYS.panLeft, 0),
+    top: readStoredNumber(STORAGE_KEYS.panTop, 0),
+    zoom: clampCameraZoom(readStoredNumber(STORAGE_KEYS.zoom, 0.72)),
+  }));
+  const cameraRef = useRef(camera);
+  cameraRef.current = camera;
+  const zoom = camera.zoom;
+  const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
-  const [handMode, setHandMode] = useState(() => readStoredBoolean(STORAGE_KEYS.handMode, true));
+  const [handMode, setHandMode] = useState(() => readStoredBoolean(STORAGE_KEYS.handMode, false));
   const [panning, setPanning] = useState(false);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const spaceHeldRef = useRef(false);
   const [themeId, setThemeId] = useState<ThemeId>(() => readStoredTheme());
   /** Which kit draws the controls. The theme's other half — see the picker
    * beside the theme picker, and `theme/kits/` for what a kit is. */
@@ -1224,11 +1263,16 @@ export function ModularApp() {
     })),
   ), [graph.nodes]);
   const measureFrameRef = useRef<number | null>(null);
-  const panRef = useRef<{ clientX: number; clientY: number; scrollLeft: number; scrollTop: number } | null>(null);
+  const panRef = useRef<{ clientX: number; clientY: number; camera: Camera } | null>(null);
   const didPanRef = useRef(false);
-  const wheelFrameRef = useRef<number | null>(null);
+  // Read through a ref so two edits in one event — the baton writing to the
+  // Conductor and to M Variables — build on each other instead of the second
+  // starting from the graph the first replaced.
+  const latestGraph = useRef(graph);
+  latestGraph.current = graph;
   const dispatch = (command: GraphCommand) => {
-    const result = executeGraphCommand(graph, command);
+    const result = executeGraphCommand(latestGraph.current, command);
+    latestGraph.current = result.graph;
     setGraph(result.graph);
     setUndo((history) => [...history, result.inverse]);
     setRedo([]);
@@ -1553,8 +1597,8 @@ export function ModularApp() {
       visible: viewport
         ? visibleRegion(
           {
-            left: viewport.scrollLeft,
-            top: viewport.scrollTop,
+            left: cameraRef.current.left,
+            top: cameraRef.current.top,
             width: viewport.clientWidth,
             height: viewport.clientHeight,
           },
@@ -1691,20 +1735,32 @@ export function ModularApp() {
       setMessage("Open failed: unreadable document");
     }
   };
-  const beginCanvasPan = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!handMode || event.button !== 0) return;
-    const target = event.target as Element;
-    if (target.closest(".mm-node, .mm-module-menu") || target.closest(".mm-cables path")) return;
-    const viewport = event.currentTarget;
-    panRef.current = {
-      clientX: event.clientX,
-      clientY: event.clientY,
-      scrollLeft: viewport.scrollLeft,
-      scrollTop: viewport.scrollTop,
-    };
+  /**
+   * Panning, as ComfyUI does it: drag the empty canvas, or hold Space (or use
+   * the hand tool) and drag anywhere, or drag with the middle button anywhere.
+   */
+  const startCanvasPan = (event: React.PointerEvent<HTMLDivElement>) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    panRef.current = { clientX: event.clientX, clientY: event.clientY, camera: cameraRef.current };
     didPanRef.current = false;
     setPanning(true);
     viewport.setPointerCapture(event.pointerId);
+  };
+  /** Space, the hand tool and the middle button pan even over a module, so they win the capture phase. */
+  const captureCanvasPan = (event: React.PointerEvent<HTMLDivElement>) => {
+    const anywhere = event.button === 1 || (event.button === 0 && (spaceHeldRef.current || handMode));
+    if (!anywhere) return;
+    if ((event.target as Element).closest(".mm-module-menu")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    startCanvasPan(event);
+  };
+  const beginCanvasPan = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || panRef.current) return;
+    const target = event.target as Element;
+    if (target.closest(".mm-node, .mm-module-menu") || target.closest(".mm-cables path")) return;
+    startCanvasPan(event);
   };
   const moveCanvasPan = (event: React.PointerEvent<HTMLDivElement>) => {
     const start = panRef.current;
@@ -1712,8 +1768,7 @@ export function ModularApp() {
     const deltaX = event.clientX - start.clientX;
     const deltaY = event.clientY - start.clientY;
     if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) didPanRef.current = true;
-    event.currentTarget.scrollLeft = start.scrollLeft - deltaX;
-    event.currentTarget.scrollTop = start.scrollTop - deltaY;
+    setCamera(panBy(start.camera, deltaX, deltaY));
   };
   const endCanvasPan = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!panRef.current) return;
@@ -1723,40 +1778,27 @@ export function ModularApp() {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
   };
+  /** Zoom about the middle of the window, for the menu, the slider and the keys. */
+  const setZoom = (next: number) => {
+    const viewport = viewportRef.current;
+    const centre = { x: (viewport?.clientWidth ?? 0) / 2, y: (viewport?.clientHeight ?? 0) / 2 };
+    setCamera((current) => zoomAround(current, centre, clampCameraZoom(next) / current.zoom));
+  };
+  /** "." — the whole patch, or the selected module, in view. */
+  const fitView = () => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const nodes = selectedNodeId && graph.nodes[selectedNodeId]
+      ? [graph.nodes[selectedNodeId]]
+      : Object.values(graph.nodes);
+    setCamera(fitToBoxes(nodes.map((node) => ({ x: node.position.x, y: node.position.y, ...nodeSize(node.moduleType) })),
+      { width: viewport.clientWidth, height: viewport.clientHeight }));
+  };
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    // The wheel sets a *target*; the scale travels toward it a frame at a time.
-    // A notch that jumps straight to the new scale reads as chunky however
-    // small the jump, because nothing moved — the canvas was one size and then
-    // it was another.
-    let target = zoomRef.current;
-    let pointer = { x: 0, y: 0 };
-
-    const step = () => {
-      const current = zoomRef.current;
-      const next = easeZoom(current, target);
-      if (next === current) {
-        wheelFrameRef.current = null;
-        return;
-      }
-      const scroll = zoomScrollPosition({
-        scrollLeft: viewport.scrollLeft,
-        scrollTop: viewport.scrollTop,
-        pointerX: pointer.x,
-        pointerY: pointer.y,
-        oldZoom: current,
-        newZoom: next,
-      });
-      // The ref leads the state, so the next frame starts from the scale this
-      // one decided rather than from one React has yet to commit.
-      zoomRef.current = next;
-      setZoom(next);
-      viewport.scrollLeft = scroll.left;
-      viewport.scrollTop = scroll.top;
-      wheelFrameRef.current = requestAnimationFrame(step);
-    };
-
+    // Every notch zooms at once, about the cursor — no easing, so the canvas
+    // is always exactly where the wheel left it.
     const wheelZoom = (event: WheelEvent) => {
       // An overlay that scrolls owns its own wheel. Without this the canvas
       // zoom swallows every wheel event on the page, so a menu taller than the
@@ -1764,34 +1806,45 @@ export function ModularApp() {
       // of it become unreachable rather than merely awkward.
       const element = event.target as Element | null;
       if (element?.closest?.(
-        ".mm-module-menu, .mm-pool, .mm-theme-menu, .mm-theme-studio, .mm-note-roll__view, .mm-m-face",
+        ".mm-module-menu, .mm-pool, .mm-theme-menu, .mm-theme-studio, .mm-note-roll__view, .mm-m-face, .n4-scroll",
       )) return;
       event.preventDefault();
       event.stopPropagation();
-
       const bounds = viewport.getBoundingClientRect();
-      pointer = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
-      const pixels = clampFramePixels(
-        wheelDeltaPixels(event.deltaY, event.deltaMode, viewport.clientHeight),
-      );
-      // Aimed from the target, not from the current scale: keep scrolling while
-      // it is still travelling and the notches add up instead of fighting.
-      target = zoomByWheel(target, pixels);
-      if (wheelFrameRef.current === null) wheelFrameRef.current = requestAnimationFrame(step);
+      const pointer = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+      const factor = wheelZoomFactor(event);
+      setCamera((current) => zoomAround(current, pointer, factor));
     };
     viewport.addEventListener("wheel", wheelZoom, { passive: false });
-    return () => {
-      viewport.removeEventListener("wheel", wheelZoom);
-      if (wheelFrameRef.current !== null) cancelAnimationFrame(wheelFrameRef.current);
-    };
+    return () => viewport.removeEventListener("wheel", wheelZoom);
     // Subscribed once. Re-subscribing on every zoom change tore the listener
     // down and rebuilt it on each notch of the wheel.
+  }, []);
+  useEffect(() => {
+    // Space held is the hand: drag anywhere to pan, as in ComfyUI.
+    const isTyping = (event: KeyboardEvent) =>
+      (event.target as HTMLElement | null)?.matches?.("input, select, textarea, [contenteditable]") ?? false;
+    const down = (event: KeyboardEvent) => {
+      if (event.code !== "Space" || isTyping(event)) return;
+      event.preventDefault();
+      if (!spaceHeldRef.current) { spaceHeldRef.current = true; setSpaceHeld(true); }
+    };
+    const up = (event: KeyboardEvent) => {
+      if (event.code !== "Space") return;
+      spaceHeldRef.current = false;
+      setSpaceHeld(false);
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
   }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEYS.zoom, String(zoom));
-  }, [zoom]);
+    window.localStorage.setItem(STORAGE_KEYS.zoom, String(camera.zoom));
+    window.localStorage.setItem(STORAGE_KEYS.panLeft, String(camera.left));
+    window.localStorage.setItem(STORAGE_KEYS.panTop, String(camera.top));
+  }, [camera]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1807,22 +1860,6 @@ export function ModularApp() {
   }, [themeId]);
 
   useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport || typeof window === "undefined") return;
-    const left = readStoredNumber(STORAGE_KEYS.panLeft, 0);
-    const top = readStoredNumber(STORAGE_KEYS.panTop, 0);
-    requestAnimationFrame(() => {
-      viewport.scrollLeft = Math.max(0, left);
-      viewport.scrollTop = Math.max(0, top);
-    });
-    const storePan = () => {
-      window.localStorage.setItem(STORAGE_KEYS.panLeft, String(viewport.scrollLeft));
-      window.localStorage.setItem(STORAGE_KEYS.panTop, String(viewport.scrollTop));
-    };
-    viewport.addEventListener("scroll", storePan);
-    return () => viewport.removeEventListener("scroll", storePan);
-  }, []);
-  useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.matches("input, select, textarea")) return;
@@ -1833,6 +1870,10 @@ export function ModularApp() {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
         event.preventDefault();
         duplicateSelection();
+      }
+      if (event.key === "." && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        fitView();
       }
     };
     window.addEventListener("keydown", keydown);
@@ -1863,6 +1904,25 @@ export function ModularApp() {
       runtimeRef.current = null;
     };
   }, []);
+
+  // Position links: M Variables writes each variable's current position into
+  // the M module that holds it. Derived from the Variables node, so it stays
+  // out of the undo history; undoing a Variables change re-derives them.
+  useEffect(() => {
+    const updates = variableLinkUpdates(graph);
+    if (updates.length === 0) return;
+    const variables = Object.values(graph.nodes).find((node) => node.moduleType === M_LAB_TYPES.variables);
+    const morph = quantizeMorph(variables?.parameters["snapshot-quantize"]);
+    for (const { nodeId, values } of updates) {
+      for (const [parameterId, value] of Object.entries(values)) {
+        runtimeRef.current?.queueParameter(nodeId, parameterId, value, morph);
+      }
+    }
+    setGraph((current) => updates.reduce(
+      (next, update) => executeGraphCommand(next, { type: "set-parameters", nodeId: update.nodeId, values: update.values }).graph,
+      current,
+    ));
+  }, [graph]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -2021,7 +2081,7 @@ export function ModularApp() {
     const runtime = runtimeRef.current;
     if (!runtime || !findMNode(graphRef.current)) return;
     if (state.project.tempo !== previous.project.tempo || state.isPlaying !== previous.isPlaying) {
-      runtime.tempoMap.setTempoAt(runtime.positionTick, state.project.tempo);
+      runtime.setBaseTempo(state.project.tempo);
     }
     if (state.isPlaying === previous.isPlaying) return;
     if (state.isPlaying) runtime.start();
@@ -2113,12 +2173,8 @@ export function ModularApp() {
     const placed = menuPlacement(
       { x: menu.x, y: menu.y },
       { width: element.offsetWidth, height: element.offsetHeight },
-      {
-        left: viewport.scrollLeft,
-        top: viewport.scrollTop,
-        width: viewport.clientWidth,
-        height: viewport.clientHeight,
-      },
+      // The menu sits in the window, which no longer scrolls.
+      { left: 0, top: 0, width: viewport.clientWidth, height: viewport.clientHeight },
     );
     if (Math.abs(placed.x - menu.x) < 0.5 && Math.abs(placed.y - menu.y) < 0.5) return;
     setMenu({ ...menu, x: placed.x, y: placed.y });
@@ -2139,22 +2195,13 @@ export function ModularApp() {
       y: node.position.y,
       ...nodeSize(node.moduleType),
     }));
-    const apply = () => {
-      const { left, top } = scrollToCenter(
-        boxes,
-        { width: viewport.clientWidth, height: viewport.clientHeight },
-        zoomRef.current,
-      );
-      viewport.scrollLeft = left;
-      viewport.scrollTop = top;
-    };
-    // Twice: once now, and once after the browser has laid the stage out. The
-    // first attempt happens while the stage may still be its old size, and a
-    // scroll offset past the current extent is silently clamped to zero —
-    // which is exactly how the patch ended up in the corner.
-    apply();
-    const frame = requestAnimationFrame(apply);
-    return () => cancelAnimationFrame(frame);
+    if (boxes.length === 0) return;
+    const left = Math.min(...boxes.map((box) => box.x));
+    const top = Math.min(...boxes.map((box) => box.y));
+    const right = Math.max(...boxes.map((box) => box.x + box.width));
+    const bottom = Math.max(...boxes.map((box) => box.y + box.height));
+    setCamera(centerOn({ x: (left + right) / 2, y: (top + bottom) / 2 },
+      { width: viewport.clientWidth, height: viewport.clientHeight }, zoomRef.current));
     // Deliberately not keyed on `graph` or `zoom`: this must not yank the view
     // back every time a node moves or the user zooms.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2181,20 +2228,21 @@ export function ModularApp() {
    */
   const openAddMenu = () => {
     const viewport = viewportRef.current;
-    const x = viewport ? viewport.scrollLeft + viewport.clientWidth / 2 : canvasSize.width / 2;
-    const y = viewport ? viewport.scrollTop + viewport.clientHeight / 2 : canvasSize.height / 2;
+    const x = viewport ? viewport.clientWidth / 2 : 0;
+    const y = viewport ? viewport.clientHeight / 2 : 0;
+    const at = screenToCanvas(cameraRef.current, x, y);
     setMenuQuery("");
-    setMenu({ x, y, graphX: x / zoom, graphY: y / zoom });
+    setMenu({ x, y, graphX: at.x, graphY: at.y });
   };
 
-  const nudgeZoom = (delta: number) =>
-    setZoom((value) => Math.min(1.1, Math.max(0.12, Math.round((value + delta) * 100) / 100)));
+  /** View › Zoom In / Out: one wheel notch about the middle of the window. */
+  const nudgeZoom = (direction: 1 | -1) => setZoom(zoomRef.current * 1.1 ** direction);
 
   // View › Classic M: go to the canvas's M, or put one on it.
   const showM = () => {
     const viewport = viewportRef.current;
     const reveal = (at: { x: number; y: number }) => requestAnimationFrame(() => {
-      viewport?.scrollTo({ left: at.x * zoom - 40, top: at.y * zoom - 40 });
+      setCamera((current) => ({ ...current, left: at.x * current.zoom - 40, top: at.y * current.zoom - 40 }));
     });
     const existing = findMNode(graph);
     if (existing) {
@@ -2206,8 +2254,8 @@ export function ModularApp() {
     }
     const visible = viewport
       ? visibleRegion({
-        left: viewport.scrollLeft,
-        top: viewport.scrollTop,
+        left: cameraRef.current.left,
+        top: cameraRef.current.top,
         width: viewport.clientWidth,
         height: viewport.clientHeight,
       }, zoom)
@@ -2251,8 +2299,8 @@ export function ModularApp() {
     addModule: { run: openAddMenu },
     center: { run: () => setRecenterToken((value) => value + 1) },
 
-    zoomIn: { run: () => nudgeZoom(0.1), enabled: zoom < 1.1 },
-    zoomOut: { run: () => nudgeZoom(-0.1), enabled: zoom > 0.12 },
+    zoomIn: { run: () => nudgeZoom(1), enabled: zoom < MAX_ZOOM },
+    zoomOut: { run: () => nudgeZoom(-1), enabled: zoom > MIN_ZOOM },
     zoomReset: { run: () => setZoom(1) },
     hand: { run: () => setHandMode((value) => !value), checked: handMode },
     sounds: { run: () => setPoolOpen((value) => !value), checked: poolOpen },
@@ -2264,6 +2312,17 @@ export function ModularApp() {
   return <SoundPoolContext.Provider value={{ assets, preview: playAsset }}>
   <KitContext.Provider value={kitId}>
   <MFaceHostContext.Provider value={{ themeId, onSelectTheme: setThemeId, kitId, onSelectKit: setKitId, zoom }}>
+  <MLabHostContext.Provider value={{
+    graph,
+    setNodeParameters: (nodeId, values) => {
+      dispatch({ type: "set-parameters", nodeId, values });
+      for (const [parameterId, value] of Object.entries(values)) {
+        runtimeRef.current?.queueParameter(nodeId, parameterId, value, "immediate");
+      }
+    },
+    command: (nodeId, commandId) => { runtimeRef.current?.command(nodeId, commandId); },
+    run: (nodeId, commandId, label) => { const node = graph.nodes[nodeId]; if (node) handleNodeCommand(node, commandId, label); },
+  }}>
   <main className="mm-app" onClick={() => setMenu(null)}>
     <input
       ref={openInputRef}
@@ -2287,8 +2346,11 @@ export function ModularApp() {
             most often, and it reads at a glance whether sound is running. */}
         <button type="button" className={audioOn ? "is-active" : ""}
           aria-pressed={audioOn} onClick={toggleAudio}>Audio</button>
-        <label>Zoom <input type="range" min="12" max="110" value={Math.round(zoom * 100)}
-          onChange={(event) => setZoom(Number(event.currentTarget.value) / 100)} /></label>
+        {/* Logarithmic, so 10% to 1000% each get the same share of the slider. */}
+        <label>Zoom <input type="range" min="-100" max="100" value={Math.round(Math.log10(zoom) * 100)}
+          aria-valuetext={`${Math.round(zoom * 100)}%`}
+          onChange={(event) => setZoom(10 ** (Number(event.currentTarget.value) / 100))} />
+          <output>{Math.round(zoom * 100)}%</output></label>
         <ThemePicker themeId={themeId} onSelect={setThemeId} />
         {/* The kit sits beside the theme because they are the two halves of
             the same choice: the theme decides the colours, the kit decides
@@ -2299,29 +2361,45 @@ export function ModularApp() {
         </select></label>
       </nav>
     </header>
-    <div ref={viewportRef} className={`mm-canvas-viewport${handMode ? " is-hand" : ""}${panning ? " is-panning" : ""}`}
+    <div ref={viewportRef}
+      className={`mm-canvas-viewport${handMode || spaceHeld ? " is-hand" : ""}${panning ? " is-panning" : ""}`}
+      // The dot grid is the window's background, laid out by the camera, so it
+      // runs on forever however far the canvas is panned.
+      style={{
+        backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
+        backgroundPosition: `${-camera.left}px ${-camera.top}px`,
+      }}
+      onPointerDownCapture={captureCanvasPan}
       onPointerDown={beginCanvasPan} onPointerMove={moveCanvasPan}
       onPointerUp={endCanvasPan} onPointerCancel={endCanvasPan}
+      // The middle button would otherwise start the browser's autoscroll.
+      onMouseDown={(event) => { if (event.button === 1) event.preventDefault(); }}
+      // Double-click the empty canvas to search for a module, as in ComfyUI.
+      onDoubleClick={(event) => {
+        if ((event.target as Element).closest(".mm-node, .mm-module-menu, .mm-cables path")) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const x = event.clientX - bounds.left;
+        const y = event.clientY - bounds.top;
+        const at = screenToCanvas(cameraRef.current, x, y);
+        setMenuQuery("");
+        setMenu({ x, y, graphX: at.x, graphY: at.y });
+      }}
       onClick={() => {
       if (didPanRef.current) { didPanRef.current = false; return; }
       setSelectedNodeId(null); setSelectedEdgeId(null); setMenu(null);
     }} onContextMenu={(event) => {
       event.preventDefault();
       const bounds = event.currentTarget.getBoundingClientRect();
-      const x = event.clientX - bounds.left + event.currentTarget.scrollLeft;
-      const y = event.clientY - bounds.top + event.currentTarget.scrollTop;
+      const x = event.clientX - bounds.left;
+      const y = event.clientY - bounds.top;
+      const at = screenToCanvas(cameraRef.current, x, y);
       setMenuQuery("");
-      setMenu({ x, y, graphX: x / zoom, graphY: y / zoom });
+      setMenu({ x, y, graphX: at.x, graphY: at.y });
     }}>
-      <div className="mm-canvas-stage"
-        style={{
-          // A fixed world, not the canvas times zoom. Pulling back shows more
-          // of the patch; it never shrinks the surface out from under you.
-          width: `max(100%, ${stageSize(canvasSize, zoom).width}px)`,
-          height: `max(100%, ${stageSize(canvasSize, zoom).height}px)`,
-        }}>
+      <div className="mm-canvas-stage">
       <div ref={canvasRef} className={`mm-canvas${canInteractAtZoom(zoom) ? "" : " is-too-small"}`}
-        style={{ width: canvasSize.width, height: canvasSize.height, transform: `scale(${zoom})` }}>
+        style={{ width: canvasSize.width, height: canvasSize.height,
+          transform: `translate(${-camera.left}px, ${-camera.top}px) scale(${zoom})` }}>
         <svg className="mm-cables" width={canvasSize.width} height={canvasSize.height}
           aria-label="Graph connections">
           {Object.values(graph.edges).map((edge) => {
@@ -2398,6 +2476,7 @@ export function ModularApp() {
     /> : null}
     <footer className="mm-status-bar"><span>{message}</span><span>{Object.keys(graph.nodes).length} nodes · {Object.keys(graph.edges).length} cable{audioOn ? ` · ${audioNodes} audio · ${engineKind === "rust" ? "Rust" : "Web Audio"}` : ""}{rackReport ? ` · ${rackReport.modules} in engine · ${rackReport.samples} sample${rackReport.samples === 1 ? "" : "s"}` : ""}</span></footer>
   </main>
+  </MLabHostContext.Provider>
   </MFaceHostContext.Provider>
   </KitContext.Provider>
   </SoundPoolContext.Provider>;

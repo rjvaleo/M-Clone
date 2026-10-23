@@ -149,6 +149,7 @@ describe("Against the real registry", () => {
     { family: "routing", label: "Routing and output" },
     { family: "instrument", label: "Instruments" },
     { family: "audio", label: "Audio" },
+    { family: "m", label: "M" },
   ];
   const real = (query = "") =>
     buildMenu({ modules: [...moduleRegistry.values()], groups: REAL_GROUPS, query });

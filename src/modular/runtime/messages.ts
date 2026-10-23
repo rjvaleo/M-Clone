@@ -12,7 +12,9 @@
 
 import type { Tick } from "./time";
 
-export type MessageKind = "step-clock" | "reset" | "step-event" | "note-event" | "control";
+export type MessageKind = "step-clock" | "reset" | "step-event" | "note-event" | "control"
+  /** A program change travelling with a channel's notes: `controlValue` is the program. */
+  | "program-change";
 
 /**
  * One message on a cable.
@@ -53,6 +55,12 @@ export type StreamMessage = {
   controlValue: number;
   /** Duration multiplier applied downstream by legato and gate processors. */
   gate: number;
+  /**
+   * Which voice this belongs to, 0-based. A module that handles several of
+   * M's voices sends them all on one cable and tags each message; modules
+   * that know nothing of voices leave it at 0 and copy it through.
+   */
+  voice: number;
   sourceNodeId: string;
 };
 
@@ -70,6 +78,7 @@ const blankMessage = (): StreamMessage => ({
   channel: 1,
   controlValue: 0,
   gate: 1,
+  voice: 0,
   sourceNodeId: "",
 });
 
@@ -85,6 +94,7 @@ const resetMessage = (message: StreamMessage): StreamMessage => {
   message.channel = 1;
   message.controlValue = 0;
   message.gate = 1;
+  message.voice = 0;
   message.sourceNodeId = "";
   return message;
 };

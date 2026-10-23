@@ -21,6 +21,7 @@ import { randomUnit, streamKey } from "./rng";
 import { PPQN, stepTicks, type Tick, type TempoMap } from "./time";
 import { findScale, scaleById, type Scale } from "../tuning/scales";
 import { snapToChord, snapToScale, type ChordShape, type SnapDirection } from "../tuning/quantize";
+import { MClockProcessor, MConductorProcessor, MNoteSeqProcessor, MOrchestraProcessor } from "./mlabProcessors";
 
 export type ProcessWindow = {
   /** Inclusive start of the window in ticks. */
@@ -80,6 +81,12 @@ export type ProcessorBuild = {
   seed: number;
   /** Supplied to Note Order for the Note Editor it is wired to. */
   pattern?: () => PatternView;
+  /**
+   * The live parameters of the node wired into an input port, for inputs that
+   * carry state rather than events (a time map, a set of cycles). Undefined
+   * while nothing is wired there.
+   */
+  reference?: (portId: string) => () => ParameterBag | undefined;
   /** Supplied to sinks. */
   sink?: ScheduledEventSink;
 };
@@ -91,6 +98,8 @@ export interface StreamProcessor {
   reset(atTick: Tick): void;
   /** Lossy, read-only values for node-face status fields. */
   status?(): Readonly<Record<string, string>>;
+  /** A face command (Tap, Sync, ReScramble…). True if this processor handled it. */
+  command?(id: string, args?: JsonValue): boolean;
 }
 
 /**
@@ -1079,6 +1088,18 @@ export class MidiOutputProcessor extends BaseProcessor {
     for (let i = 0; i < notes.count; i++) {
       const note = notes.items[i];
       const channel = note.channel > 0 ? clampInt(note.channel, 1, 16) : fallbackChannel;
+      if (note.kind === "program-change") {
+        // M's Sound Choice, sent ahead of the channel's notes.
+        const change = this.sink.acquire();
+        change.type = "program-change";
+        change.atTick = note.atTick;
+        change.portId = this.nodeId;
+        change.channel = channel;
+        change.program = clampInt(note.controlValue, 0, 127);
+        change.sequence = this.sequence++;
+        this.sink.submit(change);
+        continue;
+      }
       const noteId = this.noteId++;
       const duration = Math.max(1, Math.round(note.durationTicks));
 
@@ -1127,6 +1148,7 @@ function copyNote(target: StreamMessage, source: StreamMessage): void {
   target.velocity = source.velocity;
   target.channel = source.channel;
   target.gate = source.gate;
+  target.voice = source.voice;
 }
 
 /**
@@ -1293,6 +1315,10 @@ export const PROCESSOR_FACTORIES: Record<
   "m.scale-quantizer": (build) => new ScaleQuantizerProcessor(build),
   "m.chord-quantizer": (build) => new ChordQuantizerProcessor(build),
   "m.midi-output": (build) => new MidiOutputProcessor(build),
+  "m.lab-clock": (build) => new MClockProcessor(build),
+  "m.lab-conductor": (build) => new MConductorProcessor(build),
+  "m.lab-noteseq": (build) => new MNoteSeqProcessor(build),
+  "m.lab-orchestra": (build) => new MOrchestraProcessor(build),
   // The players schedule exactly as a MIDI Output does — the difference is
   // entirely on the other side of the scheduler, where one adapter writes bytes
   // to a port and the other starts a buffer on the audio clock. Giving them a
