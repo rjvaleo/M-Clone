@@ -360,8 +360,11 @@ describe("The plan-to-engine bridge", () => {
   });
 
   it("gives every ported module a distinct wire number", () => {
-    const kinds = Object.values(MODULE_KINDS);
-    expect(new Set(kinds).size).toBe(kinds.length);
+    // The prism effects share one kind and are told apart by their code, so
+    // what is unique is the kind and the variant a default build gets.
+    const builds = Object.entries(MODULE_KINDS).map(([type, kind]) =>
+      kind === 19 ? `19:${variantOf(type, {})}` : String(kind));
+    expect(new Set(builds).size).toBe(builds.length);
   });
 
   it("sends each parameter to the index its module declares", () => {
@@ -1166,5 +1169,31 @@ describe("Values the plan files as structure", () => {
     const at = (name: string) => engine.params.get(`${s}.${PARAM_INDICES["m.synth"][name]}`);
     // `Wave` in rust/dsp-core/src/osc.rs: sine, triangle, sawtooth, square, pulse.
     expect([at("osc1-wave"), at("osc2-wave"), at("osc3-wave")]).toEqual([0, 3, 4]);
+  });
+});
+
+describe("Prism effects in Rust", () => {
+  it("builds each as a prism module from its effect's code", () => {
+    expect(MODULE_KINDS["m.prism-tremolo"]).toBe(19);
+    expect(variantOf("m.prism-tremolo", {})).toBe(1);
+    expect(variantOf("m.prism-sh-compand", {})).toBe(16);
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("t", "m.prism-tremolo", { depth: 0.9, shape: 1 })]));
+    const t = rack.moduleIdOf("t")!;
+    expect(engine.modules.get(t)).toBe(19);
+    expect(engine.variants.get(t)).toBe(1);
+    expect(engine.params.get(`${t}.1`)).toBe(0.9);
+    expect(engine.params.get(`${t}.2`)).toBe(1);
+    // The fade, after the kernel's four controls.
+    expect(engine.params.get(`${t}.4`)).toBe(1);
+  });
+
+  it("feeds both sides of the host input into an unpatched one", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("t", "m.prism-tremolo")]));
+    const t = rack.moduleIdOf("t");
+    expect([...engine.cables].filter((c) => c.endsWith(`→${t}:0`) || c.endsWith(`→${t}:1`))).toHaveLength(2);
   });
 });

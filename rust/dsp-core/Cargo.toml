@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 description = "Portable DSP core for the idMLab modular rack. No platform dependencies."
 
-# Deliberately dependency-free.
+# Deliberately dependency-free, with one exception: `prism-fx`, the effects
+# shared with MultiGrainLive. It is RJ's own crate and has no dependencies
+# either, so the guarantee below still holds; see `PrismModule`.
 #
 # Every crate considered (fundsp, dasp, biquad) brings either an opinionated
 # graph model or a trait hierarchy that would have to be threaded through the
@@ -13,5 +15,6 @@ description = "Portable DSP core for the idMLab modular rack. No platform depend
 # adaptation than it saves in typing, and would put a third party between this
 # code and a real-time guarantee it has to make.
 [dependencies]
+prism-fx = { path = "../../../prism-fx/crates/prism-fx" }
 
 [dev-dependencies]

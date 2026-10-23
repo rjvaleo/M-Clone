@@ -14,9 +14,10 @@
  */
 
 import type { AudioPlan } from "../audioPlan";
+import { PRISM_SOUND_TYPES } from "../../registry/prismModules";
 
 /** Modules whose single `asset-id` names their whole source. */
-const SINGLE_SOURCE: ReadonlySet<string> = new Set(["m.looper", "m.granular"]);
+const SINGLE_SOURCE: ReadonlySet<string> = new Set(["m.looper", "m.granular", ...PRISM_SOUND_TYPES]);
 
 /** Modules whose `slots` list names one sample per MIDI note. */
 const SLOT_KIT: ReadonlySet<string> = new Set(["m.percussion"]);

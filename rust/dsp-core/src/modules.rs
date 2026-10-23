@@ -2398,6 +2398,117 @@ impl Module for Dp4Machine {
     }
 }
 
+/// `m.prism-*` — an effect from `prism-fx`, the crate shared with
+/// MultiGrainLive, built by its descriptor's `code`.
+///
+/// Parameters are the kernel's, in its descriptor's order, then the rack's
+/// fade handle. The kernel smooths its own controls, so a value is handed over
+/// only when it changes. Stereo in and out, frame by frame, as the kernel
+/// itself runs. An effect that takes a sound — a convolution's impulse — gets
+/// it from the bank through `set_sample_slot`; it is handed over on the next
+/// sample, which is the one allocation such an effect makes after it is built.
+pub struct PrismModule {
+    code: u32,
+    kernel: Option<Box<dyn prism_fx::DynKernel>>,
+    seen: Vec<f32>,
+    fade: Tracked,
+    sound: Option<u32>,
+    loaded: Option<u32>,
+}
+
+impl PrismModule {
+    pub fn new(code: u32, sample_rate: f32) -> Self {
+        let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
+        let kernel = prism_fx::CATALOG
+            .iter()
+            .find(|e| e.descriptor.code as u32 == code)
+            .map(|e| (e.make)(rate));
+        let seen = kernel.as_ref().map(|k| k.descriptor().params.iter().map(|p| p.default).collect()).unwrap_or_default();
+        Self { code, kernel, seen, fade: Tracked::new(0.0), sound: None, loaded: None }
+    }
+
+    fn fade_index(&self) -> usize {
+        self.seen.len()
+    }
+
+    /// Hand the bank's sample to the kernel, interleaved at its own rate.
+    fn load(kernel: &mut dyn prism_fx::DynKernel, sample: &crate::samples::Sample) {
+        let (channels, frames) = (sample.channels(), sample.frames());
+        let mut interleaved = Vec::with_capacity(channels * frames);
+        for frame in 0..frames {
+            for channel in 0..channels {
+                interleaved.push(sample.frame(channel, frame));
+            }
+        }
+        kernel.set_sound(&interleaved, channels, sample.sample_rate());
+    }
+}
+
+impl Module for PrismModule {
+    fn process(&mut self, ctx: &ProcessContext, ports: &mut Ports) {
+        let fade = self.fade.follow(clamp(ports.param(self.fade_index()), 0.0, 1.0));
+        let Some(kernel) = self.kernel.as_mut() else {
+            output_stereo(ports, [0.0; 2]);
+            return;
+        };
+        for (index, seen) in self.seen.iter_mut().enumerate() {
+            let value = ports.param(index);
+            if value != *seen {
+                *seen = value;
+                kernel.set_param(index, value);
+            }
+        }
+        if self.sound != self.loaded {
+            if let Some(sample) = self.sound.and_then(|id| ctx.samples.get(id)) {
+                Self::load(kernel.as_mut(), sample);
+                self.loaded = self.sound;
+            }
+        }
+        let mut frame = [ports.input(0), ports.input(1)];
+        kernel.tick(&mut frame);
+        output_stereo(ports, frame.map(|v| v * fade));
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        // Kernels size their buffers at construction: a new rate is a new one,
+        // told every value the old one had, and the sound again.
+        let seen = std::mem::take(&mut self.seen);
+        *self = Self { sound: self.sound, ..Self::new(self.code, sample_rate) };
+        if let Some(kernel) = self.kernel.as_mut() {
+            for (index, value) in seen.iter().enumerate() {
+                kernel.set_param(index, *value);
+            }
+        }
+        if !seen.is_empty() {
+            self.seen = seen;
+        }
+        self.fade.set_sample_rate(sample_rate);
+    }
+
+    fn reset(&mut self) {
+        if let Some(kernel) = self.kernel.as_mut() {
+            kernel.reset();
+        }
+        self.fade.reset();
+    }
+
+    fn set_sample_slot(&mut self, _slot: u32, sample: u32) {
+        self.sound = Some(sample);
+    }
+
+    fn input_count(&self) -> usize { 2 }
+    fn output_count(&self) -> usize { 2 }
+    fn param_count(&self) -> usize { self.seen.len() + 1 }
+
+    fn param_default(&self, index: usize) -> f32 {
+        self.kernel
+            .as_ref()
+            .and_then(|k| k.descriptor().params.get(index))
+            .map(|p| p.default)
+            .unwrap_or(0.0)
+    }
+}
+
 /// Every module the host can name, so the shim never matches on strings.
 ///
 /// The discriminants are part of the wire protocol between TypeScript and
@@ -2424,6 +2535,8 @@ pub enum ModuleKind {
     Mixer = 16,
     Widener = 17,
     Dp4Machine = 18,
+    /// The variant is the prism descriptor's `code`.
+    Prism = 19,
 }
 
 impl ModuleKind {
@@ -2448,6 +2561,7 @@ impl ModuleKind {
             16 => Some(Self::Mixer),
             17 => Some(Self::Widener),
             18 => Some(Self::Dp4Machine),
+            19 => Some(Self::Prism),
             _ => None,
         }
     }
@@ -2496,6 +2610,7 @@ impl ModuleKind {
             Self::Mixer => Box::<Mixer>::default(),
             Self::Widener => Box::new(Widener::new(sample_rate)),
             Self::Dp4Machine => Box::new(Dp4Machine::new(variant, sample_rate)),
+            Self::Prism => Box::new(PrismModule::new(variant, sample_rate)),
         }
     }
 
@@ -3897,5 +4012,141 @@ mod tests {
         }
         assert!(peak < 32.0, "ran away to {peak}");
         assert!(late > 1e-3, "the loop died: {late}");
+    }
+
+    // ---- prism effects -------------------------------------------------------
+
+    /// A prism effect between two host inputs and the master, fade opened.
+    fn prism_chain(code: u16) -> (Engine, [u32; 2], u32, u32) {
+        let mut engine = Engine::new(RATE);
+        let left = engine.add(ModuleKind::HostInput.build());
+        let right = engine.add(ModuleKind::HostInput.build());
+        let fx = engine.add(ModuleKind::Prism.build_variant_at(code as u32, RATE));
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        for (port, input) in [left, right].into_iter().enumerate() {
+            engine.connect(PortRef { module: input, port: 0 }, PortRef { module: fx, port: port as u8 });
+            engine.connect(PortRef { module: fx, port: port as u8 }, PortRef { module: output, port: port as u8 });
+        }
+        let fade = prism_fx::CATALOG.iter().find(|e| e.descriptor.code == code).unwrap().descriptor.params.len();
+        engine.set_param(fx, fade, 1.0);
+        (engine, [left, right], fx, output)
+    }
+
+    fn noise(n: usize, seed: u32) -> Vec<f32> {
+        let mut x = seed.max(1);
+        (0..n)
+            .map(|_| {
+                x ^= x << 13;
+                x ^= x >> 17;
+                x ^= x << 5;
+                (x as f32 / u32::MAX as f32) * 2.0 - 1.0
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_prism_effect_builds_by_its_code() {
+        assert_eq!(ModuleKind::from_u32(19), Some(ModuleKind::Prism));
+        for entry in prism_fx::CATALOG {
+            let d = entry.descriptor;
+            let module = ModuleKind::Prism.build_variant_at(d.code as u32, RATE);
+            assert_eq!((module.input_count(), module.output_count()), (2, 2), "{}", d.id);
+            assert_eq!(module.param_count(), d.params.len() + 1, "{}: its controls and the fade", d.id);
+            for (i, spec) in d.params.iter().enumerate() {
+                assert_eq!(module.param_default(i), spec.default, "{}.{}", d.id, spec.key);
+            }
+        }
+    }
+
+    #[test]
+    fn a_prism_module_sounds_exactly_as_its_kernel() {
+        // Every effect in the catalogue, against the kernel run on its own:
+        // the module adds nothing but the fade, which is open.
+        for entry in prism_fx::CATALOG {
+            let d = entry.descriptor;
+            let (mut engine, inputs, _fx, output) = prism_chain(d.code);
+            let mut kernel = (entry.make)(RATE);
+            let (l, r) = (noise(4_800, 7), noise(4_800, 11));
+            // Fade glide settled first, kernel run over the same frames.
+            settle(&mut engine);
+            let mut expected = Vec::new();
+            // The settle's silent frames, and one more: the frame in flight on
+            // the cable when the first real one is set.
+            for _ in 0..(RATE * PARAM_RAMP_SEC * 3.0) as usize + 1 {
+                let mut frame = [0.0, 0.0];
+                kernel.tick(&mut frame);
+            }
+            for n in 0..l.len() {
+                let mut frame = [l[n], r[n]];
+                kernel.tick(&mut frame);
+                expected.push(frame);
+            }
+            for n in 0..l.len() {
+                engine.set_param(inputs[0], HostInput::SAMPLE, l[n]);
+                engine.set_param(inputs[1], HostInput::SAMPLE, r[n]);
+                engine.process();
+                // One sample of cable delay in, one out: the module's answer
+                // to frame n reaches the master two samples later.
+                if n >= 2 {
+                    let want = expected[n - 2];
+                    let got = [engine.output_of(output, 0), engine.output_of(output, 1)];
+                    assert!((got[0] - want[0]).abs() < 1e-5 && (got[1] - want[1]).abs() < 1e-5,
+                        "{} frame {n}: {got:?} against {want:?}", d.id);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_prism_control_reaches_its_kernel() {
+        // Tremolo's depth, from none to full.
+        let code = prism_fx::find("tremolo").unwrap().descriptor.code;
+        let depth = prism_fx::find("tremolo").unwrap().descriptor.index_of("depth").unwrap();
+        let (mut engine, inputs, fx, output) = prism_chain(code);
+        engine.set_param(fx, depth, 0.0);
+        settle(&mut engine);
+        let (l, _) = render_stereo(&mut engine, inputs, output, 48_000, |_| (0.5, 0.5));
+        let still = l[24_000..].iter().fold(0.0f32, |m, v| m.max((v - 0.5).abs()));
+        engine.set_param(fx, depth, 1.0);
+        let (l, _) = render_stereo(&mut engine, inputs, output, 48_000, |_| (0.5, 0.5));
+        let moving = l[24_000..].iter().fold(0.0f32, |m, v| m.max((v - 0.5).abs()));
+        assert!(still < 1e-3 && moving > 0.1, "{still} then {moving}");
+    }
+
+    #[test]
+    fn an_unknown_prism_code_is_silent_rather_than_a_crash() {
+        let module = ModuleKind::Prism.build_variant_at(60_000, RATE);
+        assert_eq!((module.input_count(), module.output_count()), (2, 2));
+        let (mut engine, inputs, _, output) = {
+            let mut engine = Engine::new(RATE);
+            let input = engine.add(ModuleKind::HostInput.build());
+            let fx = engine.add(module);
+            let output = engine.add(ModuleKind::AudioOutput.build());
+            engine.connect(PortRef { module: input, port: 0 }, PortRef { module: fx, port: 0 });
+            engine.connect(PortRef { module: fx, port: 0 }, PortRef { module: output, port: 0 });
+            engine.set_param(fx, 0, 1.0);
+            (engine, [input, input], fx, output)
+        };
+        let (l, _) = render_stereo(&mut engine, inputs, output, 4_800, |_| (0.5, 0.0));
+        assert!(l.iter().all(|v| *v == 0.0));
+    }
+
+    #[test]
+    fn a_prism_effect_that_takes_a_sound_takes_it_from_the_bank() {
+        // Convolution with an impulse a quarter second in: an echo appears.
+        let d = prism_fx::find("convolution").unwrap().descriptor;
+        let (mut engine, inputs, fx, output) = prism_chain(d.code);
+        engine.set_param(fx, d.index_of("mix").unwrap(), 1.0);
+        // The default uses 100 ms of the impulse; this one's echo is at 250.
+        engine.set_param(fx, d.index_of("lengthMs").unwrap(), 1_000.0);
+        let frames = 24_000;
+        assert!(engine.samples_mut().allocate(3, 1, frames, RATE));
+        let data = engine.samples_mut().get_mut(3).unwrap().data_mut();
+        data[12_000] = 1.0;
+        engine.set_sample_slot(fx, 0, 3);
+        settle(&mut engine);
+        let (l, _) = render_stereo(&mut engine, inputs, output, 36_000, |n| if n == 0 { (1.0, 1.0) } else { (0.0, 0.0) });
+        let loudest = (0..l.len()).max_by(|&a, &b| l[a].abs().total_cmp(&l[b].abs())).unwrap();
+        assert!((12_000..12_000 + 2_048 + 8).contains(&loudest), "the echo is at {loudest}");
     }
 }

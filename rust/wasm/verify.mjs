@@ -343,5 +343,38 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
     `L ${dpL.toFixed(4)} R ${dpR.toFixed(4)}`);
 }
 
+// ---- a prism effect ---------------------------------------------------------
+// Built by kind 19 and the effect's code: Tremolo is code 1, its depth index 1,
+// and its fade follows its four controls.
+{
+  const PRISM = 19;
+  api.init(SAMPLE_RATE);
+  const source = u32(api.add_module(KIND.HOST_INPUT));
+  const tremolo = u32(api.add_module_variant(PRISM, 1));
+  const out = u32(api.add_module(KIND.AUDIO_OUTPUT));
+  check("built Tremolo from prism-fx", tremolo !== NO_MODULE);
+  check("input → Tremolo → output",
+    api.connect(source, 0, tremolo, 0) === 1 && api.connect(source, 0, tremolo, 1) === 1 &&
+      api.connect(tremolo, 0, out, 0) === 1 && api.connect(tremolo, 1, out, 1) === 1);
+  api.set_io(source, out);
+  api.set_param(tremolo, 4, 1.0);
+  api.set_param(tremolo, 1, 1.0);
+  let low = Infinity;
+  let high = 0;
+  for (let b = 0; b < 400; b++) {
+    const feed = new Float32Array(api.memory.buffer, api.input_ptr(), QUANTUM);
+    feed.fill(0.5);
+    api.process_quantum();
+    const left = new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM);
+    if (b < 40) continue;
+    for (let i = 0; i < QUANTUM; i++) {
+      low = Math.min(low, left[i]);
+      high = Math.max(high, left[i]);
+    }
+  }
+  check("Tremolo moves a steady input at full depth", high - low > 0.3,
+    `${low.toFixed(3)} to ${high.toFixed(3)}`);
+}
+
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

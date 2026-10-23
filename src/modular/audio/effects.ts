@@ -38,6 +38,7 @@ import { createBlackholeCore } from "./blackhole";
 import { createDp4Machine, createDp4ReverbCore, createNonLinCore } from "./dp4";
 import { createWidener } from "./widener";
 import { createMixer } from "./mixer";
+import { PRISM_CODES } from "../registry/prismModules";
 
 /** Where a parameter's ramp shape comes from — the registry descriptor. */
 export type SmoothingLookup = (parameterId: string) => SmoothingPolicy;
@@ -563,6 +564,18 @@ const buildMixer: CoreBuilder = (context, spec) => {
   };
 };
 
+/**
+ * A prism effect on Web Audio: its input, untouched.
+ *
+ * The shared effects exist only in Rust, which is the default engine; a
+ * session on `?engine=web-audio` keeps the patch sounding through them rather
+ * than going silent at the first one.
+ */
+const buildPrismPassthrough: CoreBuilder = (context) => {
+  const gain = context.createGain();
+  return { input: gain, output: gain, params: {}, parallel: false, owned: [gain] };
+};
+
 export const EFFECT_BUILDERS: Readonly<Record<string, CoreBuilder>> = {
   "m.audio-output": buildOutput,
   "m.audio-gain": buildGain,
@@ -578,6 +591,7 @@ export const EFFECT_BUILDERS: Readonly<Record<string, CoreBuilder>> = {
   "m.audio-dp4": buildDp4Machine,
   "m.audio-widener": buildWidener,
   "m.audio-mixer": buildMixer,
+  ...Object.fromEntries(Object.keys(PRISM_CODES).map((type) => [type, buildPrismPassthrough])),
 };
 
 export const isEffectModule = (moduleType: string): boolean => moduleType in EFFECT_BUILDERS;

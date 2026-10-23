@@ -1,5 +1,5 @@
 [workspace]
-members = ["dsp-core", "wasm"]
+members = ["dsp-core", "wasm", "prism-gen"]
 resolver = "2"
 
 [profile.release]

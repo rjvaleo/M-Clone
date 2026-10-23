@@ -25,6 +25,7 @@
 
 import type { AudioNodeSpec, AudioPlan } from "../audioPlan";
 import { AUDIO_MIX_PARAM, AUDIO_MUTE_PARAM } from "../../registry/audioModules";
+import { PRISM_CODES, PRISM_PARAM_INDICES, PRISM_SOUND_PARAM, PRISM_SOUND_TYPES } from "../../registry/prismModules";
 import { planSampleRefs } from "./sampleSync";
 import { transferSample, type SampleSource } from "./sampleTransfer";
 import { NoteSchedule } from "./noteSchedule";
@@ -60,6 +61,8 @@ export const MODULE_KINDS: Readonly<Record<string, number>> = {
   "m.audio-mixer": 16,
   "m.audio-widener": 17,
   "m.audio-dp4": 18,
+  // Every effect from prism-fx is one Rust module, built by its code.
+  ...Object.fromEntries(Object.keys(PRISM_CODES).map((type) => [type, 19])),
 };
 
 /**
@@ -126,6 +129,7 @@ function dp4Variant(structure: Record<string, unknown>): number {
 /** The variant number for a spec, or 0 where the module has none. */
 export function variantOf(moduleType: string, structure: Record<string, unknown>): number {
   if (moduleType === "m.audio-dp4") return dp4Variant(structure);
+  if (PRISM_CODES[moduleType] !== undefined) return PRISM_CODES[moduleType];
   const options = STRUCTURAL_VARIANTS[moduleType];
   if (!options) return 0;
   const field = VARIANT_FIELD[moduleType];
@@ -372,6 +376,7 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     )),
     level: 24,
   },
+  ...PRISM_PARAM_INDICES,
   "m.granular": {
     "grain-size": 0,
     "grain-spacing": 1,
@@ -411,6 +416,7 @@ const FADE_HANDLE: Readonly<Record<string, number | undefined>> = {
   "m.audio-mixer": PARAM_INDICES["m.audio-mixer"].level,
   "m.audio-widener": PARAM_INDICES["m.audio-widener"].level,
   "m.audio-dp4": PARAM_INDICES["m.audio-dp4"].level,
+  ...Object.fromEntries(Object.keys(PRISM_CODES).map((type) => [type, PRISM_PARAM_INDICES[type].level])),
 };
 
 /** Modules that take notes. Everything else inherits the trait's no-op. */
@@ -446,6 +452,7 @@ const TAKES_AUDIO_INPUT: ReadonlySet<string> = new Set([
   // mixer is left out: its four channels are what a person patches, and a
   // first channel that quietly carried the live input would be a surprise.
   "m.audio-dp4",
+  ...Object.keys(PRISM_CODES),
 ]);
 
 /**
@@ -503,6 +510,12 @@ export const PARAMS_HANDLED_ELSEWHERE: Readonly<Record<string, Readonly<Record<s
   },
   "m.granular": { "asset-id": "audio, not a value; reaches the engine via set_sample_slot" },
   "m.audio-mixer": { mute: "structural; becomes the spec's bypass" },
+  ...Object.fromEntries(Object.keys(PRISM_CODES).map((type) => [type, {
+    mute: "structural; becomes the spec's bypass",
+    ...(PRISM_SOUND_TYPES.has(type)
+      ? { [PRISM_SOUND_PARAM]: "audio, not a value; reaches the engine via set_sample_slot" }
+      : {}),
+  }])),
   "m.audio-widener": { mute: "structural; becomes the spec's bypass" },
   "m.audio-dp4": {
     mute: "structural; becomes the spec's bypass",
