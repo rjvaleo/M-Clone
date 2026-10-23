@@ -1,6 +1,6 @@
 # MultiGrainLive's sound, effects and synths in idMLab
 
-*23 October 2026. Agreed with RJ. Step 1 built (branch `sound-port`).*
+*23 October 2026. Agreed with RJ. Steps 1 and 2 built (branch `sound-port`).*
 
 Bring MultiGrainLive's whole sound engine and every effect into idMLab, add
 modulators that can be mapped to any knob, port the scale-sequencer synth in
@@ -52,12 +52,27 @@ full, and add drum step programming. Automation is not ported.
      build only limits it; at its defaults a looped pair's gain is above one.
      In the Web Audio build both feedback modes return to A's input — kept,
      so the two backends agree.
-2. **The prism effects in idMLab.** (`ModuleKind::Prism` is 19 now, not the
-   16 SHARED-FX.md assumed: 16–18 went to the ports above.) `dsp-core` depends on prism-fx;
-   `ModuleKind::Prism` with the descriptor's code as the variant; a
-   `PrismModule` around `Kernel::tick`; generated TS descriptors and the
-   parameter-index table; a sound input (convolution impulse, threshold
-   sound) through the existing sample transfer.
+   Also: values the plan files as structure for Web Audio's sake — a
+   reverb's tail and decay rate, a crusher's bit depth, the synth's waves —
+   now reach Rust; before, those knobs did nothing there.
+2. **The prism effects in idMLab.** **Built.**
+   - `dsp-core` depends on prism-fx by path. `ModuleKind::Prism` is 19 (not
+     the 16 SHARED-FX.md assumed; 16–18 went to the ports above), built from
+     the descriptor's `code`. `PrismModule` runs the kernel frame by frame in
+     true stereo, hands a control over only when it moves, and puts the fade
+     after the kernel's controls. A test renders every effect in the
+     catalogue against its kernel run alone, sample for sample.
+   - `rust/prism-gen` writes `src/modular/registry/prismCatalog.generated.ts`
+     (`npm run gen:prism`, run by `build:wasm`); its test fails while that
+     file is behind the crate. `prismModules.ts` turns it into the sixteen
+     `m.prism-*` modules, faces in the originals' groups, and the bridge's
+     tables. Nothing in idMLab restates a range.
+   - A choice travels as its option's index; an effect's own `mix` is the
+     plan's wet; a sound (Convolution's impulse, Spectral Dynamics' threshold
+     sound) is an `asset-id` sample slot, handed to the kernel from the bank.
+   - On Web Audio a prism module passes its input through untouched.
+   - Checked in the app: the Add menu lists all sixteen, and ++delay patched
+     between M's synth and the output sounds on the Rust default.
 3. **Modulators and the mixer.**
    - A per-parameter modulation path through `compileAudioPlan`, the bridge
      and the Rust engine (it has `set_modulation` for the synth's matrix

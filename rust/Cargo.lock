@@ -5,10 +5,24 @@ version = 4
 [[package]]
 name = "dsp-core"
 version = "0.1.0"
+dependencies = [
+ "prism-fx",
+]
 
 [[package]]
 name = "idmlab-engine"
 version = "0.1.0"
 dependencies = [
  "dsp-core",
+]
+
+[[package]]
+name = "prism-fx"
+version = "0.1.0"
+
+[[package]]
+name = "prism-gen"
+version = "0.1.0"
+dependencies = [
+ "prism-fx",
 ]

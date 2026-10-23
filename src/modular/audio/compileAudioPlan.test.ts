@@ -163,3 +163,21 @@ describe("Compiling the audio subgraph", () => {
     expect(audioOutputNodeIds(compileAudioPlan(noOutput, moduleRegistry))).toEqual([]);
   });
 });
+
+describe("Compiling the prism effects", () => {
+  it("sends a choice as its option's index, which is the value the kernel reads", () => {
+    const plan = compileAudioPlan(graphWith([
+      { id: "t", type: "m.prism-tremolo", parameters: { shape: "Square", depth: 0.7 } },
+    ]), moduleRegistry);
+    expect(plan.nodes.t.parameters).toMatchObject({ shape: 2, depth: 0.7 });
+    expect(plan.nodes.t.structure).toEqual({});
+  });
+
+  it("files an effect's sound as structure and its own mix as the wet", () => {
+    const plan = compileAudioPlan(graphWith([
+      { id: "c", type: "m.prism-convolution", parameters: { "asset-id": "sha-9", mix: 0.25 } },
+    ]), moduleRegistry);
+    expect(plan.nodes.c.structure).toEqual({ "asset-id": "sha-9" });
+    expect(plan.nodes.c.wet).toBe(0.25);
+  });
+});

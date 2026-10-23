@@ -19,6 +19,7 @@
 // move never rebuilds topology" a property of the compiler rather than a habit
 // of whoever wrote the module.
 
+import { PRISM_STRUCTURE_PARAMS } from "../registry/prismModules";
 import type { GraphDocument, JsonValue } from "../model/graph";
 import type { ModuleRegistry } from "../registry/registry";
 import {
@@ -66,6 +67,7 @@ export function compileAudioPlan(
     const structuralIds = new Set([
       ...(AUDIO_STRUCTURE_PARAMS[node.moduleType] ?? []),
       ...(PLAYER_STRUCTURE_PARAMS[node.moduleType] ?? []),
+      ...(PRISM_STRUCTURE_PARAMS[node.moduleType] ?? []),
     ]);
     const structure: Record<string, JsonValue> = {};
     const parameters: Record<string, number> = {};
@@ -84,6 +86,12 @@ export function compileAudioPlan(
       // in `structure` is what keeps a checkbox — freeze, reverse, loop — from
       // rebuilding a subgraph and cutting off whatever was sounding.
       else if (typeof value === "boolean") parameters[parameter.id] = value ? 1 : 0;
+      // A choice that is not structural travels as its option's index — the
+      // value a prism kernel reads for it.
+      else if (parameter.kind === "enum" && typeof value === "string") {
+        const index = parameter.options?.indexOf(value) ?? -1;
+        if (index >= 0) parameters[parameter.id] = index;
+      }
     }
 
     nodes[nodeId] = {

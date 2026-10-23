@@ -134,3 +134,11 @@ describe("SampleSlots", () => {
     expect(slots.slotFor("a")).toBe(0);
   });
 });
+
+describe("Prism effects that take a sound", () => {
+  it("ask for their sound as slot 0", () => {
+    expect(planSampleRefs(plan([node("c", "m.prism-convolution", { "asset-id": "sha-7" })])))
+      .toEqual([{ nodeId: "c", slot: 0, assetId: "sha-7" }]);
+    expect(planSampleRefs(plan([node("t", "m.prism-tremolo", { "asset-id": "sha-7" })]))).toEqual([]);
+  });
+});
