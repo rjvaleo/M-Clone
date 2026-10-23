@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MessageBus, type StreamMessage } from "./messages";
 import { ParameterBag, type ProcessWindow } from "./processors";
-import { MClockProcessor, MConductorProcessor, MOrchestraProcessor } from "./mlabProcessors";
+import { MConductorProcessor, MOrchestraProcessor } from "./mlabProcessors";
 import { PPQN, TempoMap } from "./time";
 
 const window = (startTick: number, endTick: number): ProcessWindow => ({
@@ -103,7 +103,7 @@ describe("MIDI Out: program changes", () => {
 
 const clock = (values: Record<string, unknown> = {}) => {
   const bus = new MessageBus();
-  const processor = new MClockProcessor({
+  const processor = new MConductorProcessor({
     nodeId: "ck", bus, parameters: new ParameterBag(values as never), budget: 256, seed: 7,
   });
   const outs = { sync: collector(bus, "ck", "sync-out"), run: collector(bus, "ck", "run-out") };
@@ -118,7 +118,7 @@ const clock = (values: Record<string, unknown> = {}) => {
   return { processor, run, tempo, parameters: (processor as unknown as { parameters: ParameterBag }).parameters };
 };
 
-describe("M Clock (Groove Clock): tempo, Sync and Tap Conduct", () => {
+describe("M Conductor's transport: tempo, Sync and Tap Conduct, as M's Conducting window", () => {
   it("plays the whole canvas at its tempo", () => {
     const { run, tempo, parameters } = clock({ tempo: 90 });
     run(0, 100);
@@ -126,15 +126,6 @@ describe("M Clock (Groove Clock): tempo, Sync and Tap Conduct", () => {
     parameters.set("tempo", 140);
     run(100, 200);
     expect(tempo.bpmAt(100)).toBe(140);
-  });
-
-  it("BPM Fine Adjust moves the tempo by a percentage, inside its Adj Range", () => {
-    const { run, tempo } = clock({ tempo: 100, fine: 4, "adj-range": 5 });
-    run(0, 100);
-    expect(tempo.bpmAt(0)).toBeCloseTo(104);
-    const capped = clock({ tempo: 100, fine: 30, "adj-range": 5 });
-    capped.run(0, 100);
-    expect(capped.tempo.bpmAt(0)).toBeCloseTo(105);
   });
 
   it("sends Sync at once, or on the next beat or bar of its Bar Length", () => {
@@ -147,7 +138,7 @@ describe("M Clock (Groove Clock): tempo, Sync and Tap Conduct", () => {
     }
   });
 
-  it("reports the bar, beat and sixteenth for the Groove Clock's readouts", () => {
+  it("reports the bar, beat and sixteenth for its readouts", () => {
     const { processor, run } = clock({ "bar-length": 3 });
     run(0, 3 * PPQN + PPQN + 2 * (PPQN / 4));
     run(3 * PPQN + PPQN + 2 * (PPQN / 4), 3 * PPQN + PPQN + 3 * (PPQN / 4));
@@ -186,7 +177,7 @@ const conductor = (values: Record<string, unknown> = {}) => {
   return { run, parameters: (processor as unknown as { parameters: ParameterBag }).parameters };
 };
 
-describe("M Conductor (Triple XY): the baton and two more pads", () => {
+describe("M Conductor's pads: the baton and two more", () => {
   const pads = (x: number, y: number, glide = 0) => [{ x, y, glide }, { x: 0, y: 0, glide: 0 }, { x: 0.5, y: -0.5, glide: 0 }];
 
   it("sends each pad's X and Y when they move, -1 to +1 as Triple XY does", () => {

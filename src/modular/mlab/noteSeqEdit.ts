@@ -10,7 +10,9 @@ import type { ScaleName } from "../../engine/music";
 import type { VoicePattern } from "./model";
 import { MAX_CYCLE_CELLS, defaultCellLengths, defaultCells, defaultNoteSeqPatterns, shiftSteps, type SeqCellLengths, type SeqCells } from "./noteSeq";
 import { setPatternLength, toggleNote } from "./patternEdit";
-import type { SeqMaterial } from "./generate";
+import { generate, type SeqMaterial } from "./generate";
+import type { Rng } from "../../engine/rng";
+import { MAX_WARP_STEPS, defaultWarpBanks, setWarpOffset, type WarpBank } from "./warpSteps";
 
 type Params = Readonly<Record<string, JsonValue>>;
 type Updates = Record<string, JsonValue>;
@@ -137,3 +139,63 @@ export function setRate(value: string): Updates {
   const [num, den] = value.split("/").map(Number);
   return { "rate-num": num, "rate-den": den };
 }
+
+/* ===== The dice on each lane ===== */
+
+export type LaneId = "pitch" | "accent" | "legato" | "rhythm" | "velocity" | "warp";
+const DICE_SHARES = { few: 0.25, some: 0.5, most: 0.75, all: 1 } as const;
+export type DiceShare = keyof typeof DICE_SHARES;
+
+/** `count` distinct indexes below `n`. */
+const pick = (n: number, share: number, rng: Rng): number[] => {
+  const pool = Array.from({ length: n }, (_, i) => i);
+  const count = share >= 1 ? n : Math.max(1, Math.round(n * share));
+  const out: number[] = [];
+  while (out.length < count && pool.length) out.push(pool.splice(rng.int(pool.length), 1)[0]);
+  return out;
+};
+const LEVELS: Record<"accent" | "legato" | "rhythm", [number, number]> = { accent: [1, 4], legato: [1, 4], rhythm: [1, 3] };
+
+/** Randomize a share of one lane, as drumcomputer's RND does one control. */
+export function randomizeLane(p: Params, lane: LaneId, share: DiceShare, rng: Rng): Updates {
+  const s = DICE_SHARES[share];
+  const pattern = patternInPlay(p);
+  if (lane === "accent" || lane === "legato" || lane === "rhythm") {
+    const cells = [...cellsInPlay(p, lane)];
+    const [low, high] = LEVELS[lane];
+    for (const i of pick(cellLengthInPlay(p, lane), s, rng)) cells[i] = low + rng.int(high - low + 1);
+    return withCells(p, lane, cells);
+  }
+  if (lane === "velocity") {
+    const values = Array.from({ length: pattern.length }, (_, i) => read<number[]>(p, "velocity", [])[i] ?? 0);
+    for (const i of pick(pattern.length, s, rng)) values[i] = Number(((rng.next() - 0.5) * 1.2).toFixed(2));
+    return { velocity: values };
+  }
+  if (lane === "warp") {
+    const bank = warpInPlay(p);
+    const offsets = Array.from({ length: Math.max(bank.offsets.length, bank.length) }, (_, i) => bank.offsets[i] ?? 0);
+    for (const i of pick(bank.length, s, rng)) if (i > 0) offsets[i] = Number(((rng.next() - 0.5) * 0.5).toFixed(2));
+    return withWarp(p, { ...bank, offsets });
+  }
+  const id = ({ few: "rnd-few", some: "rnd-some", most: "rnd-most", all: "rnd-all" } as const)[share];
+  const material = generate(id, currentMaterial(p), rng, { preserveRests: true });
+  return withPattern(p, material.pattern);
+}
+
+/* ===== The Warp lane ===== */
+
+const warpPosition = (p: Params) => Math.max(0, Math.min(5, Math.round(Number(p["warp-position"] ?? 0))));
+const warpBanks = (p: Params) => read<WarpBank[]>(p, "warp", defaultWarpBanks());
+
+/** The NoteSeq's own Time Distortion at the position in play — what its Warp lane draws. */
+export const warpInPlay = (p: Params): WarpBank => warpBanks(p)[warpPosition(p)] ?? defaultWarpBanks()[0];
+
+function withWarp(p: Params, bank: WarpBank): Updates {
+  const banks = warpBanks(p).map((b) => b);
+  banks[warpPosition(p)] = bank;
+  return { warp: json(banks) };
+}
+
+export const setWarpStep = (p: Params, step: number, value: number): Updates => withWarp(p, setWarpOffset(warpInPlay(p), step, value));
+export const setWarpLength = (p: Params, length: number): Updates =>
+  withWarp(p, { ...warpInPlay(p), length: Math.max(1, Math.min(MAX_WARP_STEPS, Math.round(length))) });

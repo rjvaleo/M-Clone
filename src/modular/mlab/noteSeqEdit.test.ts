@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { createNode } from "../registry/registry";
+import { Rng } from "../../engine/rng";
 import {
   RATE_OPTIONS,
   applyMaterial,
   cellsInPlay,
   currentMaterial,
   normGates,
+  randomizeLane,
+  setWarpStep,
+  setWarpLength,
+  warpInPlay,
   setCellLength,
   setCellValue,
   setEndStep,
@@ -72,5 +77,27 @@ describe("editing a NoteSeq from its face", () => {
   it("offers Numerology's rates, M's time bases among them", () => {
     expect(RATE_OPTIONS.map((r) => r.label)).toEqual(expect.arrayContaining(["1/4", "1/8", "16th", "1/8T"]));
     expect(RATE_OPTIONS.find((r) => r.label === "1/8")!.value).toBe("1/8");
+  });
+
+  it("the dice on a lane randomizes only that lane, and only a share of it", () => {
+    const p = params();
+    const accent = { ...p, ...randomizeLane(p, "accent", "all", new Rng(4)) };
+    expect(cellsInPlay(accent, "accent").every((c) => typeof c === "number" && c >= 1 && c <= 4)).toBe(true);
+    expect(cellsInPlay(accent, "legato")).toEqual(cellsInPlay(p, "legato"));
+    const few = { ...p, ...randomizeLane(p, "velocity", "few", new Rng(4)) };
+    const changed = (few.velocity as number[]).filter((v) => v !== 0).length;
+    expect(changed).toBeGreaterThan(0);
+    expect(changed).toBeLessThanOrEqual(4);
+    const pitches = { ...p, ...randomizeLane(p, "pitch", "all", new Rng(4)) };
+    expect(group(pitches as never).steps.slice(0, 8)).not.toEqual(group(p).steps.slice(0, 8));
+  });
+
+  it("the Warp lane is the NoteSeq's own Time Distortion, at the position in play", () => {
+    const p = params({ "warp-position": 2 });
+    const next = { ...p, ...setWarpStep(p, 3, 0.2) };
+    expect(warpInPlay(next).offsets[3]).toBe(0.2);
+    expect(warpInPlay({ ...next, "warp-position": 0 } as never).offsets[3]).toBe(0);
+    expect(warpInPlay({ ...next, ...setWarpLength(next, 6) }).length).toBe(6);
+    expect(warpInPlay({ ...p, ...setWarpStep(p, 0, 0.3) }).offsets[0]).toBe(0);
   });
 });

@@ -118,3 +118,21 @@ export function pitchRows(pattern: VoicePattern, rows = 24): number[] {
   const top = Math.max(rows - 1, Math.min(127, centre + Math.floor(rows / 2)));
   return Array.from({ length: rows }, (_, i) => top - i);
 }
+
+/**
+ * Rows for just the notes the loop plays, two either side, highest first:
+ * at least an octave so there is room to add notes, at most two.
+ */
+export function fitPitchRows(pattern: VoicePattern, pad = 2, min = 12, max = 24): number[] {
+  const notes = pattern.steps.slice(0, pattern.length).flat();
+  if (!notes.length) return pitchRows(pattern, min);
+  let top = Math.min(127, Math.max(...notes) + pad);
+  let bottom = Math.max(0, Math.min(...notes) - pad);
+  while (top - bottom + 1 < min) { if (top < 127) top += 1; if (top - bottom + 1 < min && bottom > 0) bottom -= 1; }
+  if (top - bottom + 1 > max) {
+    const centre = Math.round((Math.min(...notes) + Math.max(...notes)) / 2);
+    top = Math.min(127, centre + max / 2 - 1);
+    bottom = top - max + 1;
+  }
+  return Array.from({ length: top - bottom + 1 }, (_, i) => top - i);
+}

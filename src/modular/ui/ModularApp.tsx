@@ -59,7 +59,7 @@ import type {
   ParameterDescriptor,
   PortRef,
 } from "../model/graph";
-import { createNode, moduleRegistry } from "../registry/registry";
+import { createNode, withDeclaredParameters, moduleRegistry } from "../registry/registry";
 import { applyTheme, DEFAULT_THEME_ID, themeMeta, type ThemeId } from "../theme/themes";
 import { ThemePicker } from "./ThemePicker";
 import { MenuBar, type MenuActions } from "./MenuBar";
@@ -70,6 +70,8 @@ import { M_LAB_TYPES } from "../registry/mLabModules";
 import { quantizeMorph, variableLinkUpdates } from "../mlab/links";
 import { MLAB_FACES, MLabHostContext, N4_TITLES } from "./mlab";
 import { N4Header } from "./n4/N4Header";
+import { presetHandlers } from "./n4/PresetManager";
+import { NOT_IN_PRESETS, snapshotOf } from "../mlab/presets";
 import { setRuntimeHost } from "../../ui/runtime";
 import { useM } from "../../state/store";
 import { shareMidiAccess } from "./midisession";
@@ -1041,6 +1043,7 @@ function NodeFace({
     // Lets the stylesheet make an exception for one module without inventing a
     // layout class that means "the Note Editor".
     data-module-type={node.moduleType}
+    data-node-box={node.id}
     onPointerDown={beginDrag}
     onClick={(event) => { event.stopPropagation(); onRaise(); onSelect(); }}
     // Neither dimension is declared any more. A layout class used to pin both,
@@ -1058,9 +1061,11 @@ function NodeFace({
         onRename={(label) => dispatch({ type: "set-node-details", nodeId: node.id, label })}
         onComment={(comment) => setParameter("comment", comment)}
         onReset={() => setParameters(Object.fromEntries(descriptor.parameters
-          .filter((parameter) => !["comment", "collapsed"].includes(parameter.id))
+          // Resetting the module keeps its name, comment, view and presets.
+          .filter((parameter) => !NOT_IN_PRESETS.has(parameter.id))
           .map((parameter) => [parameter.id, structuredClone(parameter.defaultValue)])))}
-        onClose={onClose} />
+        onClose={onClose}
+        presets={presetHandlers(node.parameters, () => snapshotOf(node.parameters), setParameters as (values: Record<string, unknown>) => void)} />
       : <header className="mm-node__header">
         <span>{node.label}</span>
         <CloseNodeButton label={node.label} onClose={onClose} />
@@ -1667,6 +1672,7 @@ export function ModularApp() {
     assets: AssetEntry[],
     hydrate: (engine: AudioEngine) => void,
   ) => {
+    documentGraph = withDeclaredParameters(documentGraph);
     setGraph(documentGraph);
     setUndo([]);
     setRedo([]);
@@ -1791,7 +1797,12 @@ export function ModularApp() {
     const nodes = selectedNodeId && graph.nodes[selectedNodeId]
       ? [graph.nodes[selectedNodeId]]
       : Object.values(graph.nodes);
-    setCamera(fitToBoxes(nodes.map((node) => ({ x: node.position.x, y: node.position.y, ...nodeSize(node.moduleType) })),
+    // Measured, not estimated: a module's face is the size of what is on it.
+    const sizeOf = (node: NodeInstance) => {
+      const element = viewport.querySelector<HTMLElement>(`[data-node-box="${CSS.escape(node.id)}"]`);
+      return element ? { width: element.offsetWidth, height: element.offsetHeight } : nodeSize(node.moduleType);
+    };
+    setCamera(fitToBoxes(nodes.map((node) => ({ x: node.position.x, y: node.position.y, ...sizeOf(node) })),
       { width: viewport.clientWidth, height: viewport.clientHeight }));
   };
   useEffect(() => {
@@ -2369,6 +2380,9 @@ export function ModularApp() {
         backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
         backgroundPosition: `${-camera.left}px ${-camera.top}px`,
       }}
+      // The camera does all the moving. A hidden-overflow box can still be
+      // scrolled — focusing a control far out does it — so put it straight back.
+      onScroll={(event) => { event.currentTarget.scrollLeft = 0; event.currentTarget.scrollTop = 0; }}
       onPointerDownCapture={captureCanvasPan}
       onPointerDown={beginCanvasPan} onPointerMove={moveCanvasPan}
       onPointerUp={endCanvasPan} onPointerCancel={endCanvasPan}

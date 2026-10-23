@@ -49,9 +49,9 @@ const play = (graph: GraphDocument, seconds: number) => {
   return recorder.events;
 };
 
-/** M Clock → M NoteSeq → M Orchestra → MIDI Out, as a Numerology stack is wired. */
+/** M Conductor → M NoteSeq → M Orchestra → MIDI Out, as a Numerology stack is wired. */
 const mChain = (noteSeq: Record<string, JsonValue> = {}) => graphOf(
-  [["ck", "m.lab-clock"], ["ns", "m.lab-noteseq", noteSeq], ["or", "m.lab-orchestra"], ["out", "m.midi-output"]],
+  [["ck", "m.lab-conductor"], ["ns", "m.lab-noteseq", noteSeq], ["or", "m.lab-orchestra"], ["out", "m.midi-output"]],
   [
     ["ck", "transport-out", "ns", "clock-in"],
     ["ck", "sync-out", "ns", "sync-in"],

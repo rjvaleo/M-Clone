@@ -140,3 +140,56 @@ const FLAT_NAMES = ["C", "Db,C#", "D", "Eb,D#", "E", "F", "Gb,F#", "G", "Ab,G#",
 /** A pitch as the PolyNote labels its rows: "Db,C# 4", with MIDI 60 as C 3 (manual p95). */
 export const polyNoteName = (pitch: number): string =>
   `${FLAT_NAMES[((pitch % 12) + 12) % 12]} ${Math.floor(pitch / 12) - 2}`;
+
+/* ===== The step chip row ===== */
+
+export type ChipState = { skip: boolean; mute: boolean };
+
+/** A click on a step's chip: none → Skip → Mute → none. */
+export function nextChip(state: ChipState): ChipState {
+  if (!state.skip && !state.mute) return { skip: true, mute: false };
+  if (state.skip) return { skip: false, mute: true };
+  return { skip: false, mute: false };
+}
+
+const JUMP_LEVELS = [0, 0.25, 0.5, 1];
+/** Alt-click: the step's Random Jump chance, up a level and round. */
+export function nextJump(chance: number): number {
+  const next = JUMP_LEVELS.find((level) => level > chance + 1e-9);
+  return next ?? 0;
+}
+
+/* ===== Two-thumb range sliders ===== */
+
+export type Range = { low: number; high: number };
+
+/** Move the thumb nearer to `value` (or the one named), never past the other. */
+export function rangeDrag(range: Range, value: number, thumb?: "low" | "high"): Range {
+  const which = thumb ?? (Math.abs(value - range.low) <= Math.abs(value - range.high) ? "low" : "high");
+  return which === "low"
+    ? { low: Math.min(value, range.high), high: range.high }
+    : { low: range.low, high: Math.max(value, range.low) };
+}
+
+/* ===== Tempo range ===== */
+
+export type TempoRange = { low: number; tempo: number; high: number };
+
+/** M's Conducting tempo bar: a low end, a high end, and the tempo between them. */
+export function tempoRangeDrag(range: TempoRange, part: "low" | "high" | "tempo", value: number): TempoRange {
+  const v = Math.round(value);
+  if (part === "tempo") return { ...range, tempo: Math.max(range.low, Math.min(range.high, v)) };
+  const next = part === "low"
+    ? { low: Math.min(v, range.high), high: range.high }
+    : { low: range.low, high: Math.max(v, range.low) };
+  return { ...next, tempo: Math.max(next.low, Math.min(next.high, range.tempo)) };
+}
+
+/* ===== Faders side by side ===== */
+
+/** Which of `count` faders across `width` is under the pointer, and the value at its height. */
+export function faderUnder(
+  x: number, y: number, width: number, height: number, count: number, min: number, max: number, step: number,
+): { index: number; value: number } {
+  return { index: stepFromX(x, width, count), value: laneValueFromY(y, height, min, max, step) };
+}

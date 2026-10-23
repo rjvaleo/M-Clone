@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultOrchestration, defaultPrograms } from "./model";
 import { defaultNoteSeqPatterns } from "./noteSeq";
-import { pitchRows, runPatternCommand, setPatternLength, toggleNote } from "./patternEdit";
+import { fitPitchRows, pitchRows, runPatternCommand, setPatternLength, toggleNote } from "./patternEdit";
 import { parseProgram, setProgram, shownProgram, toggleChannel } from "./orchestraEdit";
 import { batonFromPad, conductUpdates } from "./conductorPad";
 import { defaultVariables, toggleArrow } from "./variables";
@@ -47,6 +47,24 @@ describe("pattern editing", () => {
   });
 });
 
+describe("the note grid fits the loop", () => {
+  it("shows the played notes' range and two rows either side, highest first", () => {
+    const rows = fitPitchRows(riff());
+    expect(rows[0]).toBe(74);
+    expect(rows[rows.length - 1]).toBe(58);
+  });
+
+  it("ignores notes past the end marker, and keeps at least an octave", () => {
+    const rows = fitPitchRows({ steps: [[60], [61], [96]], scrambled: [[60], [61], [96]], length: 2 });
+    expect(rows.includes(96)).toBe(false);
+    expect(rows.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it("never grows past two octaves", () => {
+    expect(fitPitchRows({ steps: [[30], [90]], scrambled: [[30], [90]], length: 2 }).length).toBe(24);
+  });
+});
+
 describe("orchestra editing", () => {
   it("adds and removes channels from a voice's orchestration", () => {
     const more = toggleChannel(defaultOrchestration(), 0, 0, 5);
@@ -70,13 +88,13 @@ describe("the Triple XY's baton", () => {
     expect(batonFromPad(0, 0)).toEqual({ x: 0.5, y: 0.5 });
   });
 
-  it("moves the pad, the armed variables and the clock's conducted tempo together", () => {
+  it("moves the pad, the armed variables and the conducted tempo together", () => {
     const variables = toggleArrow(defaultVariables(), "density", "right");
     const pads = [{ x: 0, y: 0, glide: 0 }, { x: 0, y: 0, glide: 0 }, { x: 0, y: 0, glide: 0 }];
-    const out = conductUpdates(pads, { "tempo-arrow": "x", "adj-range": 5 }, variables, 0.98, 0);
-    expect((out.conductor.pads as { x: number }[])[0].x).toBe(0.98);
+    const out = conductUpdates(pads, { "tempo-arrow": "right", "tempo-low": 110, "tempo-high": 130 }, variables, 1, 0);
+    expect((out.conductor.pads as { x: number }[])[0].x).toBe(1);
     expect(out.variables!.active.density).toBe(5);
-    expect(out.clock).toEqual({ fine: 4.9 });
-    expect(conductUpdates(pads, { "tempo-arrow": "off" }, null, 0.5, 0.5).clock).toBeUndefined();
+    expect(out.conductor.tempo).toBe(130);
+    expect(conductUpdates(pads, { "tempo-arrow": "off" }, null, 0.5, 0.5).conductor.tempo).toBeUndefined();
   });
 });

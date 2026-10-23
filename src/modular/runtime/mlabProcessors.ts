@@ -62,25 +62,21 @@ abstract class MLabProcessor implements StreamProcessor {
   }
 }
 
-/* ===== M Clock ===== */
+/* ===== M Conductor: the transport half ===== */
 
 /**
- * The Groove Clock's job with M's Conducting controls: it sets the canvas
- * tempo (BPM plus Fine Adjust, a percentage inside its Adj Range), sends Sync
+ * M's Conducting window, transport half: it sets the canvas tempo, sends Sync
  * now or on the next beat or bar, and runs Tap Conduct as a gate — shut until
- * a tap, then open for one beat per tap.
+ * a tap, then open for one beat per tap. The pads are added by
+ * MConductorProcessor below.
  */
-export class MClockProcessor extends MLabProcessor {
+abstract class ConductorTransport extends MLabProcessor {
   private sentRun: number | null = null;
   private syncRequested = false;
   private syncAt: number | null = null;
   private tapRequested = false;
   private openUntil: number | null = null;
   private at = 0;
-
-  constructor(build: ProcessorBuild) {
-    super(build, "m-clock");
-  }
 
   reset(_atTick: Tick): void {
     this.sentRun = null;
@@ -94,10 +90,8 @@ export class MClockProcessor extends MLabProcessor {
     return true;
   }
 
-  process(window: ProcessWindow): void {
-    const range = Math.max(0, this.parameters.number("adj-range", 5));
-    const fine = Math.max(-range, Math.min(range, this.parameters.number("fine", 0)));
-    const tempo = this.parameters.number("tempo", 120) * (1 + fine / 100);
+  protected transport(window: ProcessWindow): void {
+    const tempo = this.parameters.number("tempo", 120);
     if (tempo > 0 && Math.abs(window.tempo.bpmAt(window.startTick) - tempo) > 1e-9) window.tempo.setTempoAt(window.startTick, tempo);
     this.at = window.startTick;
     this.runGate(window);
@@ -156,7 +150,7 @@ export class MClockProcessor extends MLabProcessor {
     this.syncAt = null;
   }
 
-  status(): Readonly<Record<string, string>> {
+  protected transportStatus(): Record<string, string> {
     const bar = Math.max(1, Math.round(this.parameters.number("bar-length", 4)));
     const sixteenths = Math.floor(this.at / (PPQN / 4));
     return {
@@ -175,11 +169,12 @@ export const defaultPads = (): XYPad[] => Array.from({ length: 3 }, () => ({ x: 
 const PAD_PORTS = [["x1-out", "y1-out"], ["x2-out", "y2-out"], ["x3-out", "y3-out"]] as const;
 
 /**
- * A Triple XY: three pads, each sending X and Y from -1 to +1, each gliding
- * from where it is toward its target over Glide seconds. Pad 1 is M's baton;
- * the face moves the variables armed with arrows as it goes.
+ * M's Conducting window: the transport above, and the pads — three of them,
+ * each sending X and Y from -1 to +1 and gliding toward its target over Glide
+ * seconds. Pad 1 is M's baton; the face moves the Variables armed with arrows
+ * and the tempo as it goes.
  */
-export class MConductorProcessor extends MLabProcessor {
+export class MConductorProcessor extends ConductorTransport {
   private current: { x: number; y: number }[] | null = null;
   private sent: (number | null)[] = Array(6).fill(null);
 
@@ -187,11 +182,13 @@ export class MConductorProcessor extends MLabProcessor {
     super(build, "m-conductor");
   }
 
-  reset(_atTick: Tick): void {
+  reset(atTick: Tick): void {
+    super.reset(atTick);
     this.sent = Array(6).fill(null);
   }
 
   process(window: ProcessWindow): void {
+    this.transport(window);
     const pads = this.parameters.json<XYPad[]>("pads", defaultPads());
     const seconds = window.tempo.tickToSeconds(window.endTick) - window.tempo.tickToSeconds(window.startTick);
     if (!this.current) this.current = pads.map((pad) => ({ x: pad.x, y: pad.y }));
@@ -221,7 +218,7 @@ export class MConductorProcessor extends MLabProcessor {
   }
 
   status(): Readonly<Record<string, string>> {
-    return { current: JSON.stringify(this.current ?? []) };
+    return { ...this.transportStatus(), current: JSON.stringify(this.current ?? []) };
   }
 }
 
@@ -553,16 +550,17 @@ export class MNoteSeqProcessor extends MLabProcessor {
     };
   }
 
-  /** The curve of whatever M Time Warp is wired into `warp-in`. */
+  /** The Time Distortion this voice plays through. */
   private warpCurve(): (clock: number) => number {
-    const warp = this.warp();
-    if (!warp) return (clock) => clock;
-    const banks = warp.json<WarpBank[]>("banks", []);
-    const bank = banks[Math.max(0, Math.min(5, Math.round(warp.number("position", 0))))];
+    // A Time Warp cabled into Warp In wins; otherwise the NoteSeq's own Warp lane.
+    const wired = this.warp();
+    const source = wired
+      ? { banks: wired.json<WarpBank[]>("banks", []), position: wired.number("position", 0), amount: wired.number("amount", 1) }
+      : { banks: this.parameters.json<WarpBank[]>("warp", []), position: this.parameters.number("warp-position", 0), amount: this.parameters.number("warp-amount", 1) };
+    const bank = source.banks[Math.max(0, Math.min(5, Math.round(source.position)))];
     if (!bank) return (clock) => clock;
     const map = normalizeTimeMap(warpToTimeMap(bank));
-    const amount = warp.number("amount", 1);
-    return (clock) => distortClockTicks(map, clock, amount);
+    return (clock) => distortClockTicks(map, clock, source.amount);
   }
 
   status(): Readonly<Record<string, string>> {

@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { PresetButton, type PresetHandlers } from "./PresetManager";
 
 export type N4HeaderProps = {
   name: string;
@@ -19,6 +20,8 @@ export type N4HeaderProps = {
   onComment: (comment: string) => void;
   onReset: () => void;
   onClose: () => void;
+  /** The module's preset manager, behind Numerology's preset button. */
+  presets?: PresetHandlers;
 };
 
 export function N4Header(props: N4HeaderProps) {
@@ -46,6 +49,7 @@ export function N4Header(props: N4HeaderProps) {
       <button type="button" className={`n4-header__power${props.enabled ? "" : " is-off"}`}
         aria-label={props.enabled ? "Bypass module" : "Turn module back on"} aria-pressed={!props.enabled}
         onClick={(event) => { event.stopPropagation(); props.onBypass(); }}>⏻</button>
+      {props.presets && <PresetButton handlers={props.presets} />}
       <span className="n4-header__menu">
         <button type="button" aria-label="Module actions" aria-expanded={menu}
           onClick={(event) => { event.stopPropagation(); setMenu(!menu); }}>⚙▾</button>

@@ -14,6 +14,7 @@ import { positionFromBaton, type BatonPoint } from "../../engine/conductor";
 import type { ArrowDir, ArrowState } from "../../engine/snapshot";
 import type { NoteOrderMix, VelocityRange } from "../../engine/types";
 import { MAX_VOICES, POSITIONS } from "./model";
+import { recallSlot, type PresetList } from "./presets";
 
 export const M_VARIABLES = [
   "patternGroup", "density", "velocityRange", "noteOrder", "transposition", "timeDistortion",
@@ -139,14 +140,26 @@ export function resolveTargets(state: VariablesState, targets: readonly MTarget[
     if (target.kind === "noteSeq") {
       const voice = Math.max(0, Math.min(MAX_VOICES - 1, Math.round(Number(target.parameters.voice ?? 1)) - 1));
       const range = tables.velocityRange[active.velocityRange][voice];
+      // The Pattern Group position picks the NoteSeq's preset slot a–f — its
+      // first six presets. A slot with a preset recalls it, once, as the slot
+      // changes; an empty slot is M's own pattern group.
+      const presets = (target.parameters.presets as unknown as PresetList | undefined) ?? [];
+      const onSlot = Boolean(presets[active.patternGroup]);
+      const recalled = onSlot && Number(target.parameters["preset-slot"] ?? -1) !== active.patternGroup
+        ? recallSlot(presets, active.patternGroup)
+        : null;
+      const pattern: Record<string, JsonValue> = onSlot
+        ? { ...(recalled ?? {}), "preset-slot": active.patternGroup }
+        : { group: active.patternGroup };
       wanted = {
-        group: active.patternGroup,
+        ...pattern,
         density: tables.density[active.density][voice],
         "vel-low": range.low,
         "vel-high": range.high,
         "note-order": tables.noteOrder[active.noteOrder][voice] as unknown as JsonValue,
         transposition: tables.transposition[active.transposition][voice],
         "cycle-positions": { accent: active.accent, legato: active.legato, rhythm: active.rhythm },
+        "warp-position": active.timeDistortion,
       };
     } else if (target.kind === "timeWarp") {
       wanted = { position: active.timeDistortion };

@@ -1,4 +1,5 @@
 import type {
+  GraphDocument,
   GraphPoint,
   JsonValue,
   ModuleDescriptor,
@@ -1094,4 +1095,26 @@ export function createNode(
     parameters,
     enabled: true,
   };
+}
+
+/**
+ * A graph whose every node carries every parameter its module declares now.
+ * A document saved before a module gained a setting would otherwise refuse
+ * any edit to it; what the node already holds is kept as it is.
+ */
+export function withDeclaredParameters(graph: GraphDocument): GraphDocument {
+  const nodes = Object.fromEntries(Object.entries(graph.nodes).map(([id, node]) => {
+    const descriptor = moduleRegistry.get(node.moduleType);
+    if (!descriptor) return [id, node];
+    const missing = descriptor.parameters.filter((parameter) => !(parameter.id in node.parameters));
+    if (!missing.length) return [id, node];
+    return [id, {
+      ...node,
+      parameters: {
+        ...node.parameters,
+        ...Object.fromEntries(missing.map((parameter) => [parameter.id, structuredClone(parameter.defaultValue)])),
+      },
+    }];
+  }));
+  return { ...graph, nodes };
 }

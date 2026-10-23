@@ -7,6 +7,8 @@ import { createContext, useContext } from "react";
 import type { GraphDocument, JsonValue, NodeInstance } from "../../model/graph";
 import { POSITION_LABELS } from "../../mlab/model";
 import { N4Button } from "../n4/kit";
+import { presetHandlers } from "../n4/PresetManager";
+import { snapshotOf } from "../../mlab/presets";
 
 export type MLabFaceProps = {
   node: NodeInstance;
@@ -44,3 +46,7 @@ export function PositionButtons({ value, onPick, label }: { value: number; onPic
     </div>
   );
 }
+
+/** A module's preset manager, wired to its parameters. */
+export const usePresets = (node: NodeInstance, setParameters: (values: Record<string, JsonValue>) => void) =>
+  presetHandlers(node.parameters, () => snapshotOf(node.parameters), setParameters as (values: Record<string, unknown>) => void);

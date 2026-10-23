@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createNode, moduleRegistry, validateModuleDescriptor } from "./registry";
+import { createNode, moduleRegistry, validateModuleDescriptor, withDeclaredParameters } from "./registry";
 import { M_LAB_TYPES } from "./mLabModules";
 import { canAddModule, moduleLimit } from "../model/limits";
 import { emptyGraph } from "../model/graph";
@@ -26,8 +26,8 @@ describe("the M modules, built from Numerology's", () => {
     }
   });
 
-  it("allows one clock, Variables, conductor and orchestra; a NoteSeq and Time Warp per voice", () => {
-    for (const type of [M_LAB_TYPES.clock, M_LAB_TYPES.variables, M_LAB_TYPES.conductor, M_LAB_TYPES.orchestra]) {
+  it("allows one conductor, Variables and orchestra; a NoteSeq and Time Warp per voice", () => {
+    for (const type of [M_LAB_TYPES.variables, M_LAB_TYPES.conductor, M_LAB_TYPES.orchestra]) {
       const graph = emptyGraph();
       graph.nodes.a = createNode(type, "a", { x: 0, y: 0 });
       expect(canAddModule(graph, type), type).toBe(false);
@@ -46,18 +46,16 @@ describe("the M modules, built from Numerology's", () => {
     ]);
   });
 
-  it("wires M Clock: transport, Sync and the Tap Conduct gate out", () => {
-    expect(ports(M_LAB_TYPES.clock, "input")).toEqual([]);
-    expect(ports(M_LAB_TYPES.clock, "output")).toEqual(["transport-out:transport", "sync-out:reset", "run-out:control"]);
-  });
-
   it("wires M Time Warp: its curve out, by reference", () => {
     expect(ports(M_LAB_TYPES.timeWarp, "output")).toEqual(["warp-out:time-map"]);
   });
 
-  it("wires M Conductor as a Triple XY: X and Y for each of three pads", () => {
-    expect(ports(M_LAB_TYPES.conductor, "output")).toEqual(
-      ["x1-out:control", "y1-out:control", "x2-out:control", "y2-out:control", "x3-out:control", "y3-out:control"]);
+  it("wires M Conductor: the transport, Sync and Tap Conduct gate, then X and Y for each pad", () => {
+    expect(ports(M_LAB_TYPES.conductor, "input")).toEqual([]);
+    expect(ports(M_LAB_TYPES.conductor, "output")).toEqual([
+      "transport-out:transport", "sync-out:reset", "run-out:control",
+      "x1-out:control", "y1-out:control", "x2-out:control", "y2-out:control", "x3-out:control", "y3-out:control",
+    ]);
   });
 
   it("wires M Orchestra: notes in; one output per MIDI channel", () => {
@@ -74,7 +72,7 @@ describe("the M modules, built from Numerology's", () => {
 
 describe("a custom face can own its commands", () => {
   it("counts them as on the face, and rejects one the module does not have", () => {
-    const clock = moduleRegistry.get(M_LAB_TYPES.clock)!;
+    const clock = moduleRegistry.get(M_LAB_TYPES.conductor)!;
     expect(validateModuleDescriptor(clock)).toEqual([]);
     const face = clock.face.map((section) => ({
       ...section,
@@ -83,5 +81,20 @@ describe("a custom face can own its commands", () => {
     expect(validateModuleDescriptor({ ...clock, face })).toEqual(expect.arrayContaining([
       "Unknown custom-face command: nope", "Command is hidden from node face: play",
     ]));
+  });
+});
+
+describe("opening a document saved before a module gained a setting", () => {
+  it("gives every node the parameters its module now declares, keeping what it has", () => {
+    const graph = emptyGraph();
+    const node = createNode(M_LAB_TYPES.noteSeq, "ns", { x: 0, y: 0 }, { octave: 2 });
+    delete node.parameters.presets;
+    delete node.parameters["preset-slot"];
+    graph.nodes.ns = node;
+    const filled = withDeclaredParameters(graph);
+    expect(filled.nodes.ns.parameters.presets).toEqual([]);
+    expect(filled.nodes.ns.parameters["preset-slot"]).toBe(-1);
+    expect(filled.nodes.ns.parameters.octave).toBe(2);
+    expect(graph.nodes.ns.parameters.presets).toBeUndefined();
   });
 });

@@ -119,17 +119,17 @@ describe("runtime bridge", () => {
   it("hands any other command to the node's own processor", () => {
     const command = vi.fn(() => true);
     const runtime = { ...runtimeStub(), command };
-    const result = executeRuntimeCommand(runtime, node("cond", "m.lab-clock"), "tap", "Tap");
+    const result = executeRuntimeCommand(runtime, node("cond", "m.lab-conductor"), "tap", "Tap");
     expect(command).toHaveBeenCalledWith("cond", "tap");
     expect(result.message).toBe("cond: Tap");
   });
 
-  it("runs the transport from M Clock, and sends its Sync to the Clock itself", () => {
+  it("runs the transport from M Conductor, and sends its Sync to the Conductor itself", () => {
     const command = vi.fn(() => true);
     const runtime = { ...runtimeStub(), command };
-    executeRuntimeCommand(runtime, node("co", "m.lab-clock"), "play", "Play");
-    executeRuntimeCommand(runtime, node("co", "m.lab-clock"), "stop", "Stop");
-    executeRuntimeCommand(runtime, node("co", "m.lab-clock"), "sync", "Sync");
+    executeRuntimeCommand(runtime, node("co", "m.lab-conductor"), "play", "Play");
+    executeRuntimeCommand(runtime, node("co", "m.lab-conductor"), "stop", "Stop");
+    executeRuntimeCommand(runtime, node("co", "m.lab-conductor"), "sync", "Sync");
     expect(runtime.start).toHaveBeenCalled();
     expect(runtime.stop).toHaveBeenCalled();
     expect(runtime.sync).not.toHaveBeenCalled();

@@ -12,7 +12,7 @@ import { useRef, useState, type ReactNode } from "react";
 import "./n4.css";
 import type { CyclicStep, NoteOrderMix } from "../../../engine/types";
 import { normalizeCyclicStep } from "../../../engine/cyclic";
-import { ACTION_SHARES, formatLaneValue, laneValueFromY, polyNoteName, splitFromDrag, stepFromX, type LaneFormat, type RowAction } from "./logic";
+import { ACTION_SHARES, faderUnder, formatLaneValue, laneValueFromY, polyNoteName, rangeDrag, splitFromDrag, stepFromX, tempoRangeDrag, type LaneFormat, type RowAction } from "./logic";
 
 /** Numerology colours a sequencer's handles by its kind. */
 export type N4Accent = "orange" | "red" | "blue" | "yellow" | "tan" | "mauve" | "purple";
@@ -64,11 +64,13 @@ export function N4Spinner<T extends string | number>({ label, value, options, on
   );
 }
 
-export function N4Button({ on, onClick, children, title, small, className = "" }: {
-  on?: boolean; onClick: (event: React.MouseEvent) => void; children: ReactNode; title?: string; small?: boolean; className?: string;
+export function N4Button({ on, onClick, children, title, small, icon, className = "" }: {
+  on?: boolean; onClick: (event: React.MouseEvent) => void; children: ReactNode; title?: string; small?: boolean;
+  /** A square key for a glyph or a letter, as tight as a transport button gets. */
+  icon?: boolean; className?: string;
 }) {
   return (
-    <button type="button" className={`n4-button${on ? " is-on" : ""}${small ? " n4-button--small" : ""} ${className}`}
+    <button type="button" className={`n4-button${on ? " is-on" : ""}${small ? " n4-button--small" : ""}${icon ? " n4-button--icon" : ""} ${className}`}
       aria-pressed={on === undefined ? undefined : on} title={title} onClick={onClick}>{children}</button>
   );
 }
@@ -253,7 +255,7 @@ export function LaneSelect<T extends string>({ options, value, onChange }: {
  * end marker, because each cycle has its own length, and ranges — shift-drag
  * a step open into a span of levels and M picks inside it at random.
  */
-export function SliderLane({ values, window: w, min, max, step, format, onChange, onRange, ownLength, onOwnLength, playing, active, display }: {
+export function SliderLane({ values, window: w, min, max, step, format, onChange, onRange, ownLength, onOwnLength, playing, active, display, height, compact, bipolar, fixedFirst }: {
   values: readonly (number | CyclicStep)[];
   window: Window; min: number; max: number; step: number; format: LaneFormat;
   onChange: (step: number, value: number) => void;
@@ -261,6 +263,12 @@ export function SliderLane({ values, window: w, min, max, step, format, onChange
   ownLength?: number; onOwnLength?: (length: number) => void;
   playing: number; active?: (step: number) => boolean;
   display?: (value: number | CyclicStep) => string;
+  /** A thin lane, as Consequence stacks them: values printed inside each step. */
+  compact?: boolean; height?: number;
+  /** Bars grow from the middle, for values either side of zero. */
+  bipolar?: boolean;
+  /** Step 1 cannot be moved (Time Distortion's first boundary). */
+  fixedFirst?: boolean;
 }) {
   const anchor = useRef<{ step: number; level: number } | null>(null);
   const drag = usePointerDrag((x, y, rect, phase, event) => {
@@ -271,33 +279,53 @@ export function SliderLane({ values, window: w, min, max, step, format, onChange
     else onChange(at, value);
   });
   const lengthDrag = usePointerDrag((x, _y, rect) => onOwnLength?.(w.first + stepFromX(x, rect.width, w.count) + 1));
-  const y = (v: number) => `${(1 - (v - min) / Math.max(1e-9, max - min)) * 100}%`;
+  const t = (v: number) => (v - min) / Math.max(1e-9, max - min);
+  const y = (v: number) => `${(1 - t(v)) * 100}%`;
+  const text = (s: number) => (display ? display(values[s] ?? min) : formatLaneValue(values[s] ?? min, format));
   return (
-    <div className="n4-lane">
-      {ownLength !== undefined && (
+    <div className={`n4-lane${compact ? " n4-lane--compact" : ""}`}>
+      {ownLength !== undefined && !compact && (
         <div className="n4-lane__length" ref={lengthDrag.ref} onPointerDown={lengthDrag.onPointerDown} data-n4-control="true"
           title="This cycle's own length: drag the red marker">
           {columns(w).map((s) => <span key={s} className={s === ownLength - 1 ? "is-end" : ""}>{s === ownLength - 1 ? "◀" : ""}</span>)}
         </div>
       )}
-      <div className="n4-lane__area" ref={drag.ref} onPointerDown={drag.onPointerDown} data-n4-control="true"
+      <div className="n4-lane__area" ref={drag.ref} onPointerDown={(event) => {
+        // In a thin lane the length marker rides along the top edge: grab it there.
+        if (compact && ownLength !== undefined && onOwnLength && (event.target as Element).closest(".n4-lane__end")) {
+          lengthDrag.onPointerDown(event);
+          return;
+        }
+        drag.onPointerDown(event);
+      }} data-n4-control="true" style={height ? { height } : undefined}
         title={onRange ? "Drag to set; shift-drag to open a step into a random range" : "Drag to set"}>
         {columns(w).map((s) => {
           const raw = values[s] ?? min;
           const dim = (ownLength !== undefined && s >= ownLength) || (active && !active(s));
           const range = typeof raw === "object" ? normalizeCyclicStep(raw) : null;
+          const point = typeof raw === "object" ? normalizeCyclicStep(raw).min : raw;
+          const zero = bipolar ? t(0) : 0;
           return (
             <div key={s} className={`n4-lane__col${dim ? " is-dim" : ""}${s === playing ? " is-playing" : ""}${s % 4 === 0 ? " is-beat" : ""}`}>
-              {range && range.min !== range.max
-                ? <span className="n4-lane__range" style={{ top: y(range.max), bottom: `calc(100% - ${y(range.min)})` }} />
-                : <span className="n4-lane__handle" style={{ top: y(typeof raw === "object" ? normalizeCyclicStep(raw).min : raw) }} />}
+              {compact
+                ? range && range.min !== range.max
+                  ? <span className="n4-lane__bar is-range" style={{ bottom: `${t(range.min) * 100}%`, height: `${(t(range.max) - t(range.min)) * 100}%` }} />
+                  : <span className={`n4-lane__bar${fixedFirst && s === 0 ? " is-fixed" : ""}`}
+                    style={{ bottom: `${Math.min(zero, t(point)) * 100}%`, height: `${Math.max(2, Math.abs(t(point) - zero) * 100)}%` }} />
+                : range && range.min !== range.max
+                  ? <span className="n4-lane__range" style={{ top: y(range.max), bottom: `calc(100% - ${y(range.min)})` }} />
+                  : <span className="n4-lane__handle" style={{ top: y(point) }} />}
+              {compact && <span className="n4-lane__text">{fixedFirst && s === 0 ? "Fixed" : text(s)}</span>}
+              {compact && ownLength !== undefined && s === ownLength - 1 && <span className="n4-lane__end" title="This cycle's own length: drag">◀</span>}
             </div>
           );
         })}
       </div>
-      <div className="n4-lane__values">
-        {columns(w).map((s) => <span key={s}>{display ? display(values[s] ?? min) : formatLaneValue(values[s] ?? min, format)}</span>)}
-      </div>
+      {!compact && (
+        <div className="n4-lane__values">
+          {columns(w).map((s) => <span key={s}>{text(s)}</span>)}
+        </div>
+      )}
     </div>
   );
 }
@@ -403,13 +431,250 @@ export function N4Fader({ value, min, max, step, onChange, label }: {
   );
 }
 
-/** The ▶ triangle at the bottom left, and the settings strip it opens (manual p93). */
-export function AdvancedPanel({ open, onToggle, children }: { open: boolean; onToggle: () => void; children: ReactNode }) {
+/** The ▶ triangle that opens a module's advanced settings (manual p93). */
+export function AdvancedToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" className={`n4-advanced-toggle${open ? " is-open" : ""}`} aria-expanded={open}
+      aria-label="Advanced settings" title="Advanced settings" onClick={(event) => { event.stopPropagation(); onToggle(); }}>▶</button>
+  );
+}
+
+/**
+ * The advanced settings strip. Its triangle sits wherever the face has room
+ * for it — pass `toggle={false}` and place an AdvancedToggle yourself — so it
+ * never costs a row of its own.
+ */
+export function AdvancedPanel({ open, onToggle, children, toggle = true }: { open: boolean; onToggle: () => void; children: ReactNode; toggle?: boolean }) {
   return (
     <>
-      <button type="button" className={`n4-advanced-toggle${open ? " is-open" : ""}`} aria-expanded={open}
-        aria-label="Advanced settings" onClick={(event) => { event.stopPropagation(); onToggle(); }}>▶</button>
+      {toggle && <AdvancedToggle open={open} onToggle={onToggle} />}
       {open && <div className="n4-advanced">{children}</div>}
     </>
+  );
+}
+
+/* ===== Controls that hold two values, or many ===== */
+
+/**
+ * The step chip row: Skip, Mute and Random Jump on one row of chips, one per
+ * step, as Omnisphere's arpeggiator puts a modifier over each step. Click
+ * cycles none → Skip → Mute; Alt-click steps the Random Jump chance; Shift-click
+ * selects the step for relative edits.
+ */
+export function StepChips({ window: w, skip, mute, jump, select, onToggle, onAction, onClear }: {
+  window: Window; skip: readonly boolean[]; mute: readonly boolean[]; jump: readonly number[]; select: readonly boolean[];
+  onToggle: (step: number, how: "chip" | "jump" | "select") => void;
+  onAction: (row: "skip" | "mute" | "select", action: RowAction, on: boolean) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="n4-row">
+      <div className="n4-row__menu">
+        <button type="button" className="n4-gear" aria-label="Step actions" aria-expanded={open}
+          onClick={(event) => { event.stopPropagation(); setOpen(!open); }}>⚙▾</button>
+        <span className="n4-label">Step</span>
+        {open && (
+          <div className="n4-popup n4-popup--wide" role="menu" onClick={(event) => event.stopPropagation()}>
+            {(["skip", "mute", "select"] as const).map((row) => (
+              <div key={row} className="n4-popup__group">
+                {[true, false].map((on) => (Object.keys(ACTION_SHARES) as RowAction[]).map((action) => (
+                  <button type="button" role="menuitem" key={`${row}-${on}-${action}`}
+                    onClick={() => { onAction(row, action, on); setOpen(false); }}>
+                    {on ? "" : "Un"}{on ? row[0].toUpperCase() + row.slice(1) : row} {ACTION_LABELS[action]}
+                  </button>
+                )))}
+              </div>
+            ))}
+          </div>
+        )}
+        <button type="button" className="n4-clear" aria-label="Clear the step chips" onClick={(event) => { event.stopPropagation(); onClear(); }}>×</button>
+      </div>
+      <div className="n4-chips">
+        {columns(w).map((step) => {
+          const state = skip[step] ? "skip" : mute[step] ? "mute" : "";
+          const chance = jump[step] ?? 0;
+          return (
+            <button type="button" key={step}
+              className={`n4-chip${state ? ` is-${state}` : ""}${select[step] ? " is-selected" : ""}`}
+              aria-label={`Step ${step + 1}${state ? ` ${state}` : ""}${chance ? `, random jump ${Math.round(chance * 100)}%` : ""}`}
+              title="Click: Skip / Mute · Alt-click: Random Jump · Shift-click: select"
+              onClick={(event) => { event.stopPropagation(); onToggle(step, event.altKey ? "jump" : event.shiftKey ? "select" : "chip"); }}>
+              {state === "skip" ? "S" : state === "mute" ? "M" : ""}
+              {chance > 0 && <i className="n4-chip__jump" style={{ opacity: 0.35 + chance * 0.65 }}><DiceIcon size={9} /></i>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** A die, drawn: the ⚄ character is missing from too many fonts to rely on. */
+export function DiceIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg className="n4-dice-icon" width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="13" height="13" rx="3" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      {[[5, 5], [11, 5], [8, 8], [5, 11], [11, 11]].map(([cx, cy]) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.3" fill="currentColor" />)}
+    </svg>
+  );
+}
+
+/** The dice on a lane: randomize a Few, Some, Most or All of just that lane. */
+export function LaneDice({ label, onPick }: { label: string; onPick: (share: "few" | "some" | "most" | "all") => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="n4-dice">
+      <button type="button" aria-label={`Randomize ${label}`} aria-expanded={open} title={`Randomize ${label}`}
+        onClick={(event) => { event.stopPropagation(); setOpen(!open); }}><DiceIcon /></button>
+      {open && (
+        <div className="n4-popup" role="menu" onClick={(event) => event.stopPropagation()}>
+          {(["few", "some", "most", "all"] as const).map((share) => (
+            <button type="button" role="menuitem" key={share} onClick={() => { onPick(share); setOpen(false); }}>
+              Randomize {share === "few" ? "a Few" : share[0].toUpperCase() + share.slice(1)}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
+/** A two-thumb slider for a low/high pair: Velocity Range, a tempo range. */
+export function RangeSlider({ label, low, high, min, max, step = 1, onChange, format = String }: {
+  label: string; low: number; high: number; min: number; max: number; step?: number;
+  onChange: (low: number, high: number) => void; format?: (value: number) => string;
+}) {
+  const thumb = useRef<"low" | "high">("low");
+  const at = (v: number) => `${((v - min) / Math.max(1e-9, max - min)) * 100}%`;
+  const drag = usePointerDrag((x, _y, rect, phase) => {
+    const raw = min + (Math.max(0, Math.min(rect.width, x)) / rect.width) * (max - min);
+    const value = Math.round(raw / step) * step;
+    if (phase === "down") thumb.current = Math.abs(value - low) <= Math.abs(value - high) ? "low" : "high";
+    const next = rangeDrag({ low, high }, value, thumb.current);
+    onChange(next.low, next.high);
+  });
+  return (
+    <div className="n4-range">
+      <div className="n4-range__head"><span className="n4-label">{label}</span><span className="n4-value">{format(low)}–{format(high)}</span></div>
+      <div className="n4-range__track" ref={drag.ref} onPointerDown={drag.onPointerDown} data-n4-control="true"
+        role="group" aria-label={`${label} ${format(low)} to ${format(high)}`}>
+        <span className="n4-range__fill" style={{ left: at(low), right: `calc(100% - ${at(high)})` }} />
+        <span className="n4-range__thumb" style={{ left: at(low) }} />
+        <span className="n4-range__thumb" style={{ left: at(high) }} />
+      </div>
+    </div>
+  );
+}
+
+/** M's Conducting tempo bar: low · tempo · high on one track (110 · 120 · 130). */
+export function TempoBar({ low, tempo, high, min = 20, max = 300, onChange }: {
+  low: number; tempo: number; high: number; min?: number; max?: number;
+  onChange: (next: { low: number; tempo: number; high: number }) => void;
+}) {
+  const part = useRef<"low" | "high" | "tempo">("tempo");
+  const at = (v: number) => `${((v - min) / (max - min)) * 100}%`;
+  const drag = usePointerDrag((x, _y, rect, phase) => {
+    const value = min + (Math.max(0, Math.min(rect.width, x)) / rect.width) * (max - min);
+    if (phase === "down") {
+      const d = (v: number) => Math.abs(v - value);
+      part.current = d(tempo) <= Math.min(d(low), d(high)) ? "tempo" : d(low) < d(high) ? "low" : "high";
+    }
+    onChange(tempoRangeDrag({ low, tempo, high }, part.current, value));
+  });
+  return (
+    <div className="n4-tempo">
+      <div className="n4-tempo__track" ref={drag.ref} onPointerDown={drag.onPointerDown} data-n4-control="true"
+        role="group" aria-label={`Tempo ${tempo}, conducted between ${low} and ${high}`}>
+        <span className="n4-tempo__span" style={{ left: at(low), right: `calc(100% - ${at(high)})` }} />
+        <span className="n4-tempo__end" style={{ left: at(low) }} />
+        <span className="n4-tempo__end" style={{ left: at(high) }} />
+        <span className="n4-tempo__now" style={{ left: at(tempo) }} />
+      </div>
+      <div className="n4-tempo__legend">
+        <span className="n4-value">{low}</span>
+        <span><b className="n4-value n4-value--big">{tempo}</b> <span className="n4-label">BPM</span></span>
+        <span className="n4-value">{high}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Faders side by side, one per voice — swept in one drag, so four voices can
+ * be set in a single gesture, as an ADSR fader cluster is.
+ */
+export function VoiceFaders({ values, min, max, step, onChange, format, label }: {
+  values: readonly number[]; min: number; max: number; step: number;
+  onChange: (index: number, value: number) => void; format: (value: number) => string; label: string;
+}) {
+  const drag = usePointerDrag((x, y, rect) => {
+    const { index, value } = faderUnder(x, y, rect.width, rect.height, values.length, min, max, step);
+    onChange(index, value);
+  });
+  const t = (v: number) => (v - min) / Math.max(1e-9, max - min);
+  const zero = min < 0 && max > 0 ? t(0) : 0;
+  return (
+    <div className="n4-vfaders">
+      <div className="n4-vfaders__area" ref={drag.ref} onPointerDown={drag.onPointerDown} data-n4-control="true"
+        role="group" aria-label={label}>
+        {values.map((v, i) => (
+          <div key={i} className={`n4-vfaders__col uvoice uvoice--${i + 1}`}>
+            <span className="n4-vfaders__bar" style={{ bottom: `${Math.min(zero, t(v)) * 100}%`, height: `${Math.max(2, Math.abs(t(v) - zero) * 100)}%` }} />
+          </div>
+        ))}
+      </div>
+      <div className="n4-vfaders__legend">
+        {values.map((v, i) => <span key={i} className={`uvoice uvoice--${i + 1}`}><b>{i + 1}</b> {format(v)}</span>)}
+      </div>
+    </div>
+  );
+}
+
+/** ‹ value › — a stepper, for Octave and other short ranges. */
+export function N4Stepper({ label, value, min, max, onChange, format = (v: number) => (v > 0 ? `+${v}` : String(v)) }: {
+  label: string; value: number; min: number; max: number; onChange: (value: number) => void; format?: (value: number) => string;
+}) {
+  return (
+    <div className="n4-stepper">
+      <span className="n4-label">{label}</span>
+      <span className="n4-stepper__control">
+        <button type="button" aria-label={`${label} down`} onClick={() => onChange(Math.max(min, value - 1))}>‹</button>
+        <span className="n4-value">{format(value)}</span>
+        <button type="button" aria-label={`${label} up`} onClick={() => onChange(Math.min(max, value + 1))}>›</button>
+      </span>
+    </div>
+  );
+}
+
+/** A single value as a label, its value, and a thin track under them (one line, one gesture). */
+export function N4Slider({ label, value, min, max, step = 0.01, onChange, format = (v: number) => v.toFixed(2) }: {
+  label: string; value: number; min: number; max: number; step?: number; onChange: (value: number) => void; format?: (value: number) => string;
+}) {
+  const drag = usePointerDrag((x, _y, rect) => {
+    const raw = min + (Math.max(0, Math.min(rect.width, x)) / rect.width) * (max - min);
+    onChange(Number((Math.round(raw / step) * step).toFixed(4)));
+  });
+  const at = `${((value - min) / Math.max(1e-9, max - min)) * 100}%`;
+  return (
+    <div className="n4-range">
+      <div className="n4-range__head"><span className="n4-label">{label}</span><span className="n4-value">{format(value)}</span></div>
+      <div className="n4-range__track" ref={drag.ref} onPointerDown={drag.onPointerDown} data-n4-control="true"
+        role="slider" aria-label={label} aria-valuemin={min} aria-valuemax={max} aria-valuenow={value}>
+        <span className="n4-range__fill" style={{ left: 0, right: `calc(100% - ${at})` }} />
+        <span className="n4-range__thumb" style={{ left: at }} />
+      </div>
+    </div>
+  );
+}
+
+/** A lane's label: its name, its own cycle length, and its dice. */
+export function LaneLabel({ name, length, onDice }: { name: string; length?: number; onDice?: (share: "few" | "some" | "most" | "all") => void }) {
+  return (
+    <div className="n4-lanelabel">
+      <span className="n4-label">{name}</span>
+      {length !== undefined && <span className="n4-lanelabel__len" title="This cycle's own length">◀{length}</span>}
+      {onDice && <LaneDice label={name} onPick={onDice} />}
+    </div>
   );
 }
