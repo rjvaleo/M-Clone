@@ -6,6 +6,8 @@
  */
 
 import { M_LAB_TYPES } from "../../registry/mLabModules";
+import type { GraphDocument } from "../../model/graph";
+import { sameItems, useGraphSelection } from "../graphStore";
 import { variablesStateOf } from "../../mlab/links";
 import { activate, setTableValue, type MVariable, type VariablesState } from "../../mlab/variables";
 import { N4Panel } from "../n4/kit";
@@ -18,9 +20,11 @@ const TITLES: Record<Table, string> = {
   density: "Note Density", velocityRange: "Velocity Range", transposition: "Transposition", noteOrder: "Note Order",
 };
 
+const variablesOnly = (graph: GraphDocument) => [findNodeOfType(graph, M_LAB_TYPES.variables)];
+
 function EditWindow({ table }: { table: Table }) {
   const host = useMLabHost();
-  const variables = findNodeOfType(host?.graph, M_LAB_TYPES.variables);
+  const variables = useGraphSelection(variablesOnly, sameItems)[0];
   if (!host || !variables) {
     return <N4Panel accent="orange"><p className="n4-muted m-ed__empty">Add M Variables to the canvas: this edits its values.</p></N4Panel>;
   }

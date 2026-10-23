@@ -55,7 +55,7 @@ function ConductorBody({ node, setParameter, setParameters }: MLabFaceProps) {
       setParameter("pads", pads.map((pad, i) => (i === index ? { ...pad, x, y } : pad)) as never);
       return;
     }
-    const variables = findNodeOfType(host?.graph, M_LAB_TYPES.variables);
+    const variables = findNodeOfType(host?.getGraph(), M_LAB_TYPES.variables);
     const out = conductUpdates(pads, node.parameters, variables ? variablesStateOf(variables) : null, x, y);
     setParameters(out.conductor);
     if (out.variables && variables) host?.setNodeParameters(variables.id, { active: out.variables.active as never });

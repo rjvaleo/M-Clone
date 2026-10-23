@@ -18,7 +18,10 @@ export type MLabFaceProps = {
 };
 
 export type MLabHost = {
-  graph: GraphDocument;
+  /** The patch as it is now, for reading at the moment of an edit. To show
+   * another module, select it with useGraphSelection instead, so the face
+   * re-renders when that module changes and not on every edit. */
+  getGraph: () => GraphDocument;
   /** Write parameters on another node, as its own face would. */
   setNodeParameters: (nodeId: string, values: Record<string, JsonValue>) => void;
   /** Send a command to a node's processor. */

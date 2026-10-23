@@ -1,6 +1,7 @@
 import { Profiler, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ProfilerOnRenderCallback } from "react";
 import { perf } from "../perf/recorder";
 import { StatusStore, StatusStoreContext, useNodeStatus } from "./statusStore";
+import { GraphStore, GraphStoreContext } from "./graphStore";
 import { PerfPanel } from "./PerfPanel";
 import { noteOrderHandleLayout, setNoteOrderBoundary } from "../../engine/transform";
 import { createModularDocument, decodeModularDocument } from "../document/document";
@@ -2326,8 +2327,10 @@ export function ModularApp() {
       }
     },
   }), []);
+  // Stable for the life of the app: faces read the patch through the graph
+  // store (graphStore.ts), each selecting only what it shows.
   const mlabHost = useMemo<MLabHost>(() => ({
-    graph,
+    getGraph: () => latest.current.graph,
     setNodeParameters: (nodeId, values) => {
       latest.current.dispatch({ type: "set-parameters", nodeId, values });
       for (const [parameterId, value] of Object.entries(values)) {
@@ -2340,12 +2343,15 @@ export function ModularApp() {
       if (node) latest.current.handleNodeCommand(node, commandId, label);
     },
     readScope: (nodeId, into) => audioRef.current?.readScope(nodeId, into) ?? false,
-  }), [graph]);
+  }), []);
+  const graphStore = useMemo(() => new GraphStore(graph), []);
+  useLayoutEffect(() => { graphStore.set(graph); }, [graph, graphStore]);
 
   return <SoundPoolContext.Provider value={{ assets, preview: playAsset }}>
   <KitContext.Provider value={kitId}>
   <MFaceHostContext.Provider value={{ themeId, onSelectTheme: setThemeId, kitId, onSelectKit: setKitId, zoom }}>
   <StatusStoreContext.Provider value={statusStore}>
+  <GraphStoreContext.Provider value={graphStore}>
   <MLabHostContext.Provider value={mlabHost}>
   <Profiler id="render whole app" onRender={recordRender}>
   <main className="mm-app" onClick={() => setMenu(null)}>
@@ -2506,6 +2512,7 @@ export function ModularApp() {
   </main>
   </Profiler>
   </MLabHostContext.Provider>
+  </GraphStoreContext.Provider>
   </StatusStoreContext.Provider>
   </MFaceHostContext.Provider>
   </KitContext.Provider>
