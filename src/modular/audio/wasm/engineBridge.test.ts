@@ -1136,3 +1136,35 @@ describe("The modules ported for the Rust default", () => {
     expect(variantOf("m.audio-dp4", {})).toBe(0 | (0 << 2) | (1 << 4) | (0 << 6) | (1 << 7) | (2 << 10) | (4 << 13) | (0 << 16));
   });
 });
+
+describe("Values the plan files as structure", () => {
+  // Web Audio rebuilds a node for these — a convolver's impulse, a wave's
+  // oscillator type — so the plan carries them as structure. Rust takes them
+  // as plain values, and a bridge that read only `parameters` left them all
+  // at their defaults: a reverb whose tail never moved, a crusher stuck at its
+  // default depth, a synth that only ever played its default waves.
+  it("sends a structural number that has an engine index", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([
+      node("r", "m.audio-reverb", {}, { structure: { "tail-seconds": 6, "decay-rate": 2, "impulse-seed": 3 } }),
+      node("b", "m.audio-bitcrusher", {}, { structure: { "bit-depth": 5 } }),
+    ]));
+    const [r, b] = ["r", "b"].map((id) => rack.moduleIdOf(id)!);
+    expect(engine.params.get(`${r}.${PARAM_INDICES["m.audio-reverb"]["tail-seconds"]}`)).toBe(6);
+    expect(engine.params.get(`${r}.${PARAM_INDICES["m.audio-reverb"]["decay-rate"]}`)).toBe(2);
+    expect(engine.params.get(`${b}.${PARAM_INDICES["m.audio-bitcrusher"]["bit-depth"]}`)).toBe(5);
+  });
+
+  it("sends a synth wave as the number Rust's Wave uses", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth", {}, {
+      structure: { "osc1-wave": "sine", "osc2-wave": "square", "osc3-wave": "pulse" },
+    })]));
+    const s = rack.moduleIdOf("s")!;
+    const at = (name: string) => engine.params.get(`${s}.${PARAM_INDICES["m.synth"][name]}`);
+    // `Wave` in rust/dsp-core/src/osc.rs: sine, triangle, sawtooth, square, pulse.
+    expect([at("osc1-wave"), at("osc2-wave"), at("osc3-wave")]).toEqual([0, 3, 4]);
+  });
+});
