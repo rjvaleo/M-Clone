@@ -21,7 +21,7 @@ import { randomUnit, streamKey } from "./rng";
 import { PPQN, stepTicks, type Tick, type TempoMap } from "./time";
 import { findScale, scaleById, type Scale } from "../tuning/scales";
 import { snapToChord, snapToScale, type ChordShape, type SnapDirection } from "../tuning/quantize";
-import { MClockProcessor, MConductorProcessor, MNoteSeqProcessor, MOrchestraProcessor } from "./mlabProcessors";
+import { MConductorProcessor, MNoteSeqProcessor, MOrchestraProcessor } from "./mlabProcessors";
 
 export type ProcessWindow = {
   /** Inclusive start of the window in ticks. */
@@ -1315,7 +1315,6 @@ export const PROCESSOR_FACTORIES: Record<
   "m.scale-quantizer": (build) => new ScaleQuantizerProcessor(build),
   "m.chord-quantizer": (build) => new ChordQuantizerProcessor(build),
   "m.midi-output": (build) => new MidiOutputProcessor(build),
-  "m.lab-clock": (build) => new MClockProcessor(build),
   "m.lab-conductor": (build) => new MConductorProcessor(build),
   "m.lab-noteseq": (build) => new MNoteSeqProcessor(build),
   "m.lab-orchestra": (build) => new MOrchestraProcessor(build),

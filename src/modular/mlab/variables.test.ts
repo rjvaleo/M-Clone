@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makePresetPositions } from "../../engine/variables";
+import { storePreset } from "./presets";
 import {
   M_VARIABLES,
   activate,
@@ -64,7 +65,25 @@ describe("M Variables: writing positions into the other modules", () => {
     expect(one.group).toBe(2);
     expect(one.transposition).toBe(makePresetPositions().transposition.slots[3][0]);
     expect(three.transposition).toBe(makePresetPositions().transposition.slots[3][2]);
-    expect(Object.keys(one)).toEqual(expect.arrayContaining(["density", "vel-low", "vel-high", "note-order", "cycle-positions"]));
+    expect(Object.keys(one)).toEqual(expect.arrayContaining(["density", "vel-low", "vel-high", "note-order", "cycle-positions", "warp-position"]));
+  });
+
+  it("a Pattern Group position recalls the NoteSeq preset on that slot, once", () => {
+    const state = activate(defaultVariables(), "patternGroup", 2);
+    const presets = storePreset([], 2, "Chorus", { "rate-den": 16, octave: 1 });
+    const parameters = { voice: 1, "preset-slot": 0 } as never;
+    const first = resolveTargets(state, [{ kind: "noteSeq", nodeId: "ns", parameters: { ...(parameters as object), presets } as never }])[0].values;
+    expect(first).toMatchObject({ "rate-den": 16, octave: 1, "preset-slot": 2 });
+    expect(first.group).toBeUndefined();
+    // Once recalled, editing the module is not undone by the next pass.
+    const after = resolveTargets(state, [{ kind: "noteSeq", nodeId: "ns", parameters: { ...(parameters as object), presets, ...first, octave: 3 } as never }]);
+    expect(after[0]?.values.octave).toBeUndefined();
+  });
+
+  it("an empty slot falls back to M's own pattern group", () => {
+    const state = activate(defaultVariables(), "patternGroup", 4);
+    const updates = resolveTargets(state, [seq("ns", 1)]);
+    expect(updates[0].values.group).toBe(4);
   });
 
   it("points the cycles, Time Warps and M Orchestra at their positions", () => {

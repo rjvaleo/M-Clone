@@ -200,6 +200,15 @@ describe("Run Mode, Sync and Warp In", () => {
     expect(notes.map((n) => [n.atTick, n.note])).toEqual([[0, 60], [720, 62], [1440, 64], [1920, 60], [2640, 62], [3360, 64]]);
   });
 
+  it("plays its own Warp lane when no Time Warp is wired in", () => {
+    const bank = { offsets: [0, 0.3, -0.2, 0.1], length: 4, denominator: 8 };
+    const warp = Array.from({ length: 6 }, (_, i) => (i === 2 ? bank : { offsets: [0], length: 1, denominator: 8 }));
+    const notes = noteSeq({ warp, "warp-position": 2 }).run(4000);
+    const map = warpToTimeMap(bank);
+    expect(notes.map((n) => n.atTick)).toEqual([0, 720, 1440, 2160, 2880, 3600]
+      .map((tick) => Math.round(distortClockTicks(map, tick))).filter((tick) => tick < 4000));
+  });
+
   it("lands each step on M Time Warp's curve when one is wired in", () => {
     const bank = { offsets: [0, 0.3, -0.2, 0.1], length: 4, denominator: 8 };
     const banks = Array.from({ length: 6 }, (_, i) => (i === 0 ? bank : { offsets: [0], length: 1, denominator: 8 }));

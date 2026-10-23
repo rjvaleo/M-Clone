@@ -27,7 +27,7 @@ import {
   type MVariable, type VariablesState,
 } from "../../mlab/variables";
 import type { GraphDocument, NodeInstance } from "../../model/graph";
-import { N4Box, N4Button, N4Panel, N4Spinner } from "../n4/kit";
+import { N4Box, N4Button, N4Panel, N4Spinner, RangeSlider, SplitBar, VoiceFaders } from "../n4/kit";
 import { param, useMLabHost, type MLabFaceProps } from "./common";
 
 /** M shows four Voices in each miniature. */
@@ -165,55 +165,47 @@ export function VariablesFace({ node, setParameter, setParameters }: MLabFacePro
 }
 
 /**
- * The values of the active Position of the Variable being edited, one line
- * per Voice, as M's edit windows lay them out. The Cyclic, Time Distortion
- * and Orchestration Positions are edited on the modules that hold them.
+ * The values of the active Position of the Variable being edited, one per
+ * Voice. Density and Transposition are faders side by side, so all four
+ * voices can be swept in one drag; Velocity Range is a two-thumb slider per
+ * voice; Note Order is each voice's Orig | Scram | Rand bar. The Cyclic, Time
+ * Distortion and Orchestration Positions are edited on the modules that hold
+ * them.
  */
 function ValueEditor({ state, variable, write }: {
   state: VariablesState; variable: MVariable; write: (next: VariablesState) => void;
 }) {
   const position = state.active[variable];
-  const title = `${variable === "noteOrder" ? "Note Order" : variable === "velocityRange" ? "Velocity Range"
-    : variable === "density" ? "Note Density" : variable === "transposition" ? "Transposition" : variable} — position ${POSITION_LABELS[position]}`;
-  const rows = VOICES.map((v) => {
-    if (variable === "density") {
-      const value = state.tables.density[position][v];
-      return <label key={v} className={`m-varwin__voice uvoice uvoice--${v + 1}`}><b>{v + 1}</b>
-        <input type="range" min={0} max={100} value={Math.round(value * 100)}
-          onChange={(event) => write(setTableValue(state, "density", position, v, Number(event.currentTarget.value) / 100))} />
-        <span>{Math.round(value * 100)}%</span></label>;
-    }
-    if (variable === "transposition") {
-      const value = state.tables.transposition[position][v];
-      return <label key={v} className={`m-varwin__voice uvoice uvoice--${v + 1}`}><b>{v + 1}</b>
-        <input type="range" min={-24} max={24} value={value}
-          onChange={(event) => write(setTableValue(state, "transposition", position, v, Number(event.currentTarget.value)))} />
-        <span>{value > 0 ? `+${value}` : value}</span></label>;
-    }
-    if (variable === "velocityRange") {
-      const range = state.tables.velocityRange[position][v];
-      const set = (low: number, high: number) => write(setTableValue(state, "velocityRange", position, v, { low, high }));
-      return <label key={v} className={`m-varwin__voice uvoice uvoice--${v + 1}`}><b>{v + 1}</b>
-        <input type="range" min={1} max={127} value={range.low} onChange={(event) => set(Number(event.currentTarget.value), range.high)} />
-        <input type="range" min={1} max={127} value={range.high} onChange={(event) => set(range.low, Number(event.currentTarget.value))} />
-        <span>{range.low}–{range.high}</span></label>;
-    }
-    if (variable === "noteOrder") {
-      const mix = state.tables.noteOrder[position][v];
-      const set = (original: number, utterly: number) => {
-        const o = Math.max(0, Math.min(100, original));
-        const u = Math.max(0, Math.min(100 - o, utterly));
-        write(setTableValue(state, "noteOrder", position, v, { original: o, cyclic: 100 - o - u, utterly: u }));
-      };
-      return <label key={v} className={`m-varwin__voice uvoice uvoice--${v + 1}`}><b>{v + 1}</b>
-        <input type="range" min={0} max={100} value={mix.original} aria-label="Original" onChange={(event) => set(Number(event.currentTarget.value), mix.utterly)} />
-        <input type="range" min={0} max={100} value={mix.utterly} aria-label="Utterly random" onChange={(event) => set(mix.original, Number(event.currentTarget.value))} />
-        <span>{mix.original} / {mix.cyclic} / {mix.utterly}</span></label>;
-    }
-    return null;
-  });
-  if (rows.every((row) => row === null)) {
-    return <p className="m-varwin__note">This Variable's Positions are edited on the module that plays them.</p>;
+  const names: Partial<Record<MVariable, string>> = {
+    density: "Note Density", transposition: "Transposition", velocityRange: "Velocity Range", noteOrder: "Note Order",
+  };
+  const title = names[variable];
+  if (!title) return <p className="m-varwin__note">This Variable's Positions are edited on the module that plays them.</p>;
+  const heading = <div className="n4-lanelabel"><span className="n4-label">{title}</span><span className="n4-value">Position {POSITION_LABELS[position]}</span></div>;
+  if (variable === "density" || variable === "transposition") {
+    const values = VOICES.map((v) => state.tables[variable][position][v]);
+    return <div className="m-varwin__editor">{heading}
+      <VoiceFaders label={`${title} per voice`} values={values}
+        min={variable === "density" ? 0 : -24} max={variable === "density" ? 1 : 24} step={variable === "density" ? 0.01 : 1}
+        format={(v) => (variable === "density" ? `${Math.round(v * 100)}%` : v > 0 ? `+${v}` : String(v))}
+        onChange={(v, value) => write(setTableValue(state, variable, position, v, value))} />
+    </div>;
   }
-  return <div className="m-varwin__editor"><div className="n4-box__title">{title}</div>{rows}</div>;
+  if (variable === "velocityRange") {
+    return <div className="m-varwin__editor">{heading}
+      {VOICES.map((v) => {
+        const range = state.tables.velocityRange[position][v];
+        return <div key={v} className={`m-varwin__voice uvoice uvoice--${v + 1}`}><b>{v + 1}</b>
+          <RangeSlider label="" low={range.low} high={range.high} min={1} max={127}
+            onChange={(low, high) => write(setTableValue(state, "velocityRange", position, v, { low, high }))} /></div>;
+      })}
+    </div>;
+  }
+  return <div className="m-varwin__editor">{heading}
+    {VOICES.map((v) => (
+      <div key={v} className={`m-varwin__voice uvoice uvoice--${v + 1}`}><b>{v + 1}</b>
+        <SplitBar mix={state.tables.noteOrder[position][v]} onChange={(mix) => write(setTableValue(state, "noteOrder", position, v, mix))} />
+      </div>
+    ))}
+  </div>;
 }

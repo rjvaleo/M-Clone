@@ -33,11 +33,11 @@ export function executeRuntimeCommand(
 ): { message: string; updates?: { parameterId: string; value: JsonValue; morph: MorphPolicy }[] } {
   if (!runtime) return { message: `${node.label}: runtime unavailable` };
 
-  // M Clock runs the transport too; its Sync, though, is its own (it
+  // M Conductor runs the transport too; its Sync, though, is its own (it
   // restarts the voices without moving the song position), so that falls
   // through to the processor command below.
-  const clock = node.moduleType === "m.lab-clock";
-  if (clock && (commandId === "play" || commandId === "pause" || commandId === "stop")) {
+  const conductor = node.moduleType === "m.lab-conductor";
+  if (conductor && (commandId === "play" || commandId === "pause" || commandId === "stop")) {
     if (commandId === "play") runtime.start();
     else if (commandId === "pause") runtime.pause();
     else runtime.stop();

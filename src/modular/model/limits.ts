@@ -9,9 +9,8 @@ import type { GraphDocument } from "./graph";
 
 const LIMITS: Readonly<Record<string, number>> = {
   "m.m": 1,
-  // The M modules: one clock, one set of Variables, one conductor and one
-  // orchestra; a sequencer and a Time Warp for each of M's eight voices.
-  "m.lab-clock": 1,
+  // The M modules: one conductor, one set of Variables and one orchestra;
+  // a sequencer and a Time Warp for each of M's eight voices.
   "m.lab-variables": 1,
   "m.lab-conductor": 1,
   "m.lab-orchestra": 1,

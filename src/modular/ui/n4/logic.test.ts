@@ -4,6 +4,11 @@ import {
   ACTION_SHARES,
   applyRowAction,
   cellRangeDrag,
+  faderUnder,
+  nextChip,
+  nextJump,
+  rangeDrag,
+  tempoRangeDrag,
   formatLaneValue,
   laneValueFromY,
   moveSelected,
@@ -118,5 +123,43 @@ describe("note names as Numerology prints them", () => {
     expect(polyNoteName(61)).toBe("Db,C# 3");
     expect(polyNoteName(70)).toBe("Bb,A# 3");
     expect(polyNoteName(48)).toBe("C 2");
+  });
+});
+
+describe("the step chip row: Skip, Mute and Random Jump on one row", () => {
+  it("a click cycles a step through none, Skip and Mute", () => {
+    expect(nextChip({ skip: false, mute: false })).toEqual({ skip: true, mute: false });
+    expect(nextChip({ skip: true, mute: false })).toEqual({ skip: false, mute: true });
+    expect(nextChip({ skip: false, mute: true })).toEqual({ skip: false, mute: false });
+  });
+
+  it("Alt-click steps the Random Jump chance up and round", () => {
+    expect([0, 0.25, 0.5, 1].map(nextJump)).toEqual([0.25, 0.5, 1, 0]);
+    expect(nextJump(0.3)).toBe(0.5);
+  });
+});
+
+describe("a two-thumb range slider", () => {
+  it("moves whichever thumb is nearer, and never lets them cross", () => {
+    expect(rangeDrag({ low: 40, high: 100 }, 30)).toEqual({ low: 30, high: 100 });
+    expect(rangeDrag({ low: 40, high: 100 }, 90)).toEqual({ low: 40, high: 90 });
+    expect(rangeDrag({ low: 40, high: 100 }, 120, "low")).toEqual({ low: 100, high: 100 });
+  });
+});
+
+describe("the tempo range, as M's Conducting window draws it (110 · 120 · 130)", () => {
+  it("drags the low or high end, or the tempo itself, kept inside the range", () => {
+    const range = { low: 110, tempo: 120, high: 130 };
+    expect(tempoRangeDrag(range, "low", 100)).toEqual({ low: 100, tempo: 120, high: 130 });
+    expect(tempoRangeDrag(range, "high", 115)).toEqual({ low: 110, tempo: 115, high: 115 });
+    expect(tempoRangeDrag(range, "tempo", 200)).toEqual({ low: 110, tempo: 130, high: 130 });
+  });
+});
+
+describe("faders side by side, swept in one drag", () => {
+  it("finds the fader under the pointer and its value", () => {
+    expect(faderUnder(10, 0, 160, 100, 4, 0, 1, 0.01)).toEqual({ index: 0, value: 1 });
+    expect(faderUnder(150, 100, 160, 100, 4, 0, 1, 0.01)).toEqual({ index: 3, value: 0 });
+    expect(faderUnder(70, 50, 160, 100, 4, -24, 24, 1)).toEqual({ index: 1, value: 0 });
   });
 });

@@ -3,17 +3,18 @@
  *
  * Each is a Numerology module type carrying one of M's windows:
  *
- *   M Clock      — the Groove Clock, with M's tempo conducting, Tap and Sync
  *   M NoteSeq    — a MonoNote/PolyNote sequencer that is one voice of M:
  *                  its Pattern, Cyclic Variables, Note Order and randomness
  *   M Time Warp  — a CV Sequencer drawing one voice's Time Distortion
  *   M Variables  — M's own Variables window: every Variable's six
  *                  Positions in miniature, its arrow, and snapshots a–z
- *   M Conductor  — a Triple XY; pad 1 is the baton
+ *   M Conductor  — M's Conducting window: the transport, the tempo range,
+ *                  Tap and Sync, and the baton pad (plus two more X-Y pads)
  *   M Orchestra  — MatrixSeq rows of channels against voices, and Sound Choice
  *
  * As in Numerology there is one sequencer per voice: four voices of M are four
- * M NoteSeqs, each with a Time Warp cabled into its Warp In.
+ * M NoteSeqs. Each keeps its own Time Distortion as a Warp lane; an M Time
+ * Warp cabled into Warp In takes over from it.
  *
  * Every face is custom (src/modular/ui/mlab), drawn with the Numerology kit in
  * src/modular/ui/n4; every parameter a face edits is listed on its custom
@@ -48,7 +49,6 @@ import { DEFAULT_EVOLVE } from "../mlab/evolve";
 import { defaultWarpBanks } from "../mlab/warpSteps";
 
 export const M_LAB_TYPES = {
-  clock: "m.lab-clock",
   noteSeq: "m.lab-noteseq",
   timeWarp: "m.lab-time-warp",
   variables: "m.lab-variables",
@@ -64,47 +64,16 @@ const headerParams = (): ParameterDescriptor[] => [
   stringParam("comment", "Comment", "..."),
   boolParam("collapsed", "Minimized", false),
   boolParam("advanced", "Advanced settings open", false),
+  // The preset manager: up to 99 snapshots; the first six are slots a–f.
+  jsonParam("presets", "Presets", []),
+  numberParam("preset-slot", "Preset slot in play", -1, -1, 5, 1),
 ];
-const HEADER_IDS = ["comment", "collapsed", "advanced"];
+const HEADER_IDS = ["comment", "collapsed", "advanced", "presets", "preset-slot"];
 
 /** A module whose whole face is one custom Numerology panel. */
 const panel = (id: string, label: string, parameters: ParameterDescriptor[], commands: string[] = []) => [
   { ...section("panel", label, [custom(id, label, [...HEADER_IDS, ...parameters.map((p) => p.id)], commands)]), showHeading: false },
 ];
-
-/* ===== M Clock (Groove Clock) ===== */
-
-const CLOCK_PARAMS = [
-  numberParam("tempo", "BPM", project.tempo, 20, 300, 0.01, "BPM"),
-  numberParam("bar-length", "Bar Length", 4, 1, 16, 1),
-  numberParam("fine", "BPM Fine Adjust", 0, -50, 50, 0.01, "%"),
-  numberParam("adj-range", "Adj Range", 5, 1, 50, 1, "%"),
-  boolParam("latch", "Latch", true),
-  enumParam("tap-conduct", "Tap Conduct", ["off", "held"], "off"),
-  enumParam("sync-quantize", "Sync On", QUANTIZE, "now"),
-  enumParam("tempo-arrow", "Conduct tempo", ["off", "x", "y"], "off"),
-];
-
-const M_CLOCK = defineModule({
-  type: M_LAB_TYPES.clock,
-  label: "M Clock",
-  family: "m",
-  layout: "editor",
-  colorToken: "clock",
-  ports: [
-    output("transport-out", "Transport", transportSignal()),
-    output("sync-out", "Sync", resetSignal()),
-    output("run-out", "Run", numberSignal()),
-  ],
-  parameters: [...headerParams(), ...CLOCK_PARAMS],
-  commands: [
-    { id: "play", label: "Play" },
-    { id: "stop", label: "Stop" },
-    { id: "sync", label: "Sync" },
-    { id: "tap", label: "Tap" },
-  ],
-  face: panel("m-lab-clock", "Groove Clock", CLOCK_PARAMS, ["play", "stop", "sync", "tap"]),
-});
 
 /* ===== M NoteSeq ===== */
 
@@ -147,9 +116,12 @@ const NOTESEQ_PARAMS = [
   jsonParam("evolve", "Evolve", DEFAULT_EVOLVE as never),
   boolParam("evolve-auto", "Auto Evolve", false),
   enumParam("pitch-view", "Pitch list", ["orig", "scram"], "orig"),
-  enumParam("timing-lane", "Timing lane", ["legato", "rhythm", "rnd-jump"], "legato"),
-  enumParam("timbre-lane", "Timbre lane", ["accent", "velocity"], "accent"),
   numberParam("scroll", "First step shown", 0, 0, MAX_SEQ_STEPS - 1, 1),
+  // The Warp lane: this voice's own Time Distortion, used when no M Time Warp
+  // is cabled into Warp In.
+  jsonParam("warp", "Time Distortion a–f", defaultWarpBanks() as never),
+  numberParam("warp-position", "Time Distortion position", 0, 0, 5, 1),
+  numberParam("warp-amount", "Time Distortion amount", 1, 0, 1, 0.01),
 ];
 
 const M_NOTESEQ = defineModule({
@@ -180,7 +152,6 @@ const WARP_PARAMS = [
   jsonParam("banks", "Time Distortion a–f", defaultWarpBanks() as never),
   numberParam("position", "Time Distortion position", 0, 0, 5, 1),
   numberParam("amount", "Amount", 1, 0, 1, 0.01),
-  jsonParam("select", "Select", []),
 ];
 
 const M_TIME_WARP = defineModule({
@@ -219,10 +190,20 @@ const M_VARIABLES_MODULE = defineModule({
   face: panel("m-lab-variables", "Variables", VARIABLES_PARAMS),
 });
 
-/* ===== M Conductor (Triple XY) ===== */
+/* ===== M Conductor (M's Conducting window) ===== */
+
+const ARROWS = ["off", "right", "down", "left", "up"] as const;
 
 const CONDUCTOR_PARAMS = [
+  numberParam("tempo", "Tempo", project.tempo, 20, 300, 1, "BPM"),
+  numberParam("tempo-low", "Tempo low", 110, 20, 300, 1, "BPM"),
+  numberParam("tempo-high", "Tempo high", 130, 20, 300, 1, "BPM"),
+  enumParam("tempo-arrow", "Conduct tempo", ARROWS, "off"),
+  numberParam("bar-length", "Bar Length", 4, 1, 16, 1),
+  enumParam("tap-conduct", "Tap Conduct", ["off", "held"], "off"),
+  enumParam("sync-quantize", "Sync On", QUANTIZE, "now"),
   jsonParam("pads", "X-Y pads", Array.from({ length: 3 }, () => ({ x: 0, y: 0, glide: 0 }))),
+  boolParam("extra-pads", "Show pads 2 and 3", false),
 ];
 
 const M_CONDUCTOR = defineModule({
@@ -231,12 +212,23 @@ const M_CONDUCTOR = defineModule({
   family: "m",
   layout: "editor",
   colorToken: "clock",
-  ports: [1, 2, 3].flatMap((n) => [
-    output(`x${n}-out`, `X ${n}`, numberSignal()),
-    output(`y${n}-out`, `Y ${n}`, numberSignal()),
-  ]),
+  ports: [
+    output("transport-out", "Transport", transportSignal()),
+    output("sync-out", "Sync", resetSignal()),
+    output("run-out", "Run", numberSignal()),
+    ...[1, 2, 3].flatMap((n) => [
+      output(`x${n}-out`, `X ${n}`, numberSignal()),
+      output(`y${n}-out`, `Y ${n}`, numberSignal()),
+    ]),
+  ],
   parameters: [...headerParams(), ...CONDUCTOR_PARAMS],
-  face: panel("m-lab-conductor", "Triple XY", CONDUCTOR_PARAMS),
+  commands: [
+    { id: "play", label: "Play" },
+    { id: "stop", label: "Stop" },
+    { id: "sync", label: "Sync" },
+    { id: "tap", label: "Tap" },
+  ],
+  face: panel("m-lab-conductor", "Conductor", CONDUCTOR_PARAMS, ["play", "stop", "sync", "tap"]),
 });
 
 /* ===== M Orchestra (Matrix rows) ===== */
@@ -266,5 +258,5 @@ const M_ORCHESTRA = defineModule({
 });
 
 export const M_LAB_MODULES: ModuleDescriptor[] = [
-  M_CLOCK, M_NOTESEQ, M_TIME_WARP, M_VARIABLES_MODULE, M_CONDUCTOR, M_ORCHESTRA,
+  M_CONDUCTOR, M_NOTESEQ, M_TIME_WARP, M_VARIABLES_MODULE, M_ORCHESTRA,
 ];
