@@ -7,7 +7,9 @@
  * Two more X-Y pads, plain CV for anything else, fold out beside it.
  */
 
+import { memo } from "react";
 import { ConductingArrow } from "../../../ui/ConductingArrow";
+import { useNodeStatus } from "../statusStore";
 import type { ArrowDir } from "../../../engine/snapshot";
 import { M_LAB_TYPES } from "../../registry/mLabModules";
 import { variablesStateOf } from "../../mlab/links";
@@ -18,15 +20,36 @@ import { PresetSlots } from "../n4/PresetManager";
 
 const defaultPads = (): Pad[] => Array.from({ length: 3 }, () => ({ x: 0, y: 0, glide: 0 }));
 
-export function ConductorFace({ node, setParameter, setParameters, status }: MLabFaceProps) {
+/*
+ * The transport ticks ten times a second while playing. Only the readouts
+ * that show it — bar · beat, the run line, a gliding pad's position — read the
+ * status; the face itself renders only when a setting changes.
+ */
+function BarBeat({ nodeId }: { nodeId: string }) {
+  const status = useNodeStatus(nodeId);
+  return <span className="n4-lcd" aria-label="Bar and beat">{status.bar ?? "1"}·{status.beat ?? "1"}·{status.sixteenth ?? "1"}</span>;
+}
+
+function RunLine({ nodeId }: { nodeId: string }) {
+  return <span className="n4-muted">{useNodeStatus(nodeId).run ?? ""}</span>;
+}
+
+function PadReadout({ nodeId, index, target }: { nodeId: string; index: number; target: { x: number; y: number } }) {
+  const raw = useNodeStatus(nodeId).current ?? "[]";
+  let now = target;
+  try { now = (JSON.parse(raw) as { x: number; y: number }[])[index] ?? target; } catch { now = target; }
+  return <span className="n4-value">{now.x.toFixed(2)} · {now.y.toFixed(2)}</span>;
+}
+
+export const ConductorFace = memo(ConductorBody,
+  (a, b) => a.node === b.node && a.setParameter === b.setParameter && a.setParameters === b.setParameters);
+
+function ConductorBody({ node, setParameter, setParameters }: MLabFaceProps) {
   const host = useMLabHost();
   const presets = usePresets(node, setParameters);
   const pads = param<Pad[]>(node, "pads", defaultPads());
   const arrow = param<string>(node, "tempo-arrow", "off");
   const extra = node.parameters["extra-pads"] === true;
-  const current = (() => {
-    try { return JSON.parse(status.current ?? "[]") as { x: number; y: number }[]; } catch { return []; }
-  })();
   const move = (index: number, x: number, y: number) => {
     if (index !== 0) {
       setParameter("pads", pads.map((pad, i) => (i === index ? { ...pad, x, y } : pad)) as never);
@@ -41,12 +64,11 @@ export function ConductorFace({ node, setParameter, setParameters, status }: MLa
     setParameter("pads", pads.map((p, i) => (i === index ? { ...p, glide: value } : p)) as never);
   const pad = (index: number, size: "big" | "small") => {
     const target = pads[index] ?? { x: 0, y: 0, glide: 0 };
-    const now = current[index] ?? target;
     return (
       <div className={`n4-xypanel n4-xypanel--${size}`} key={index}>
         <div className="n4-xypanel__head">
           <span className="n4-label">{index === 0 ? "Baton" : `X-Y ${index + 1}`}</span>
-          <span className="n4-value">{now.x.toFixed(2)} · {now.y.toFixed(2)}</span>
+          <PadReadout nodeId={node.id} index={index} target={target} />
         </div>
         <XYPad x={target.x} y={target.y} label={index === 0 ? "Baton" : `X-Y ${index + 1}`} onChange={(x, y) => move(index, x, y)} />
         <N4Slider label="Glide" value={target.glide} min={0} max={4} onChange={(v) => glide(index, v)} format={(v) => `${v.toFixed(2)} s`} />
@@ -63,7 +85,7 @@ export function ConductorFace({ node, setParameter, setParameters, status }: MLa
             <N4Button onClick={() => host?.run(node.id, "stop", "Stop")} title="Stop">■</N4Button>
             <N4Button onClick={() => host?.run(node.id, "sync", "Sync")} title="Restart every voice's cycles">Sync</N4Button>
             <N4Button onClick={() => host?.run(node.id, "tap", "Tap")} title="Tap">Tap</N4Button>
-            <span className="n4-lcd" aria-label="Bar and beat">{status.bar ?? "1"}·{status.beat ?? "1"}·{status.sixteenth ?? "1"}</span>
+            <BarBeat nodeId={node.id} />
           </div>
           <div className="n4-conductor__tempo">
             <ConductingArrow label="Tempo" className="n4-arrow"
@@ -84,7 +106,7 @@ export function ConductorFace({ node, setParameter, setParameters, status }: MLa
               onChange={(v) => setParameter("bar-length", v)} />
           </div>
           <PresetSlots handlers={presets} />
-          <span className="n4-muted">{status.run ?? ""}</span>
+          <RunLine nodeId={node.id} />
         </div>
         {pad(0, "big")}
         {extra && pad(1, "small")}

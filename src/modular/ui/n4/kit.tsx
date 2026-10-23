@@ -8,11 +8,28 @@
  * The arithmetic lives in logic.ts; these only draw and forward the pointer.
  */
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import "./n4.css";
 import type { CyclicStep, NoteOrderMix } from "../../../engine/types";
 import { normalizeCyclicStep } from "../../../engine/cyclic";
 import { ACTION_SHARES, faderUnder, formatLaneValue, laneValueFromY, polyNoteName, rangeDrag, splitFromDrag, stepFromX, tempoRangeDrag, type LaneFormat, type RowAction } from "./logic";
+
+/**
+ * A pop-up that closes when you click anywhere outside it, or press Escape.
+ * Returns the ref for the element holding both the button and the pop-up.
+ */
+export function useDismiss<T extends HTMLElement>(open: boolean, close: () => void) {
+  const ref = useRef<T | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (event: PointerEvent) => { if (!ref.current?.contains(event.target as Node)) close(); };
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
+    window.addEventListener("pointerdown", away, true);
+    window.addEventListener("keydown", key);
+    return () => { window.removeEventListener("pointerdown", away, true); window.removeEventListener("keydown", key); };
+  }, [open, close]);
+  return ref;
+}
 
 /** Numerology colours a sequencer's handles by its kind. */
 export type N4Accent = "orange" | "red" | "blue" | "yellow" | "tan" | "mauve" | "purple";
@@ -20,8 +37,12 @@ export type N4Accent = "orange" | "red" | "blue" | "yellow" | "tan" | "mauve" | 
 /** Steps shown at once; more scroll, as Numerology's sequencers do. */
 export const VISIBLE_STEPS = 16;
 
-export function N4Panel({ accent, children, wide }: { accent: N4Accent; children: ReactNode; wide?: boolean }) {
-  return <div className={`n4 n4--${accent}${wide ? " n4--wide" : ""}`}>{children}</div>;
+export function N4Panel({ accent, children, wide, narrow }: {
+  accent: N4Accent; children: ReactNode; wide?: boolean;
+  /** As wide as its widest fixed part (the steps); toolbars wrap to fit. */
+  narrow?: boolean;
+}) {
+  return <div className={`n4 n4--${accent}${wide ? " n4--wide" : ""}${narrow ? " n4--narrow" : ""}`}>{children}</div>;
 }
 
 /** Left boxes, the lanes, right boxes. */
@@ -91,7 +112,7 @@ export function N4Field({ label, value, onChange, min, max, step = 1, width = 4 
 }
 
 /** Track a pointer across an element from press to release. */
-function usePointerDrag(onPoint: (x: number, y: number, rect: DOMRect, phase: "down" | "move", event: React.PointerEvent | PointerEvent) => void) {
+export function usePointerDrag(onPoint: (x: number, y: number, rect: DOMRect, phase: "down" | "move", event: React.PointerEvent | PointerEvent) => void) {
   const ref = useRef<HTMLDivElement | null>(null);
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -167,8 +188,10 @@ const columns = (w: Window) => Array.from({ length: w.count }, (_, i) => w.first
  * The row of step numbers, with the green start marker and red end marker
  * (manual p88). Drag a marker along the row to move it.
  */
-export function StepLabels({ window: w, start, end, playing, onStart, onEnd, fixedFirst }: {
+export function StepLabels({ window: w, start, end, playing, onStart, onEnd, fixedFirst, playhead }: {
   window: Window; start: number; end: number; playing: number; onStart?: (step: number) => void; onEnd: (step: number) => void; fixedFirst?: boolean;
+  /** Tags each label so a playhead can be drawn on it without a render (see playhead.ts). */
+  playhead?: string;
 }) {
   const dragging = useRef<"start" | "end" | null>(null);
   const drag = usePointerDrag((x, _y, rect, phase, event) => {
@@ -186,6 +209,7 @@ export function StepLabels({ window: w, start, end, playing, onStart, onEnd, fix
       title="Drag the green marker to set the start step, the red one to set the end">
       {columns(w).map((step) => (
         <span key={step} data-marker={step === start ? "start" : step === end ? "end" : undefined}
+          data-playhead={playhead} data-step={step}
           className={`n4-steplabel${step === start ? " is-start" : ""}${step === end ? " is-end" : ""}${step === playing ? " is-playing" : ""}`}>
           {step === 0 && fixedFirst ? "1" : step + 1}
         </span>
@@ -202,9 +226,10 @@ export function ButtonRow({ label, flags, window: w, onToggle, onAction, onClear
   onAction: (action: RowAction, on: boolean) => void; onClear: () => void; kind: "skip" | "select" | "mute";
 }) {
   const [open, setOpen] = useState(false);
+  const menu = useDismiss<HTMLDivElement>(open, () => setOpen(false));
   return (
     <div className="n4-row">
-      <div className="n4-row__menu">
+      <div className="n4-row__menu" ref={menu}>
         <button type="button" className="n4-gear" aria-label={`${label} actions`} aria-expanded={open}
           onClick={(event) => { event.stopPropagation(); setOpen(!open); }}>⚙▾</button>
         <span>{label}</span>
@@ -255,13 +280,15 @@ export function LaneSelect<T extends string>({ options, value, onChange }: {
  * end marker, because each cycle has its own length, and ranges — shift-drag
  * a step open into a span of levels and M picks inside it at random.
  */
-export function SliderLane({ values, window: w, min, max, step, format, onChange, onRange, ownLength, onOwnLength, playing, active, display, height, compact, bipolar, fixedFirst }: {
+export function SliderLane({ values, window: w, min, max, step, format, onChange, onRange, ownLength, onOwnLength, playing, active, display, height, compact, bipolar, fixedFirst, playhead }: {
   values: readonly (number | CyclicStep)[];
   window: Window; min: number; max: number; step: number; format: LaneFormat;
   onChange: (step: number, value: number) => void;
   onRange?: (step: number, from: number, to: number) => void;
   ownLength?: number; onOwnLength?: (length: number) => void;
   playing: number; active?: (step: number) => boolean;
+  /** Tags each column so a playhead can be drawn on it without a render (see playhead.ts). */
+  playhead?: string;
   display?: (value: number | CyclicStep) => string;
   /** A thin lane, as Consequence stacks them: values printed inside each step. */
   compact?: boolean; height?: number;
@@ -306,7 +333,7 @@ export function SliderLane({ values, window: w, min, max, step, format, onChange
           const point = typeof raw === "object" ? normalizeCyclicStep(raw).min : raw;
           const zero = bipolar ? t(0) : 0;
           return (
-            <div key={s} className={`n4-lane__col${dim ? " is-dim" : ""}${s === playing ? " is-playing" : ""}${s % 4 === 0 ? " is-beat" : ""}`}>
+            <div key={s} data-playhead={playhead} data-step={s} className={`n4-lane__col${dim ? " is-dim" : ""}${s === playing ? " is-playing" : ""}${s % 4 === 0 ? " is-beat" : ""}`}>
               {compact
                 ? range && range.min !== range.max
                   ? <span className="n4-lane__bar is-range" style={{ bottom: `${t(range.min) * 100}%`, height: `${(t(range.max) - t(range.min)) * 100}%` }} />
@@ -335,9 +362,11 @@ export function SliderLane({ values, window: w, min, max, step, format, onChange
  * allowed. Click a cell to add or remove that note from the step. The step
  * playing now is lit in the colour of where M's Note Order read it from.
  */
-export function NoteGrid({ steps, rows, window: w, length, onToggle, playing, source, header }: {
+export function NoteGrid({ steps, rows, window: w, length, onToggle, playing, source, header, playhead }: {
   steps: readonly number[][]; rows: readonly number[]; window: Window; length: number;
   onToggle: (step: number, pitch: number) => void; playing: number; source: string;
+  /** Tags each column so a playhead can be drawn on it without a render (see playhead.ts). */
+  playhead?: string;
   /** Sits above the note names, in the lane-label column. */
   header?: ReactNode;
 }) {
@@ -352,7 +381,7 @@ export function NoteGrid({ steps, rows, window: w, length, onToggle, playing, so
       </div>
       <div className="n4-notegrid__cells" data-n4-control="true">
         {columns(w).map((s) => (
-          <div key={s} className={`n4-notegrid__col${s >= length ? " is-dim" : ""}${s === playing ? ` is-playing is-${source || "original"}` : ""}${s % 4 === 0 ? " is-beat" : ""}`}>
+          <div key={s} data-playhead={playhead} data-step={s} className={`n4-notegrid__col${s >= length ? " is-dim" : ""}${s === playing ? ` is-playing is-${source || "original"}` : ""}${s % 4 === 0 ? " is-beat" : ""}`}>
             {rows.map((pitch) => (
               <button type="button" key={pitch} aria-label={`Step ${s + 1} ${polyNoteName(pitch)}`}
                 className={`n4-note${steps[s]?.includes(pitch) ? " is-on" : ""}${pitch % 12 === 0 ? " is-c" : ""}`}
@@ -468,9 +497,10 @@ export function StepChips({ window: w, skip, mute, jump, select, onToggle, onAct
   onClear: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const menu = useDismiss<HTMLDivElement>(open, () => setOpen(false));
   return (
     <div className="n4-row">
-      <div className="n4-row__menu">
+      <div className="n4-row__menu" ref={menu}>
         <button type="button" className="n4-gear" aria-label="Step actions" aria-expanded={open}
           onClick={(event) => { event.stopPropagation(); setOpen(!open); }}>⚙▾</button>
         <span className="n4-label">Step</span>
@@ -523,8 +553,9 @@ export function DiceIcon({ size = 12 }: { size?: number }) {
 /** The dice on a lane: randomize a Few, Some, Most or All of just that lane. */
 export function LaneDice({ label, onPick }: { label: string; onPick: (share: "few" | "some" | "most" | "all") => void }) {
   const [open, setOpen] = useState(false);
+  const menu = useDismiss<HTMLSpanElement>(open, () => setOpen(false));
   return (
-    <span className="n4-dice">
+    <span className="n4-dice" ref={menu}>
       <button type="button" aria-label={`Randomize ${label}`} aria-expanded={open} title={`Randomize ${label}`}
         onClick={(event) => { event.stopPropagation(); setOpen(!open); }}><DiceIcon /></button>
       {open && (

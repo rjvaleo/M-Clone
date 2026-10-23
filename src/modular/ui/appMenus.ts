@@ -35,6 +35,7 @@ export const APP_MENUS: AppMenu[] = [
       { id: "template4", label: "4 Streams", hint: "Replace the patch with a four-stream template" },
       { id: "template8", label: "8 Streams", hint: "Replace the patch with an eight-stream template" },
       { id: "template16", label: "16 Streams", hint: "Replace the patch with a sixteen-stream template" },
+      { id: "templateM", label: "M Rack", hint: "Replace the patch with M built from its modules" },
       "separator",
       { id: "open", label: "Open…", hint: "Open a saved project" },
       { id: "save", label: "Save", hint: "Save the project manifest" },
@@ -70,6 +71,7 @@ export const APP_MENUS: AppMenu[] = [
       "separator",
       { id: "hand", label: "Hand Tool", hint: "Drag anywhere to pan, as holding Space does" },
       { id: "sounds", label: "Sound Pool", hint: "Show the sample pool" },
+      { id: "performance", label: "Performance", hint: "Show what takes the most time, ranked" },
       "separator",
       // Not a toggle: it swaps the whole surface. Coming back is the classic
       // interface's own View menu's job, so there is nothing to tick here.

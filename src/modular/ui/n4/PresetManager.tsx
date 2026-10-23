@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { MAX_PRESETS, PRESET_SLOTS, deletePreset, firstFree, movePreset, renamePreset, storePreset, type PresetList } from "../../mlab/presets";
 import { POSITION_LABELS } from "../../mlab/model";
+import { useDismiss } from "./kit";
 
 export type PresetHandlers = {
   presets: PresetList;
@@ -24,8 +25,9 @@ export type PresetHandlers = {
 
 export function PresetButton({ handlers }: { handlers: PresetHandlers }) {
   const [open, setOpen] = useState(false);
+  const menu = useDismiss<HTMLSpanElement>(open, () => setOpen(false));
   return (
-    <span className="n4-header__menu">
+    <span className="n4-header__menu" ref={menu}>
       <button type="button" aria-label="Presets" aria-expanded={open} title="Presets"
         onClick={(event) => { event.stopPropagation(); setOpen(!open); }}>
         <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true">

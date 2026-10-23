@@ -23,6 +23,7 @@ import type {
   ConvolverNodeLike,
   DelayNodeLike,
   EffectContext,
+  AnalyserNodeLike,
   GainNodeLike,
   OscillatorKind,
   OscillatorNodeLike,
@@ -110,6 +111,17 @@ export class FakeNode implements AudioNodeLike {
     }
     this.outgoing.clear();
     this.wires.length = 0;
+  }
+}
+
+/** Reports a flat quarter-scale signal, so a test can see the tap was read. */
+export class FakeAnalyser extends FakeNode implements AnalyserNodeLike {
+  fftSize = 2048;
+  constructor() {
+    super("analyser");
+  }
+  getFloatTimeDomainData(into: Float32Array): void {
+    into.fill(0.25);
   }
 }
 
@@ -294,6 +306,13 @@ export class FakeAudioContext implements EffectContext, EngineContext {
   /** How many nodes of a kind exist, for leak and churn assertions. */
   countOf(kind: string): number {
     return this.created.filter((node) => node.kind === kind).length;
+  }
+
+  readonly analysers: FakeAnalyser[] = [];
+  createAnalyser(): AnalyserNodeLike {
+    const analyser = new FakeAnalyser();
+    this.analysers.push(analyser);
+    return analyser;
   }
 
   createGain(): GainNodeLike {

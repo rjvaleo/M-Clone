@@ -25,6 +25,8 @@ export type MLabHost = {
   command: (nodeId: string, commandId: string) => void;
   /** Run a module command as its own button would, transport commands included. */
   run: (nodeId: string, commandId: string, label: string) => void;
+  /** The live waveform leaving a module; false while audio is off. */
+  readScope?: (nodeId: string, into: Float32Array) => boolean;
 };
 
 export const MLabHostContext = createContext<MLabHost | null>(null);

@@ -20,6 +20,12 @@ export type BiquadFilterKind =
   | "notch"
   | "allpass";
 
+/** A tap for drawing: the last block of samples, read without changing the sound. */
+export interface AnalyserNodeLike extends AudioNodeLike {
+  fftSize: number;
+  getFloatTimeDomainData(into: Float32Array): void;
+}
+
 export interface GainNodeLike extends AudioNodeLike {
   readonly gain: AudioParamLike;
 }

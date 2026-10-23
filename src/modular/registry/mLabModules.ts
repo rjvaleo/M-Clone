@@ -8,6 +8,8 @@
  *   M Time Warp  — a CV Sequencer drawing one voice's Time Distortion
  *   M Variables  — M's own Variables window: every Variable's six
  *                  Positions in miniature, its arrow, and snapshots a–z
+ *   Note Density, Velocity Range, Transposition, Note Order — M's edit
+ *                  windows, four voices each, on M Variables' tables
  *   M Conductor  — M's Conducting window: the transport, the tempo range,
  *                  Tap and Sync, and the baton pad (plus two more X-Y pads)
  *   M Orchestra  — MatrixSeq rows of channels against voices, and Sound Choice
@@ -52,6 +54,10 @@ export const M_LAB_TYPES = {
   noteSeq: "m.lab-noteseq",
   timeWarp: "m.lab-time-warp",
   variables: "m.lab-variables",
+  density: "m.lab-density",
+  velocityRange: "m.lab-velocity-range",
+  transposition: "m.lab-transposition",
+  noteOrder: "m.lab-note-order",
   conductor: "m.lab-conductor",
   orchestra: "m.lab-orchestra",
 } as const;
@@ -190,6 +196,31 @@ const M_VARIABLES_MODULE = defineModule({
   face: panel("m-lab-variables", "Variables", VARIABLES_PARAMS),
 });
 
+/* ===== M's edit windows: Note Density, Velocity Range, Transposition, Note Order ===== */
+
+// Each is M's own edit window for one Variable, four voices to a window. They
+// have no settings of their own, so no presets: they edit M Variables' tables.
+const editWindow = (type: string, label: string, faceId: string) => defineModule({
+  type,
+  label,
+  family: "m",
+  layout: "editor",
+  colorToken: "density",
+  ports: [],
+  parameters: [
+    stringParam("comment", "Comment", "..."),
+    boolParam("collapsed", "Minimized", false),
+  ],
+  face: [{ ...section("panel", label, [custom(faceId, label, ["comment", "collapsed"])]), showHeading: false }],
+});
+
+const M_EDIT_WINDOWS = [
+  editWindow(M_LAB_TYPES.density, "M Note Density", "m-lab-density"),
+  editWindow(M_LAB_TYPES.velocityRange, "M Velocity Range", "m-lab-velocity-range"),
+  editWindow(M_LAB_TYPES.transposition, "M Transposition", "m-lab-transposition"),
+  editWindow(M_LAB_TYPES.noteOrder, "M Note Order", "m-lab-note-order"),
+];
+
 /* ===== M Conductor (M's Conducting window) ===== */
 
 const ARROWS = ["off", "right", "down", "left", "up"] as const;
@@ -258,5 +289,5 @@ const M_ORCHESTRA = defineModule({
 });
 
 export const M_LAB_MODULES: ModuleDescriptor[] = [
-  M_CONDUCTOR, M_NOTESEQ, M_TIME_WARP, M_VARIABLES_MODULE, M_ORCHESTRA,
+  M_CONDUCTOR, M_NOTESEQ, M_TIME_WARP, M_VARIABLES_MODULE, ...M_EDIT_WINDOWS, M_ORCHESTRA,
 ];

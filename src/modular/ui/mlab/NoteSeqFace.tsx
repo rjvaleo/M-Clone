@@ -11,7 +11,8 @@
  * thing — the Velocity Range — are one two-thumb slider.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { applyPlayhead, playheadMarks } from "../n4/playhead";
 import type { CyclicStep, CyclicVariable, NoteOrderMix } from "../../../engine/types";
 import { Rng } from "../../../engine/rng";
 import { normalizeCyclicStep } from "../../../engine/cyclic";
@@ -41,7 +42,38 @@ const RUN_MODES = [["normal", "Normal"], ["manual", "Manual"], ["cv-gated", "CV 
 const options = <T extends string>(pairs: readonly (readonly [T, string])[]) => pairs.map(([value, label]) => ({ value, label }));
 const LANE_HEIGHT = 22;
 
+/**
+ * The face, in two parts. The body is every lane and control, and renders only
+ * when the pattern or a setting changes. The playhead — the playing step, its
+ * source colour, each cell lane's playing cell — moves on its own, by class,
+ * ten times a second, without rendering the body (see n4/playhead.ts).
+ */
 export function NoteSeqFace({ node, setParameter, setParameters, status }: MLabFaceProps) {
+  const root = useRef<HTMLDivElement | null>(null);
+  const cells = status.cells ?? "[]";
+  useLayoutEffect(() => {
+    let parsed: number[] = [];
+    try { parsed = JSON.parse(cells) as number[]; } catch { parsed = []; }
+    if (root.current) applyPlayhead(root.current, playheadMarks({ index: Number(status.index ?? -1), cells: parsed, source: status.source ?? "" }));
+  });
+
+  // Auto Evolve: each dimension once at the end of every bar (manual p51).
+  const p = node.parameters;
+  const lastBar = useRef(status.bar);
+  useEffect(() => {
+    if (status.bar === lastBar.current) return;
+    lastBar.current = status.bar;
+    if (p["evolve-auto"] !== true || status.bar === undefined) return;
+    let material = currentMaterial(p);
+    const config = param<EvolveConfig>(node, "evolve", DEFAULT_EVOLVE);
+    for (const d of ["x", "y", "z"] as EvolveDimension[]) material = evolve(d, config, material, freshRng());
+    setParameters(applyMaterial(p, material));
+  });
+
+  return <div ref={root} className="n4-playhead-root"><NoteSeqBody node={node} setParameter={setParameter} setParameters={setParameters} /></div>;
+}
+
+const NoteSeqBody = memo(function NoteSeqBody({ node, setParameter, setParameters }: Omit<MLabFaceProps, "status">) {
   const host = useMLabHost();
   const p = node.parameters;
   const pattern = patternInPlay(p);
@@ -55,25 +87,11 @@ export function NoteSeqFace({ node, setParameter, setParameters, status }: MLabF
   const flags = (id: string) => param<boolean[]>(node, id, []);
   const lane = (id: string) => param<number[]>(node, id, []);
   const values = param<CycleValues>(node, "cycle-values", { legato: [6, 25, 50, 75, 100], rhythm: [1, 1, 1.5, 2, 5] });
-  const playing = Number(status.index ?? -1);
-  const playingCells = (() => { try { return JSON.parse(status.cells ?? "[]") as number[]; } catch { return []; } })();
   const mix = param<NoteOrderMix>(node, "note-order", { original: 100, cyclic: 0, utterly: 0 });
   const warp = warpInPlay(p);
   const presets = usePresets(node, setParameters);
   const [showRun, setShowRun] = useState(false);
   const [showEvolve, setShowEvolve] = useState(false);
-
-  // Auto Evolve: each dimension once at the end of every bar (manual p51).
-  const lastBar = useRef(status.bar);
-  useEffect(() => {
-    if (status.bar === lastBar.current) return;
-    lastBar.current = status.bar;
-    if (p["evolve-auto"] !== true || status.bar === undefined) return;
-    let material = currentMaterial(p);
-    const config = param<EvolveConfig>(node, "evolve", DEFAULT_EVOLVE);
-    for (const d of ["x", "y", "z"] as EvolveDimension[]) material = evolve(d, config, material, freshRng());
-    setParameters(applyMaterial(p, material));
-  });
 
   const grown = <T,>(id: string, length: number, fill: T): T[] =>
     Array.from({ length: Math.max(length, param<T[]>(node, id, []).length) }, (_, i) => param<T[]>(node, id, [])[i] ?? fill);
@@ -104,7 +122,6 @@ export function NoteSeqFace({ node, setParameter, setParameters, status }: MLabF
     setParameter(id, moveSelected(grown(id, step + 1, 0), flags("select"), step, value, min, max));
   const dice = (id: LaneId) => (share: "few" | "some" | "most" | "all") => setParameters(randomizeLane(p, id, share, freshRng()));
   const cellLane = (kind: CyclicVariable, show: (level: number) => string) => {
-    const playingCell = playingCells[["accent", "legato", "rhythm"].indexOf(kind)] ?? -1;
     return (
       <SliderLane compact height={LANE_HEIGHT} values={cellsInPlay(p, kind)} window={cellWindow} min={0} max={4} step={1} format="level"
         display={(cell) => {
@@ -116,7 +133,7 @@ export function NoteSeqFace({ node, setParameter, setParameters, status }: MLabF
           cellRangeDrag(Math.round(from), to >= from ? "top" : "bottom", to)))}
         ownLength={cellLengthInPlay(p, kind)}
         onOwnLength={(length) => setParameters(setCellLength(p, kind, length))}
-        playing={playingCell} />
+        playing={-1} playhead={`cell-${kind}`} />
     );
   };
   const runGenerate = () => {
@@ -185,85 +202,68 @@ export function NoteSeqFace({ node, setParameter, setParameters, status }: MLabF
       <N4Button icon onClick={() => setParameters(shiftAll(p, -1))} title="Shift every step left">&lt;&lt;</N4Button>
       <N4Button icon onClick={() => setParameters(shiftAll(p, 1))} title="Shift every step right">&gt;&gt;</N4Button>
     </div>
+    <div className="n4-toolbar n4-toolbar--sub">
+      <div className="n4-tabs" role="tablist" aria-label="Pitch list">
+        {(["orig", "scram"] as const).map((v) => (
+          <button type="button" role="tab" key={v} aria-selected={view === v} className={view === v ? "is-on" : ""}
+            onClick={(event) => { event.stopPropagation(); setParameter("pitch-view", v); }}>{v === "orig" ? "Orig" : "Scram"}</button>
+        ))}
+      </div>
+      <span className="n4-sidebtns">
+        <button type="button" title="Randomize pitches" onClick={() => setParameters(randomizeLane(p, "pitch", "few", freshRng()))}><DiceIcon /></button>
+        <button type="button" title="Zero All: every note to the first" onClick={() => setParameters(zeroPitchesIn(p))}>∅</button>
+        <button type="button" title="Invert" onClick={invert}>1/x</button>
+      </span>
+      <div className="n4-toolbar__cell n4-toolbar__cell--wide"><SplitBar mix={mix} onChange={(next) => setParameter("note-order", next)} /></div>
+      <div className="n4-toolbar__cell"><N4Slider label="Density" value={param(node, "density", 1)} min={0} max={1}
+        onChange={(v) => setParameter("density", v)} format={(v) => `${Math.round(v * 100)}%`} /></div>
+      <div className="n4-toolbar__cell"><RangeSlider label="Vel" low={param(node, "vel-low", 48)} high={param(node, "vel-high", 110)} min={1} max={127}
+        onChange={(low, high) => setParameters({ "vel-low": low, "vel-high": high })} /></div>
+      <div className="n4-toolbar__cell"><N4Slider label="Gate" value={param(node, "legato", 1)} min={0} max={2} onChange={(v) => setParameter("legato", v)} /></div>
+      <N4Button small onClick={() => setParameters(normGates(p))} title="Every legato cell to the middle level">Norm gate</N4Button>
+      <N4Button small onClick={() => setParameter("velocity", [])} title="Velocity lane to zero">Norm vel</N4Button>
+      <N4Spinner label="Warp" value={Math.round(param(node, "warp-position", 0))}
+        options={POSITION_LABELS.map((name, i) => ({ value: i, label: name }))} onChange={(v) => setParameter("warp-position", v)} />
+    </div>
   </>;
 
   return (
-    <N4Panel accent={view === "scram" ? "blue" : "orange"} wide>
+    <N4Panel accent={view === "scram" ? "blue" : "orange"} narrow>
       {toolbar}
       <div className="n4-centre">
-        {/* Each lane's own controls sit at its left, as Consequence keeps Gate's next to Gate. */}
-        <div className="n4-rowgrid n4-rowgrid--aside">
+        <div className="n4-rowgrid n4-rowgrid--lean">
           <span className="n4-spacer" />
-          <span className="n4-spacer" />
-          <StepLabels window={w} start={start} end={pattern.length - 1} playing={playing}
+          <StepLabels window={w} start={start} end={pattern.length - 1} playing={-1} playhead="step"
             onStart={(step) => setParameter("start", step)} onEnd={(step) => setParameters(setEndStep(p, step))} />
 
-          <span className="n4-spacer" />
           <StepChips window={w} skip={flags("skip")} mute={flags("mute")} jump={lane("rnd-jump")} select={flags("select")}
             onToggle={toggleChip} onAction={rowAction} onClear={() => setParameters({ skip: [], mute: [], "rnd-jump": [], select: [] })} />
 
-          <div className="n4-aside">
-            <div className="n4-line">
-              <div className="n4-tabs" role="tablist" aria-label="Pitch list">
-                {(["orig", "scram"] as const).map((v) => (
-                  <button type="button" role="tab" key={v} aria-selected={view === v} className={view === v ? "is-on" : ""}
-                    onClick={(event) => { event.stopPropagation(); setParameter("pitch-view", v); }}>{v === "orig" ? "Orig" : "Scram"}</button>
-                ))}
-              </div>
-              <span className="n4-sidebtns">
-                <button type="button" title="Randomize pitches" onClick={() => setParameters(randomizeLane(p, "pitch", "few", freshRng()))}><DiceIcon /></button>
-                <button type="button" title="Zero All: every note to the first" onClick={() => setParameters(zeroPitchesIn(p))}>∅</button>
-                <button type="button" title="Invert" onClick={invert}>1/x</button>
-              </span>
-            </div>
-            <span className="n4-label">Note Order</span>
-            <SplitBar mix={mix} onChange={(next) => setParameter("note-order", next)} />
-            <N4Slider label="Density" value={param(node, "density", 1)} min={0} max={1} onChange={(v) => setParameter("density", v)}
-              format={(v) => `${Math.round(v * 100)}%`} />
-          </div>
           <NoteGrid steps={steps} rows={fitPitchRows(pattern)} window={w} length={pattern.length}
             onToggle={(step, pitch) => setParameters(toggleNoteIn(p, view, step, pitch))}
-            playing={playing} source={status.source ?? ""} />
+            playing={-1} source="" playhead="notes" />
 
-          <div className="n4-aside">
-            <RangeSlider label="Vel range" low={param(node, "vel-low", 48)} high={param(node, "vel-high", 110)} min={1} max={127}
-              onChange={(low, high) => setParameters({ "vel-low": low, "vel-high": high })} />
-          </div>
           <LaneLabel name="Accent" length={cellLengthInPlay(p, "accent")} onDice={dice("accent")} />
           {cellLane("accent", String)}
 
-          <div className="n4-aside">
-            <N4Slider label="Gate adj" value={param(node, "legato", 1)} min={0} max={2} onChange={(v) => setParameter("legato", v)} />
-          </div>
-          <LaneLabel name="Legato" length={cellLengthInPlay(p, "legato")} onDice={dice("legato")} />
-          {cellLane("legato", (level) => `${values.legato[level]}%`)}
+          <LaneLabel name="Legato %" length={cellLengthInPlay(p, "legato")} onDice={dice("legato")} />
+          {cellLane("legato", (level) => `${values.legato[level]}`)}
 
-          <div className="n4-aside n4-aside--row">
-            <N4Button small onClick={() => setParameters(normGates(p))} title="Every legato cell to the middle level">Norm gate</N4Button>
-          </div>
-          <LaneLabel name="Rhythm" length={cellLengthInPlay(p, "rhythm")} onDice={dice("rhythm")} />
-          {cellLane("rhythm", (level) => `×${values.rhythm[level]}`)}
+          <LaneLabel name="Rhythm ×" length={cellLengthInPlay(p, "rhythm")} onDice={dice("rhythm")} />
+          {cellLane("rhythm", (level) => `${values.rhythm[level]}`)}
 
-          <div className="n4-aside n4-aside--row">
-            <N4Button small onClick={() => setParameter("velocity", [])} title="Velocity lane to zero">Norm vel</N4Button>
-          </div>
           <LaneLabel name="Velocity" onDice={dice("velocity")} />
           <SliderLane compact bipolar height={LANE_HEIGHT} values={grown("velocity", w.first + w.count, 0)} window={w} min={-1} max={1} step={0.01} format="signed"
             display={(v) => (Number(v) === 0 ? "" : `${Number(v) > 0 ? "+" : ""}${Math.round(Number(v) * 63)}`)}
-            onChange={setLaneValue("velocity", -1, 1)} playing={playing} active={activeStep} />
+            onChange={setLaneValue("velocity", -1, 1)} playing={-1} playhead="step" active={activeStep} />
 
-          <div className="n4-aside n4-aside--row">
-            <N4Spinner label="Pos" value={Math.round(param(node, "warp-position", 0))}
-              options={POSITION_LABELS.map((name, i) => ({ value: i, label: name }))} onChange={(v) => setParameter("warp-position", v)} />
-          </div>
           <LaneLabel name="Warp" length={warp.length} onDice={dice("warp")} />
           <SliderLane compact bipolar fixedFirst height={LANE_HEIGHT} values={warp.offsets} window={cellWindow}
             min={-MAX_WARP_OFFSET} max={MAX_WARP_OFFSET} step={0.01} format="signed"
-            display={(v) => (Number(v) === 0 ? "" : Number(v).toFixed(2))}
+            display={(v) => (Number(v) === 0 ? "" : String(Math.round(Number(v) * 100)))}
             onChange={(step, value) => { if (step > 0) setParameters(setWarpStep(p, step, value)); }}
             ownLength={warp.length} onOwnLength={(length) => setParameters(setWarpLength(p, length))} playing={-1} />
 
-          <span className="n4-spacer" />
           <span className="n4-spacer" />
           <N4Scrollbar first={w.first} total={total} onScroll={(value) => setParameter("scroll", value)} />
         </div>
@@ -330,4 +330,4 @@ export function NoteSeqFace({ node, setParameter, setParameters, status }: MLabF
       </AdvancedPanel>
     </N4Panel>
   );
-}
+});

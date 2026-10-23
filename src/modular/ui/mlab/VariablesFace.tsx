@@ -23,11 +23,11 @@ import { POSITION_LABELS } from "../../mlab/model";
 import { defaultCells, type SeqCells } from "../../mlab/noteSeq";
 import { defaultWarpBanks, warpToTimeMap, type WarpBank } from "../../mlab/warpSteps";
 import {
-  SNAPSHOT_SLOTS, activate, recallSnapshot, setTableValue, storeSnapshot,
+  SNAPSHOT_SLOTS, activate, recallSnapshot, storeSnapshot,
   type MVariable, type VariablesState,
 } from "../../mlab/variables";
 import type { GraphDocument, NodeInstance } from "../../model/graph";
-import { N4Box, N4Button, N4Panel, N4Spinner, RangeSlider, SplitBar, VoiceFaders } from "../n4/kit";
+import { N4Box, N4Button, N4Panel, N4Spinner } from "../n4/kit";
 import { param, useMLabHost, type MLabFaceProps } from "./common";
 
 /** M shows four Voices in each miniature. */
@@ -145,7 +145,6 @@ export function VariablesFace({ node, setParameter, setParameters }: MLabFacePro
         ))}
       </div>
       </N4Box>
-      <N4Box title={undefined}><ValueEditor state={state} variable={editing} write={write} /></N4Box>
       <div className="n4-syncstrip">
         <b>Snapshot</b>
         <div className="m-varwin__snapshots n4-snapshots" role="group" aria-label="Snapshots">
@@ -162,50 +161,4 @@ export function VariablesFace({ node, setParameter, setParameters }: MLabFacePro
     </div>
     </N4Panel>
   );
-}
-
-/**
- * The values of the active Position of the Variable being edited, one per
- * Voice. Density and Transposition are faders side by side, so all four
- * voices can be swept in one drag; Velocity Range is a two-thumb slider per
- * voice; Note Order is each voice's Orig | Scram | Rand bar. The Cyclic, Time
- * Distortion and Orchestration Positions are edited on the modules that hold
- * them.
- */
-function ValueEditor({ state, variable, write }: {
-  state: VariablesState; variable: MVariable; write: (next: VariablesState) => void;
-}) {
-  const position = state.active[variable];
-  const names: Partial<Record<MVariable, string>> = {
-    density: "Note Density", transposition: "Transposition", velocityRange: "Velocity Range", noteOrder: "Note Order",
-  };
-  const title = names[variable];
-  if (!title) return <p className="m-varwin__note">This Variable's Positions are edited on the module that plays them.</p>;
-  const heading = <div className="n4-lanelabel"><span className="n4-label">{title}</span><span className="n4-value">Position {POSITION_LABELS[position]}</span></div>;
-  if (variable === "density" || variable === "transposition") {
-    const values = VOICES.map((v) => state.tables[variable][position][v]);
-    return <div className="m-varwin__editor">{heading}
-      <VoiceFaders label={`${title} per voice`} values={values}
-        min={variable === "density" ? 0 : -24} max={variable === "density" ? 1 : 24} step={variable === "density" ? 0.01 : 1}
-        format={(v) => (variable === "density" ? `${Math.round(v * 100)}%` : v > 0 ? `+${v}` : String(v))}
-        onChange={(v, value) => write(setTableValue(state, variable, position, v, value))} />
-    </div>;
-  }
-  if (variable === "velocityRange") {
-    return <div className="m-varwin__editor">{heading}
-      {VOICES.map((v) => {
-        const range = state.tables.velocityRange[position][v];
-        return <div key={v} className={`m-varwin__voice uvoice uvoice--${v + 1}`}><b>{v + 1}</b>
-          <RangeSlider label="" low={range.low} high={range.high} min={1} max={127}
-            onChange={(low, high) => write(setTableValue(state, "velocityRange", position, v, { low, high }))} /></div>;
-      })}
-    </div>;
-  }
-  return <div className="m-varwin__editor">{heading}
-    {VOICES.map((v) => (
-      <div key={v} className={`m-varwin__voice uvoice uvoice--${v + 1}`}><b>{v + 1}</b>
-        <SplitBar mix={state.tables.noteOrder[position][v]} onChange={(mix) => write(setTableValue(state, "noteOrder", position, v, mix))} />
-      </div>
-    ))}
-  </div>;
 }

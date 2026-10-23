@@ -14,6 +14,7 @@
 // The loop never reads the document, never re-derives what changed, and never
 // allocates in steady state. It compares `plan.generation`, and that is all.
 
+import { perf } from "../perf/recorder";
 import type { GraphDocument, JsonValue } from "../model/graph";
 import { materializeStreamCompounds } from "../model/stream";
 import type { CompiledPlan } from "../compiler/compileGraph";
@@ -374,7 +375,7 @@ export class ModularRuntime {
     for (const node of this.nodes.values()) node.processor.reset(0);
     this.expectedWakeSec = now + this.options.wakeIntervalMs / 1000;
     this.running = true;
-    this.options.driver.start(() => this.tick(), this.options.wakeIntervalMs);
+    this.options.driver.start(() => perf.time("runtime tick", () => this.tick()), this.options.wakeIntervalMs);
   }
 
   /** Stop scheduling but keep the musical position. */
@@ -401,7 +402,7 @@ export class ModularRuntime {
     this.pausedAtSec = null;
     this.expectedWakeSec = now + this.options.wakeIntervalMs / 1000;
     this.running = true;
-    this.options.driver.start(() => this.tick(), this.options.wakeIntervalMs);
+    this.options.driver.start(() => perf.time("runtime tick", () => this.tick()), this.options.wakeIntervalMs);
   }
 
   stop(): void {

@@ -361,3 +361,34 @@ describe("playing a note on a node from outside the graph", () => {
     expect(engine.input).toBeDefined();
   });
 });
+
+describe("Audio engine scope tap", () => {
+  const synthPatch = (): GraphDocument => {
+    const document = emptyGraph();
+    document.nodes.syn = createNode("m.synth", "syn", { x: 0, y: 0 });
+    document.nodes.out = createNode("m.audio-output", "out", { x: 0, y: 0 });
+    document.edges.e1 = { id: "e1", from: { nodeId: "syn", portId: "audio-out" }, to: { nodeId: "out", portId: "audio-in" }, enabled: true };
+    return document;
+  };
+
+  it("taps a module's output with one analyser and reads its live waveform", () => {
+    const { context, engine } = rig();
+    engine.update(synthPatch());
+    const buffer = new Float32Array(8);
+    expect(engine.readScope("syn", buffer)).toBe(true);
+    expect([...buffer]).toEqual(Array(8).fill(0.25));
+    engine.readScope("syn", buffer);
+    expect(context.analysers).toHaveLength(1);
+  });
+
+  it("reads nothing for a module that makes no sound, or a context with no analyser", () => {
+    const { context, engine } = rig();
+    engine.update(synthPatch());
+    expect(engine.readScope("nope", new Float32Array(8))).toBe(false);
+    (context as unknown as { createAnalyser?: unknown }).createAnalyser = undefined;
+    const other = rig();
+    (other.context as unknown as { createAnalyser?: unknown }).createAnalyser = undefined;
+    other.engine.update(synthPatch());
+    expect(other.engine.readScope("syn", new Float32Array(8))).toBe(false);
+  });
+});

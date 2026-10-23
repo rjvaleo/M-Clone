@@ -27,7 +27,8 @@ describe("the M modules, built from Numerology's", () => {
   });
 
   it("allows one conductor, Variables and orchestra; a NoteSeq and Time Warp per voice", () => {
-    for (const type of [M_LAB_TYPES.variables, M_LAB_TYPES.conductor, M_LAB_TYPES.orchestra]) {
+    for (const type of [M_LAB_TYPES.variables, M_LAB_TYPES.density, M_LAB_TYPES.velocityRange, M_LAB_TYPES.transposition,
+      M_LAB_TYPES.noteOrder, M_LAB_TYPES.conductor, M_LAB_TYPES.orchestra]) {
       const graph = emptyGraph();
       graph.nodes.a = createNode(type, "a", { x: 0, y: 0 });
       expect(canAddModule(graph, type), type).toBe(false);
@@ -67,6 +68,14 @@ describe("the M modules, built from Numerology's", () => {
 
   it("gives M Variables no cables: it writes positions into the other modules", () => {
     expect(moduleRegistry.get(M_LAB_TYPES.variables)!.ports).toEqual([]);
+  });
+
+  it("gives each of M's edit windows its own module, with no cables or presets: they edit M Variables' tables", () => {
+    for (const type of [M_LAB_TYPES.density, M_LAB_TYPES.velocityRange, M_LAB_TYPES.transposition, M_LAB_TYPES.noteOrder]) {
+      const editor = moduleRegistry.get(type)!;
+      expect(editor.ports, type).toEqual([]);
+      expect(editor.parameters.map((p) => p.id), type).toEqual(["comment", "collapsed"]);
+    }
   });
 });
 

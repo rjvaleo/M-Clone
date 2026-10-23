@@ -217,7 +217,8 @@ button { cursor: pointer; }
  * label that grows inward has nowhere to go on a wide name, while the canvas
  * outside the node is empty by definition.
  */
-.mm-node__ports { position: absolute; top: 48px; display: grid; gap: 11px; }
+.mm-node { --mm-ports-top: 48px; --mm-port-gap: 11px; }
+.mm-node__ports { position: absolute; top: var(--mm-ports-top); display: grid; gap: var(--mm-port-gap); }
 .mm-node__ports--input { left: -6px; justify-items: start; }
 .mm-node__ports--output { right: -6px; justify-items: end; }
 .mm-port {
