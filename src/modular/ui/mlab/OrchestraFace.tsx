@@ -9,14 +9,23 @@
 import { MAX_VOICES, POSITION_LABELS, defaultOrchestration, defaultPrograms } from "../../mlab/model";
 import { parseProgram, setProgram, shownProgram, toggleChannel } from "../../mlab/orchestraEdit";
 import { M_LAB_TYPES } from "../../registry/mLabModules";
+import type { GraphDocument } from "../../model/graph";
+import { useGraphSelection } from "../graphStore";
 import { N4Button, N4Panel, N4Spinner } from "../n4/kit";
-import { param, useMLabHost, usePresets, type MLabFaceProps } from "./common";
+import { param, usePresets, type MLabFaceProps } from "./common";
 import { PresetSlots } from "../n4/PresetManager";
 
 const CHANNELS = Array.from({ length: 16 }, (_, i) => i + 1);
 
+/** As many voice columns as the highest NoteSeq voice, four at least. */
+const voiceCountOf = (graph: GraphDocument): number => {
+  const voices = Object.values(graph.nodes)
+    .filter((n) => n.moduleType === M_LAB_TYPES.noteSeq)
+    .map((n) => Math.round(Number(n.parameters.voice ?? 1)));
+  return Math.max(4, Math.min(MAX_VOICES, Math.max(0, ...voices)));
+};
+
 export function OrchestraFace({ node, setParameter, setParameters }: MLabFaceProps) {
-  const host = useMLabHost();
   const presets = usePresets(node, setParameters);
   const position = Math.round(param(node, "position", 0));
   const soundPosition = Math.round(param(node, "sound-position", 0));
@@ -24,10 +33,7 @@ export function OrchestraFace({ node, setParameter, setParameters }: MLabFacePro
   const programs = param<(number | null)[][]>(node, "programs", defaultPrograms());
   const numbering = param(node, "program-numbering", "1-128");
   const muted = param<boolean[]>(node, "muted", Array(16).fill(false));
-  const seqVoices = host ? Object.values(host.graph.nodes)
-    .filter((n) => n.moduleType === M_LAB_TYPES.noteSeq)
-    .map((n) => Math.round(Number(n.parameters.voice ?? 1))) : [];
-  const voiceCount = Math.max(4, Math.min(MAX_VOICES, Math.max(0, ...seqVoices)));
+  const voiceCount = useGraphSelection(voiceCountOf, Object.is);
   const voices = Array.from({ length: voiceCount }, (_, v) => v);
   const columns = `48px 20px repeat(${voiceCount}, 1fr) 56px`;
 

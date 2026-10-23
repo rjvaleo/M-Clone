@@ -27,8 +27,9 @@ import {
   type MVariable, type VariablesState,
 } from "../../mlab/variables";
 import type { GraphDocument, NodeInstance } from "../../model/graph";
+import { sameItems, useGraphSelection } from "../graphStore";
 import { N4Box, N4Button, N4Panel, N4Spinner } from "../n4/kit";
-import { param, useMLabHost, type MLabFaceProps } from "./common";
+import { param, type MLabFaceProps } from "./common";
 
 /** M shows four Voices in each miniature. */
 const VOICES = [0, 1, 2, 3];
@@ -61,16 +62,26 @@ const warpFor = (graph: GraphDocument | undefined, seq: NodeInstance | undefined
   return edge ? graph.nodes[edge.from.nodeId] : undefined;
 };
 
+const variablesSources = (graph: GraphDocument): unknown[] => [
+  nodesOfType(graph, M_LAB_TYPES.orchestra)[0],
+  ...VOICES.map((v) => seqForVoice(graph, v)?.parameters.cells),
+  ...VOICES.map((v) => warpFor(graph, seqForVoice(graph, v))),
+];
+
 export function VariablesFace({ node, setParameter, setParameters }: MLabFaceProps) {
-  const host = useMLabHost();
-  const graph = host?.graph;
+  // Only what the miniatures show: the Orchestra, each voice's cyclic cells and
+  // its warp lane. A NoteSeq slider leaves these as they were, so this face
+  // does not re-render for it.
+  const sources = useGraphSelection(variablesSources, sameItems);
+  const orchestra = sources[0] as NodeInstance | undefined;
+  const cellsOf = (v: number) => sources[1 + v] as SeqCells | undefined;
+  const warpOf = (v: number) => sources[1 + VOICES.length + v] as NodeInstance | undefined;
   const state = variablesStateOf(node);
   const [editing, setEditing] = useState<MVariable>("density");
   const write = (next: VariablesState) => setParameters({
     tables: next.tables as never, active: next.active as never, arrows: next.arrows as never,
     marks: next.marks as never, snapshots: next.snapshots as never,
   });
-  const orchestra = nodesOfType(graph, M_LAB_TYPES.orchestra)[0];
 
   /** What one Position holds, per voice, for its miniature. */
   const slot = (row: (typeof ROWS)[number], p: number): PositionValue[] | null => {
@@ -80,7 +91,7 @@ export function VariablesFace({ node, setParameter, setParameters }: MLabFacePro
       case "noteOrder": return VOICES.map((v) => state.tables.noteOrder[p][v]);
       case "transposition": return VOICES.map((v) => state.tables.transposition[p][v]);
       case "timeDistortion": return VOICES.map((v) => {
-        const warp = warpFor(graph, seqForVoice(graph, v));
+        const warp = warpOf(v);
         const bank = (warp?.parameters.banks as unknown as WarpBank[] | undefined)?.[p] ?? defaultWarpBanks()[0];
         return warpToTimeMap(bank);
       });
@@ -92,7 +103,7 @@ export function VariablesFace({ node, setParameter, setParameters }: MLabFacePro
 
   /** The Cyclic Variables in miniature, as M's Cyclic Variables window draws them. */
   const cycleBars = (kind: CyclicVariable, p: number) => VOICES.map((v) => {
-    const cells = (seqForVoice(graph, v)?.parameters.cells as unknown as SeqCells | undefined)?.[kind]?.[p] ?? defaultCells()[kind][p];
+    const cells = cellsOf(v)?.[kind]?.[p] ?? defaultCells()[kind][p];
     const sum = (cells as CyclicStep[]).reduce<number>((total, cell) => total + normalizeCyclicStep(cell).max, 0);
     return <i key={v} className={`uvoice uvoice--${v + 1}`} style={{ width: `${Math.max(2, (sum / 64) * 100)}%` }} />;
   });
