@@ -16,6 +16,7 @@
 // The queue coalesces: dragging a knob for two seconds leaves one pending edit
 // per parameter per target tick, not six hundred.
 
+import { PPQN } from "./time";
 import type { JsonValue, ParameterDescriptor } from "../model/graph";
 import type { Tick } from "./time";
 
@@ -59,6 +60,12 @@ export function scheduledTickFor(
     case "step-start":
     case "step-end":
       return Math.max(earliestTick, boundaryTick);
+    // A snapshot or position recall quantized to the beat or bar: these wait
+    // for the next beat or bar line, whatever the node's own step.
+    case "next-beat":
+      return Math.ceil(earliestTick / PPQN) * PPQN;
+    case "next-bar":
+      return Math.ceil(earliestTick / (4 * PPQN)) * 4 * PPQN;
     default:
       return earliestTick;
   }

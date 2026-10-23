@@ -8,6 +8,8 @@ export type RuntimeLike = {
   sync(): void;
   panic(): void;
   rescramble(nodeId: string): boolean;
+  /** Commands a module's own processor handles (Tap, Sync, pattern commands…). */
+  command?(nodeId: string, commandId: string): boolean;
   queueParameter(nodeId: string, parameterId: string, value: JsonValue, morph?: MorphPolicy): void;
 };
 
@@ -30,6 +32,17 @@ export function executeRuntimeCommand(
     Math.floor(Math.random() * maxExclusive),
 ): { message: string; updates?: { parameterId: string; value: JsonValue; morph: MorphPolicy }[] } {
   if (!runtime) return { message: `${node.label}: runtime unavailable` };
+
+  // M Clock runs the transport too; its Sync, though, is its own (it
+  // restarts the voices without moving the song position), so that falls
+  // through to the processor command below.
+  const clock = node.moduleType === "m.lab-clock";
+  if (clock && (commandId === "play" || commandId === "pause" || commandId === "stop")) {
+    if (commandId === "play") runtime.start();
+    else if (commandId === "pause") runtime.pause();
+    else runtime.stop();
+    return { message: `${node.label}: ${fallbackLabel}` };
+  }
 
   if (node.moduleType === "m.transport-clock") {
     if (commandId === "play") {
@@ -69,5 +82,6 @@ export function executeRuntimeCommand(
     };
   }
 
+  runtime.command?.(node.id, commandId);
   return { message: `${node.label}: ${fallbackLabel}` };
 }

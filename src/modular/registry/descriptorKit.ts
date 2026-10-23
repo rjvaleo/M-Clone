@@ -24,6 +24,7 @@ export const transportSignal = (): SignalType => ({ kind: "transport", resolutio
 export const stepClockSignal = (): SignalType => ({ kind: "step-clock" });
 export const resetSignal = (): SignalType => ({ kind: "reset" });
 export const patternSignal = (): SignalType => ({ kind: "pattern-data" });
+export const timeMapSignal = (): SignalType => ({ kind: "time-map" });
 export const stepEventSignal = (): SignalType => ({ kind: "step-event" });
 export const noteSignal = (): SignalType => ({ kind: "note-event" });
 export const midiSignal = (): SignalType => ({ kind: "midi", protocol: "midi1" });
@@ -200,7 +201,8 @@ export const custom = (
   id: string,
   label: string,
   parameterIds?: readonly string[],
-): NodeFaceElement => ({ kind: "custom", id, label, parameterIds });
+  commandIds?: readonly string[],
+): NodeFaceElement => ({ kind: "custom", id, label, parameterIds, ...(commandIds ? { commandIds } : {}) });
 
 /**
  * The preset pad, identical on every module that has one.

@@ -97,49 +97,24 @@ button { cursor: pointer; }
 .mm-menu__check { display: inline-block; width: 14px; flex: none; }
 .mm-menu__separator { height: 0; margin: 4px 6px; border: 0; border-top: 1px solid var(--bd-100); }
 
-.mm-canvas-viewport { position: relative; overflow: auto; background-color: var(--mm-canvas); }
-.mm-canvas-viewport.is-hand { cursor: grab; touch-action: none; }
+/* ComfyUI's canvas: the window never scrolls; the camera moves the canvas. */
+.mm-canvas-viewport {
+  position: relative; overflow: hidden; background-color: var(--mm-canvas);
+  background-image: radial-gradient(circle, var(--mm-grid) 1px, transparent 1px);
+  touch-action: none; cursor: default;
+}
+.mm-canvas-viewport.is-hand, .mm-canvas-viewport.is-hand * { cursor: grab !important; }
 .mm-canvas-viewport.is-panning { cursor: grabbing; user-select: none; }
 .mm-canvas-viewport.is-panning * { cursor: grabbing !important; }
 /*
- * The stage is the canvas's layout box; the canvas itself is only transformed.
- * A CSS transform does not change layout size, so the stage carries the pixel
- * dimensions and gives the scrollport something honest to measure.
- *
- * It never gets smaller than the window.
- *
- * Its size is the canvas scaled by zoom, so zooming out used to shrink it into
- * a small island in the middle of the scrollport: the island had the dot grid
- * and took the scrollbars, and everything around it was dead space that looked
- * like canvas and behaved like nothing. Flooring the stage at `100%` — done
- * inline with `max()`, since the other term is a zoom-dependent pixel value —
- * means the working surface is always at least everything you can see.
- *
- * No centring and no `margin: auto`. Auto margins on an item larger than its
- * scrollport push half the overflow off the start side where the scrollbar
- * cannot reach it, which is a different way to lose part of the canvas.
+ * The stage is a fixed anchor at the window's corner; the camera transform on
+ * `.mm-canvas` (translate, then scale, origin top-left) does all the moving.
+ * The dot grid is painted on the window itself and positioned by the camera
+ * inline, so it scales with the patch and never runs out.
  */
-.mm-canvas-stage { position: relative; }
+.mm-canvas-stage { position: absolute; left: 0; top: 0; }
 .mm-canvas { position: relative; transform-origin: 0 0; }
-/*
- * The grid belongs to the canvas, not to the stage.
- *
- * The stage is not transformed; `.mm-canvas` is the element `scale(zoom)`
- * applies to. Painting the dots on the stage put them in screen space while the
- * modules sat in canvas space, so the two were never connected: the patch grew
- * and shrank and the dots just drifted at a constant size. Painting them here
- * puts the spacing in canvas units, so the transform scales the grid by exactly
- * what it scales the modules by, and a dot stays over the same point of the
- * patch at every zoom.
- *
- * The dot radius scales with it, so far enough out the grid fades away rather
- * than collapsing into moiré.
- */
-.mm-canvas::before {
-  content: ""; position: absolute; inset: 0; z-index: 0;
-  background-image: radial-gradient(circle, var(--mm-grid) 1px, transparent 1px);
-  background-size: 20px 20px; pointer-events: none;
-}
+
 .mm-cables { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
 .mm-cables path {
   fill: none; stroke: var(--mm-cable); stroke-width: 5; opacity: .85;
@@ -642,11 +617,6 @@ button { cursor: pointer; }
 .mm-theme-studio__body { overflow: auto; padding: 12px; }
 
 /* Scrollbars follow the theme rather than the platform default. */
-.mm-canvas-viewport { scrollbar-color: var(--scroll) transparent; }
-.mm-canvas-viewport::-webkit-scrollbar { width: 12px; height: 12px; }
-.mm-canvas-viewport::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 7px; border: 3px solid transparent; background-clip: content-box; }
-.mm-canvas-viewport::-webkit-scrollbar-thumb:hover { background: var(--scroll-hover); background-clip: content-box; }
-.mm-canvas-viewport::-webkit-scrollbar-track { background: transparent; }
 
 @media (max-width: 760px) {
   .mm-project-bar > div span { display: none; }
@@ -829,3 +799,5 @@ button { cursor: pointer; }
     linear-gradient(135deg, transparent 0 55%, var(--bd-300, var(--bd-200)) 55% 62%,
       transparent 62% 72%, var(--bd-300, var(--bd-200)) 72% 79%, transparent 79%);
 }
+
+/* The M modules wear Numerology's look: see ui/n4/n4.css. */

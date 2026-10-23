@@ -17,7 +17,9 @@ export type GraphCommand =
   | { type: "set-parameter"; nodeId: NodeId; parameterId: ParameterId; value: JsonValue }
   | { type: "set-parameters"; nodeId: NodeId; values: Record<ParameterId, JsonValue> }
   | { type: "add-edge"; edge: Edge }
-  | { type: "remove-edge"; edgeId: EdgeId };
+  | { type: "remove-edge"; edgeId: EdgeId }
+  /** A module header's bypass switch and name. */
+  | { type: "set-node-details"; nodeId: NodeId; enabled?: boolean; label?: string };
 
 export type CommandResult = { graph: GraphDocument; inverse: GraphCommand };
 
@@ -105,6 +107,18 @@ export function executeGraphCommand(graph: GraphDocument, command: GraphCommand)
       return {
         graph: next,
         inverse: { type: "set-parameters", nodeId: command.nodeId, values: previous },
+      };
+    }
+    case "set-node-details": {
+      const node = requireNode(graph, command.nodeId);
+      next.nodes[command.nodeId] = {
+        ...node,
+        enabled: command.enabled ?? node.enabled,
+        label: command.label ?? node.label,
+      };
+      return {
+        graph: next,
+        inverse: { type: "set-node-details", nodeId: command.nodeId, enabled: node.enabled, label: node.label },
       };
     }
     case "add-edge": {

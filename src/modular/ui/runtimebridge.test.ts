@@ -115,4 +115,24 @@ describe("runtime bridge", () => {
     );
     expect(result.updates?.[0].value).toBe(1);
   });
+
+  it("hands any other command to the node's own processor", () => {
+    const command = vi.fn(() => true);
+    const runtime = { ...runtimeStub(), command };
+    const result = executeRuntimeCommand(runtime, node("cond", "m.lab-clock"), "tap", "Tap");
+    expect(command).toHaveBeenCalledWith("cond", "tap");
+    expect(result.message).toBe("cond: Tap");
+  });
+
+  it("runs the transport from M Clock, and sends its Sync to the Clock itself", () => {
+    const command = vi.fn(() => true);
+    const runtime = { ...runtimeStub(), command };
+    executeRuntimeCommand(runtime, node("co", "m.lab-clock"), "play", "Play");
+    executeRuntimeCommand(runtime, node("co", "m.lab-clock"), "stop", "Stop");
+    executeRuntimeCommand(runtime, node("co", "m.lab-clock"), "sync", "Sync");
+    expect(runtime.start).toHaveBeenCalled();
+    expect(runtime.stop).toHaveBeenCalled();
+    expect(runtime.sync).not.toHaveBeenCalled();
+    expect(command).toHaveBeenCalledWith("co", "sync");
+  });
 });

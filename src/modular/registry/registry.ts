@@ -11,6 +11,7 @@ import { CLASSIC_MODULES } from "./classicModules";
 import { AUDIO_MODULES } from "./audioModules";
 import { PLAYER_MODULES } from "./playerModules";
 import { M_MODULE } from "./mModule";
+import { M_LAB_MODULES } from "./mLabModules";
 import { PRESET_SLOTS } from "./descriptorKit";
 
 const numberParameter = (
@@ -970,6 +971,7 @@ export type ModuleRegistry = ReadonlyMap<ModuleTypeId, ModuleDescriptor>;
 
 export const moduleRegistry: ModuleRegistry = new Map(
   [M_MODULE,
+    ...M_LAB_MODULES,
     ...CLASSIC_MODULES,
     ...AUDIO_MODULES,
     ...PLAYER_MODULES,
@@ -1014,6 +1016,10 @@ export function validateModuleDescriptor(descriptor: ModuleDescriptor): string[]
         for (const parameterId of element.parameterIds ?? []) {
           if (!parameterIds.has(parameterId)) errors.push(`Unknown custom-face parameter: ${parameterId}`);
           faceParameters.add(parameterId);
+        }
+        for (const commandId of element.commandIds ?? []) {
+          if (!commandIds.has(commandId)) errors.push(`Unknown custom-face command: ${commandId}`);
+          faceCommands.add(commandId);
         }
       }
     }

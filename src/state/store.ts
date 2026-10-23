@@ -4,6 +4,7 @@
 // reads `project` live, which is what makes "ride the sliders while it plays"
 // work — positions apply by writing into the live voice fields.
 
+import { tapOffset, tapTempo } from "../engine/tap";
 import { create } from "zustand";
 import type {
   CyclicVariable,
@@ -130,19 +131,6 @@ export type MidiInputResponse =
   | { type: "tap-beat"; beatSec: number }
   /** Freeze, Accelerando or Decelerando in Tap Conduct: keep playing without taps. */
   | { type: "tap-freeze" };
-
-/**
- * Tap tempo from the time between two taps, as M computes it: the interval is
- * held to 59 ms..1.5 s and read as one Sync Ratio unit (a quarter note at 4).
- */
-function tapTempo(intervalSec: number, syncRatio: number): { tempo: number; beatSec: number } {
-  const beatSec = Math.max(0.059, Math.min(1.5, intervalSec));
-  const tempo = (60 * 4) / (Math.max(1, syncRatio) * beatSec);
-  return { tempo: Math.max(1, Math.min(255, Math.round(tempo))), beatSec };
-}
-
-/** Tap Affects Velocity: the offset the key's velocity gives every note. */
-const tapOffset = (velocity: number) => Math.trunc((velocity - 64) / 2);
 
 function isPositionVar(key: keyof VoiceState): key is PositionVarId {
   return (POSITION_VARS as string[]).includes(key as string);

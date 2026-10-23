@@ -17,6 +17,8 @@ export type SignalType =
   | { kind: "step-clock" }
   | { kind: "reset" }
   | { kind: "pattern-data" }
+  /** A Time Warp's curves, read by reference like pattern data. */
+  | { kind: "time-map" }
   | { kind: "step-event" }
   | { kind: "note-event" }
   | { kind: "midi"; protocol: "midi1" }
@@ -46,7 +48,7 @@ export type ParameterDescriptor = {
   unit?: string;
   options?: readonly string[];
   smoothing: "none" | "linear" | "exponential";
-  morph: "immediate" | "linear" | "exponential" | "step-start" | "step-end";
+  morph: "immediate" | "linear" | "exponential" | "step-start" | "step-end" | "next-beat" | "next-bar";
   automation: "none" | "record" | "record-and-host";
   /**
    * Force a particular control instead of the one the parameter's shape
@@ -81,6 +83,8 @@ export type NodeFaceElement =
     id: string;
     label: string;
     parameterIds?: readonly ParameterId[];
+    /** The commands the custom face puts its own buttons on. */
+    commandIds?: readonly string[];
     /**
      * The parameters a preset slot captures and restores.
      *
@@ -112,7 +116,7 @@ export type ModuleDescriptor = {
   type: ModuleTypeId;
   version: number;
   label: string;
-  family: "clock" | "source" | "transform" | "control" | "routing" | "scene" | "instrument" | "audio";
+  family: "clock" | "source" | "transform" | "control" | "routing" | "scene" | "instrument" | "audio" | "m";
   layout: "compact" | "editor" | "utility";
   colorToken: string;
   ports: readonly PortDescriptor[];

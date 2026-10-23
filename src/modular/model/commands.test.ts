@@ -154,4 +154,17 @@ describe("Modular graph commands", () => {
       type: "add-edge", edge: { ...edge, to: { nodeId: "clock", portId: "reset-in" } },
     })).toThrow("Duplicate edge");
   });
+
+  it("bypasses and renames a node, with an inverse for undo", () => {
+    let graph = emptyGraph();
+    graph = executeGraphCommand(graph, { type: "add-node", node: createNode("m.transport-clock", "clock", { x: 0, y: 0 }) }).graph;
+    const bypassed = executeGraphCommand(graph, { type: "set-node-details", nodeId: "clock", enabled: false, label: "Master Clock" });
+    expect(bypassed.graph.nodes.clock.enabled).toBe(false);
+    expect(bypassed.graph.nodes.clock.label).toBe("Master Clock");
+    const undone = executeGraphCommand(bypassed.graph, bypassed.inverse).graph.nodes.clock;
+    expect(undone.enabled).toBe(true);
+    expect(undone.label).toBe(graph.nodes.clock.label);
+    expect(() => executeGraphCommand(graph, { type: "set-node-details", nodeId: "ghost", enabled: false }))
+      .toThrow("Unknown node");
+  });
 });

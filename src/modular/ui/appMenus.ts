@@ -68,7 +68,7 @@ export const APP_MENUS: AppMenu[] = [
       { id: "zoomOut", label: "Zoom Out" },
       { id: "zoomReset", label: "Actual Size" },
       "separator",
-      { id: "hand", label: "Hand Tool", hint: "Drag the canvas instead of selecting" },
+      { id: "hand", label: "Hand Tool", hint: "Drag anywhere to pan, as holding Space does" },
       { id: "sounds", label: "Sound Pool", hint: "Show the sample pool" },
       "separator",
       // Not a toggle: it swaps the whole surface. Coming back is the classic
