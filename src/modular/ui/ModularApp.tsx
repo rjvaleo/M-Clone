@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Profiler, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ProfilerOnRenderCallback } from "react";
+import { perf } from "../perf/recorder";
+import { StatusStore, StatusStoreContext, useNodeStatus } from "./statusStore";
+import { PerfPanel } from "./PerfPanel";
 import { noteOrderHandleLayout, setNoteOrderBoundary } from "../../engine/transform";
 import { createModularDocument, decodeModularDocument } from "../document/document";
 import { decodeModularPack, encodeModularPack, isModularPack } from "../document/pack";
@@ -11,23 +14,13 @@ import { CANVAS_SIZE, canvasExtent, centeringOffset } from "./viewport";
 import { MAX_ZOOM, MIN_ZOOM, centerOn, clampCameraZoom, fitToBoxes, panBy, screenToCanvas, wheelZoomFactor, zoomAround, type Camera } from "./camera";
 import { isDragSurface, menuPlacement, placeNode, visibleRegion } from "./nodePlacement";
 import { buildMenu, soleMatch } from "./moduleMenu";
-import { parameterControlKind, selectorVariant } from "./parameterControl";
-import { isLiveStatus, statusLevel } from "./nodeStatus";
+import { parameterControlKind } from "./parameterControl";
+import { isLiveStatus } from "./nodeStatus";
 import { preferredEngine, type RackEngineChoice } from "../audio/wasm/rackNode";
 import type { RackReport } from "../audio/wasm/rackProtocol";
 import { KitContext } from "../theme/kits/KitContext";
 import { KIT_IDS, KIT_META, type KitId } from "../theme/kits/types";
-import { Knob } from "../theme/kits/controls/Knob";
-import { Slider } from "../theme/kits/controls/Slider";
-import { Fader } from "../theme/kits/controls/Fader";
-import { Toggle } from "../theme/kits/controls/Toggle";
-import { Button } from "../theme/kits/controls/Button";
-import { Selector } from "../theme/kits/controls/Selector";
-import { Stepper } from "../theme/kits/controls/Stepper";
 import { Jack } from "../theme/kits/controls/Jack";
-import { Led } from "../theme/kits/controls/Led";
-import { Meter } from "../theme/kits/controls/Meter";
-import { Display } from "../theme/kits/controls/Display";
 import {
   centreOn, EMPTY_VIEW, openingScrollTop, ROLL_PITCH_COUNT, viewWindow, type RollView,
 } from "./noteRoll";
@@ -68,8 +61,12 @@ import { M_NODE_TYPE, findMNode, routedTracks, trackTargets } from "./mNode";
 import { canAddModule } from "../model/limits";
 import { M_LAB_TYPES } from "../registry/mLabModules";
 import { quantizeMorph, variableLinkUpdates } from "../mlab/links";
+import { buildMRack } from "../mlab/rack";
 import { MLAB_FACES, MLabHostContext, N4_TITLES } from "./mlab";
+import type { MLabHost } from "./mlab/common";
 import { N4Header } from "./n4/N4Header";
+import { N4Button, N4Knob, N4Spinner, N4Stepper } from "./n4/kit";
+import { formatValue } from "./n4/format";
 import { presetHandlers } from "./n4/PresetManager";
 import { NOT_IN_PRESETS, snapshotOf } from "../mlab/presets";
 import { setRuntimeHost } from "../../ui/runtime";
@@ -123,14 +120,6 @@ const MODULE_GROUPS: { family: string; label: string }[] = [
  */
 const hasVoiceCount = (moduleType: string): boolean => isPlayerModule(moduleType);
 
-/**
- * What a full voice meter means.
- *
- * The voice pool's own ceiling, not a per-module polyphony setting — the
- * meter answers "how close is this to using everything available", which is
- * the question worth a meter rather than a number.
- */
-const VOICE_METER_CEILING = 16;
 
 const accentVar = (colorToken: string): string =>
   `var(--mm-module-${colorToken}, var(--mm-module-density))`;
@@ -469,60 +458,32 @@ function ParameterControl({
   const minimum = descriptor.minimum ?? 0;
   const maximum = descriptor.maximum ?? 1;
 
-  if (kind === "toggle") {
-    return <div className="mm-field mm-field--kit">
+  // The tight instrument's controls, the same ones the M modules use: a
+  // small knob with its value printed under it, a ⇕ menu, a lit key.
+  if (kind === "toggle" || kind === "button") {
+    return <div className="mm-field mm-field--n4">
       <span>{descriptor.label}</span>
-      <Toggle value={value === true} onChange={(next) => onChange(next)} />
-    </div>;
-  }
-
-  if (kind === "button") {
-    return <div className="mm-field mm-field--kit">
-      <span>{descriptor.label}</span>
-      <Button label={value === true ? "On" : "Off"} pressed={value === true}
-        onClick={() => onChange(!(value === true))} />
+      <N4Button small on={value === true} onClick={() => onChange(!(value === true))}>{value === true ? "On" : "Off"}</N4Button>
     </div>;
   }
 
   if (kind === "selector") {
     const options = descriptor.options ?? [];
-    return <div className="mm-field mm-field--kit">
+    return <div className="mm-field mm-field--n4">
       <span>{descriptor.label}</span>
-      <Selector
-        options={options.map((option) => ({ value: option, label: option }))}
-        value={String(value)}
-        variant={selectorVariant(options)}
-        label={descriptor.label}
-        onChange={(next) => onChange(next)}
-      />
-    </div>;
-  }
-
-  if (kind === "stepper") {
-    return <div className="mm-field mm-field--kit">
-      <span>{descriptor.label}</span>
-      <Stepper value={number} min={minimum} max={maximum} step={descriptor.step}
+      <N4Spinner value={String(value)} options={options.map((option) => ({ value: option, label: option }))}
         onChange={(next) => onChange(next)} />
     </div>;
   }
 
+  if (kind === "stepper") {
+    return <N4Stepper label={descriptor.label} value={number} min={minimum} max={maximum}
+      format={(next) => formatValue(next, descriptor)} onChange={(next) => onChange(next)} />;
+  }
+
   if (kind === "knob" || kind === "slider" || kind === "fader") {
-    // A readout beside the control, because every panel in the catalogue puts
-    // one there: a knob with no number is unreadable the moment you let go.
-    const readout = <Display value={number} unit={descriptor.unit} variant="chip"
-      decimals={descriptor.step !== undefined && descriptor.step < 1 ? 2 : 0} />;
-    return <div className="mm-field mm-field--kit mm-field--continuous">
-      <span>{descriptor.label}</span>
-      <span className="mm-field__control">
-        {kind === "knob" && <Knob value={number} min={minimum} max={maximum} step={descriptor.step}
-          size={34} onChange={(next) => onChange(next)} />}
-        {kind === "slider" && <Slider value={number} min={minimum} max={maximum} step={descriptor.step}
-          orientation="horizontal" length={78} onChange={(next) => onChange(next)} />}
-        {kind === "fader" && <Fader value={number} min={minimum} max={maximum} step={descriptor.step}
-          length={64} onChange={(next) => onChange(next)} />}
-        {readout}
-      </span>
-    </div>;
+    return <N4Knob label={descriptor.label} value={number} min={minimum} max={maximum} step={descriptor.step}
+      format={(next) => formatValue(next, descriptor)} onChange={(next) => onChange(next)} />;
   }
 
   if (kind === "number") {
@@ -844,13 +805,15 @@ function groupCommands(
   return out;
 }
 
-function CustomFace({ element, node, setParameter, setParameters, status }: {
+function CustomFace({ element, node, setParameter, setParameters }: {
   element: Extract<NodeFaceElement, { kind: "custom" }>;
   node: NodeInstance;
   setParameter: (id: string, value: JsonValue) => void;
   setParameters: (values: Record<string, JsonValue>) => void;
-  status: Readonly<Record<string, string>>;
 }) {
+  // Subscribes to its own module's status, so a status tick renders this face
+  // and not the module around it.
+  const status = useNodeStatus(node.id);
   // The Pattern Editor's three grids are the same editor as the standalone
   // Cyclic modules, pointed at a different parameter.
   if (element.id.startsWith("embedded-") && element.id.endsWith("-grid")) {
@@ -925,6 +888,23 @@ function CloseNodeButton({ label, onClose }: { label: string; onClose: () => voi
     onClick={(event) => { event.stopPropagation(); onClose(); }}>×</button>;
 }
 
+/** A face re-renders only when its own props change: its node, its status, its selection. */
+const NodeFaceMemo = memo(NodeFace);
+
+/** One status line, subscribed to its own module: a tick renders this and nothing else. */
+function StatusReadout({ nodeId, id, label }: { nodeId: string; id: string; label: string }) {
+  const text = useNodeStatus(nodeId)[id] ?? "Idle";
+  const live = isLiveStatus(text);
+  return <output className={`n4-status${live ? " is-live" : ""}`}>
+    <span className="n4-status__led" aria-hidden="true" />
+    <span className="n4-status__label">{label}</span>
+    <span className="n4-status__value">{text}</span>
+  </output>;
+}
+
+/** React's own measure of each render, filed under the module type that rendered. */
+const recordRender: ProfilerOnRenderCallback = (id, _phase, actualDuration) => perf.record(id, actualDuration);
+
 function NodeFace({
   node,
   zoom,
@@ -941,7 +921,6 @@ function NodeFace({
   stackIndex,
   dropTarget,
   onClose,
-  status,
   midiDevices,
   connectedPorts,
 }: {
@@ -952,17 +931,16 @@ function NodeFace({
   dispatch: (command: GraphCommand) => void;
   onCommand: (node: NodeInstance, commandId: string, label: string) => void;
   onParameterChange: (nodeId: string, parameterId: string, value: JsonValue, morph: MorphPolicy) => void;
-  onSelect: () => void;
+  onSelect: (nodeId: string) => void;
   onPortClick: (port: PortRef) => void;
   onPortPointerDown: (event: React.PointerEvent, port: PortRef, direction: "input" | "output") => void;
-  /** Tells the cable layer to re-measure while this node is being dragged. */
-  onDragMove: () => void;
+  /** Moves this node's cables with it while it is dragged; null when it lands. */
+  onDragMove: (nodeId: string, offset: { x: number; y: number } | null) => void;
   /** Raises this node above the others. */
-  onRaise: () => void;
+  onRaise: (nodeId: string) => void;
   stackIndex: number;
   dropTarget: PortRef | null;
-  onClose: () => void;
-  status: Readonly<Record<string, string>>;
+  onClose: (nodeId: string) => void;
   midiDevices: readonly MidiDeviceOption[];
   /** `"nodeId:portId"` for every port with a cable on it, so a jack can show
    * itself as connected. Computed once for the whole graph rather than per
@@ -970,35 +948,45 @@ function NodeFace({
   connectedPorts: ReadonlySet<string>;
 }) {
   const descriptor = moduleRegistry.get(node.moduleType);
-  const [drag, setDrag] = useState({ x: 0, y: 0 });
+  // A drag moves the module on the compositor, with no render: the article is
+  // translated directly and its cables follow, and the graph learns the new
+  // position once, when it lands. Rendering on every move put the module a
+  // frame or two behind the pointer.
+  const articleRef = useRef<HTMLElement | null>(null);
   const dragRef = useRef<{ x: number; y: number } | null>(null);
   const parameterMap = useMemo(() => new Map((descriptor?.parameters ?? []).map((item) => [item.id, item])), [descriptor]);
-  const setParameter = (parameterId: string, value: JsonValue) => {
+  // Modules without a stored "collapsed" fold for this session only.
+  const [folded, setFolded] = useState(false);
+  // Stable for the life of the node, so a memoised face body (the NoteSeq's)
+  // is not re-rendered just because its node's status ticked.
+  const nodeId = node.id;
+  const setParameter = useCallback((parameterId: string, value: JsonValue) => {
     const morph = (parameterMap.get(parameterId)?.morph ?? "immediate") as MorphPolicy;
-    onParameterChange(node.id, parameterId, value, morph);
-    dispatch({ type: "set-parameter", nodeId: node.id, parameterId, value });
-  };
-  const setParameters = (values: Record<string, JsonValue>) => {
+    onParameterChange(nodeId, parameterId, value, morph);
+    dispatch({ type: "set-parameter", nodeId, parameterId, value });
+  }, [parameterMap, onParameterChange, dispatch, nodeId]);
+  const setParameters = useCallback((values: Record<string, JsonValue>) => {
     for (const [parameterId, value] of Object.entries(values)) {
       const morph = (parameterMap.get(parameterId)?.morph ?? "immediate") as MorphPolicy;
-      onParameterChange(node.id, parameterId, value, morph);
+      onParameterChange(nodeId, parameterId, value, morph);
     }
-    dispatch({ type: "set-parameters", nodeId: node.id, values });
-  };
+    dispatch({ type: "set-parameters", nodeId, values });
+  }, [parameterMap, onParameterChange, dispatch, nodeId]);
   const beginDrag = (event: React.PointerEvent) => {
     if (event.button !== 0) return;
     // The whole face is a drag handle, so the drag has to stand aside for every
     // control living on it — otherwise turning a knob would move the module.
     if (!isDragSurface(event.target as Element)) return;
-    onRaise();
+    onRaise(node.id);
     dragRef.current = { x: event.clientX, y: event.clientY };
     const move = (moveEvent: PointerEvent) => {
       const start = dragRef.current;
       if (!start) return;
-      setDrag({ x: (moveEvent.clientX - start.x) / zoom, y: (moveEvent.clientY - start.y) / zoom });
-      // Cables are measured from the DOM, so a node moving under them has to
-      // ask for a re-measure or they stay pinned where the node used to be.
-      onDragMove();
+      perf.time("drag move", () => {
+        const offset = { x: (moveEvent.clientX - start.x) / zoom, y: (moveEvent.clientY - start.y) / zoom };
+        if (articleRef.current) articleRef.current.style.translate = `${offset.x}px ${offset.y}px`;
+        onDragMove(node.id, offset);
+      });
     };
     const finish = (upEvent: PointerEvent) => {
       const start = dragRef.current;
@@ -1007,7 +995,8 @@ function NodeFace({
       window.removeEventListener("pointerup", finish);
       if (!start) return;
       const delta = { x: (upEvent.clientX - start.x) / zoom, y: (upEvent.clientY - start.y) / zoom };
-      setDrag({ x: 0, y: 0 });
+      if (articleRef.current) articleRef.current.style.translate = "";
+      onDragMove(node.id, null);
       dispatch({ type: "move-nodes", positions: {
         [node.id]: { x: node.position.x + delta.x, y: node.position.y + delta.y },
       } });
@@ -1019,11 +1008,12 @@ function NodeFace({
     return <article className={`mm-node mm-node--unknown${selected ? " is-selected" : ""}`}
       aria-label={`Unknown ${node.moduleType} module`}
       onPointerDown={beginDrag}
-      onClick={(event) => { event.stopPropagation(); onRaise(); onSelect(); }}
-      style={{ left: node.position.x + drag.x, top: node.position.y + drag.y, width: 360, minHeight: 150, zIndex: stackIndex, "--mm-accent": "var(--rd-bd-300)" } as React.CSSProperties}>
+      ref={articleRef}
+      onClick={(event) => { event.stopPropagation(); onRaise(node.id); onSelect(node.id); }}
+      style={{ left: node.position.x, top: node.position.y, width: 360, minHeight: 150, zIndex: stackIndex, "--mm-accent": "var(--rd-bd-300)" } as React.CSSProperties}>
       <header className="mm-node__header">
         <span>Unknown module</span><small>{node.moduleType}</small>
-        <CloseNodeButton label="Unknown module" onClose={onClose} />
+        <CloseNodeButton label="Unknown module" onClose={() => onClose(node.id)} />
       </header>
       <div className="mm-node__face">
         <section className="mm-node-section">
@@ -1034,29 +1024,30 @@ function NodeFace({
     </article>;
   }
   const accent = accentVar(descriptor.colorToken);
-  // The M modules are Numerology modules: they wear its header, and its
-  // minimize button folds the body away.
-  const numerology = node.moduleType.startsWith("m.lab-");
-  const collapsed = numerology && node.parameters.collapsed === true;
-  return <article className={`mm-node mm-node--${descriptor.family} mm-node--layout-${descriptor.layout}${selected ? " is-selected" : ""}${node.enabled ? "" : " is-bypassed"}`}
+  // Every module wears the Numerology header and the tight chassis. The M
+  // modules store their minimize and comment; the rest fold for the session.
+  const stored = "collapsed" in node.parameters;
+  const collapsed = stored ? node.parameters.collapsed === true : folded;
+  return <article className={`mm-node mm-node--n4 mm-node--${descriptor.family} mm-node--layout-${descriptor.layout}${selected ? " is-selected" : ""}${node.enabled ? "" : " is-bypassed"}`}
     aria-label={`${node.label} module`}
     // Lets the stylesheet make an exception for one module without inventing a
     // layout class that means "the Note Editor".
     data-module-type={node.moduleType}
     data-node-box={node.id}
     onPointerDown={beginDrag}
-    onClick={(event) => { event.stopPropagation(); onRaise(); onSelect(); }}
+    ref={articleRef}
+    onClick={(event) => { event.stopPropagation(); onRaise(node.id); onSelect(node.id); }}
     // Neither dimension is declared any more. A layout class used to pin both,
     // so every module was padded out to the largest thing that class might ever
     // hold — a Play Enable, which is a checkbox and a preset strip, was given
     // the same 520 × 330 as a module with a full control panel. The face is the
     // size of what is on it, bounded by the layout's range in the stylesheet.
-    style={{ left: node.position.x + drag.x, top: node.position.y + drag.y,
+    style={{ left: node.position.x, top: node.position.y,
       zIndex: stackIndex, "--mm-accent": accent } as React.CSSProperties}>
-    {numerology
-      ? <N4Header name={node.label} comment={String(node.parameters.comment ?? "...")} title={N4_TITLES[node.moduleType] ?? descriptor.label}
+    {<N4Header name={node.label} title={N4_TITLES[node.moduleType] ?? descriptor.label}
+        comment={"comment" in node.parameters ? String(node.parameters.comment ?? "...") : undefined}
         collapsed={collapsed} enabled={node.enabled}
-        onCollapse={() => setParameter("collapsed", !collapsed)}
+        onCollapse={() => stored ? setParameter("collapsed", !collapsed) : setFolded(!folded)}
         onBypass={() => dispatch({ type: "set-node-details", nodeId: node.id, enabled: !node.enabled })}
         onRename={(label) => dispatch({ type: "set-node-details", nodeId: node.id, label })}
         onComment={(comment) => setParameter("comment", comment)}
@@ -1064,12 +1055,10 @@ function NodeFace({
           // Resetting the module keeps its name, comment, view and presets.
           .filter((parameter) => !NOT_IN_PRESETS.has(parameter.id))
           .map((parameter) => [parameter.id, structuredClone(parameter.defaultValue)])))}
-        onClose={onClose}
-        presets={presetHandlers(node.parameters, () => snapshotOf(node.parameters), setParameters as (values: Record<string, unknown>) => void)} />
-      : <header className="mm-node__header">
-        <span>{node.label}</span>
-        <CloseNodeButton label={node.label} onClose={onClose} />
-      </header>}
+        onClose={() => onClose(node.id)}
+        presets={"presets" in node.parameters
+          ? presetHandlers(node.parameters, () => snapshotOf(node.parameters), setParameters as (values: Record<string, unknown>) => void)
+          : undefined} />}
     <div className="mm-node__ports mm-node__ports--input">
       {descriptor.ports.filter((port) => port.direction === "input").map((port) =>
         <button type="button" key={port.id}
@@ -1135,27 +1124,13 @@ function NodeFace({
               key={`${element.kind}-${element.id}`}
               onClick={() => onCommand(node, element.id, element.label)}>{element.label}</button>;
             if (element.kind === "status") {
-              // A status is a readout, so it gets the kit's readout controls:
-              // an LED for "is this doing anything", the text itself as a
-              // Display, and — where the status is a count of something with
-              // a known ceiling — a Meter, which is the difference between
-              // reading "6" and seeing that six is nearly all of them.
-              const text = status[element.id] ?? "Idle";
-              const live = isLiveStatus(text);
-              return <output className="mm-status mm-status--kit"
-                key={`${element.kind}-${element.id}`}>
-                <Led on={live} tone="accent" />
-                <Display label={element.label} value={text} variant="inline"
-                  tone={live ? "accent" : "normal"} />
-                {hasVoiceCount(node.moduleType) && element.id === "voices" && <Meter
-                  levels={[statusLevel(text, VOICE_METER_CEILING)]}
-                  orientation="horizontal" length={46} segments={8}
-                  label={`${element.label} level`} />}
-              </output>;
+              // A readout in the tight instrument's terms: a lit dot for "is
+              // this doing anything", the label small, the value in the pixel face.
+              return <StatusReadout key={`${element.kind}-${element.id}`} nodeId={node.id} id={element.id} label={element.label} />;
             }
             return <CustomFace key={`${element.kind}-${element.id}-${index}`}
               element={element} node={node} setParameter={setParameter}
-              setParameters={setParameters} status={status} />;
+              setParameters={setParameters} />;
           })}
         </div>
       </section>)}
@@ -1181,6 +1156,8 @@ export function ModularApp() {
   zoomRef.current = zoom;
   const [handMode, setHandMode] = useState(() => readStoredBoolean(STORAGE_KEYS.handMode, false));
   const [panning, setPanning] = useState(false);
+  /** The performance panel: what takes the time, ranked. */
+  const [perfOpen, setPerfOpen] = useState(false);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const spaceHeldRef = useRef(false);
   const [themeId, setThemeId] = useState<ThemeId>(() => readStoredTheme());
@@ -1202,14 +1179,19 @@ export function ModularApp() {
 
   /** Every port with a cable on it, as `"nodeId:portId"`. Built once per edge
    * change so each jack is a set lookup rather than a scan of every edge. */
+  // Keyed by the endpoints, not the edges object: every command copies that
+  // object, and a new Set each time re-rendered every module face.
+  const edgeSignature = Object.values(graph.edges)
+    .map((edge) => `${edge.from.nodeId}:${edge.from.portId}>${edge.to.nodeId}:${edge.to.portId}`).join("|");
   const connectedPorts = useMemo(() => {
     const ports = new Set<string>();
-    for (const edge of Object.values(graph.edges)) {
-      ports.add(`${edge.from.nodeId}:${edge.from.portId}`);
-      ports.add(`${edge.to.nodeId}:${edge.to.portId}`);
+    for (const pair of edgeSignature ? edgeSignature.split("|") : []) {
+      const [from, to] = pair.split(">");
+      ports.add(from);
+      ports.add(to);
     }
     return ports;
-  }, [graph.edges]);
+  }, [edgeSignature]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [pendingConnection, setPendingConnection] = useState<PortRef | null>(null);
@@ -1222,7 +1204,8 @@ export function ModularApp() {
   /** Stacking order. A node touched most recently sits in front of the rest. */
   const [stacking, setStacking] = useState<Record<string, number>>({});
   const stackCounter = useRef(1);
-  const [runtimeStatuses, setRuntimeStatuses] = useState<Record<string, Readonly<Record<string, string>>>>({});
+  // Statuses live outside React state: see statusStore.ts.
+  const statusStore = useMemo(() => new StatusStore(), []);
   const [midiDevices, setMidiDevices] = useState<MidiDeviceOption[]>([]);
   const nextId = useRef(2);
   const nextEdgeId = useRef(2);
@@ -1267,7 +1250,6 @@ export function ModularApp() {
       ...nodeSize(node.moduleType),
     })),
   ), [graph.nodes]);
-  const measureFrameRef = useRef<number | null>(null);
   const panRef = useRef<{ clientX: number; clientY: number; camera: Camera } | null>(null);
   const didPanRef = useRef(false);
   // Read through a ref so two edits in one event — the baton writing to the
@@ -1358,6 +1340,7 @@ export function ModularApp() {
   const measureNow = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const started = performance.now();
     const canvasRect = canvas.getBoundingClientRect();
     const next: Record<string, Point> = {};
     for (const element of canvas.querySelectorAll<HTMLElement>(".mm-port")) {
@@ -1370,25 +1353,10 @@ export function ModularApp() {
         zoom,
       );
     }
+    perf.record("measure ports", performance.now() - started);
     setPortAnchors((current) => (sameAnchors(current, next) ? current : next));
   }, [zoom]);
 
-  /**
-   * Coalesced re-measure, for the one caller that fires continuously: node
-   * dragging. One layout read per frame is the most that can reach the screen.
-   *
-   * Only the drag path goes through a frame. The measurement that matters for
-   * correctness — the one after every render — runs synchronously in the layout
-   * effect below, because a backgrounded tab never runs an animation frame and
-   * cables would sit on their fallback geometry until it was foregrounded.
-   */
-  const measurePorts = useCallback(() => {
-    if (measureFrameRef.current !== null) cancelAnimationFrame(measureFrameRef.current);
-    measureFrameRef.current = requestAnimationFrame(() => {
-      measureFrameRef.current = null;
-      measureNow();
-    });
-  }, [measureNow]);
 
   // Ports move when the graph changes, when zoom changes, and when a node is
   // dragged; the first two are renders, and the third calls `measurePorts`.
@@ -1965,8 +1933,7 @@ export function ModularApp() {
           return [node.id, status];
         }),
       );
-      setRuntimeStatuses((current) =>
-        JSON.stringify(current) === JSON.stringify(next) ? current : next);
+      statusStore.set(next);
       setAudioNodes(audioRef.current?.liveNodeCount ?? 0);
       setRackReport((current) => {
         const next = audioRef.current?.rackReport ?? null;
@@ -1976,8 +1943,9 @@ export function ModularApp() {
       setMidiDevices((current) =>
         JSON.stringify(current) === JSON.stringify(devices) ? current : devices);
     };
-    update();
-    const timer = window.setInterval(update, 100);
+    const timed = () => perf.time("status poll", update);
+    timed();
+    const timer = window.setInterval(timed, 100);
     return () => window.clearInterval(timer);
   }, [graph, audioOn]);
 
@@ -2157,7 +2125,7 @@ export function ModularApp() {
    */
   useEffect(() => {
     if (!audioOn) return;
-    audioRef.current?.update(graph);
+    perf.time("audio graph update", () => audioRef.current?.update(graph));
   }, [graph, audioOn]);
 
   useEffect(() => () => {
@@ -2295,6 +2263,7 @@ export function ModularApp() {
     template4: { run: () => loadGraph(streamTemplate(4)) },
     template8: { run: () => loadGraph(streamTemplate(8)) },
     template16: { run: () => loadGraph(streamTemplate(16)) },
+    templateM: { run: () => loadGraph(centred(buildMRack())) },
     open: { run: () => openInputRef.current?.click() },
     save: { run: save },
     savePack: { run: savePack },
@@ -2315,25 +2284,70 @@ export function ModularApp() {
     zoomReset: { run: () => setZoom(1) },
     hand: { run: () => setHandMode((value) => !value), checked: handMode },
     sounds: { run: () => setPoolOpen((value) => !value), checked: poolOpen },
+    performance: { run: () => setPerfOpen((value) => !value), checked: perfOpen },
     classicView: { run: showM, checked: findMNode(graph) !== null },
   };
 
   useEffect(() => () => runtimeRef.current?.stop(), []);
 
-  return <SoundPoolContext.Provider value={{ assets, preview: playAsset }}>
-  <KitContext.Provider value={kitId}>
-  <MFaceHostContext.Provider value={{ themeId, onSelectTheme: setThemeId, kitId, onSelectKit: setKitId, zoom }}>
-  <MLabHostContext.Provider value={{
+  // What the module faces call back into, read through the latest render so
+  // the handlers themselves never change and a memoised face never re-renders
+  // just because the app did.
+  const latest = useRef({ dispatch, handleNodeCommand, handleParameterChange, handlePortClick, beginCableDrag,
+    bringToFront, removeNode, anchorFor, graph });
+  latest.current = { dispatch, handleNodeCommand, handleParameterChange, handlePortClick, beginCableDrag,
+    bringToFront, removeNode, anchorFor, graph };
+  const handlers = useMemo(() => ({
+    dispatch: (command: GraphCommand) => latest.current.dispatch(command),
+    onCommand: (node: NodeInstance, commandId: string, label: string) => latest.current.handleNodeCommand(node, commandId, label),
+    onParameterChange: (nodeId: string, parameterId: string, value: JsonValue, morph: MorphPolicy) =>
+      latest.current.handleParameterChange(nodeId, parameterId, value, morph),
+    onSelect: (nodeId: string) => { setSelectedNodeId(nodeId); setSelectedEdgeId(null); },
+    onPortClick: (port: PortRef) => latest.current.handlePortClick(port),
+    onPortPointerDown: (event: React.PointerEvent, port: PortRef, direction: "input" | "output") =>
+      latest.current.beginCableDrag(event, port, direction),
+    onRaise: (nodeId: string) => latest.current.bringToFront(nodeId),
+    onClose: (nodeId: string) => latest.current.removeNode(nodeId),
+    // A dragged module's cables follow it directly, from the last measured
+    // ports plus the drag offset: no render, no layout read.
+    onDragMove: (nodeId: string, offset: { x: number; y: number } | null) => {
+      if (!offset) return;
+      const { graph: current, anchorFor: anchor } = latest.current;
+      const svg = canvasRef.current?.querySelector("svg.mm-cables");
+      if (!svg) return;
+      const moved = (ref: PortRef, direction: "input" | "output") => {
+        const at = anchor(ref, direction);
+        return ref.nodeId === nodeId ? { x: at.x + offset.x, y: at.y + offset.y } : at;
+      };
+      for (const edge of Object.values(current.edges)) {
+        if (edge.from.nodeId !== nodeId && edge.to.nodeId !== nodeId) continue;
+        svg.querySelector(`path[data-edge-id="${CSS.escape(edge.id)}"]`)
+          ?.setAttribute("d", cablePath(moved(edge.from, "output"), moved(edge.to, "input")));
+      }
+    },
+  }), []);
+  const mlabHost = useMemo<MLabHost>(() => ({
     graph,
     setNodeParameters: (nodeId, values) => {
-      dispatch({ type: "set-parameters", nodeId, values });
+      latest.current.dispatch({ type: "set-parameters", nodeId, values });
       for (const [parameterId, value] of Object.entries(values)) {
         runtimeRef.current?.queueParameter(nodeId, parameterId, value, "immediate");
       }
     },
     command: (nodeId, commandId) => { runtimeRef.current?.command(nodeId, commandId); },
-    run: (nodeId, commandId, label) => { const node = graph.nodes[nodeId]; if (node) handleNodeCommand(node, commandId, label); },
-  }}>
+    run: (nodeId, commandId, label) => {
+      const node = latest.current.graph.nodes[nodeId];
+      if (node) latest.current.handleNodeCommand(node, commandId, label);
+    },
+    readScope: (nodeId, into) => audioRef.current?.readScope(nodeId, into) ?? false,
+  }), [graph]);
+
+  return <SoundPoolContext.Provider value={{ assets, preview: playAsset }}>
+  <KitContext.Provider value={kitId}>
+  <MFaceHostContext.Provider value={{ themeId, onSelectTheme: setThemeId, kitId, onSelectKit: setKitId, zoom }}>
+  <StatusStoreContext.Provider value={statusStore}>
+  <MLabHostContext.Provider value={mlabHost}>
+  <Profiler id="render whole app" onRender={recordRender}>
   <main className="mm-app" onClick={() => setMenu(null)}>
     <input
       ref={openInputRef}
@@ -2422,7 +2436,7 @@ export function ModularApp() {
             if (!from || !to) return null;
             // Both ends come from the ports themselves, so a cable lands on the
             // port it is actually connected to however many the node has.
-            return <path key={edge.id} className={selectedEdgeId === edge.id ? "is-selected" : ""}
+            return <path key={edge.id} data-edge-id={edge.id} className={selectedEdgeId === edge.id ? "is-selected" : ""}
               aria-label={`Cable from ${from.label} to ${to.label}`}
               onClick={(event) => { event.stopPropagation(); setSelectedEdgeId(edge.id); setSelectedNodeId(null); }}
               d={cablePath(anchorFor(edge.from, "output"), anchorFor(edge.to, "input"))} />;
@@ -2434,21 +2448,20 @@ export function ModularApp() {
               cableDrag.direction,
             )} />}
         </svg>
-        {Object.values(graph.nodes).map((node) => <NodeFace key={node.id} node={node}
+        {Object.values(graph.nodes).map((node) => <Profiler key={node.id} id={`render ${node.moduleType}`} onRender={recordRender}><NodeFaceMemo node={node}
           zoom={zoom} selected={selectedNodeId === node.id} pendingConnection={pendingConnection}
-          dispatch={dispatch} onCommand={handleNodeCommand}
-          onParameterChange={handleParameterChange}
-          onSelect={() => { setSelectedNodeId(node.id); setSelectedEdgeId(null); }}
-          onPortClick={handlePortClick}
-          onPortPointerDown={beginCableDrag}
-          onDragMove={measurePorts}
-          onRaise={() => bringToFront(node.id)}
+          dispatch={handlers.dispatch} onCommand={handlers.onCommand}
+          onParameterChange={handlers.onParameterChange}
+          onSelect={handlers.onSelect}
+          onPortClick={handlers.onPortClick}
+          onPortPointerDown={handlers.onPortPointerDown}
+          onDragMove={handlers.onDragMove}
+          onRaise={handlers.onRaise}
           stackIndex={2 + (stacking[node.id] ?? 0)}
           dropTarget={dropTarget}
-          status={runtimeStatuses[node.id] ?? {}}
           midiDevices={midiDevices}
           connectedPorts={connectedPorts}
-          onClose={() => removeNode(node.id)} />)}
+          onClose={handlers.onClose} /></Profiler>)}
       </div>
       </div>
       {menu && <div ref={menuRef} className="mm-module-menu" style={{ left: menu.x, top: menu.y }}
@@ -2489,8 +2502,11 @@ export function ModularApp() {
       onClose={() => setPoolOpen(false)}
     /> : null}
     <footer className="mm-status-bar"><span>{message}</span><span>{Object.keys(graph.nodes).length} nodes · {Object.keys(graph.edges).length} cable{audioOn ? ` · ${audioNodes} audio · ${engineKind === "rust" ? "Rust" : "Web Audio"}` : ""}{rackReport ? ` · ${rackReport.modules} in engine · ${rackReport.samples} sample${rackReport.samples === 1 ? "" : "s"}` : ""}</span></footer>
+  {perfOpen && <PerfPanel onClose={() => setPerfOpen(false)} />}
   </main>
+  </Profiler>
   </MLabHostContext.Provider>
+  </StatusStoreContext.Provider>
   </MFaceHostContext.Provider>
   </KitContext.Provider>
   </SoundPoolContext.Provider>;

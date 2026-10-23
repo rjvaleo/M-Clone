@@ -208,7 +208,7 @@ const GRANULAR = defineModule({
  */
 const SYNTH_WAVES = ["sawtooth", "square", "triangle", "sine", "pulse"] as const;
 
-const oscillatorSection = (index: 1 | 2 | 3, defaults: {
+const oscillatorParams = (index: 1 | 2 | 3, defaults: {
   wave: string;
   detune: number;
   level: number;
@@ -219,17 +219,11 @@ const oscillatorSection = (index: 1 | 2 | 3, defaults: {
     numberParam(`osc${index}-level`, `Osc ${index} level`, defaults.level, 0, 1, 0.01),
     numberParam(`osc${index}-width`, `Osc ${index} width`, 0.5, 0.1, 0.9, 0.01),
   ],
-  face: section(`osc${index}`, `Oscillator ${index}`, [
-    param(`osc${index}-wave`),
-    param(`osc${index}-detune`),
-    param(`osc${index}-level`),
-    param(`osc${index}-width`),
-  ]),
 });
 
-const OSC1 = oscillatorSection(1, { wave: "sawtooth", detune: 0, level: 0.8 });
-const OSC2 = oscillatorSection(2, { wave: "sawtooth", detune: 7, level: 0.5 });
-const OSC3 = oscillatorSection(3, { wave: "sine", detune: -1200, level: 0.3 });
+const OSC1 = oscillatorParams(1, { wave: "sawtooth", detune: 0, level: 0.8 });
+const OSC2 = oscillatorParams(2, { wave: "sawtooth", detune: 7, level: 0.5 });
+const OSC3 = oscillatorParams(3, { wave: "sine", detune: -1200, level: 0.3 });
 
 const SYNTH = defineModule({
   type: "m.synth",
@@ -277,33 +271,16 @@ const SYNTH = defineModule({
       "amp-attack", "amp-decay", "amp-sustain", "amp-release",
       "level", "pan",
     ], "top"),
-    OSC1.face,
-    OSC2.face,
-    OSC3.face,
-    section("filter", "Filter", [
-      param("cutoff"),
-      param("resonance"),
-      param("key-follow"),
-      param("filter-amount"),
-      param("filter-attack"),
-      param("filter-decay"),
-      param("filter-sustain"),
-      param("filter-release"),
-    ]),
-    section("amp", "Amplitude", [
-      param("amp-attack"),
-      param("amp-decay"),
-      param("amp-sustain"),
-      param("amp-release"),
-    ]),
-    section("out", "Output", [
-      param("level"),
-      param("pan"),
-      param("max-voices"),
-      param("mute"),
-      status("voices", "Sounding"),
-    ]),
-    section("modulation", "Modulation", [custom("mod-matrix", "Modulation matrix", ["matrix"])]),
+    // One tight panel: oscillators, filter, both envelopes drawn as curves
+    // with handles, and the output. See ui/mlab/SynthFace.tsx.
+    { ...section("synth", "Synth", [custom("synth-panel", "Synth", [
+      ...OSC1.parameters, ...OSC2.parameters, ...OSC3.parameters,
+    ].map((parameter) => parameter.id).concat([
+      "cutoff", "resonance", "key-follow", "filter-amount",
+      "filter-attack", "filter-decay", "filter-sustain", "filter-release",
+      "amp-attack", "amp-decay", "amp-sustain", "amp-release",
+      "level", "pan", "max-voices", "mute", "matrix",
+    ]))]), showHeading: false },
   ],
 });
 

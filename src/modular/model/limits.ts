@@ -12,6 +12,10 @@ const LIMITS: Readonly<Record<string, number>> = {
   // The M modules: one conductor, one set of Variables and one orchestra;
   // a sequencer and a Time Warp for each of M's eight voices.
   "m.lab-variables": 1,
+  "m.lab-density": 1,
+  "m.lab-velocity-range": 1,
+  "m.lab-transposition": 1,
+  "m.lab-note-order": 1,
   "m.lab-conductor": 1,
   "m.lab-orchestra": 1,
   "m.lab-noteseq": 8,

@@ -7,17 +7,19 @@
 
 import { useState } from "react";
 import { PresetButton, type PresetHandlers } from "./PresetManager";
+import { useDismiss } from "./kit";
 
 export type N4HeaderProps = {
   name: string;
-  comment: string;
+  /** Absent on a module with nowhere to store one. */
+  comment?: string;
   title: string;
   collapsed: boolean;
   enabled: boolean;
   onCollapse: () => void;
   onBypass: () => void;
   onRename: (name: string) => void;
-  onComment: (comment: string) => void;
+  onComment?: (comment: string) => void;
   onReset: () => void;
   onClose: () => void;
   /** The module's preset manager, behind Numerology's preset button. */
@@ -27,11 +29,12 @@ export type N4HeaderProps = {
 export function N4Header(props: N4HeaderProps) {
   const [editing, setEditing] = useState<"name" | "comment" | null>(null);
   const [menu, setMenu] = useState(false);
+  const menuRef = useDismiss<HTMLSpanElement>(menu, () => setMenu(false));
   const commit = (field: "name" | "comment", value: string) => {
     setEditing(null);
     const text = value.trim();
     if (field === "name" && text) props.onRename(text);
-    if (field === "comment") props.onComment(text || "...");
+    if (field === "comment") props.onComment?.(text || "...");
   };
   const editor = (field: "name" | "comment", value: string) => (
     <input autoFocus defaultValue={value} aria-label={field === "name" ? "Module name" : "Module comment"}
@@ -50,7 +53,7 @@ export function N4Header(props: N4HeaderProps) {
         aria-label={props.enabled ? "Bypass module" : "Turn module back on"} aria-pressed={!props.enabled}
         onClick={(event) => { event.stopPropagation(); props.onBypass(); }}>⏻</button>
       {props.presets && <PresetButton handlers={props.presets} />}
-      <span className="n4-header__menu">
+      <span className="n4-header__menu" ref={menuRef}>
         <button type="button" aria-label="Module actions" aria-expanded={menu}
           onClick={(event) => { event.stopPropagation(); setMenu(!menu); }}>⚙▾</button>
         {menu && (
@@ -65,8 +68,10 @@ export function N4Header(props: N4HeaderProps) {
       <span className="n4-header__name" onDoubleClick={(event) => { event.stopPropagation(); setEditing("name"); }}>
         {editing === "name" ? editor("name", props.name) : props.name}
       </span>
-      <span className="n4-header__comment" onDoubleClick={(event) => { event.stopPropagation(); setEditing("comment"); }}>
-        {editing === "comment" ? editor("comment", props.comment) : props.comment}
+      <span className="n4-header__comment" onDoubleClick={(event) => {
+        event.stopPropagation(); if (props.comment !== undefined) setEditing("comment");
+      }}>
+        {editing === "comment" ? editor("comment", props.comment ?? "") : props.comment}
       </span>
       <span className="n4-header__title">{props.title}</span>
       <button type="button" className="n4-header__close" aria-label={`Close ${props.name}`}

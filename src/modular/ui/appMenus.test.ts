@@ -31,13 +31,14 @@ describe("what each menu holds", () => {
   const items = (title: string) =>
     menuLabels(APP_MENUS.find((menu) => menu.title === title)!.items);
 
-  it("puts documents and the stream templates under File", () => {
+  it("puts documents, the stream templates and the M Rack under File", () => {
     expect(items("File")).toEqual([
       "New",
       "1 Stream",
       "4 Streams",
       "8 Streams",
       "16 Streams",
+      "M Rack",
       "Open…",
       "Save",
       "Save with Samples",
@@ -54,7 +55,7 @@ describe("what each menu holds", () => {
 
   it("puts the view controls under View", () => {
     expect(items("View")).toEqual([
-      "Zoom In", "Zoom Out", "Actual Size", "Hand Tool", "Sound Pool",
+      "Zoom In", "Zoom Out", "Actual Size", "Hand Tool", "Sound Pool", "Performance",
       "Classic M",
     ]);
   });
