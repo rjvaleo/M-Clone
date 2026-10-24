@@ -175,6 +175,11 @@ impl Lfo {
         self.rate_hz
     }
 
+    /// Where the cycle is, `[0, 1)`: the next sample's position.
+    pub fn phase(&self) -> f32 {
+        self.phase
+    }
+
     /// §9.6's Depth, 0..1. Applied on the way out so the shape is unchanged.
     pub fn set_depth(&mut self, depth: f32) {
         self.depth = clamp(depth, 0.0, 1.0);

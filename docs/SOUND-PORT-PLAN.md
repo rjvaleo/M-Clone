@@ -1,6 +1,6 @@
 # MultiGrainLive's sound, effects and synths in idMLab
 
-*23 October 2026. Agreed with RJ. Steps 1 and 2 built (branch `sound-port`).*
+*23 October 2026. Agreed with RJ. Steps 1, 2 and 3's LFO built (branch `sound-port`).*
 
 Bring MultiGrainLive's whole sound engine and every effect into idMLab, add
 modulators that can be mapped to any knob, port the scale-sequencer synth in
@@ -74,13 +74,29 @@ full, and add drum step programming. Automation is not ported.
    - Checked in the app: the Add menu lists all sixteen, and ++delay patched
      between M's synth and the output sounds on the Rust default.
 3. **Modulators and the mixer.**
-   - A per-parameter modulation path through `compileAudioPlan`, the bridge
-     and the Rust engine (it has `set_modulation` for the synth's matrix
-     only today). Modulation is applied sample by sample in Rust.
-   - Modules: LFO (shapes, rate, tempo sync to the transport, phase, amount),
-     then envelope follower, random / sample-and-hold and an ADSR on a gate.
-   - The Map interaction, rings and moving indicators on every knob face.
-   - `m.audio-mixer` on the Rust engine; more channels and sends if wanted.
+   **LFO built.**
+   - **Rust.** `Engine::connect_param` routes a module output to any
+     module's parameter: each sample the module reads the host's value plus
+     `source × scale`, held inside the knob's range, without the host value
+     ever being overwritten. `LfoModule` (kind 20) runs the synth's `Lfo` —
+     sine, triangle, saw up and down, square, sample-and-hold, smooth random —
+     scaled by its amount, and reports its phase. The ABI has
+     `connect_param`, `disconnect_param`, `module_output` and
+     `module_telemetry`.
+   - **The plan** carries LFOs as `modulators` and each mapping as a
+     `modulations` route scaled by half the knob's range; only numbers the
+     plan carries as values are mappable (not structure, mix or mute). Each
+     rack report carries every LFO's phase and output.
+   - **The face.** The LFO has its colour (each new one takes one no other
+     LFO wears), Rate, Shape, Amount and Phase, a **Map** button and the list
+     of knobs it moves, each with ×. Map, then click a knob: it gets a ring in
+     the LFO's colour (two rings for two LFOs), a second pointer and a live
+     value that move with the LFO, drawn at frame rate without a render from
+     the reported phase carried forward. Esc stops mapping; Alt-click on a
+     knob lets its last LFO go. Works on standard faces and the synth's.
+   - Web Audio does not modulate: the routes exist only in Rust.
+   - Not built yet: the envelope follower and the ADSR on a gate (S&H and
+     smooth random are LFO shapes), tempo sync, more mixer channels or sends.
 4. **The sound engine, hooked to M.**
    - The shared crate, with MultiGrainLive moved onto it first and its tests
      kept passing (Echo-style parity on renders).

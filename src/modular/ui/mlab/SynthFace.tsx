@@ -8,6 +8,7 @@ import type { JsonValue } from "../../model/graph";
 import { EnvelopeEditor } from "../n4/EnvelopeEditor";
 import { formatValue } from "../n4/format";
 import { N4Button, N4Knob, N4Panel, N4Spinner } from "../n4/kit";
+import { ModTarget } from "../ModTarget";
 import { Scope } from "../n4/Scope";
 import { useMLabHost, type MLabFaceProps } from "./common";
 
@@ -19,9 +20,12 @@ const LIMITS = { attack: 4000, decay: 4000, release: 8000 };
 
 export function SynthFace({ node, setParameter, setParameters, status }: MLabFaceProps) {
   const n = (id: string, fallback = 0) => { const v = node.parameters[id]; return typeof v === "number" ? v : fallback; };
+  // Every knob here is one an LFO can map, like any other face's.
   const knob = (id: string, label: string, min: number, max: number, step: number, unit?: string) =>
-    <N4Knob label={label} value={n(id)} min={min} max={max} step={step}
-      format={(v) => formatValue(v, { unit, step })} onChange={(v) => setParameter(id, v)} />;
+    <ModTarget nodeId={node.id} moduleType={node.moduleType} parameterId={id} value={n(id)}>
+      {(modulated) => <N4Knob label={label} value={n(id)} min={min} max={max} step={step}
+        format={(v) => formatValue(v, { unit, step })} onChange={(v) => setParameter(id, v)} modulated={modulated} />}
+    </ModTarget>;
   const env = (prefix: string) => ({
     attack: n(`${prefix}-attack`), decay: n(`${prefix}-decay`), sustain: n(`${prefix}-sustain`), release: n(`${prefix}-release`),
   });

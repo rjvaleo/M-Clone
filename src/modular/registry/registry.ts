@@ -11,6 +11,7 @@ import type {
 import { CLASSIC_MODULES } from "./classicModules";
 import { AUDIO_MODULES } from "./audioModules";
 import { PRISM_MODULES } from "./prismModules";
+import { MODULATOR_MODULES } from "./modulatorModules";
 import { PLAYER_MODULES } from "./playerModules";
 import { M_MODULE } from "./mModule";
 import { M_LAB_MODULES } from "./mLabModules";
@@ -977,6 +978,7 @@ export const moduleRegistry: ModuleRegistry = new Map(
     ...CLASSIC_MODULES,
     ...AUDIO_MODULES,
     ...PRISM_MODULES,
+    ...MODULATOR_MODULES,
     ...PLAYER_MODULES,
     PATTERN_EDITOR,
     TRANSPORT,

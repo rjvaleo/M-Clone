@@ -19,6 +19,8 @@
 // move never rebuilds topology" a property of the compiler rather than a habit
 // of whoever wrote the module.
 
+import { MODULATOR_TYPES } from "../registry/modulatorModules";
+import { targetsOf } from "../modulation";
 import { PRISM_STRUCTURE_PARAMS } from "../registry/prismModules";
 import type { GraphDocument, JsonValue } from "../model/graph";
 import type { ModuleRegistry } from "../registry/registry";
@@ -28,7 +30,7 @@ import {
   AUDIO_STRUCTURE_PARAMS,
 } from "../registry/audioModules";
 import { PLAYER_STRUCTURE_PARAMS } from "../registry/playerModules";
-import type { AudioConnection, AudioNodeSpec, AudioPlan } from "./audioPlan";
+import type { AudioConnection, AudioModulation, AudioNodeSpec, AudioPlan } from "./audioPlan";
 
 export const AUDIO_OUTPUT_MODULE = "m.audio-output";
 
@@ -115,7 +117,54 @@ export function compileAudioPlan(
     connections.push({ from: { ...edge.from }, to: { ...edge.to } });
   }
 
-  return { generation: options.generation ?? 0, nodes, connections };
+  const { modulators, modulations } = compileModulation(graph, registry, nodes);
+  return { generation: options.generation ?? 0, nodes, connections, modulators, modulations };
+}
+
+/**
+ * The LFOs, and a route for each knob they move.
+ *
+ * A knob is moved only if it is a number on a module in the plan that the plan
+ * carries as a parameter: a structural value is one Web Audio rebuilds for,
+ * and a module outside the plan has no engine half to move.
+ */
+function compileModulation(
+  graph: GraphDocument,
+  registry: ModuleRegistry,
+  nodes: Readonly<Record<string, AudioNodeSpec>>,
+): { modulators: AudioNodeSpec[]; modulations: AudioModulation[] } {
+  const modulators: AudioNodeSpec[] = [];
+  const modulations: AudioModulation[] = [];
+  for (const nodeId of Object.keys(graph.nodes).sort()) {
+    const node = graph.nodes[nodeId];
+    if (!node.enabled || !MODULATOR_TYPES.has(node.moduleType)) continue;
+    const descriptor = registry.get(node.moduleType);
+    if (!descriptor) continue;
+    const parameters: Record<string, number> = {};
+    for (const parameter of descriptor.parameters) {
+      const value = node.parameters[parameter.id] ?? parameter.defaultValue;
+      if (typeof value === "number" && Number.isFinite(value)) parameters[parameter.id] = value;
+      else if (parameter.kind === "enum" && parameter.id !== "color" && typeof value === "string") {
+        const index = parameter.options?.indexOf(value) ?? -1;
+        if (index >= 0) parameters[parameter.id] = index;
+      }
+    }
+    modulators.push({ nodeId, moduleType: node.moduleType, structure: {}, parameters, bypass: false, wet: 1 });
+    for (const target of targetsOf(node)) {
+      const spec = nodes[target.nodeId];
+      if (!spec || !(target.parameterId in spec.parameters)) continue;
+      const knob = registry.get(spec.moduleType)?.parameters.find((p) => p.id === target.parameterId);
+      if (knob?.kind !== "number" || knob.minimum === undefined || knob.maximum === undefined) continue;
+      modulations.push({
+        from: nodeId,
+        to: { ...target },
+        scale: (knob.maximum - knob.minimum) / 2,
+        min: knob.minimum,
+        max: knob.maximum,
+      });
+    }
+  }
+  return { modulators, modulations };
 }
 
 /** Node ids that reach the speakers, in document order. */

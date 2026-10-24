@@ -376,5 +376,43 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
     `${low.toFixed(3)} to ${high.toFixed(3)}`);
 }
 
+// ---- an LFO moving a knob ---------------------------------------------------
+// LfoModule is kind 20; a route from its output scales by half the knob's
+// range. Here it sweeps a gain's level (index 0, range 0–2) at 5 Hz.
+{
+  const LFO = 20;
+  api.init(SAMPLE_RATE);
+  const source = u32(api.add_module(KIND.HOST_INPUT));
+  const gain = u32(api.add_module(KIND.GAIN));
+  const lfo = u32(api.add_module(LFO));
+  const out = u32(api.add_module(KIND.AUDIO_OUTPUT));
+  check("built an LFO", lfo !== NO_MODULE);
+  api.connect(source, 0, gain, 0);
+  api.connect(gain, 0, out, 0);
+  api.set_io(source, out);
+  api.set_param(gain, GAIN_PARAM.LEVEL, 1.0);
+  api.set_param(lfo, 0, 5.0);
+  api.set_param(lfo, 2, 1.0);
+  check("routes the LFO to the gain", api.connect_param(lfo, 0, gain, GAIN_PARAM.GAIN, 1.0, 0.0, 2.0) === 1);
+  check("refuses a route to a parameter that is not there", api.connect_param(lfo, 0, gain, 40, 1.0, 0.0, 2.0) === 0);
+  let low = Infinity;
+  let high = 0;
+  for (let b = 0; b < 400; b++) {
+    new Float32Array(api.memory.buffer, api.input_ptr(), QUANTUM).fill(0.5);
+    api.process_quantum();
+    const left = new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM);
+    if (b < 40) continue;
+    for (let i = 0; i < QUANTUM; i++) {
+      low = Math.min(low, left[i]);
+      high = Math.max(high, left[i]);
+    }
+  }
+  check("the LFO sweeps the sound", low < 0.1 && high > 0.9, `${low.toFixed(3)} to ${high.toFixed(3)}`);
+  const phase = api.module_telemetry(lfo);
+  check("the LFO reports its phase", phase >= 0 && phase < 1, `${phase}`);
+  check("and its output", Number.isFinite(api.module_output(lfo, 0)));
+  check("unroutes it", api.disconnect_param(lfo, 0, gain, GAIN_PARAM.GAIN) === 1);
+}
+
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

@@ -25,7 +25,7 @@
 
 import type { AudioNodeSpec, AudioPlan } from "../audioPlan";
 import { AUDIO_MIX_PARAM, AUDIO_MUTE_PARAM } from "../../registry/audioModules";
-import { PRISM_CODES, PRISM_PARAM_INDICES, PRISM_SOUND_PARAM, PRISM_SOUND_TYPES } from "../../registry/prismModules";
+import { PRISM_CODES, PRISM_FADE_KEY, PRISM_PARAM_INDICES, PRISM_SOUND_PARAM, PRISM_SOUND_TYPES } from "../../registry/prismModules";
 import { planSampleRefs } from "./sampleSync";
 import { transferSample, type SampleSource } from "./sampleTransfer";
 import { NoteSchedule } from "./noteSchedule";
@@ -61,6 +61,7 @@ export const MODULE_KINDS: Readonly<Record<string, number>> = {
   "m.audio-mixer": 16,
   "m.audio-widener": 17,
   "m.audio-dp4": 18,
+  "m.lfo": 20,
   // Every effect from prism-fx is one Rust module, built by its code.
   ...Object.fromEntries(Object.keys(PRISM_CODES).map((type) => [type, 19])),
 };
@@ -377,6 +378,8 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     level: 24,
   },
   ...PRISM_PARAM_INDICES,
+  // `LfoModule`. Its targets are routes, not values; its colour is the face's.
+  "m.lfo": { rate: 0, shape: 1, amount: 2, phase: 3 },
   "m.granular": {
     "grain-size": 0,
     "grain-spacing": 1,
@@ -416,7 +419,7 @@ const FADE_HANDLE: Readonly<Record<string, number | undefined>> = {
   "m.audio-mixer": PARAM_INDICES["m.audio-mixer"].level,
   "m.audio-widener": PARAM_INDICES["m.audio-widener"].level,
   "m.audio-dp4": PARAM_INDICES["m.audio-dp4"].level,
-  ...Object.fromEntries(Object.keys(PRISM_CODES).map((type) => [type, PRISM_PARAM_INDICES[type].level])),
+  ...Object.fromEntries(Object.keys(PRISM_CODES).map((type) => [type, PRISM_PARAM_INDICES[type][PRISM_FADE_KEY]])),
 };
 
 /** Modules that take notes. Everything else inherits the trait's no-op. */
@@ -510,6 +513,10 @@ export const PARAMS_HANDLED_ELSEWHERE: Readonly<Record<string, Readonly<Record<s
   },
   "m.granular": { "asset-id": "audio, not a value; reaches the engine via set_sample_slot" },
   "m.audio-mixer": { mute: "structural; becomes the spec's bypass" },
+  "m.lfo": {
+    color: "the face's, not the engine's",
+    targets: "the knobs it moves; they reach the engine as connect_param routes",
+  },
   ...Object.fromEntries(Object.keys(PRISM_CODES).map((type) => [type, {
     mute: "structural; becomes the spec's bypass",
     ...(PRISM_SOUND_TYPES.has(type)
@@ -547,6 +554,7 @@ export const ENGINE_ONLY_PARAMS: ReadonlySet<string> = new Set([
   AUDIO_MIX_PARAM,
   AUDIO_MUTE_PARAM,
   "level",
+  PRISM_FADE_KEY,
   // The Rust synth is ahead of its face here; Wave 0 of IDMLAB_MASTER_PLAN.md
   // puts these on the face.
   "osc1-semitones",
@@ -613,6 +621,11 @@ export interface EngineExports {
   remove_module(id: number): number;
   connect(fromModule: number, fromPort: number, toModule: number, toPort: number): number;
   disconnect(fromModule: number, fromPort: number, toModule: number, toPort: number): number;
+  /** A module output driving another's parameter; see `Engine::connect_param`. */
+  connect_param(fromModule: number, fromPort: number, toModule: number, param: number, scale: number, min: number, max: number): number;
+  disconnect_param(fromModule: number, fromPort: number, toModule: number, param: number): number;
+  module_output(module: number, port: number): number;
+  module_telemetry(module: number): number;
   set_param(module: number, index: number, value: number): void;
   note_on(module: number, note: number, velocity: number, detuneCents: number): void;
   note_off(module: number, note: number): void;
@@ -680,6 +693,11 @@ const structureKey = (spec: AudioNodeSpec): string =>
   `${spec.moduleType}|${JSON.stringify(spec.structure)}`;
 
 type Cable = { from: number; fromPort: number; to: number; toPort: number };
+
+type Route = { from: number; to: number; param: number; scale: number; min: number; max: number };
+
+/** Every spec the engine builds: the audio nodes and the modulators. */
+const specsOf = (plan: AudioPlan): AudioNodeSpec[] => [...Object.values(plan.nodes), ...(plan.modulators ?? [])];
 
 type Built = {
   moduleId: number;
@@ -766,6 +784,7 @@ export class WasmRack {
    * represent it.
    */
   private readonly cables = new Map<string, Cable>();
+  private readonly routes = new Map<string, Route>();
   private readonly unsupportedTypes = new Set<string>();
   private outputModuleId: number | undefined;
   /** Asset hash to engine slot, as the main thread assigned them. */
@@ -816,6 +835,7 @@ export class WasmRack {
     this.removeDeparted(plan);
     this.buildAndRamp(plan);
     this.rewire(plan);
+    this.reroute(plan);
     // After the modules exist: a slot is set on a module id.
     this.assignSamples(plan);
     this.pointHostAtOutput(plan);
@@ -968,6 +988,12 @@ export class WasmRack {
       peak: this.peak,
       quanta: this.quantaTotal,
     };
+    const lfos: Record<string, [number, number]> = {};
+    for (const [nodeId, built] of this.built) {
+      if (built.moduleType !== "m.lfo") continue;
+      lfos[nodeId] = [this.engine.module_telemetry(built.moduleId), this.engine.module_output(built.moduleId, 0)];
+    }
+    if (Object.keys(lfos).length > 0) report.lfos = lfos;
     this.peak = 0;
     this.quantaSinceReport = 0;
     return report;
@@ -1005,8 +1031,9 @@ export class WasmRack {
   }
 
   private removeDeparted(plan: AudioPlan): void {
+    const specs = new Map(specsOf(plan).map((spec) => [spec.nodeId, spec]));
     for (const [nodeId, built] of [...this.built]) {
-      const spec = plan.nodes[nodeId];
+      const spec = specs.get(nodeId);
       // A rebuilt node is removed here and added below, which is the whole
       // difference between a structure change and a parameter change.
       if (spec && structureKey(spec) === built.structure) continue;
@@ -1017,11 +1044,14 @@ export class WasmRack {
       for (const [key, cable] of this.cables) {
         if (cable.from === built.moduleId || cable.to === built.moduleId) this.cables.delete(key);
       }
+      for (const [key, route] of this.routes) {
+        if (route.from === built.moduleId || route.to === built.moduleId) this.routes.delete(key);
+      }
     }
   }
 
   private buildAndRamp(plan: AudioPlan): void {
-    for (const spec of Object.values(plan.nodes)) {
+    for (const spec of specsOf(plan)) {
       const kind = MODULE_KINDS[spec.moduleType];
       if (kind === undefined) {
         this.unsupportedTypes.add(spec.moduleType);
@@ -1116,6 +1146,34 @@ export class WasmRack {
       if (this.cables.has(key)) continue;
       this.engine.connect(cable.from, cable.fromPort, cable.to, cable.toPort);
       this.cables.set(key, cable);
+    }
+  }
+
+  /**
+   * Each LFO into each knob it moves, at the knob's engine index. A route whose
+   * scale or range changed is connected again, which replaces it in place.
+   */
+  private reroute(plan: AudioPlan): void {
+    const wanted = new Map<string, Route>();
+    for (const modulation of plan.modulations ?? []) {
+      const from = this.moduleIdOf(modulation.from);
+      const to = this.moduleIdOf(modulation.to.nodeId);
+      const type = this.moduleTypeOf(modulation.to.nodeId);
+      const param = type === undefined ? undefined : PARAM_INDICES[type]?.[modulation.to.parameterId];
+      if (from === undefined || to === undefined || param === undefined) continue;
+      const { scale, min, max } = modulation;
+      wanted.set(`${from}→${to}.${param}`, { from, to, param, scale, min, max });
+    }
+    for (const [key, route] of this.routes) {
+      if (wanted.has(key)) continue;
+      this.engine.disconnect_param(route.from, 0, route.to, route.param);
+      this.routes.delete(key);
+    }
+    for (const [key, route] of wanted) {
+      const existing = this.routes.get(key);
+      if (existing && existing.scale === route.scale && existing.min === route.min && existing.max === route.max) continue;
+      this.engine.connect_param(route.from, 0, route.to, route.param, route.scale, route.min, route.max);
+      this.routes.set(key, route);
     }
   }
 

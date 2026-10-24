@@ -802,3 +802,43 @@ button { cursor: pointer; }
 }
 
 /* The M modules wear Numerology's look: see ui/n4/n4.css. */
+
+/* ---- LFO mappings ------------------------------------------------------------
+ * A mapped knob wears a ring in its LFO's colour (two rings for two LFOs) and a
+ * second pointer the modulation animator turns. While an LFO's Map button is on
+ * every knob it could move is outlined, and a click picks one. The wrapper is
+ * `display: contents` so a face lays its knobs out exactly as before. */
+.mm-mod-target { display: contents; }
+.mm-mod-target.is-modulated .n4-knob__dial {
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--mod-color), 0 0 0 4px var(--mod-color-2), 0 0 8px var(--mod-color);
+}
+.n4-knob__mod { stroke: var(--mod-color); stroke-width: 2.5; stroke-linecap: round; }
+.n4-knob__live { font: 10px var(--n4-mono, ui-monospace, monospace); color: var(--mod-color); min-height: 1em; }
+.mm-canvas-viewport.is-mapping { cursor: crosshair; }
+.mm-canvas-viewport.is-mapping .mm-mod-target .n4-knob__dial {
+  border-radius: 50%;
+  outline: 2px dashed currentColor;
+  outline-offset: 3px;
+  cursor: crosshair;
+}
+
+.mm-lfo { display: grid; gap: 6px; }
+.mm-lfo__colors { display: flex; gap: 4px; }
+.mm-lfo__swatch {
+  width: 14px; height: 14px; border-radius: 50%; padding: 0;
+  border: 1px solid rgb(0 0 0 / 35%); cursor: pointer;
+}
+.mm-lfo__swatch.is-on { box-shadow: 0 0 0 2px var(--n4-text, #fff); }
+.mm-lfo__map {
+  font: 600 10px var(--n4-sans, system-ui); letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 4px 8px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--mod-color); color: var(--mod-color); background: transparent;
+}
+.mm-lfo__map.is-on { background: var(--mod-color); color: #111; }
+.mm-lfo__targets { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.mm-lfo__targets li {
+  display: flex; justify-content: space-between; align-items: center; gap: 6px;
+  font: 10px var(--n4-mono, ui-monospace, monospace); color: var(--mod-color);
+}
+.mm-lfo__targets button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 2px; }

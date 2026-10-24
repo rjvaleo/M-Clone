@@ -137,8 +137,11 @@ export function usePointerDrag(onPoint: (x: number, y: number, rect: DOMRect, ph
 }
 
 /** A knob, turned by dragging up or down, as Numerology's Humanize and Gate Adj. */
-export function N4Knob({ label, value, min, max, step = 0.01, onChange, format }: {
+export function N4Knob({ label, value, min, max, step = 0.01, onChange, format, modulated = false }: {
   label: string; value: number; min: number; max: number; step?: number; onChange: (value: number) => void; format?: (value: number) => string;
+  /** An LFO moves this knob: draw a second pointer, and a live value, that the
+   * modulation animator moves without a render (see ui/modulationAnimator.ts). */
+  modulated?: boolean;
 }) {
   const start = useRef<{ y: number; value: number } | null>(null);
   const t = (value - min) / Math.max(1e-9, max - min);
@@ -164,10 +167,12 @@ export function N4Knob({ label, value, min, max, step = 0.01, onChange, format }
           <circle cx="20" cy="20" r="15" className="n4-knob__ring" />
           <path className="n4-knob__arc" d={arc(20, 20, 15, -135, angle)} />
           <line x1="20" y1="20" x2={20 + 11 * Math.sin((angle * Math.PI) / 180)} y2={20 - 11 * Math.cos((angle * Math.PI) / 180)} />
+          {modulated && <line className="n4-knob__mod" x1="20" y1="20" x2="20" y2="6" />}
         </svg>
       </div>
       <span className="n4-knob__label">{label}</span>
       <span className="n4-knob__value">{format ? format(value) : value.toFixed(2)}</span>
+      {modulated && <span className="n4-knob__live" aria-hidden="true" />}
     </div>
   );
 }

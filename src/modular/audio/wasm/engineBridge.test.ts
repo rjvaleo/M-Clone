@@ -68,6 +68,23 @@ class FakeEngine implements EngineExports {
     this.calls.push(`disconnect:${key}`);
     return this.cables.delete(key) ? 1 : 0;
   }
+  connect_param(fm: number, fp: number, tm: number, param: number, scale: number, min: number, max: number): number {
+    this.calls.push(`route:${fm}:${fp}→${tm}.${param}*${scale}[${min},${max}]`);
+    return 1;
+  }
+  disconnect_param(fm: number, fp: number, tm: number, param: number): number {
+    this.calls.push(`unroute:${fm}:${fp}→${tm}.${param}`);
+    return 1;
+  }
+  /** What every module reports, for asserting on the report. */
+  telemetry = Number.NaN;
+  moduleOutput = 0;
+  module_telemetry(): number {
+    return this.telemetry;
+  }
+  module_output(): number {
+    return this.moduleOutput;
+  }
   set_param(module: number, index: number, value: number): void {
     this.calls.push(`param:${module}.${index}=${value}`);
     this.params.set(`${module}.${index}`, value);
@@ -1195,5 +1212,45 @@ describe("Prism effects in Rust", () => {
     rack.update(plan([node("t", "m.prism-tremolo")]));
     const t = rack.moduleIdOf("t");
     expect([...engine.cables].filter((c) => c.endsWith(`→${t}:0`) || c.endsWith(`→${t}:1`))).toHaveLength(2);
+  });
+});
+
+describe("LFOs and their routes", () => {
+  const lfo = (targets: { nodeId: string; parameterId: string }[] = []) => ({
+    ...plan([node("d", "m.audio-delay", { feedback: 0.4 })]),
+    modulators: [node("l", "m.lfo", { rate: 2, shape: 0, amount: 0.5, phase: 0 })],
+    modulations: targets.map((to) => ({ from: "l", to, scale: 0.475, min: 0, max: 0.95 })),
+  });
+
+  it("builds an LFO and sends it its controls", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(lfo());
+    const l = rack.moduleIdOf("l")!;
+    expect(engine.modules.get(l)).toBe(20);
+    expect(engine.params.get(`${l}.0`)).toBe(2);
+    expect(engine.params.get(`${l}.2`)).toBe(0.5);
+  });
+
+  it("routes the LFO to each mapped knob's engine index, and unroutes it", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(lfo([{ nodeId: "d", parameterId: "feedback" }]));
+    const [l, d] = ["l", "d"].map((id) => rack.moduleIdOf(id)!);
+    expect(engine.of("route")).toEqual([`route:${l}:0→${d}.${PARAM_INDICES["m.audio-delay"].feedback}*0.475[0,0.95]`]);
+    rack.update({ ...lfo([{ nodeId: "d", parameterId: "feedback" }]), generation: 2 });
+    expect(engine.of("route")).toHaveLength(1);
+    rack.update({ ...lfo([]), generation: 3 });
+    expect(engine.of("unroute")).toEqual([`unroute:${l}:0→${d}.${PARAM_INDICES["m.audio-delay"].feedback}`]);
+  });
+
+  it("reports each LFO's phase and value", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(lfo());
+    engine.telemetry = 0.3;
+    engine.moduleOutput = -0.2;
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.lfos).toEqual({ l: [0.3, -0.2] });
   });
 });

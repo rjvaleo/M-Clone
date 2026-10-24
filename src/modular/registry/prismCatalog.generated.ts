@@ -413,4 +413,358 @@ export const PRISM_CATALOG: readonly PrismEffect[] = [
     groups: [{ label: "Reverb", keys: ["sizeM", "reverbTimeS", "bassRt", "bassXovHz", "rtHiCutHz"] }, { label: "Modulation", keys: ["shape", "spread", "spinHz", "wanderMs", "tapSlope"] }, { label: "Reflections", keys: ["rflTimeMaster", "llRflMs", "llRflDb", "lrRflMs", "lrRflDb", "rrRflMs", "rrRflDb", "rlRflMs", "rlRflDb"] }, { label: "Levels, Mix and EQ", keys: ["predelayMs", "diffusion", "earlyDb", "reverbDb", "rolloffHz", "mix"] }],
     primary: ["predelayMs", "reverbTimeS", "rolloffHz", "diffusion", "rtHiCutHz", "mix"],
   },
+  {
+    id: "hp-low-pass", code: 32, label: "Hyperprism Low Pass", category: "filter", source: "Hyperprism-PPC 1.2.1: Low Pass",
+    sound: null,
+    params: [
+      { key: "freqHz", label: "Frequency", min: 0, max: 20000, default: 20000, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "q", label: "Q", min: 0, max: 10, default: 1, log: false, unit: "", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 25, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Filter", keys: ["freqHz", "q"] }, { label: "Settings", keys: ["smoothing"] }],
+    primary: ["freqHz", "q"],
+  },
+  {
+    id: "hp-high-pass", code: 33, label: "Hyperprism High Pass", category: "filter", source: "Hyperprism-PPC 1.2.1: High Pass",
+    sound: null,
+    params: [
+      { key: "freqHz", label: "Frequency", min: 0, max: 20000, default: 20, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "q", label: "Q", min: 0, max: 10, default: 1, log: false, unit: "", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 25, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Filter", keys: ["freqHz", "q"] }, { label: "Settings", keys: ["smoothing"] }],
+    primary: ["freqHz", "q"],
+  },
+  {
+    id: "hp-band-pass", code: 34, label: "Hyperprism Band Pass", category: "filter", source: "Hyperprism-PPC 1.2.1: Band Pass",
+    sound: null,
+    params: [
+      { key: "freqHz", label: "Frequency", min: 0, max: 2000, default: 1000, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "q", label: "Q", min: 1, max: 10, default: 1, log: false, unit: "", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 25, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Filter", keys: ["freqHz", "q"] }, { label: "Settings", keys: ["smoothing"] }],
+    primary: ["freqHz", "q"],
+  },
+  {
+    id: "hp-band-reject", code: 35, label: "Hyperprism Band Reject", category: "filter", source: "Hyperprism-PPC 1.2.1: Band Reject",
+    sound: null,
+    params: [
+      { key: "freqHz", label: "Frequency", min: 0, max: 2000, default: 1000, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "q", label: "Q", min: 1, max: 10, default: 1, log: false, unit: "", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 25, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Filter", keys: ["freqHz", "q"] }, { label: "Settings", keys: ["smoothing"] }],
+    primary: ["freqHz", "q"],
+  },
+  {
+    id: "hp-more-stereo", code: 36, label: "Hyperprism More Stereo", category: "stereo", source: "Hyperprism-PPC 1.2.1: More Stereo",
+    sound: null,
+    params: [
+      { key: "level", label: "Stereo Level", min: 0, max: 300, default: 150, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "lowCutHz", label: "Low Cut", min: 0, max: 6000, default: 0, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 25, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Stereo", keys: ["level", "lowCutHz"] }, { label: "Settings", keys: ["smoothing"] }],
+    primary: ["level", "lowCutHz"],
+  },
+  {
+    id: "hp-medium-room", code: 37, label: "Hyperprism Medium Room Reverb", category: "reverb", source: "Hyperprism-PPC 1.2.1: Medium Room Reverb",
+    sound: null,
+    params: [
+      { key: "mix", label: "Mix", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "feedback", label: "Feedback", min: 0, max: 100, default: 20, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "diffusion", label: "Diffusion", min: 0, max: 150, default: 85, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "brightness", label: "Brightness", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 25, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Reverb", keys: ["mix", "feedback"] }, { label: "Settings", keys: ["diffusion", "brightness", "smoothing"] }],
+    primary: ["mix", "feedback"],
+  },
+  {
+    id: "hp-hall", code: 38, label: "Hyperprism Hall Reverb", category: "reverb", source: "Hyperprism-PPC 1.2.1: Hall Reverb",
+    sound: null,
+    params: [
+      { key: "mix", label: "Mix", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "feedback", label: "Feedback", min: 0, max: 100, default: 20, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "diffusion", label: "Diffusion", min: 0, max: 150, default: 85, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "brightness", label: "Brightness", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 25, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Reverb", keys: ["mix", "feedback"] }, { label: "Settings", keys: ["diffusion", "brightness", "smoothing"] }],
+    primary: ["mix", "feedback"],
+  },
+  {
+    id: "hp-single-delay", code: 40, label: "Hyperprism Single Delay", category: "delay", source: "Hyperprism-PPC 1.2.1: Single Delay",
+    sound: null,
+    params: [
+      { key: "delayMs", label: "Delay", min: 0, max: 2000, default: 1000, log: false, unit: "ms", kind: "continuous", choices: null, when: null },
+      { key: "mix", label: "Mix", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "speed", label: "Param. Speed Ch.", min: 1, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["delayMs", "mix"] }, { label: "Additional settings", keys: ["speed"] }],
+    primary: ["delayMs", "mix"],
+  },
+  {
+    id: "hp-echo", code: 41, label: "Hyperprism Echo", category: "delay", source: "Hyperprism-PPC 1.2.1: Echo",
+    sound: null,
+    params: [
+      { key: "delayMs", label: "Delay", min: 0, max: 2000, default: 1000, log: false, unit: "ms", kind: "continuous", choices: null, when: null },
+      { key: "feedback", label: "Feedback", min: 0, max: 100, default: 0, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "mix", label: "Mix", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "speed", label: "Param. Speed Ch.", min: 1, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["delayMs", "feedback"] }, { label: "Additional settings", keys: ["speed", "mix"] }],
+    primary: ["delayMs", "feedback", "mix"],
+  },
+  {
+    id: "hp-echotranz", code: 42, label: "Hyperprism EchoTranz", category: "delay", source: "Hyperprism-PPC 1.2.1: EchoTranz",
+    sound: null,
+    params: [
+      { key: "delayMs", label: "Delay", min: 0, max: 2000, default: 1000, log: false, unit: "ms", kind: "continuous", choices: null, when: null },
+      { key: "feedback", label: "Feedback", min: 0, max: 100, default: 0, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "mix", label: "Mix", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "speed", label: "Param. Speed Ch.", min: 1, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["delayMs", "feedback"] }, { label: "Additional settings", keys: ["speed", "mix"] }],
+    primary: ["delayMs", "feedback", "mix"],
+  },
+  {
+    id: "hp-multi-delay", code: 43, label: "Hyperprism Multi Delay", category: "delay", source: "Hyperprism-PPC 1.2.1: Multi Delay",
+    sound: null,
+    params: [
+      { key: "delay1Ms", label: "Delay 1", min: 0, max: 1000, default: 500, log: false, unit: "ms", kind: "continuous", choices: null, when: null },
+      { key: "delay2Ms", label: "Delay 2", min: 0, max: 1000, default: 500, log: false, unit: "ms", kind: "continuous", choices: null, when: null },
+      { key: "att1Db", label: "Delay 1 att.", min: 0, max: 36, default: 0, log: false, unit: "dB", kind: "int", choices: null, when: null },
+      { key: "att2Db", label: "Delay 2 att.", min: 0, max: 36, default: 0, log: false, unit: "dB", kind: "int", choices: null, when: null },
+      { key: "att3Db", label: "Delay 3 att.", min: 0, max: 36, default: 0, log: false, unit: "dB", kind: "int", choices: null, when: null },
+      { key: "mix", label: "Mix", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "speed", label: "Param. Speed Ch.", min: 1, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["delay1Ms", "delay2Ms"] }, { label: "Taps", keys: ["att1Db", "att2Db", "att3Db"] }, { label: "Additional settings", keys: ["speed", "mix"] }],
+    primary: ["delay1Ms", "delay2Ms", "mix"],
+  },
+  {
+    id: "hp-comb-filter", code: 44, label: "Hyperprism Comb Filter", category: "filter", source: "Hyperprism-PPC 1.2.1: Comb Filter",
+    sound: null,
+    params: [
+      { key: "delayMs", label: "Delay", min: 0, max: 100, default: 50, log: false, unit: "ms", kind: "continuous", choices: null, when: null },
+      { key: "depth", label: "Depth", min: 0, max: 100, default: 0, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["delayMs", "depth"] }, { label: "Additional settings", keys: ["smoothing"] }],
+    primary: ["delayMs", "depth"],
+  },
+  {
+    id: "hp-doppler", code: 45, label: "Hyperprism Doppler", category: "stereo", source: "Hyperprism-PPC 1.2.1: Doppler",
+    sound: null,
+    params: [
+      { key: "xM", label: "X (right)", min: -100, max: 100, default: 0, log: false, unit: "m", kind: "continuous", choices: null, when: null },
+      { key: "yM", label: "Y (ahead)", min: -100, max: 100, default: 10, log: false, unit: "m", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["xM", "yM"] }, { label: "Additional settings", keys: ["smoothing"] }],
+    primary: ["xM", "yM"],
+  },
+  {
+    id: "hp-chorus", code: 48, label: "Hyperprism Chorus", category: "modulation", source: "Hyperprism-PPC 1.2.1: Chorus",
+    sound: null,
+    params: [
+      { key: "rateHz", label: "Frequency", min: 0, max: 4, default: 2, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "depth", label: "Depth", min: 0, max: 100, default: 0, log: false, unit: "samples", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "input", label: "Input", min: 0, max: 1, default: 0, log: false, unit: "", kind: "choice", choices: ["Stereo", "Mono"], when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["rateHz", "depth"] }, { label: "Additional settings", keys: ["smoothing", "input"] }],
+    primary: ["rateHz", "depth"],
+  },
+  {
+    id: "hp-flanger", code: 49, label: "Hyperprism Flanger", category: "modulation", source: "Hyperprism-PPC 1.2.1: Flanger",
+    sound: null,
+    params: [
+      { key: "rateHz", label: "Frequency", min: 0, max: 4, default: 2, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "depth", label: "Depth", min: 0, max: 100, default: 0, log: false, unit: "samples", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["rateHz", "depth"] }, { label: "Additional settings", keys: ["smoothing"] }],
+    primary: ["rateHz", "depth"],
+  },
+  {
+    id: "hp-ring-modulator", code: 50, label: "Hyperprism Ring Modulator", category: "modulation", source: "Hyperprism-PPC 1.2.1: Ring Modulator",
+    sound: null,
+    params: [
+      { key: "rateHz", label: "Frequency", min: 0, max: 4000, default: 2000, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "depth", label: "Depth", min: 0, max: 100, default: 0, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["rateHz", "depth"] }, { label: "Additional settings", keys: ["smoothing"] }],
+    primary: ["rateHz", "depth"],
+  },
+  {
+    id: "hp-vibrato", code: 51, label: "Hyperprism Vibrato", category: "modulation", source: "Hyperprism-PPC 1.2.1: Vibrato",
+    sound: null,
+    params: [
+      { key: "rateHz", label: "Frequency", min: 0, max: 4, default: 2, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "depth", label: "Depth", min: 0, max: 10, default: 0, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["rateHz", "depth"] }, { label: "Additional settings", keys: ["smoothing"] }],
+    primary: ["rateHz", "depth"],
+  },
+  {
+    id: "hp-tremolo", code: 52, label: "Hyperprism Tremolo", category: "modulation", source: "Hyperprism-PPC 1.2.1: Tremolo",
+    sound: null,
+    params: [
+      { key: "rateHz", label: "Frequency", min: 0, max: 4, default: 2, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "depth", label: "Depth", min: 0, max: 100, default: 0, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["rateHz", "depth"] }, { label: "Additional settings", keys: ["smoothing"] }],
+    primary: ["rateHz", "depth"],
+  },
+  {
+    id: "hp-frequency-modulator", code: 53, label: "Hyperprism Frequency Modulator", category: "modulation", source: "Hyperprism-PPC 1.2.1: Frequency Modulator",
+    sound: null,
+    params: [
+      { key: "rateHz", label: "Frequency", min: 0, max: 1000, default: 500, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "depth", label: "Depth", min: 0, max: 10, default: 0, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["rateHz", "depth"] }, { label: "Additional settings", keys: ["smoothing"] }],
+    primary: ["rateHz", "depth"],
+  },
+  {
+    id: "hp-phaser", code: 54, label: "Hyperprism Phaser", category: "modulation", source: "Hyperprism-PPC 1.2.1: Phaser",
+    sound: null,
+    params: [
+      { key: "rateHz", label: "Frequency", min: 0, max: 4, default: 2, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "depth", label: "Depth", min: 0, max: 10, default: 5, log: false, unit: "", kind: "continuous", choices: null, when: null },
+      { key: "feedback", label: "Feedback", min: 0, max: 100, default: 20, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "baseHz", label: "Base freq", min: 0, max: 10000, default: 440, log: false, unit: "Hz", kind: "int", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["rateHz", "depth"] }, { label: "Additional settings", keys: ["feedback", "baseHz", "smoothing"] }],
+    primary: ["rateHz", "depth"],
+  },
+  {
+    id: "hp-pitch-shifter", code: 55, label: "Hyperprism Pitch Shifter", category: "pitch", source: "Hyperprism-PPC 1.2.1: Pitch Shifter",
+    sound: null,
+    params: [
+      { key: "pitch", label: "Pitch", min: 0, max: 200, default: 100, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "mix", label: "Mix", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "feedback", label: "Feedback", min: 0, max: 100, default: 0, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "grain", label: "Grain size", min: 0, max: 100, default: 15, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "xfade", label: "X-fade size", min: 0, max: 100, default: 100, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pad", keys: ["pitch", "mix"] }, { label: "Additional settings", keys: ["feedback", "grain", "xfade", "smoothing"] }],
+    primary: ["pitch", "mix"],
+  },
+  {
+    id: "hp-pan", code: 56, label: "Hyperprism Pan", category: "stereo", source: "Hyperprism-PPC 1.2.1: Pan",
+    sound: null,
+    params: [
+      { key: "balance", label: "LR Balance", min: -100, max: 100, default: 0, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "gainDb", label: "Gain", min: -96, max: 0, default: 0, log: false, unit: "dB", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Pan", keys: ["balance", "gainDb"] }, { label: "Settings", keys: ["smoothing"] }],
+    primary: ["balance", "gainDb"],
+  },
+  {
+    id: "hp-auto-pan", code: 57, label: "Hyperprism Auto-Pan", category: "stereo", source: "Hyperprism-PPC 1.2.1: Auto-Pan",
+    sound: null,
+    params: [
+      { key: "rateHz", label: "Frequency", min: 0, max: 20, default: 5, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "depth", label: "Depth", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "position", label: "Position", min: 0, max: 100, default: 25, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 30, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Sweep", keys: ["rateHz", "depth"] }, { label: "Settings", keys: ["position", "smoothing"] }],
+    primary: ["rateHz", "depth"],
+  },
+  {
+    id: "hp-stereo-dynamics", code: 58, label: "Hyperprism Stereo Dynamics", category: "stereo", source: "Hyperprism-PPC 1.2.1: Stereo Dynamics",
+    sound: null,
+    params: [
+      { key: "rightGain", label: "Right gain", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "leftGain", label: "Left gain", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Gains", keys: ["rightGain", "leftGain"] }, { label: "Settings", keys: ["smoothing"] }],
+    primary: ["rightGain", "leftGain"],
+  },
+  {
+    id: "hp-quasi-stereo", code: 59, label: "Hyperprism Quasi Stereo", category: "stereo", source: "Hyperprism-PPC 1.2.1: Quasi Stereo",
+    sound: null,
+    params: [
+      { key: "depth", label: "Depth", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "lowCutHz", label: "Low Cut", min: 0, max: 6000, default: 50, log: false, unit: "Hz", kind: "continuous", choices: null, when: null },
+      { key: "delayMs", label: "Delay Time", min: 0, max: 40, default: 25, log: false, unit: "ms", kind: "int", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 50, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "mono", label: "Mono input", min: 0, max: 1, default: 0, log: false, unit: "", kind: "toggle", choices: null, when: null }
+    ],
+    groups: [{ label: "Width", keys: ["depth", "lowCutHz"] }, { label: "Settings", keys: ["delayMs", "smoothing", "mono"] }],
+    primary: ["depth", "lowCutHz"],
+  },
+  {
+    id: "hp-ms-matrix", code: 60, label: "Hyperprism MS Matrix", category: "stereo", source: "Hyperprism-PPC 1.2.1: MS Matrix",
+    sound: null,
+    params: [
+      { key: "position", label: "Stereo Position", min: -90, max: 90, default: 0, log: false, unit: "°", kind: "continuous", choices: null, when: null },
+      { key: "sideVolume", label: "Side Volume", min: -400, max: 400, default: 0, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "input", label: "Input", min: 0, max: 1, default: 0, log: false, unit: "", kind: "choice", choices: ["Side in left", "Side in right"], when: null },
+      { key: "output", label: "Output", min: 0, max: 1, default: 0, log: false, unit: "", kind: "choice", choices: ["Sum to left", "Sum to right"], when: null },
+      { key: "mono", label: "Mono input", min: 0, max: 1, default: 0, log: false, unit: "", kind: "toggle", choices: null, when: null }
+    ],
+    groups: [{ label: "Matrix", keys: ["position", "sideVolume"] }, { label: "Routing", keys: ["input", "output", "mono"] }],
+    primary: ["position", "sideVolume", "input", "output"],
+  },
+  {
+    id: "hp-hyper-stereo", code: 61, label: "Hyperprism Hyper Stereo", category: "stereo", source: "Hyperprism-PPC 1.2.1: Hyper Stereo",
+    sound: null,
+    params: [
+      { key: "sideGain", label: "Side", min: -90, max: 90, default: 0, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "midGain", label: "Mid", min: -400, max: 400, default: 0, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "input", label: "Input", min: 0, max: 1, default: 0, log: false, unit: "", kind: "choice", choices: ["L/R", "M/S"], when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 25, log: false, unit: "%", kind: "int", choices: null, when: null },
+      { key: "mono", label: "Mono input", min: 0, max: 1, default: 0, log: false, unit: "", kind: "toggle", choices: null, when: null }
+    ],
+    groups: [{ label: "Gains", keys: ["sideGain", "midGain"] }, { label: "Settings", keys: ["input", "smoothing", "mono"] }],
+    primary: ["sideGain", "midGain", "input"],
+  },
+  {
+    id: "hp-noise-gate", code: 62, label: "Hyperprism Noise Gate", category: "dynamics", source: "Hyperprism-PPC 1.2.1: Noise Gate",
+    sound: null,
+    params: [
+      { key: "attackMs", label: "Attack", min: 0, max: 1000, default: 250, log: false, unit: "ms", kind: "continuous", choices: null, when: null },
+      { key: "thresholdDb", label: "Threshold", min: -96, max: 0, default: 0, log: false, unit: "dB", kind: "continuous", choices: null, when: null },
+      { key: "releaseMs", label: "Release", min: 0, max: 1000, default: 250, log: false, unit: "ms", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Gate", keys: ["attackMs", "thresholdDb"] }, { label: "Settings", keys: ["releaseMs"] }],
+    primary: ["attackMs", "thresholdDb", "releaseMs"],
+  },
+  {
+    id: "hp-compressor", code: 63, label: "Hyperprism Compressor", category: "dynamics", source: "Hyperprism-PPC 1.2.1: Compressor",
+    sound: null,
+    params: [
+      { key: "volumeDb", label: "Volume", min: -96, max: 0, default: 0, log: false, unit: "dB", kind: "continuous", choices: null, when: null },
+      { key: "compressionDb", label: "Compression", min: -96, max: 0, default: 0, log: false, unit: "dB", kind: "continuous", choices: null, when: null },
+      { key: "attackMs", label: "Attack", min: 0, max: 1000, default: 100, log: false, unit: "ms", kind: "int", choices: null, when: null },
+      { key: "releaseMs", label: "Release", min: 0, max: 1000, default: 1000, log: false, unit: "ms", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Levels", keys: ["volumeDb", "compressionDb"] }, { label: "Settings", keys: ["attackMs", "releaseMs"] }],
+    primary: ["volumeDb", "compressionDb", "attackMs", "releaseMs"],
+  },
+  {
+    id: "hp-sonic-decimator", code: 64, label: "Hyperprism Sonic Decimator", category: "distortion", source: "Hyperprism-PPC 1.2.1: Sonic Decimator",
+    sound: null,
+    params: [
+      { key: "rate", label: "Sample Rate", min: 1, max: 100, default: 50, log: false, unit: "%", kind: "continuous", choices: null, when: null },
+      { key: "bits", label: "Bit Depth", min: 1, max: 16, default: 8, log: false, unit: "bits", kind: "continuous", choices: null, when: null },
+      { key: "smoothing", label: "Smoothing", min: 0, max: 100, default: 30, log: false, unit: "%", kind: "int", choices: null, when: null }
+    ],
+    groups: [{ label: "Decimate", keys: ["rate", "bits"] }, { label: "Settings", keys: ["smoothing"] }],
+    primary: ["rate", "bits"],
+  },
 ];

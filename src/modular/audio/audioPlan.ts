@@ -32,10 +32,29 @@ export type AudioNodeSpec = {
   wet: number;
 };
 
+/**
+ * A modulator driving a knob: `from`'s output moves `to` by `scale` per unit,
+ * held inside `min..max`. Only the Rust engine plays these.
+ */
+export type AudioModulation = {
+  from: string;
+  to: { nodeId: string; parameterId: string };
+  scale: number;
+  min: number;
+  max: number;
+};
+
 export type AudioPlan = {
   generation: number;
   nodes: Readonly<Record<string, AudioNodeSpec>>;
   connections: readonly AudioConnection[];
+  /**
+   * Modules with no audio of their own that move other modules' knobs — the
+   * LFOs. Apart from `nodes`, so a backend that cannot modulate never sees
+   * them.
+   */
+  modulators?: readonly AudioNodeSpec[];
+  modulations?: readonly AudioModulation[];
 };
 
 export type ParameterChange = { nodeId: string; parameterId: string; value: number };
