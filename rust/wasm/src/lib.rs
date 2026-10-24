@@ -127,6 +127,41 @@ pub extern "C" fn disconnect(from_module: u32, from_port: u32, to_module: u32, t
     u32::from(engine().map(|e| e.disconnect(from, to)).unwrap_or(false))
 }
 
+/// Drive `param` of `to_module` from an output: `value + source × scale`, held
+/// inside `min..=max`. A second call for the same source and parameter
+/// replaces the first.
+#[no_mangle]
+pub extern "C" fn connect_param(
+    from_module: u32,
+    from_port: u32,
+    to_module: u32,
+    param: u32,
+    scale: f32,
+    min: f32,
+    max: f32,
+) -> u32 {
+    let from = PortRef { module: from_module, port: from_port as u8 };
+    u32::from(engine().map(|e| e.connect_param(from, to_module, param as usize, scale, min, max)).unwrap_or(false))
+}
+
+#[no_mangle]
+pub extern "C" fn disconnect_param(from_module: u32, from_port: u32, to_module: u32, param: u32) -> u32 {
+    let from = PortRef { module: from_module, port: from_port as u8 };
+    u32::from(engine().map(|e| e.disconnect_param(from, to_module, param as usize)).unwrap_or(false))
+}
+
+/// A module's last output on one port, for a face to draw — an LFO's value.
+#[no_mangle]
+pub extern "C" fn module_output(module: u32, port: u32) -> f32 {
+    engine().map(|e| e.output_of(module, port as usize)).unwrap_or(0.0)
+}
+
+/// What a module reports about itself — an LFO's phase — or NaN.
+#[no_mangle]
+pub extern "C" fn module_telemetry(module: u32) -> f32 {
+    engine().map(|e| e.telemetry_of(module)).unwrap_or(f32::NAN)
+}
+
 #[no_mangle]
 pub extern "C" fn set_param(module: u32, index: u32, value: f32) {
     // A non-finite parameter is dropped rather than clamped: it means the host

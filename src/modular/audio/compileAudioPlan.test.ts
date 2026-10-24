@@ -181,3 +181,40 @@ describe("Compiling the prism effects", () => {
     expect(plan.nodes.c.wet).toBe(0.25);
   });
 });
+
+describe("Compiling the LFOs", () => {
+  const graph = () => graphWith([
+    { id: "d", type: "m.audio-delay" },
+    { id: "out", type: "m.audio-output" },
+    { id: "l", type: "m.lfo", parameters: {
+      rate: 3, shape: "Square", amount: 0.4, phase: 90,
+      targets: [
+        { nodeId: "d", parameterId: "feedback" },
+        { nodeId: "d", parameterId: "max-delay-seconds" },
+        { nodeId: "missing", parameterId: "feedback" },
+      ],
+    } },
+  ]);
+
+  it("carries an LFO as a modulator, not an audio node", () => {
+    const plan = compileAudioPlan(graph(), moduleRegistry);
+    expect(plan.nodes.l).toBeUndefined();
+    expect(plan.modulators?.map((m) => [m.nodeId, m.parameters])).toEqual([
+      ["l", { rate: 3, shape: 4, amount: 0.4, phase: 90 }],
+    ]);
+  });
+
+  it("routes each mapped knob over half its range, inside its range", () => {
+    const plan = compileAudioPlan(graph(), moduleRegistry);
+    const feedback = moduleRegistry.get("m.audio-delay")!.parameters.find((p) => p.id === "feedback")!;
+    // A structural knob and a vanished module are left out: Web Audio
+    // rebuilds for the one, and the other has nothing to move.
+    expect(plan.modulations).toEqual([{
+      from: "l",
+      to: { nodeId: "d", parameterId: "feedback" },
+      scale: (feedback.maximum! - feedback.minimum!) / 2,
+      min: feedback.minimum,
+      max: feedback.maximum,
+    }]);
+  });
+});

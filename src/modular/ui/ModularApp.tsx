@@ -74,6 +74,20 @@ import { setRuntimeHost } from "../../ui/runtime";
 import { useM } from "../../state/store";
 import { shareMidiAccess } from "./midisession";
 import { CyclicGrid } from "./CyclicGrid";
+import { LfoMapFace } from "./LfoFace";
+import { ModulationContext, type ModulationApi } from "./modulationContext";
+import { ModTarget } from "./ModTarget";
+import { ModulationAnimator } from "./modulationAnimator";
+import {
+  LFO_TYPE,
+  lfoStates,
+  mappingsByTarget,
+  nextLfoColor,
+  targetsOf,
+  withTarget,
+  withoutTarget,
+  type Mapping,
+} from "../modulation";
 import { executeRuntimeCommand, queueRuntimeParameter } from "./runtimebridge";
 import {
   BrowserMidiSession,
@@ -439,14 +453,32 @@ const asSteps = (value: JsonValue): number[][] =>
       ? step.filter((pitch): pitch is number => typeof pitch === "number") : [])
     : [];
 
-function ParameterControl({
+/** A face's control, which an LFO can move if it is a mappable knob. */
+function ParameterControl(props: {
+  descriptor: ParameterDescriptor;
+  value: JsonValue;
+  onChange: (value: JsonValue) => void;
+  nodeId?: string;
+  moduleType?: string;
+}) {
+  const { descriptor, value, nodeId, moduleType } = props;
+  if (!nodeId || !moduleType) return <PlainParameterControl {...props} />;
+  return <ModTarget nodeId={nodeId} moduleType={moduleType} parameterId={descriptor.id}
+    value={typeof value === "number" ? value : 0}>
+    {(modulated) => <PlainParameterControl {...props} modulated={modulated} />}
+  </ModTarget>;
+}
+
+function PlainParameterControl({
   descriptor,
   value,
   onChange,
+  modulated = false,
 }: {
   descriptor: ParameterDescriptor;
   value: JsonValue;
   onChange: (value: JsonValue) => void;
+  modulated?: boolean;
 }) {
   const kind = parameterControlKind(descriptor);
   if (kind === "none") return null;
@@ -484,7 +516,7 @@ function ParameterControl({
 
   if (kind === "knob" || kind === "slider" || kind === "fader") {
     return <N4Knob label={descriptor.label} value={number} min={minimum} max={maximum} step={descriptor.step}
-      format={(next) => formatValue(next, descriptor)} onChange={(next) => onChange(next)} />;
+      format={(next) => formatValue(next, descriptor)} onChange={(next) => onChange(next)} modulated={modulated} />;
   }
 
   if (kind === "number") {
@@ -827,6 +859,7 @@ function CustomFace({ element, node, setParameter, setParameters }: {
       storageId={storage} lengthId={`${sequence}-length`} showPresets={false} />;
   }
   if (element.id === "m-app") return <MNodeFace />;
+  if (element.id === "lfo-map") return <LfoMapFace node={node} setParameter={setParameter} />;
   const MLabFace = MLAB_FACES[element.id];
   if (MLabFace) {
     return <MLabFace node={node} setParameter={setParameter} setParameters={setParameters} status={status} />;
@@ -1119,6 +1152,7 @@ function NodeFace({
               }
               return <ParameterControl key={`${element.kind}-${element.parameterId}`}
                 descriptor={parameter} value={node.parameters[parameter.id]}
+                nodeId={node.id} moduleType={node.moduleType}
                 onChange={(value) => setParameter(parameter.id, value)} />;
             }
             if (element.kind === "command") return <button type="button" className="mm-command"
@@ -1581,7 +1615,10 @@ export function ModularApp() {
         : { x: 0, y: 0, width: canvasSize.width, height: canvasSize.height },
       canvas: canvasSize,
     });
-    dispatch({ type: "add-node", node: createNode(moduleType, id, position) });
+    const added = createNode(moduleType, id, position);
+    // Each new LFO wears a colour no other one does, so its rings stand apart.
+    if (moduleType === LFO_TYPE) added.parameters.color = nextLfoColor(graph);
+    dispatch({ type: "add-node", node: added });
     setSelectedNodeId(id);
     setSelectedEdgeId(null);
     bringToFront(id);
@@ -2015,6 +2052,79 @@ export function ModularApp() {
   // Set on first render, before M's face mounts and makes its runtime.
   const graphRef = useRef(graph);
   graphRef.current = graph;
+
+  // ---- LFO mappings ----------------------------------------------------------
+  // The LFO whose Map button is on, and every mapped knob. The map keeps its
+  // identity while the mappings are unchanged, so turning an unrelated knob
+  // does not re-render every knob that reads it.
+  const [mappingFrom, setMappingFrom] = useState<string | null>(null);
+  const mappingsMemo = useRef<{ key: string; map: Map<string, Mapping[]> }>({ key: "[]", map: new Map() });
+  const mappings = useMemo(() => {
+    const next = mappingsByTarget(graph);
+    const key = JSON.stringify([...next]);
+    if (key !== mappingsMemo.current.key) mappingsMemo.current = { key, map: next };
+    return mappingsMemo.current.map;
+  }, [graph]);
+  const modulationApi = useMemo<ModulationApi>(() => {
+    const describe: ModulationApi["describe"] = (target) => {
+      const node = graphRef.current.nodes[target.nodeId];
+      const parameter = node && moduleRegistry.get(node.moduleType)?.parameters.find((p) => p.id === target.parameterId);
+      return `${node?.label ?? target.nodeId} · ${parameter?.label ?? target.parameterId}`;
+    };
+    const setTargets = (lfoNodeId: string, change: (targets: ReturnType<typeof targetsOf>) => ReturnType<typeof targetsOf>) => {
+      const lfo = graphRef.current.nodes[lfoNodeId];
+      if (!lfo) return;
+      dispatch({ type: "set-parameter", nodeId: lfoNodeId, parameterId: "targets", value: change(targetsOf(lfo)) });
+    };
+    return {
+      mappingFrom,
+      mappings,
+      describe,
+      startMap: (lfoNodeId) => {
+        setMappingFrom(lfoNodeId);
+        setMessage(`Click the knob ${graphRef.current.nodes[lfoNodeId]?.label ?? "the LFO"} should move — Esc to stop`);
+      },
+      cancelMap: () => {
+        setMappingFrom(null);
+        setMessage("Mapping stopped");
+      },
+      finishMap: (target) => {
+        if (mappingFrom === null) return;
+        setTargets(mappingFrom, (targets) => withTarget(targets, target));
+        setMappingFrom(null);
+        setMessage(`${graphRef.current.nodes[mappingFrom]?.label ?? "LFO"} → ${describe(target)}`);
+      },
+      unmap: (lfoNodeId, target) => {
+        setTargets(lfoNodeId, (targets) => withoutTarget(targets, target));
+        setMessage(`Unmapped ${describe(target)}`);
+      },
+    };
+    // `dispatch` reads the latest graph through its ref, so it does not need to be a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mappingFrom, mappings]);
+  useEffect(() => {
+    if (mappingFrom === null) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMappingFrom(null);
+        setMessage("Mapping stopped");
+      }
+    };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [mappingFrom]);
+  // An LFO that is deleted while waiting stops waiting.
+  useEffect(() => {
+    if (mappingFrom !== null && !graph.nodes[mappingFrom]) setMappingFrom(null);
+  }, [graph, mappingFrom]);
+  useEffect(() => {
+    const animator = new ModulationAnimator(() => viewportRef.current, () => ({
+      report: audioRef.current?.rackReport ?? null,
+      lfos: lfoStates(graphRef.current),
+    }));
+    animator.start();
+    return () => animator.stop();
+  }, []);
   const startAudioRef = useRef(startAudio);
   startAudioRef.current = startAudio;
   useState(() => {
@@ -2350,6 +2460,7 @@ export function ModularApp() {
   <KitContext.Provider value={kitId}>
   <MFaceHostContext.Provider value={{ themeId, onSelectTheme: setThemeId, kitId, onSelectKit: setKitId, zoom }}>
   <StatusStoreContext.Provider value={statusStore}>
+  <ModulationContext.Provider value={modulationApi}>
   <GraphStoreContext.Provider value={graphStore}>
   <MLabHostContext.Provider value={mlabHost}>
   <Profiler id="render whole app" onRender={recordRender}>
@@ -2392,7 +2503,7 @@ export function ModularApp() {
       </nav>
     </header>
     <div ref={viewportRef}
-      className={`mm-canvas-viewport${handMode || spaceHeld ? " is-hand" : ""}${panning ? " is-panning" : ""}`}
+      className={`mm-canvas-viewport${handMode || spaceHeld ? " is-hand" : ""}${panning ? " is-panning" : ""}${mappingFrom ? " is-mapping" : ""}`}
       // The dot grid is the window's background, laid out by the camera, so it
       // runs on forever however far the canvas is panned.
       style={{
@@ -2512,6 +2623,7 @@ export function ModularApp() {
   </Profiler>
   </MLabHostContext.Provider>
   </GraphStoreContext.Provider>
+  </ModulationContext.Provider>
   </StatusStoreContext.Provider>
   </MFaceHostContext.Provider>
   </KitContext.Provider>

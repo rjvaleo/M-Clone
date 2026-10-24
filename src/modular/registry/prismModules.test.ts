@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PRISM_CATALOG } from "./prismCatalog.generated";
-import { PRISM_MODULES, PRISM_PARAM_INDICES, PRISM_STRUCTURE_PARAMS, prismType } from "./prismModules";
+import { PRISM_FADE_KEY, PRISM_MODULES, PRISM_PARAM_INDICES, PRISM_STRUCTURE_PARAMS, prismType } from "./prismModules";
 import { moduleRegistry } from "./registry";
 
 /**
@@ -50,7 +50,7 @@ describe("The prism modules", () => {
     for (const effect of PRISM_CATALOG) {
       const indices = PRISM_PARAM_INDICES[prismType(effect.id)];
       effect.params.forEach((param, index) => expect(indices[param.key]).toBe(index));
-      expect(indices.level).toBe(effect.params.length);
+      expect(indices[PRISM_FADE_KEY]).toBe(effect.params.length);
     }
   });
 

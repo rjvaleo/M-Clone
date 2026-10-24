@@ -30,6 +30,12 @@ import type { PrismEffect, PrismParam } from "./prismTypes";
 /** The module type an effect is registered under. */
 export const prismType = (id: string): string => `m.prism-${id}`;
 
+/**
+ * The rack's fade handle in a prism module's index table. Not `level`: an
+ * effect from the crate may have a control of that name (Hyper Stereo does).
+ */
+export const PRISM_FADE_KEY = "rack-fade";
+
 /** The structural parameter a sound-taking effect names its sound with. */
 export const PRISM_SOUND_PARAM = "asset-id";
 
@@ -94,7 +100,7 @@ export const PRISM_CODES: Readonly<Record<string, number>> = Object.fromEntries(
 
 /**
  * Where each control lands in the Rust module's parameters: the kernel's, in
- * the crate's order, then the rack's fade handle as `level`.
+ * the crate's order, then the rack's fade handle under `PRISM_FADE_KEY`.
  */
 export const PRISM_PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, number>>>> =
   Object.fromEntries(
@@ -102,7 +108,7 @@ export const PRISM_PARAM_INDICES: Readonly<Record<string, Readonly<Record<string
       prismType(effect.id),
       {
         ...Object.fromEntries(effect.params.map((p, index) => [p.key, index])),
-        level: effect.params.length,
+        [PRISM_FADE_KEY]: effect.params.length,
       },
     ]),
   );

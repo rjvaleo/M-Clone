@@ -40,6 +40,11 @@ export interface RackReport {
   peak: number;
   /** Quanta rendered since the engine started, so a stalled worklet shows. */
   quanta: number;
+  /**
+   * Each LFO's phase and output at the report, by node id, so a face can draw
+   * where it is and carry it forward until the next one.
+   */
+  lfos?: Record<string, [phase: number, value: number]>;
 }
 
 /**

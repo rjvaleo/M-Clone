@@ -181,6 +181,12 @@ pub trait Module: Send {
 
     fn input_count(&self) -> usize;
     fn output_count(&self) -> usize;
+
+    /// One number the module reports about itself for the host's display — an
+    /// LFO's phase. NaN for a module with nothing to say.
+    fn telemetry(&self) -> f32 {
+        f32::NAN
+    }
     fn param_count(&self) -> usize {
         0
     }
@@ -233,8 +239,25 @@ struct Slot {
     outputs: Vec<Frame>,
     /// Last sample's outputs — what readers see. This is the cable delay.
     previous: Vec<Frame>,
+    /// What the host set. Routes offset a copy; they never write here, so a
+    /// knob is exactly where it was when its modulation goes.
     params: Vec<f32>,
+    /// `params` with this sample's routes applied — what the module reads
+    /// while any route lands on it.
+    modulated: Vec<f32>,
+    routes: Vec<ParamRoute>,
     bypassed: bool,
+}
+
+/// A module output driving another module's parameter: `value + source × scale`,
+/// held inside `min..=max` after every route into it is added.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ParamRoute {
+    from: PortRef,
+    param: usize,
+    scale: f32,
+    min: f32,
+    max: f32,
 }
 
 /// The rack.
@@ -293,7 +316,8 @@ impl Engine {
         let outputs = vec![Frame::default(); module.output_count()];
         let previous = outputs.clone();
         let params: Vec<f32> = (0..module.param_count()).map(|i| module.param_default(i)).collect();
-        let slot = Slot { module, inputs, outputs, previous, params, bypassed: false };
+        let modulated = params.clone();
+        let slot = Slot { module, inputs, outputs, previous, params, modulated, routes: Vec::new(), bypassed: false };
 
         if let Some(index) = self.slots.iter().position(|s| s.is_none()) {
             self.slots[index] = Some(slot);
@@ -312,7 +336,52 @@ impl Engine {
         }
         self.slots[index] = None;
         self.cables.retain(|c| c.from.module != id && c.to.module != id);
+        for slot in self.slots.iter_mut().flatten() {
+            slot.routes.retain(|r| r.from.module != id);
+        }
         true
+    }
+
+    /// Drive parameter `param` of module `to` from an output: each sample the
+    /// module reads `value + source × scale`, held inside `min..=max`. A second
+    /// call for the same source and parameter replaces the first — it is how a
+    /// route's scale or range changes. Off the audio thread: this allocates.
+    pub fn connect_param(&mut self, from: PortRef, to: ModuleId, param: usize, scale: f32, min: f32, max: f32) -> bool {
+        let valid_from = self.slot(from.module).map(|s| (from.port as usize) < s.outputs.len()).unwrap_or(false);
+        if !valid_from || !scale.is_finite() || !min.is_finite() || !max.is_finite() || min > max {
+            return false;
+        }
+        let Some(slot) = self.slot_mut(to) else { return false };
+        if param >= slot.params.len() {
+            return false;
+        }
+        let route = ParamRoute { from, param, scale, min, max };
+        match slot.routes.iter_mut().find(|r| r.from == from && r.param == param) {
+            Some(existing) => *existing = route,
+            None => slot.routes.push(route),
+        }
+        true
+    }
+
+    pub fn disconnect_param(&mut self, from: PortRef, to: ModuleId, param: usize) -> bool {
+        let Some(slot) = self.slot_mut(to) else { return false };
+        let before = slot.routes.len();
+        slot.routes.retain(|r| !(r.from == from && r.param == param));
+        slot.routes.len() != before
+    }
+
+    pub fn route_count(&self) -> usize {
+        self.slots.iter().flatten().map(|s| s.routes.len()).sum()
+    }
+
+    /// What the host last set for a parameter, routes aside.
+    pub fn param_of(&self, id: ModuleId, index: usize) -> Option<f32> {
+        self.slot(id).and_then(|s| s.params.get(index).copied())
+    }
+
+    /// A module's own report on itself — an LFO's phase — or NaN.
+    pub fn telemetry_of(&self, id: ModuleId) -> f32 {
+        self.slot(id).map(|s| s.module.telemetry()).unwrap_or(f32::NAN)
     }
 
     /// Patch two ports together.
@@ -466,6 +535,41 @@ impl Engine {
             }
         }
 
+        // Routes, from the same previous outputs the cables read. Index by
+        // index, because a route reads one slot while writing another.
+        for index in 0..self.slots.len() {
+            let count = match &self.slots[index] {
+                Some(slot) if !slot.routes.is_empty() => slot.routes.len(),
+                _ => continue,
+            };
+            if let Some(slot) = self.slots[index].as_mut() {
+                slot.modulated.copy_from_slice(&slot.params);
+            }
+            for r in 0..count {
+                let route = match &self.slots[index] {
+                    Some(slot) => slot.routes[r],
+                    None => break,
+                };
+                let value = self
+                    .slots
+                    .get(route.from.module as usize)
+                    .and_then(|s| s.as_ref())
+                    .and_then(|s| s.previous.get(route.from.port as usize))
+                    .map(|f| f.sum())
+                    .unwrap_or(0.0);
+                if let Some(slot) = self.slots[index].as_mut() {
+                    slot.modulated[route.param] += value * route.scale;
+                }
+            }
+            if let Some(slot) = self.slots[index].as_mut() {
+                for r in 0..count {
+                    let route = slot.routes[r];
+                    let v = slot.modulated[route.param];
+                    slot.modulated[route.param] = if v.is_finite() { clamp(v, route.min, route.max) } else { route.min };
+                }
+            }
+        }
+
         for slot in self.slots.iter_mut().flatten() {
             if slot.bypassed {
                 for frame in slot.outputs.iter_mut() {
@@ -473,8 +577,8 @@ impl Engine {
                 }
                 continue;
             }
-            let mut ports =
-                Ports { inputs: &slot.inputs, outputs: &mut slot.outputs, params: &slot.params };
+            let params = if slot.routes.is_empty() { &slot.params } else { &slot.modulated };
+            let mut ports = Ports { inputs: &slot.inputs, outputs: &mut slot.outputs, params };
             slot.module.process(&ctx, &mut ports);
         }
 
@@ -740,5 +844,96 @@ mod tests {
         assert_eq!(f.get(15), 0.0);
         assert_eq!(f.get(99), 0.0);
         assert_eq!(f.sum(), 3.0);
+    }
+
+    // ---- parameter routes ------------------------------------------------------
+
+    /// A gain fed 1.0, its gain parameter at `base`, and a constant `mod` source.
+    fn routed(base: f32, value: f32) -> (Engine, ModuleId, ModuleId) {
+        let mut engine = Engine::new(SR);
+        let one = engine.add(Box::new(Constant(1.0)));
+        let gain = engine.add(Box::new(Gain));
+        let modulator = engine.add(Box::new(Constant(value)));
+        engine.connect(PortRef { module: one, port: 0 }, PortRef { module: gain, port: 0 });
+        engine.set_param(gain, 0, base);
+        (engine, gain, modulator)
+    }
+
+    fn settle(engine: &mut Engine) {
+        for _ in 0..4 {
+            engine.process();
+        }
+    }
+
+    #[test]
+    fn a_route_moves_a_parameter_by_its_source_times_its_scale() {
+        let (mut engine, gain, modulator) = routed(0.5, 0.25);
+        assert!(engine.connect_param(PortRef { module: modulator, port: 0 }, gain, 0, 2.0, 0.0, 10.0));
+        settle(&mut engine);
+        assert!((engine.output_of(gain, 0) - 1.0).abs() < 1e-6, "{}", engine.output_of(gain, 0));
+    }
+
+    #[test]
+    fn a_routed_parameter_stays_inside_its_range() {
+        let (mut engine, gain, modulator) = routed(0.5, 1.0);
+        engine.connect_param(PortRef { module: modulator, port: 0 }, gain, 0, 2.0, 0.0, 1.0);
+        settle(&mut engine);
+        assert_eq!(engine.output_of(gain, 0), 1.0);
+    }
+
+    #[test]
+    fn routes_into_one_parameter_add_up() {
+        let mut engine = Engine::new(SR);
+        let one = engine.add(Box::new(Constant(1.0)));
+        let gain = engine.add(Box::new(Gain));
+        let a = engine.add(Box::new(Constant(0.1)));
+        let b = engine.add(Box::new(Constant(0.2)));
+        engine.connect(PortRef { module: one, port: 0 }, PortRef { module: gain, port: 0 });
+        engine.connect_param(PortRef { module: a, port: 0 }, gain, 0, 1.0, -10.0, 10.0);
+        engine.connect_param(PortRef { module: b, port: 0 }, gain, 0, 1.0, -10.0, 10.0);
+        settle(&mut engine);
+        assert!((engine.output_of(gain, 0) - 0.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn reconnecting_a_route_updates_it_and_disconnecting_restores_the_knob() {
+        let (mut engine, gain, modulator) = routed(0.5, 0.25);
+        let from = PortRef { module: modulator, port: 0 };
+        engine.connect_param(from, gain, 0, 2.0, 0.0, 10.0);
+        engine.connect_param(from, gain, 0, 4.0, 0.0, 10.0);
+        settle(&mut engine);
+        assert!((engine.output_of(gain, 0) - 1.5).abs() < 1e-6, "one route, rescaled");
+        assert!(engine.disconnect_param(from, gain, 0));
+        settle(&mut engine);
+        assert!((engine.output_of(gain, 0) - 0.5).abs() < 1e-6);
+        assert!(!engine.disconnect_param(from, gain, 0));
+    }
+
+    #[test]
+    fn a_route_to_nowhere_is_refused() {
+        let (mut engine, gain, modulator) = routed(0.5, 0.25);
+        assert!(!engine.connect_param(PortRef { module: modulator, port: 3 }, gain, 0, 1.0, 0.0, 1.0));
+        assert!(!engine.connect_param(PortRef { module: modulator, port: 0 }, gain, 9, 1.0, 0.0, 1.0));
+        assert!(!engine.connect_param(PortRef { module: 99, port: 0 }, gain, 0, 1.0, 0.0, 1.0));
+    }
+
+    #[test]
+    fn removing_a_source_takes_its_routes_with_it() {
+        let (mut engine, gain, modulator) = routed(0.5, 0.25);
+        engine.connect_param(PortRef { module: modulator, port: 0 }, gain, 0, 2.0, 0.0, 10.0);
+        engine.remove(modulator);
+        settle(&mut engine);
+        assert!((engine.output_of(gain, 0) - 0.5).abs() < 1e-6);
+        assert_eq!(engine.route_count(), 0);
+    }
+
+    #[test]
+    fn the_host_value_is_kept_under_the_modulation() {
+        // A route offsets what the host set; it never overwrites it, so the
+        // knob is exactly where it was when the route goes.
+        let (mut engine, gain, modulator) = routed(0.5, 0.25);
+        engine.connect_param(PortRef { module: modulator, port: 0 }, gain, 0, 2.0, 0.0, 10.0);
+        settle(&mut engine);
+        assert_eq!(engine.param_of(gain, 0), Some(0.5));
     }
 }

@@ -22,7 +22,7 @@
 
 use crate::bank::{VoiceBank, DEFAULT_POLYPHONY, MAX_POLYPHONY};
 use crate::engine::{Module, Ports, ProcessContext};
-use crate::lfo::{LfoShape, LfoTrigger};
+use crate::lfo::{Lfo, LfoShape, LfoTrigger};
 use crate::modmatrix::{ModDest, ModSource};
 use crate::osc::Wave;
 use crate::delay::DelayLine;
@@ -2509,6 +2509,74 @@ impl Module for PrismModule {
     }
 }
 
+/// `m.lfo` — a free-running modulator. Its one output is the shape at its rate,
+/// bipolar and scaled by its amount; the host routes it to any knob with
+/// `Engine::connect_param`, which scales it by half that knob's range. It
+/// reports its phase, so a face can draw where it is between the rack's
+/// reports.
+pub struct LfoModule {
+    lfo: Lfo,
+    seen: [f32; Self::PARAM_COUNT],
+}
+
+impl LfoModule {
+    pub const RATE: usize = 0;
+    pub const SHAPE: usize = 1;
+    pub const AMOUNT: usize = 2;
+    pub const PHASE: usize = 3;
+    pub const PARAM_COUNT: usize = 4;
+
+    pub fn new(sample_rate: f32) -> Self {
+        Self { lfo: Lfo::new(if sample_rate > 0.0 { sample_rate } else { 48_000.0 }, 0x1f0), seen: [f32::NAN; Self::PARAM_COUNT] }
+    }
+}
+
+impl Module for LfoModule {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let raw = [0, 1, 2, 3].map(|i| ports.param(i));
+        if raw != self.seen {
+            if raw[Self::RATE] != self.seen[Self::RATE] {
+                self.lfo.set_rate_hz(raw[Self::RATE]);
+            }
+            if raw[Self::SHAPE] != self.seen[Self::SHAPE] {
+                self.lfo.set_shape(LfoShape::from_u32(raw[Self::SHAPE].max(0.0) as u32).unwrap_or(LfoShape::Sine));
+            }
+            if raw[Self::AMOUNT] != self.seen[Self::AMOUNT] {
+                self.lfo.set_depth(raw[Self::AMOUNT]);
+            }
+            if raw[Self::PHASE] != self.seen[Self::PHASE] {
+                self.lfo.set_phase_degrees(raw[Self::PHASE]);
+            }
+            self.seen = raw;
+        }
+        ports.output(0, self.lfo.next());
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.lfo.set_sample_rate(sample_rate);
+    }
+
+    fn reset(&mut self) {
+        self.lfo.reset();
+    }
+
+    fn telemetry(&self) -> f32 {
+        self.lfo.phase()
+    }
+
+    fn input_count(&self) -> usize { 0 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::RATE => 1.0,
+            Self::AMOUNT => 0.5,
+            _ => 0.0,
+        }
+    }
+}
+
 /// Every module the host can name, so the shim never matches on strings.
 ///
 /// The discriminants are part of the wire protocol between TypeScript and
@@ -2537,6 +2605,7 @@ pub enum ModuleKind {
     Dp4Machine = 18,
     /// The variant is the prism descriptor's `code`.
     Prism = 19,
+    Lfo = 20,
 }
 
 impl ModuleKind {
@@ -2562,6 +2631,7 @@ impl ModuleKind {
             17 => Some(Self::Widener),
             18 => Some(Self::Dp4Machine),
             19 => Some(Self::Prism),
+            20 => Some(Self::Lfo),
             _ => None,
         }
     }
@@ -2611,6 +2681,7 @@ impl ModuleKind {
             Self::Widener => Box::new(Widener::new(sample_rate)),
             Self::Dp4Machine => Box::new(Dp4Machine::new(variant, sample_rate)),
             Self::Prism => Box::new(PrismModule::new(variant, sample_rate)),
+            Self::Lfo => Box::new(LfoModule::new(sample_rate)),
         }
     }
 
@@ -4148,5 +4219,73 @@ mod tests {
         let (l, _) = render_stereo(&mut engine, inputs, output, 36_000, |n| if n == 0 { (1.0, 1.0) } else { (0.0, 0.0) });
         let loudest = (0..l.len()).max_by(|&a, &b| l[a].abs().total_cmp(&l[b].abs())).unwrap();
         assert!((12_000..12_000 + 2_048 + 8).contains(&loudest), "the echo is at {loudest}");
+    }
+
+    // ---- the LFO -----------------------------------------------------------------
+
+    #[test]
+    fn the_lfo_has_its_wire_number_and_one_output() {
+        assert_eq!(ModuleKind::from_u32(20), Some(ModuleKind::Lfo));
+        let lfo = ModuleKind::Lfo.build();
+        assert_eq!((lfo.input_count(), lfo.output_count(), lfo.param_count()), (0, 1, LfoModule::PARAM_COUNT));
+    }
+
+    #[test]
+    fn the_lfo_swings_by_its_amount_at_its_rate() {
+        let mut engine = Engine::new(RATE);
+        let lfo = engine.add(ModuleKind::Lfo.build());
+        engine.set_param(lfo, LfoModule::RATE, 4.0);
+        engine.set_param(lfo, LfoModule::AMOUNT, 0.5);
+        // A little over a second: the sine starts at zero, so the crossing
+        // that opens the first cycle is not one the window sees.
+        let mut values = Vec::new();
+        for _ in 0..(1.1 * RATE) as usize {
+            engine.process();
+            values.push(engine.output_of(lfo, 0));
+        }
+        let (lo, hi) = values.iter().fold((f32::MAX, f32::MIN), |(lo, hi), &v| (lo.min(v), hi.max(v)));
+        assert!((hi - 0.5).abs() < 1e-3 && (lo + 0.5).abs() < 1e-3, "{lo} to {hi}");
+        let rising = values.windows(2).filter(|w| w[0] < 0.0 && w[1] >= 0.0).count();
+        assert_eq!(rising, 4, "four cycles in a second");
+    }
+
+    #[test]
+    fn the_lfo_reports_its_phase() {
+        let mut engine = Engine::new(RATE);
+        let lfo = engine.add(ModuleKind::Lfo.build());
+        engine.set_param(lfo, LfoModule::RATE, 2.0);
+        for _ in 0..6_000 {
+            engine.process();
+        }
+        let phase = engine.telemetry_of(lfo);
+        assert!((phase - 0.25).abs() < 1e-3, "{phase}");
+        let gain = engine.add(ModuleKind::Gain.build());
+        assert!(engine.telemetry_of(gain).is_nan());
+    }
+
+    #[test]
+    fn an_lfo_routed_to_a_knob_moves_the_sound() {
+        // A gain's level swept by an LFO at full amount over half its range.
+        let mut engine = Engine::new(RATE);
+        let input = engine.add(ModuleKind::HostInput.build());
+        let gain = engine.add(ModuleKind::Gain.build());
+        let lfo = engine.add(ModuleKind::Lfo.build());
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: input, port: 0 }, PortRef { module: gain, port: 0 });
+        engine.connect(PortRef { module: gain, port: 0 }, PortRef { module: output, port: 0 });
+        engine.set_param(gain, Gain::LEVEL, 1.0);
+        engine.set_param(lfo, LfoModule::RATE, 5.0);
+        engine.set_param(lfo, LfoModule::AMOUNT, 1.0);
+        assert!(engine.connect_param(PortRef { module: lfo, port: 0 }, gain, Gain::GAIN, 1.0, 0.0, 2.0));
+        let mut seen = (f32::MAX, f32::MIN);
+        for n in 0..RATE as usize {
+            engine.set_param(input, HostInput::SAMPLE, 0.5);
+            engine.process();
+            if n > 4_800 {
+                let v = engine.output_of(output, 0);
+                seen = (seen.0.min(v), seen.1.max(v));
+            }
+        }
+        assert!(seen.0 < 0.05 && seen.1 > 0.95, "{seen:?}");
     }
 }
