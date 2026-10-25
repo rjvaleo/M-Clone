@@ -62,6 +62,7 @@ export const MODULE_KINDS: Readonly<Record<string, number>> = {
   "m.audio-widener": 17,
   "m.audio-dp4": 18,
   "m.lfo": 20,
+  "m.grain-engine": 21,
   // Every effect from prism-fx is one Rust module, built by its code.
   ...Object.fromEntries(Object.keys(PRISM_CODES).map((type) => [type, 19])),
 };
@@ -378,6 +379,31 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     level: 24,
   },
   ...PRISM_PARAM_INDICES,
+  // `GrainEngineModule`. Level is the instrument's own, and the rack's fade.
+  "m.grain-engine": {
+    engine: 0,
+    stretch: 1,
+    semitones: 2,
+    "window-ms": 3,
+    "grain-rate": 4,
+    overlap: 5,
+    "size-jitter": 6,
+    "position-jitter": 7,
+    "pitch-jitter": 8,
+    "pitch-drift": 9,
+    "drift-rate": 10,
+    layers: 11,
+    position: 12,
+    scan: 13,
+    reverse: 14,
+    envelope: 15,
+    "pan-spread": 16,
+    cloud: 17,
+    "cloud-mix": 18,
+    root: 19,
+    "free-run": 20,
+    level: 21,
+  },
   // `LfoModule`. Its targets are routes, not values; its colour is the face's.
   "m.lfo": { rate: 0, shape: 1, amount: 2, phase: 3 },
   "m.granular": {
@@ -416,6 +442,7 @@ const FADE_HANDLE: Readonly<Record<string, number | undefined>> = {
   "m.percussion": PARAM_INDICES["m.percussion"].level,
   "m.looper": PARAM_INDICES["m.looper"].level,
   "m.granular": PARAM_INDICES["m.granular"].level,
+  "m.grain-engine": PARAM_INDICES["m.grain-engine"].level,
   "m.audio-mixer": PARAM_INDICES["m.audio-mixer"].level,
   "m.audio-widener": PARAM_INDICES["m.audio-widener"].level,
   "m.audio-dp4": PARAM_INDICES["m.audio-dp4"].level,
@@ -424,6 +451,7 @@ const FADE_HANDLE: Readonly<Record<string, number | undefined>> = {
 
 /** Modules that take notes. Everything else inherits the trait's no-op. */
 const INSTRUMENTS: ReadonlySet<string> = new Set([
+  "m.grain-engine",
   "m.synth",
   "m.percussion",
   "m.looper",
@@ -513,6 +541,10 @@ export const PARAMS_HANDLED_ELSEWHERE: Readonly<Record<string, Readonly<Record<s
   },
   "m.granular": { "asset-id": "audio, not a value; reaches the engine via set_sample_slot" },
   "m.audio-mixer": { mute: "structural; becomes the spec's bypass" },
+  "m.grain-engine": {
+    mute: "structural; becomes the spec's bypass",
+    "asset-id": "audio, not a value; reaches the engine via set_sample_slot",
+  },
   "m.lfo": {
     color: "the face's, not the engine's",
     targets: "the knobs it moves; they reach the engine as connect_param routes",

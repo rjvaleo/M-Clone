@@ -68,3 +68,15 @@ describe("The prism modules", () => {
     expect(PRISM_STRUCTURE_PARAMS[prismType("tremolo")]).toBeUndefined();
   });
 });
+
+describe("The grain engine", () => {
+  it("is an instrument that takes notes and a sample, with MultiGrainLive's five engines", () => {
+    const engine = moduleRegistry.get("m.grain-engine")!;
+    expect(engine.family).toBe("instrument");
+    expect(engine.ports.map((p) => [p.direction, p.signal.kind])).toEqual([["input", "note-event"], ["output", "audio"]]);
+    expect(engine.parameters.find((p) => p.id === "engine")?.options).toEqual(["WSOLA", "Vocoder", "Grains", "PVSOLA", "Hybrid"]);
+    expect(engine.parameters.find((p) => p.id === "engine")?.defaultValue).toBe("Grains");
+    expect(engine.parameters.find((p) => p.id === "root")?.defaultValue).toBe(60);
+    expect(engine.parameters.find((p) => p.id === "free-run")?.defaultValue).toBe(false);
+  });
+});

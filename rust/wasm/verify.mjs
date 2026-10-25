@@ -414,5 +414,60 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   check("unroutes it", api.disconnect_param(lfo, 0, gain, GAIN_PARAM.GAIN) === 1);
 }
 
+// ---- MultiGrainLive's engine, through the real ABI --------------------------
+// GrainEngineModule is kind 21. A one-second 220 Hz sine in the bank: free
+// running it sounds with no note; gated it waits for one, and a note an octave
+// over the root plays it an octave up.
+{
+  const GRAIN_ENGINE = 21;
+  const P = { SEMITONES: 2, ROOT: 19, FREE_RUN: 20, FADE: 21 };
+  const FRAMES = SAMPLE_RATE;
+  api.init(SAMPLE_RATE);
+  check("allocates the engine's sample", api.sample_alloc(7, 2, FRAMES, SAMPLE_RATE) === 1);
+  const bank = new Float32Array(api.memory.buffer, api.sample_ptr(7), 2 * FRAMES);
+  for (let i = 0; i < FRAMES; i++) {
+    bank[i] = bank[FRAMES + i] = 0.5 * Math.sin((2 * Math.PI * 220 * i) / SAMPLE_RATE);
+  }
+  const build = (free) => {
+    api.init(SAMPLE_RATE);
+    api.sample_alloc(7, 2, FRAMES, SAMPLE_RATE);
+    const b = new Float32Array(api.memory.buffer, api.sample_ptr(7), 2 * FRAMES);
+    for (let i = 0; i < FRAMES; i++) b[i] = b[FRAMES + i] = 0.5 * Math.sin((2 * Math.PI * 220 * i) / SAMPLE_RATE);
+    const grain = u32(api.add_module(GRAIN_ENGINE));
+    const out = u32(api.add_module(KIND.AUDIO_OUTPUT));
+    api.connect(grain, 0, out, 0);
+    api.connect(grain, 1, out, 1);
+    api.set_io(NO_MODULE, out);
+    api.set_sample_slot(grain, 0, 7);
+    api.set_param(grain, P.FADE, 1.0);
+    api.set_param(grain, 0, 0); // WSOLA: the pitch is the clearest to count
+    api.set_param(grain, P.FREE_RUN, free ? 1 : 0);
+    return grain;
+  };
+  const listen = (quanta) => {
+    const got = [];
+    for (let b = 0; b < quanta; b++) {
+      api.process_quantum();
+      got.push(...new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM));
+    }
+    return got;
+  };
+  const peak = (xs) => xs.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  const hz = (xs) => {
+    let n = 0;
+    for (let i = 1; i < xs.length; i++) if ((xs[i - 1] < 0) !== (xs[i] < 0)) n++;
+    return (n / 2) * (SAMPLE_RATE / xs.length);
+  };
+  check("built the grain engine", build(true) !== NO_MODULE);
+  check("free running, it plays with no note", peak(listen(200).slice(4800)) > 0.05);
+  const gated = build(false);
+  check("gated, it is silent before a note", peak(listen(100)) === 0);
+  api.note_on(gated, 72, 1.0, 0.0);
+  const up = listen(300).slice(9600);
+  check("a note plays it", peak(up) > 0.05);
+  const f = hz(up);
+  check("an octave over the root plays an octave up", Math.abs(f - 440) < 25, `${f.toFixed(1)} Hz`);
+}
+
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);
