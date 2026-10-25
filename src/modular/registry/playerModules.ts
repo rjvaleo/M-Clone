@@ -285,6 +285,7 @@ const SYNTH = defineModule({
 });
 
 export const PLAYER_STRUCTURE_PARAMS: Readonly<Record<string, readonly string[]>> = {
+  "m.grain-engine": ["asset-id"],
   "m.percussion": ["slots"],
   "m.looper": ["asset-id"],
   "m.granular": ["asset-id"],
@@ -295,4 +296,64 @@ export const PLAYER_STRUCTURE_PARAMS: Readonly<Record<string, readonly string[]>
   "m.synth": ["matrix", "osc1-wave", "osc2-wave", "osc3-wave"],
 };
 
-export const PLAYER_MODULES: ModuleDescriptor[] = [PERCUSSION, LOOPER, GRANULAR, SYNTH];
+/**
+ * MultiGrainLive's sound engine — the `prism-grain` crate both programs share
+ * — as an instrument: a sample played by any of its five engines, with the
+ * grain cloud's controls. A note sets the pitch in semitones from Root; gated,
+ * it also starts the file and its release fades it out, and with Free run on
+ * it plays continuously, looping, and notes only retune it.
+ *
+ * It runs on the Rust engine. On Web Audio the simpler Granular player stands
+ * in, reading the same sample and the same Free run.
+ */
+const GRAIN_ENGINE = defineModule({
+  type: "m.grain-engine",
+  label: "Grain Engine",
+  family: "instrument",
+  colorToken: "audio",
+  ports: [notesIn(), audioOut()],
+  parameters: [
+    assetParam("Source"),
+    levelParam(),
+    // In the order of `prism_grain::stretch::Algorithm`, which is the wire value.
+    enumParam("engine", "Engine", ["WSOLA", "Vocoder", "Grains", "PVSOLA", "Hybrid"], "Grains"),
+    numberParam("stretch", "Stretch", 1, 0.01, 100, 0.01, "×"),
+    numberParam("semitones", "Transpose", 0, -48, 48, 0.1, "st"),
+    numberParam("window-ms", "Window", 40, 5, 2000, 1, "ms"),
+    // Zero takes the rate from the window and the overlap, as MultiGrainLive does.
+    numberParam("grain-rate", "Grain rate", 0, 0, 200, 0.1, "Hz"),
+    numberParam("overlap", "Overlap", 2, 1, 16, 0.1, "×"),
+    numberParam("size-jitter", "Size jitter", 0, 0, 1, 0.01),
+    numberParam("position-jitter", "Spray", 0, 0, 2000, 1, "ms"),
+    numberParam("pitch-jitter", "Pitch jitter", 0, 0, 24, 0.1, "st"),
+    numberParam("pitch-drift", "Drift", 0, 0, 24, 0.1, "st"),
+    numberParam("drift-rate", "Drift rate", 0.5, 0.01, 20, 0.01, "Hz"),
+    numberParam("layers", "Layers", 1, 1, 64, 1),
+    numberParam("position", "Position", 0, 0, 1, 0.001),
+    numberParam("scan", "Scan", 1, -4, 4, 0.01, "×"),
+    boolParam("reverse", "Reverse"),
+    numberParam("envelope", "Envelope", 0.5, 0, 1, 0.01),
+    numberParam("pan-spread", "Spread", 0, 0, 1, 0.01),
+    boolParam("cloud", "Cloud"),
+    numberParam("cloud-mix", "Cloud mix", 0.5, 0, 1, 0.01),
+    numberParam("root", "Root", 60, 0, 127, 1),
+    boolParam("free-run", "Free run"),
+    muteParam(),
+  ],
+  face: [
+    section("sample", "Sample", [custom("asset-slot", "Sample", ["asset-id"]), param("level")]),
+    section("engine", "Engine", [param("engine"), param("stretch"), param("semitones"), param("window-ms")]),
+    section("grains", "Grains", [
+      param("grain-rate"), param("overlap"), param("size-jitter"), param("position-jitter"),
+      param("layers"), param("envelope"),
+    ]),
+    section("motion", "Motion", [
+      param("position"), param("scan"), param("reverse"), param("pitch-jitter"),
+      param("pitch-drift"), param("drift-rate"), param("pan-spread"),
+    ]),
+    section("cloud", "Cloud", [param("cloud"), param("cloud-mix")]),
+    section("play", "Play", [param("root"), param("free-run"), param("mute")]),
+  ],
+});
+
+export const PLAYER_MODULES: ModuleDescriptor[] = [PERCUSSION, LOOPER, GRANULAR, SYNTH, GRAIN_ENGINE];

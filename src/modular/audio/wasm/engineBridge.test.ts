@@ -1254,3 +1254,18 @@ describe("LFOs and their routes", () => {
     expect(rack.takeReport()?.lfos).toEqual({ l: [0.3, -0.2] });
   });
 });
+
+describe("The grain engine in Rust", () => {
+  it("builds kind 21, takes notes, and puts each control at its index", () => {
+    expect(MODULE_KINDS["m.grain-engine"]).toBe(21);
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("g", "m.grain-engine", { engine: 0, stretch: 2, root: 48, "free-run": 1, level: 0.7 })]));
+    const g = rack.moduleIdOf("g")!;
+    expect(engine.modules.get(g)).toBe(21);
+    const at = (name: string) => engine.params.get(`${g}.${PARAM_INDICES["m.grain-engine"][name]}`);
+    expect([at("engine"), at("stretch"), at("root"), at("free-run"), at("level")]).toEqual([0, 2, 48, 1, 0.7]);
+    expect(PARAM_INDICES["m.grain-engine"].level).toBe(21);
+    expect(rack.instruments).toContain("g");
+  });
+});

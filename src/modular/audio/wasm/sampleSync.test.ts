@@ -142,3 +142,10 @@ describe("Prism effects that take a sound", () => {
     expect(planSampleRefs(plan([node("t", "m.prism-tremolo", { "asset-id": "sha-7" })]))).toEqual([]);
   });
 });
+
+describe("The grain engine's sample", () => {
+  it("is asked for as slot 0", () => {
+    expect(planSampleRefs(plan([node("g", "m.grain-engine", { "asset-id": "sha-3" })])))
+      .toEqual([{ nodeId: "g", slot: 0, assetId: "sha-3" }]);
+  });
+});

@@ -499,6 +499,9 @@ export const PLAYER_BUILDERS: Readonly<Record<string, PlayerConstructor>> = {
   "m.percussion": PercussionPlayer,
   "m.looper": LooperPlayer,
   "m.granular": GranularPlayer,
+  // MultiGrainLive's engine runs only in Rust; on Web Audio the Granular
+  // player stands in, reading the same sample and the same Free run.
+  "m.grain-engine": GranularPlayer,
   // The synth is not a `PlayerModule` — it has no sample bank and generates its
   // own signal — but it presents the same two interfaces, which is all the
   // factory and the note adapter ever ask for.

@@ -7,6 +7,7 @@ name = "dsp-core"
 version = "0.1.0"
 dependencies = [
  "prism-fx",
+ "prism-grain",
 ]
 
 [[package]]
@@ -26,3 +27,7 @@ version = "0.1.0"
 dependencies = [
  "prism-fx",
 ]
+
+[[package]]
+name = "prism-grain"
+version = "0.1.0"
