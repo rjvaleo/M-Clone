@@ -191,6 +191,186 @@ impl Adsr {
     }
 }
 
+/// An envelope drawn the way Web Audio draws one: straight lines between
+/// levels, scheduled from the note's start.
+///
+/// The browser synth — and the scale sequencer it carries — writes each note
+/// as `setValueAtTime(start)`, a `linearRampToValueAtTime` to the peak over the
+/// attack, another to the sustain over the decay, and at the key-up a jump to
+/// the sustain and a ramp to the end over the release. This is that, sample by
+/// sample, so the Rust synth's envelopes are the same shape as the Web Audio
+/// one's rather than the curved `Adsr` above.
+///
+/// The levels are free: an amp envelope runs 0 → 1 → sustain → 0, and the
+/// synth's filter envelopes run between offsets in hertz. Once a release ends
+/// the envelope rests at its end level — which for a filter offset is not
+/// zero, just as the original's last automation event holds.
+#[derive(Clone)]
+pub struct LinearEnvelope {
+    sample_rate: f32,
+    start: f32,
+    peak: f32,
+    sustain: f32,
+    end: f32,
+    attack: f32,
+    decay: f32,
+    release: f32,
+    stage: Stage,
+    /// Samples since the gate opened, or since it closed in the release.
+    elapsed: f64,
+    value: f32,
+}
+
+impl LinearEnvelope {
+    pub fn new(sample_rate: f32) -> Self {
+        Self {
+            sample_rate: if sample_rate > 0.0 { sample_rate } else { 48_000.0 },
+            start: 0.0,
+            peak: 0.0,
+            sustain: 0.0,
+            end: 0.0,
+            attack: 0.0,
+            decay: 0.0,
+            release: 0.0,
+            stage: Stage::Idle,
+            elapsed: 0.0,
+            value: 0.0,
+        }
+    }
+
+    /// Open the gate: `start` now, ramping to `peak` over `attack` seconds and
+    /// to `sustain` over `decay`. A stage of zero length is a jump.
+    pub fn trigger(&mut self, start: f32, peak: f32, sustain: f32, attack: f32, decay: f32) {
+        self.start = start;
+        self.peak = peak;
+        self.sustain = sustain;
+        self.attack = attack.max(0.0);
+        self.decay = decay.max(0.0);
+        self.stage = Stage::Attack;
+        self.elapsed = 0.0;
+        self.value = start;
+    }
+
+    /// Close the gate: jump to the sustain level and ramp to `end` over
+    /// `release` seconds. Does nothing to an envelope that is not open.
+    pub fn release(&mut self, end: f32, release: f32) {
+        if self.stage != Stage::Attack {
+            return;
+        }
+        self.end = end;
+        self.release = release.max(0.0);
+        self.stage = Stage::Release;
+        self.elapsed = 0.0;
+        self.value = self.sustain;
+    }
+
+    /// Silence now, for a stolen voice.
+    pub fn kill(&mut self) {
+        self.stage = Stage::Idle;
+        self.value = 0.0;
+    }
+
+    /// Open or releasing, as opposed to resting.
+    pub fn is_active(&self) -> bool {
+        self.stage != Stage::Idle
+    }
+
+    pub fn value(&self) -> f32 {
+        self.value
+    }
+
+    /// The level for this sample, then on to the next.
+    #[allow(clippy::should_implement_trait)]
+    #[inline]
+    pub fn next(&mut self) -> f32 {
+        let t = (self.elapsed / self.sample_rate as f64) as f32;
+        match self.stage {
+            Stage::Idle => {}
+            Stage::Release => {
+                if self.release > 0.0 && t < self.release {
+                    self.value = self.sustain + (self.end - self.sustain) * (t / self.release);
+                } else {
+                    self.value = self.end;
+                    self.stage = Stage::Idle;
+                }
+            }
+            _ => {
+                self.value = if self.attack > 0.0 && t < self.attack {
+                    self.start + (self.peak - self.start) * (t / self.attack)
+                } else if self.decay > 0.0 && t < self.attack + self.decay {
+                    self.peak + (self.sustain - self.peak) * ((t - self.attack) / self.decay)
+                } else {
+                    self.sustain
+                };
+            }
+        }
+        self.elapsed += 1.0;
+        self.value
+    }
+}
+
+#[cfg(test)]
+mod linear_tests {
+    use super::*;
+
+    const RATE: f32 = 1_000.0;
+
+    #[test]
+    fn it_draws_straight_lines_through_the_scheduled_levels() {
+        let mut env = LinearEnvelope::new(RATE);
+        env.trigger(0.0, 1.0, 0.5, 0.010, 0.020);
+        let values: Vec<f32> = (0..40).map(|_| env.next()).collect();
+        assert_eq!(values[0], 0.0);
+        assert!((values[5] - 0.5).abs() < 1e-6);
+        assert!((values[10] - 1.0).abs() < 1e-6);
+        assert!((values[20] - 0.75).abs() < 1e-6);
+        assert!((values[30] - 0.5).abs() < 1e-6);
+        assert_eq!(values[39], 0.5);
+        assert!(env.is_active());
+    }
+
+    #[test]
+    fn its_release_jumps_to_the_sustain_and_rests_on_the_end() {
+        let mut env = LinearEnvelope::new(RATE);
+        env.trigger(100.0, 900.0, 400.0, 0.010, 0.010);
+        for _ in 0..5 {
+            env.next();
+        }
+        env.release(100.0, 0.010);
+        assert_eq!(env.value(), 400.0);
+        assert_eq!(env.next(), 400.0);
+        for _ in 0..4 {
+            env.next();
+        }
+        assert!((env.next() - 250.0).abs() < 1e-3);
+        for _ in 0..10 {
+            env.next();
+        }
+        assert!(!env.is_active());
+        assert_eq!(env.next(), 100.0);
+        // A closed gate does not release twice.
+        env.release(0.0, 1.0);
+        assert_eq!(env.next(), 100.0);
+    }
+
+    #[test]
+    fn a_stage_of_no_length_is_a_jump() {
+        let mut env = LinearEnvelope::new(RATE);
+        env.trigger(0.0, 1.0, 0.25, 0.0, 0.0);
+        assert_eq!(env.next(), 0.25);
+        let mut held = LinearEnvelope::new(RATE);
+        held.trigger(0.0, 1.0, 0.25, 0.0, 0.004);
+        assert_eq!(held.next(), 1.0);
+        held.release(0.0, 0.0);
+        assert_eq!(held.next(), 0.0);
+        assert!(!held.is_active());
+        held.trigger(0.3, 1.0, 1.0, 1.0, 1.0);
+        held.kill();
+        assert_eq!(held.next(), 0.0);
+        assert_eq!(LinearEnvelope::new(0.0).next(), 0.0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // R-DSP-65 — release lands exactly on zero

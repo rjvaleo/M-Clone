@@ -114,9 +114,11 @@ impl ModDest {
             // amounts.
             Self::Osc1Pitch | Self::Osc2Pitch | Self::Osc3Pitch => 2400.0,
             Self::Osc1Level | Self::Osc2Level | Self::Osc3Level => 1.0,
-            // Most of the audible range in either direction.
-            Self::FilterCutoff => 5.0,
-            Self::FilterResonance => 1.0,
+            // Four octaves, and twenty units of Q (Web Audio's, in decibels):
+            // the browser matrix's ranges, so a routing moves both backends
+            // the same distance.
+            Self::FilterCutoff => 4.0,
+            Self::FilterResonance => 20.0,
             Self::Lfo1Rate | Self::Lfo2Rate => 4.0,
             Self::Pan => 1.0,
             Self::Volume => 1.0,
@@ -408,9 +410,9 @@ mod tests {
 
     #[test]
     fn cutoff_modulation_is_in_octaves() {
-        let up = apply(ModDest::FilterCutoff, 1000.0, 1.0 / 5.0);
-        assert!((up - 2000.0).abs() < 0.01, "one fifth of full scale should be an octave: {up}");
-        let down = apply(ModDest::FilterCutoff, 1000.0, -1.0 / 5.0);
+        let up = apply(ModDest::FilterCutoff, 1000.0, 1.0 / 4.0);
+        assert!((up - 2000.0).abs() < 0.01, "a quarter of full scale should be an octave: {up}");
+        let down = apply(ModDest::FilterCutoff, 1000.0, -1.0 / 4.0);
         assert!((down - 500.0).abs() < 0.01);
     }
 

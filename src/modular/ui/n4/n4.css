@@ -837,6 +837,16 @@
 .mm-node.mm-node--n4 .n4-synth .n4-knob__value { font: 7px/8px var(--n4-pixel); color: var(--n4-accent); -webkit-font-smoothing: none; white-space: nowrap; }
 .n4-synth__readout { font: 6.5px var(--n4-pixel); color: var(--n4-muted); -webkit-font-smoothing: none; white-space: nowrap; }
 .n4-synth__envs { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 2px; }
+/* The scale sequencer's parts, full width under the envelopes. */
+.n4-synth__lfos, .n4-synth__delay, .n4-synth__library { grid-column: 1 / -1; display: grid; gap: 1px; }
+.n4-synth__lfo { display: grid; grid-template-columns: 6px 44px 56px 26px 26px; gap: 3px; align-items: center; }
+.n4-synth__delay { grid-template-columns: max-content 1fr; align-items: center; column-gap: 4px; }
+.n4-synth__delay .n4-box__title { grid-column: 1 / -1; }
+.n4-synth__delayrow { display: grid; gap: 1px; }
+.n4-synth__knobs--delay { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.n4-synth__library { grid-template-columns: minmax(0, 1fr) max-content max-content 26px; align-items: center; column-gap: 3px; }
+.n4-synth__library .n4-box__title { grid-column: 1 / -1; }
+.n4-synth .n4-spinner select { font: 7px/8px var(--n4-pixel); -webkit-font-smoothing: none; }
 .n4-env { display: grid; gap: 1px; min-width: 0; }
 .n4-env__title { font: 600 7px var(--n4-sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--n4-muted); }
 .n4-env__graph {

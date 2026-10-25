@@ -157,7 +157,7 @@ impl VoiceBank {
     pub fn note_off(&mut self, note: u8) {
         for slot in self.slots.iter_mut() {
             if slot.voice.note() == Some(note) {
-                slot.voice.release();
+                slot.voice.release(&self.settings);
             }
         }
     }
@@ -165,7 +165,7 @@ impl VoiceBank {
     /// Release everything, letting each voice finish its tail.
     pub fn all_notes_off(&mut self) {
         for slot in self.slots.iter_mut() {
-            slot.voice.release();
+            slot.voice.release(&self.settings);
         }
     }
 
@@ -191,6 +191,7 @@ impl VoiceBank {
     pub fn next(&mut self) -> StereoSample {
         let mut left = 0.0;
         let mut right = 0.0;
+        let mut classic = 0.0;
         let settings = &self.settings;
         for slot in self.slots.iter_mut() {
             if !slot.voice.is_active() {
@@ -199,8 +200,9 @@ impl VoiceBank {
             let sample = slot.voice.next(settings);
             left += sample.left;
             right += sample.right;
+            classic += sample.classic;
         }
-        StereoSample { left, right }
+        StereoSample { left, right, classic }
     }
 }
 

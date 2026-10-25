@@ -7,6 +7,10 @@
  *   osc 3 ─ gain ─┘   (its own ADSR)
  * ```
  *
+ * A *classic* voice is the same minus its filter and panner: its amp
+ * envelope feeds the module's one shared filter, which is how the scale
+ * sequencer is built (see `synthPlayer.ts`).
+ *
  * ## The filter belongs to the voice
  *
  * This is the one structural departure from both sources this design came from.
@@ -34,6 +38,7 @@
 
 import type {
   AudioBufferLike,
+  BiquadFilterNodeLike,
   OscillatorKind,
   OscillatorNodeLike,
   StereoPannerNodeLike,
@@ -44,6 +49,7 @@ import type { AudioParamLike } from "./params";
 import { rampParam } from "./params";
 import { pulseWaveCoefficients } from "./dsp";
 import { rootHzForMidi } from "../tuning/tuning";
+import { filterSweep, keyFollowedCutoff, KEY_FOLLOW_REFERENCE_MIDI } from "./synthLaws";
 import {
   applyRoutings,
   modulate,
@@ -78,6 +84,11 @@ export type SynthFilterSettings = {
   keyFollow: number;
   /** Depth of the filter envelope, in octaves, either direction. */
   envAmountOctaves: number;
+  /**
+   * The scale sequencer's envelope amount, −1…+1, linear in hertz: +1 peaks
+   * four octaves up. Added to the octave amount; see `filterSweep`.
+   */
+  envAmount: number;
   adsr: AdsrSeconds;
 };
 
@@ -90,16 +101,29 @@ export type SynthSettings = {
 };
 
 /** The note key follow measures against — middle C. */
-export const KEY_FOLLOW_REFERENCE_MIDI = 60;
+export { KEY_FOLLOW_REFERENCE_MIDI };
+
+/**
+ * Where a voice sends itself, and what else reaches its filter.
+ *
+ * `classic` routes the amp envelope straight to `destination` with no filter
+ * or panner of the voice's own — the shared filter is downstream. The two
+ * modulation signals are the module's LFOs, summed into the voice filter's
+ * frequency and Q while the note sounds. `pitch` is the note's true pitch,
+ * microtonal remainder included, which key follow measures.
+ */
+export type VoiceRouting = {
+  classic?: boolean;
+  filterFrequencyMod?: AudioNodeLike;
+  filterQMod?: AudioNodeLike;
+  pitch?: number;
+};
 
 /** How long after its release a voice's oscillators are stopped. */
 const TAIL_SEC = 0.05;
 
 /** A voice stolen mid-note fades over this rather than clicking. */
 const STEAL_FADE_SEC = 0.02;
-
-const MIN_CUTOFF_HZ = 20;
-const MAX_CUTOFF_HZ = 20000;
 
 const clamp = (value: number, low: number, high: number): number =>
   Math.max(low, Math.min(high, value));
@@ -121,6 +145,7 @@ export function defaultSynthSettings(): SynthSettings {
       resonance: 1,
       keyFollow: 0.25,
       envAmountOctaves: 1.5,
+      envAmount: 0,
       adsr: { attack: 0.01, decay: 0.25, sustain: 0.4, release: 0.3 },
     },
     level: 0.8,
@@ -210,7 +235,7 @@ const velocityGain = (velocity: number): number => {
  * Returns the value the parameter is left holding, which the release stage
  * needs as its starting point.
  */
-function scheduleAttackDecay(
+export function scheduleAttackDecay(
   param: AudioParamLike,
   atSec: number,
   from: number,
@@ -235,9 +260,10 @@ export class SynthVoice {
   readonly startedAtSec: number;
   private readonly oscillators: OscillatorNodeLike[] = [];
   private readonly ampGain;
-  private readonly panner: StereoPannerNodeLike;
-  private readonly filter;
-  private readonly filterBaseHz: number;
+  private readonly panner: StereoPannerNodeLike | null;
+  private readonly filter: BiquadFilterNodeLike | null;
+  private readonly routing: VoiceRouting;
+  private filterBaseHz = 0;
   private readonly settings: SynthSettings;
   private released = false;
   private stopped = false;
@@ -251,15 +277,20 @@ export class SynthVoice {
     note: number,
     velocity: number,
     atSec: number,
+    routing: VoiceRouting = {},
   ) {
     this.note = note;
     this.startedAtSec = atSec;
     this.settings = settings;
+    this.routing = routing;
 
-    this.filter = context.createBiquadFilter();
-    this.filter.type = "lowpass";
+    const classic = routing.classic === true;
+    this.filter = classic ? null : context.createBiquadFilter();
     this.ampGain = context.createGain();
-    this.panner = context.createStereoPanner();
+    this.panner = classic ? null : context.createStereoPanner();
+    // What the oscillators feed: the voice's filter, or straight into the amp
+    // when the filter is the module's.
+    const mixInto: AudioNodeLike = this.filter ?? this.ampGain;
 
     const frequency = rootHzForMidi(note);
     for (const osc of settings.oscillators) {
@@ -276,27 +307,25 @@ export class SynthVoice {
       const gain = context.createGain();
       rampParam(gain.gain, clamp(osc.level, 0, 1), atSec, "none");
       oscillator.connect(gain);
-      gain.connect(this.filter);
+      gain.connect(mixInto);
       this.oscillators.push(oscillator);
     }
 
-    // Key follow before the envelope, so the sweep starts from the pitch-
-    // corrected cutoff rather than sweeping away from it.
-    const semitonesFromReference = note - KEY_FOLLOW_REFERENCE_MIDI;
-    const follow = Math.pow(2, (semitonesFromReference * clamp(settings.filter.keyFollow, 0, 1)) / 12);
-    this.filterBaseHz = clamp(
-      positive(settings.filter.cutoffHz, 2000) * follow,
-      MIN_CUTOFF_HZ,
-      MAX_CUTOFF_HZ,
-    );
-    rampParam(this.filter.Q, clamp(settings.filter.resonance, 0.0001, 30), atSec, "none");
+    if (this.filter && this.panner) {
+      this.filter.type = "lowpass";
+      rampParam(this.filter.Q, clamp(settings.filter.resonance, 0.0001, 30), atSec, "none");
+      this.filter.connect(this.ampGain);
+      this.ampGain.connect(this.panner);
+      this.panner.connect(destination);
+      rampParam(this.panner.pan, clamp(settings.pan, -1, 1), atSec, "none");
+      // The LFOs add to the scheduled sweep rather than replacing it.
+      routing.filterFrequencyMod?.connect(this.filter.frequency as unknown as AudioNodeLike);
+      routing.filterQMod?.connect(this.filter.Q as unknown as AudioNodeLike);
+    } else {
+      this.ampGain.connect(destination);
+    }
 
-    this.filter.connect(this.ampGain);
-    this.ampGain.connect(this.panner);
-    this.panner.connect(destination);
-    rampParam(this.panner.pan, clamp(settings.pan, -1, 1), atSec, "none");
-
-    this.scheduleEnvelopes(atSec, velocity);
+    this.scheduleEnvelopes(atSec, velocity, routing.pitch ?? note);
 
     this.oscillators[0].onended = () => this.finish();
     for (const oscillator of this.oscillators) oscillator.start(atSec);
@@ -313,11 +342,14 @@ export class SynthVoice {
     this.ampGain.gain.setValueAtTime(this.sustainLevel, atSec);
     this.ampGain.gain.linearRampToValueAtTime(0, atSec + ampRelease);
 
-    this.filter.frequency.cancelScheduledValues(atSec);
-    this.filter.frequency.setValueAtTime(this.sustainCutoff, atSec);
-    this.filter.frequency.linearRampToValueAtTime(this.filterBaseHz, atSec + filterRelease);
+    if (this.filter) {
+      this.filter.frequency.cancelScheduledValues(atSec);
+      this.filter.frequency.setValueAtTime(this.sustainCutoff, atSec);
+      this.filter.frequency.linearRampToValueAtTime(this.filterBaseHz, atSec + filterRelease);
+    }
 
-    this.stopAt(atSec + Math.max(ampRelease, filterRelease) + TAIL_SEC);
+    // A classic voice's filter is the module's; only its own amp has to end.
+    this.stopAt(atSec + (this.filter ? Math.max(ampRelease, filterRelease) : ampRelease) + TAIL_SEC);
   }
 
   /** Cut the note short to make room for another, without a click. */
@@ -335,15 +367,19 @@ export class SynthVoice {
       stopQuietly(oscillator, 0);
       oscillator.disconnect();
     }
-    this.filter.disconnect();
+    if (this.filter) {
+      this.routing.filterFrequencyMod?.disconnect(this.filter.frequency as unknown as AudioNodeLike);
+      this.routing.filterQMod?.disconnect(this.filter.Q as unknown as AudioNodeLike);
+      this.filter.disconnect();
+    }
     this.ampGain.disconnect();
-    this.panner.disconnect();
+    this.panner?.disconnect();
   }
 
   private sustainLevel = 0;
   private sustainCutoff = 0;
 
-  private scheduleEnvelopes(atSec: number, velocity: number): void {
+  private scheduleEnvelopes(atSec: number, velocity: number, pitch: number): void {
     const peak = clamp(this.settings.level, 0, 1) * velocityGain(velocity);
     this.sustainLevel = scheduleAttackDecay(
       this.ampGain.gain,
@@ -354,22 +390,15 @@ export class SynthVoice {
       this.settings.amp,
     );
 
-    const amount = clamp(this.settings.filter.envAmountOctaves, -8, 8);
-    const peakCutoff = clamp(this.filterBaseHz * Math.pow(2, amount), MIN_CUTOFF_HZ, MAX_CUTOFF_HZ);
-    const sustainOctaves = amount * clamp(this.settings.filter.adsr.sustain, 0, 1);
-    this.sustainCutoff = clamp(
-      this.filterBaseHz * Math.pow(2, sustainOctaves),
-      MIN_CUTOFF_HZ,
-      MAX_CUTOFF_HZ,
-    );
-    scheduleAttackDecay(
-      this.filter.frequency,
-      atSec,
-      this.filterBaseHz,
-      peakCutoff,
-      this.sustainCutoff,
-      this.settings.filter.adsr,
-    );
+    if (!this.filter) return;
+    // Key follow before the envelope, so the sweep starts from the pitch-
+    // corrected cutoff rather than sweeping away from it — the scale
+    // sequencer's laws, both of them (`synthLaws.ts`).
+    const { filter } = this.settings;
+    this.filterBaseHz = keyFollowedCutoff(positive(filter.cutoffHz, 2000), pitch, filter.keyFollow);
+    const sweep = filterSweep(this.filterBaseHz, filter.envAmountOctaves, filter.envAmount, filter.adsr.sustain);
+    this.sustainCutoff = sweep.sustain;
+    scheduleAttackDecay(this.filter.frequency, atSec, sweep.base, sweep.peak, sweep.sustain, filter.adsr);
   }
 
   private stopAt(atSec: number): void {
@@ -409,14 +438,22 @@ export class SynthVoiceBank {
     return this.voices.length;
   }
 
-  noteOn(settings: SynthSettings, note: number, velocity: number, atSec: number): void {
+  noteOn(
+    settings: SynthSettings,
+    note: number,
+    velocity: number,
+    atSec: number,
+    routing: VoiceRouting & { destination?: AudioNodeLike } = {},
+  ): void {
     if (this.disposed) return;
     // The same key struck again is the same voice, not a second one stacked on
     // top: a repeated note should retrigger, not accumulate.
     this.release(note, atSec);
     this.enforceCeiling(atSec);
 
-    const voice = new SynthVoice(this.context, this.destination, settings, note, velocity, atSec);
+    const voice = new SynthVoice(
+      this.context, routing.destination ?? this.destination, settings, note, velocity, atSec, routing,
+    );
     voice.onended = () => this.forget(voice);
     this.voices.push(voice);
   }

@@ -29,8 +29,14 @@ export class RackNotePlayer implements NotePlayer {
     private readonly rack: RackNoteSink,
   ) {}
 
+  /**
+   * `velocity` arrives as MIDI's 0–127, as every Web Audio player reads it;
+   * the engine's `note_on` takes 0–1. Without the scaling every note reached
+   * Rust at full velocity — a velocity of 100 clamped to 1.
+   */
   noteOn(note: number, velocity: number, atSec: number, detuneCents = 0): void {
-    this.rack.schedule(this.nodeId, atSec, [{ type: "note-on", note, velocity, detuneCents }]);
+    const unit = Math.max(0, Math.min(1, velocity / 127));
+    this.rack.schedule(this.nodeId, atSec, [{ type: "note-on", note, velocity: unit, detuneCents }]);
   }
 
   noteOff(note: number, atSec: number): void {
