@@ -174,6 +174,20 @@ const lfoParams = (index: number): Record<string, number> => {
   };
 };
 
+/** The scale sequencer's three LFOs: rate, depth, wave, target — four each. */
+const SYNTH_LFO_BASE = 45;
+const SYNTH_LFO_STRIDE = 4;
+const synthLfoParams = (index: number): Record<string, number> => {
+  const base = SYNTH_LFO_BASE + index * SYNTH_LFO_STRIDE;
+  const id = `lfo-${"abc"[index]}`;
+  return {
+    [`${id}-rate`]: base,
+    [`${id}-depth`]: base + 1,
+    [`${id}-wave`]: base + 2,
+    [`${id}-target`]: base + 3,
+  };
+};
+
 /**
  * Where each document parameter lands in a module's parameter array.
  *
@@ -188,7 +202,9 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
   // `level`. The document's name is the one that has to appear here.
   "m.audio-output": { volume: 0 },
   "m.synth": {
-    level: 0,
+    // Index 0 is the rack's fade handle, as on every module; the descriptor's
+    // `level` is the voice's peak (42), which Web Audio reads the same way.
+    [PRISM_FADE_KEY]: 0,
     ...oscParams(0),
     ...oscParams(1),
     ...oscParams(2),
@@ -211,9 +227,24 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     ...lfoParams(0),
     ...lfoParams(1),
     pan: 38,
+    // The master after the delay, as on Web Audio.
     volume: 39,
     "mod-wheel": 40,
     "max-voices": 41,
+    // The scale sequencer's parts; see `Synth` in modules.rs.
+    level: 42,
+    "filter-env": 43,
+    classic: 44,
+    ...synthLfoParams(0),
+    ...synthLfoParams(1),
+    ...synthLfoParams(2),
+    "delay-note": 57,
+    "delay-feedback": 58,
+    "delay-wet": 59,
+    "delay-spread": 60,
+    "delay-hicut": 61,
+    tape: 62,
+    tempo: 63,
   },
   // Mirrors `BlackholeVerb` in rust/dsp-core/src/modules.rs. `line-count` is
   // absent on purpose: it is a structural parameter, so changing it rebuilds
@@ -429,7 +460,7 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
 const FADE_HANDLE: Readonly<Record<string, number | undefined>> = {
   "m.audio-gain": PARAM_INDICES["m.audio-gain"].level,
   "m.audio-output": undefined,
-  "m.synth": PARAM_INDICES["m.synth"].level,
+  "m.synth": PARAM_INDICES["m.synth"][PRISM_FADE_KEY],
   "m.audio-blackhole": PARAM_INDICES["m.audio-blackhole"].level,
   "m.audio-dp4-reverb": PARAM_INDICES["m.audio-dp4-reverb"].level,
   "m.audio-dp4-nonlin": PARAM_INDICES["m.audio-dp4-nonlin"].level,
@@ -570,6 +601,7 @@ export const PARAMS_HANDLED_ELSEWHERE: Readonly<Record<string, Readonly<Record<s
     matrix: "96 cells; reaches the engine one at a time via set_modulation",
     "preset-values": "editor state, not a value the voice reads",
     "active-position": "editor state, not a value the voice reads",
+    "morph-time": "the face's: how long its morph to a library preset takes",
   },
 };
 
@@ -602,7 +634,6 @@ export const ENGINE_ONLY_PARAMS: ReadonlySet<string> = new Set([
   "lfo2-rate",
   "lfo2-depth",
   "lfo2-phase",
-  "volume",
   "mod-wheel",
 ]);
 

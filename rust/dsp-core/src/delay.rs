@@ -61,6 +61,23 @@ impl DelayLine {
         self.buffer[index]
     }
 
+    /// Read at a fractional delay as Web Audio's `DelayNode` does: linear
+    /// between the two samples either side.
+    ///
+    /// Read *before* pushing the current sample, so a delay of `d` samples
+    /// returns the input from `d` samples ago — the node's own semantics, and
+    /// what lets the synth's ping-pong loop match the browser's.
+    #[inline(always)]
+    pub fn read_linear(&self, delay_samples: f32) -> f32 {
+        let d = clamp(delay_samples, 1.0, self.max_delay_samples());
+        let integer = d.floor();
+        let frac = d - integer;
+        let i = self.write + self.buffer.len() - integer as usize;
+        let newer = self.buffer[i & self.mask];
+        let older = self.buffer[(i - 1) & self.mask];
+        newer + (older - newer) * frac
+    }
+
     /// Read at a fractional delay, cubic Hermite.
     ///
     /// Four-point Catmull-Rom. Linear interpolation would be cheaper and is what
@@ -179,6 +196,25 @@ impl DiffuserChain {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_linear_read_before_the_push_is_the_input_that_many_samples_ago() {
+        let mut line = DelayLine::new(0.01, 48_000.0);
+        let mut out = Vec::new();
+        for n in 0..20 {
+            out.push(line.read_linear(5.0));
+            line.push(n as f32);
+        }
+        assert_eq!(out[5], 0.0);
+        assert_eq!(out[12], 7.0);
+        // Halfway between two samples is halfway between their values.
+        let mut half = DelayLine::new(0.01, 48_000.0);
+        for n in 0..10 {
+            half.push(n as f32);
+        }
+        assert!((half.read_linear(3.5) - 6.5).abs() < 1e-6);
+        assert!((half.read_linear(3.25) - 6.75).abs() < 1e-6);
+    }
+
     use super::*;
 
     const SR: f32 = 48_000.0;

@@ -122,9 +122,11 @@ export const PULSE_HARMONICS = 256;
  *
  * Zero and one are both silence — a pulse that is never high, or never low —
  * so a knob sweeping the full range would pass through nothing at each end.
+ * Five to ninety-five per cent is the scale sequencer's range: its slider
+ * stops there, and its pulse LFO is held there.
  */
-export const MIN_PULSE_WIDTH = 0.1;
-export const MAX_PULSE_WIDTH = 0.9;
+export const MIN_PULSE_WIDTH = 0.05;
+export const MAX_PULSE_WIDTH = 0.95;
 
 /**
  * Fourier coefficients for a pulse of a given duty cycle.

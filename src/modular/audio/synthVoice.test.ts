@@ -196,7 +196,7 @@ describe("The filter envelope", () => {
     const ctx = context();
     play(ctx, {
       filter: {
-        cutoffHz: 500, resonance: 1, keyFollow: 0, envAmountOctaves: 2,
+        cutoffHz: 500, resonance: 1, keyFollow: 0, envAmountOctaves: 2, envAmount: 0,
         adsr: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 0.3 },
       },
     });
@@ -212,7 +212,7 @@ describe("The filter envelope", () => {
     const ctx = context();
     play(ctx, {
       filter: {
-        cutoffHz: 2000, resonance: 1, keyFollow: 0, envAmountOctaves: -1,
+        cutoffHz: 2000, resonance: 1, keyFollow: 0, envAmountOctaves: -1, envAmount: 0,
         adsr: { attack: 0.1, decay: 0.1, sustain: 1, release: 0.1 },
       },
     });
@@ -253,7 +253,7 @@ describe("The filter envelope", () => {
     const ctx = context();
     play(ctx, {
       filter: {
-        cutoffHz: 18000, resonance: 1, keyFollow: 1, envAmountOctaves: 4,
+        cutoffHz: 18000, resonance: 1, keyFollow: 1, envAmountOctaves: 4, envAmount: 0,
         adsr: { attack: 0.01, decay: 0.01, sustain: 1, release: 0.1 },
       },
     }, 108);
@@ -402,5 +402,94 @@ describe("Polyphony", () => {
     expect(voices.activeCount).toBe(1);
     of(ctx, FakeOscillator)[0].finish();
     expect(voices.activeCount).toBe(0);
+  });
+});
+
+describe("The scale sequencer's filter laws, in a voice", () => {
+  const filterOf = (ctx: FakeAudioContext) => of(ctx, FakeBiquad)[0];
+  const sweepOf = (envAmount: number, overrides: Partial<SynthSettings["filter"]> = {}) => {
+    const ctx = context();
+    play(ctx, {
+      filter: {
+        cutoffHz: 1000, resonance: 1, keyFollow: 0, envAmountOctaves: 0, envAmount,
+        adsr: { attack: 0.01, decay: 0.15, sustain: 0.3, release: 0.3 }, ...overrides,
+      },
+    }, 60);
+    return filterOf(ctx).frequency.moves().map((call) => call.value);
+  };
+
+  it("peaks four octaves up at +100 %, with the sustain in hertz", () => {
+    expect(sweepOf(1)).toEqual([1000, 16000, 5500]);
+  });
+
+  it("subtracts linearly at −100 %, to the 20 Hz floor", () => {
+    expect(sweepOf(-1)).toEqual([1000, 20, 20]);
+  });
+
+  it("follows a microtonal pitch when the bank is told it", () => {
+    const ctx = context();
+    const voice = new SynthVoice(ctx, ctx.createGain(), settings({
+      filter: { ...defaultSynthSettings().filter, cutoffHz: 1000, keyFollow: 1, envAmountOctaves: 0 },
+    }), 60, 100, 1, { pitch: 61 });
+    expect(filterOf(ctx).frequency.moves()[0].value).toBeCloseTo(1000 * Math.pow(2, 1 / 12), 6);
+    voice.dispose();
+  });
+
+  it("releases back to the key-followed base", () => {
+    const ctx = context();
+    const voice = play(ctx, {
+      filter: {
+        cutoffHz: 1000, resonance: 1, keyFollow: 0, envAmountOctaves: 0, envAmount: 0.5,
+        adsr: { attack: 0.01, decay: 0.15, sustain: 0.3, release: 0.3 },
+      },
+    }, 60);
+    voice.release(2);
+    expect(filterOf(ctx).frequency.moves().slice(-2).map((call) => [call.time, call.value]))
+      .toEqual([[2, 1000 + 0.5 * 15000 * 0.3], [2.3, 1000]]);
+  });
+});
+
+describe("A classic voice", () => {
+  it("has no filter or panner, and sends its amp straight to the shared filter", () => {
+    const ctx = context();
+    const shared = ctx.createGain();
+    play(ctx);
+    const before = ctx.created.length;
+    new SynthVoice(ctx, shared, settings(), 60, 100, 1, { classic: true });
+    const made = ctx.created.slice(before);
+    expect(made.filter((node) => node instanceof FakeBiquad)).toHaveLength(0);
+    expect(made.filter((node) => node instanceof FakeStereoPanner)).toHaveLength(0);
+    const amp = made.find((node): node is FakeGain => node instanceof FakeGain && node.outgoing.has(shared));
+    expect(amp).toBeDefined();
+    // The oscillators' gains feed the amp directly.
+    expect(made.filter((node) => node instanceof FakeGain && node.outgoing.has(amp!))).toHaveLength(3);
+  });
+
+  it("stops after its amp releases — its filter is not its own to wait for", () => {
+    const ctx = context();
+    const voice = new SynthVoice(ctx, ctx.createGain(), settings({
+      amp: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.2 },
+      filter: { ...defaultSynthSettings().filter, adsr: { attack: 0, decay: 0, sustain: 1, release: 3 } },
+    }), 60, 100, 1, { classic: true });
+    voice.release(2);
+    expect(of(ctx, FakeOscillator)[0].stops).toEqual([2 + 0.2 + 0.05]);
+    voice.dispose();
+  });
+});
+
+describe("The module's LFOs reaching a voice", () => {
+  it("sum into the voice filter's frequency and Q for as long as it sounds", () => {
+    const ctx = context();
+    const frequencyMod = ctx.createGain() as FakeGain;
+    const qMod = ctx.createGain() as FakeGain;
+    const voice = new SynthVoice(ctx, ctx.createGain(), settings(), 60, 100, 1, {
+      filterFrequencyMod: frequencyMod, filterQMod: qMod,
+    });
+    const filter = of(ctx, FakeBiquad)[0];
+    expect(frequencyMod.outgoing.has(filter.frequency as unknown as FakeNode)).toBe(true);
+    expect(qMod.outgoing.has(filter.Q as unknown as FakeNode)).toBe(true);
+    voice.dispose();
+    expect(frequencyMod.outgoing.size).toBe(0);
+    expect(qMod.outgoing.size).toBe(0);
   });
 });

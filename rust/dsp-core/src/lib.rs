@@ -62,6 +62,7 @@ pub mod osc;
 pub mod reverb;
 pub mod sampler;
 pub mod samples;
+pub mod tape;
 pub mod voice;
 
 /// Below this, a value is flushed to zero.

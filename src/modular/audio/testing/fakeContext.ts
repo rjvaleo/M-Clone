@@ -20,7 +20,9 @@ import type {
   ChannelMergerNodeLike,
   ChannelSplitterNodeLike,
   CompressorNodeLike,
+  ConstantSourceNodeLike,
   ConvolverNodeLike,
+  CurveParamLike,
   DelayNodeLike,
   EffectContext,
   AnalyserNodeLike,
@@ -34,14 +36,16 @@ import type {
 import type { EngineContext } from "../audioEngine";
 
 export type ParamCall = {
-  method: "set" | "linear" | "exponential" | "target" | "cancel";
+  method: "set" | "linear" | "exponential" | "target" | "cancel" | "hold" | "curve";
   value: number;
   time: number;
 };
 
-export class FakeParam implements AudioParamLike {
+export class FakeParam implements AudioParamLike, CurveParamLike {
   value: number;
   readonly calls: ParamCall[] = [];
+  /** Every curve handed over, with where and for how long. */
+  readonly curves: { values: Float32Array; start: number; duration: number }[] = [];
 
   constructor(initial = 0) {
     this.value = initial;
@@ -72,9 +76,19 @@ export class FakeParam implements AudioParamLike {
     this.calls.push({ method: "cancel", value: this.value, time: startTime });
   }
 
+  cancelAndHoldAtTime(cancelTime: number): void {
+    this.calls.push({ method: "hold", value: this.value, time: cancelTime });
+  }
+
+  setValueCurveAtTime(values: Float32Array, startTime: number, duration: number): void {
+    this.curves.push({ values: Float32Array.from(values), start: startTime, duration });
+    this.calls.push({ method: "curve", value: values[values.length - 1], time: startTime });
+    this.value = values[values.length - 1];
+  }
+
   /** Scheduled writes only — the cancel-and-pin preamble is not a move. */
   moves(): ParamCall[] {
-    return this.calls.filter((call) => call.method !== "cancel");
+    return this.calls.filter((call) => call.method !== "cancel" && call.method !== "hold");
   }
 }
 
@@ -127,6 +141,9 @@ export class FakeAnalyser extends FakeNode implements AnalyserNodeLike {
 
 export class FakeGain extends FakeNode implements GainNodeLike {
   readonly gain = new FakeParam(1);
+  channelCount = 2;
+  channelCountMode: "max" | "clamped-max" | "explicit" = "max";
+  channelInterpretation: "speakers" | "discrete" = "speakers";
   constructor() {
     super("gain");
   }
@@ -267,6 +284,22 @@ export class FakeOscillator extends FakeNode implements OscillatorNodeLike {
   }
 }
 
+/** A level that is always on once started; records its starts and stops. */
+export class FakeConstantSource extends FakeNode implements ConstantSourceNodeLike {
+  readonly offset = new FakeParam(1);
+  readonly starts: number[] = [];
+  readonly stops: number[] = [];
+  constructor() {
+    super("constant-source");
+  }
+  start(when = 0): void {
+    this.starts.push(when);
+  }
+  stop(when = 0): void {
+    this.stops.push(when);
+  }
+}
+
 export class FakeStereoPanner extends FakeNode implements StereoPannerNodeLike {
   readonly pan = new FakeParam(0);
   constructor() {
@@ -325,6 +358,10 @@ export class FakeAudioContext implements EffectContext, EngineContext {
 
   createStereoPanner(): StereoPannerNodeLike {
     return this.track(new FakeStereoPanner());
+  }
+
+  createConstantSource(): ConstantSourceNodeLike {
+    return this.track(new FakeConstantSource());
   }
 
   createChannelSplitter(numberOfOutputs: number): ChannelSplitterNodeLike {

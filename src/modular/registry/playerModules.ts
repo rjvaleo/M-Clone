@@ -31,6 +31,7 @@ import {
   stringParam,
 } from "./descriptorKit";
 import { syntheticAssetId } from "../audio/assets";
+import { DELAY_NOTES, LFO_TARGETS, LFO_WAVES, TAPE_SPEEDS } from "../audio/synthLaws";
 
 const audioSignal = (): SignalType => ({ kind: "audio", channels: 2 });
 const noteSignal = (): SignalType => ({ kind: "note-event" });
@@ -217,13 +218,51 @@ const oscillatorParams = (index: 1 | 2 | 3, defaults: {
     enumParam(`osc${index}-wave`, `Osc ${index} wave`, SYNTH_WAVES, defaults.wave),
     numberParam(`osc${index}-detune`, `Osc ${index} detune`, defaults.detune, -2400, 2400, 1, "¢"),
     numberParam(`osc${index}-level`, `Osc ${index} level`, defaults.level, 0, 1, 0.01),
-    numberParam(`osc${index}-width`, `Osc ${index} width`, 0.5, 0.1, 0.9, 0.01),
+    numberParam(`osc${index}-width`, `Osc ${index} width`, 0.5, 0.05, 0.95, 0.01),
   ],
 });
 
 const OSC1 = oscillatorParams(1, { wave: "sawtooth", detune: 0, level: 0.8 });
 const OSC2 = oscillatorParams(2, { wave: "sawtooth", detune: 7, level: 0.5 });
 const OSC3 = oscillatorParams(3, { wave: "sine", detune: -1200, level: 0.3 });
+
+/**
+ * The scale sequencer's three LFOs, each with one target.
+ *
+ * Separate from the matrix's two (`lfo1`, `lfo2`) and from the LFO modules
+ * that map to knobs: these are the original's own, free-running, shared by
+ * every note, and each drives exactly what the original's menu offers. Depth
+ * starts at zero so an existing patch sounds as it did; the rates and targets
+ * are the original's.
+ */
+const synthLfoParams = (id: "a" | "b" | "c", n: number, rate: number, target: string) => [
+  numberParam(`lfo-${id}-rate`, `LFO ${n} rate`, rate, 0.05, 20, 0.01, "Hz"),
+  numberParam(`lfo-${id}-depth`, `LFO ${n} depth`, 0, 0, 1, 0.01),
+  enumParam(`lfo-${id}-wave`, `LFO ${n} wave`, LFO_WAVES, "sine"),
+  enumParam(`lfo-${id}-target`, `LFO ${n} target`, LFO_TARGETS, target),
+];
+
+const SYNTH_LFOS = [
+  ...synthLfoParams("a", 1, 1, "filter"),
+  ...synthLfoParams("b", 2, 0.05 * 400 ** 0.4, "pw"),
+  ...synthLfoParams("c", 3, 0.05 * 400 ** 0.4, "none"),
+];
+
+/**
+ * The original's ping-pong delay, after the voices: tempo-synced, with a
+ * hi-cut in its feedback and a tape transport that glides when it is retimed.
+ * Wet starts at zero, so an existing patch has no echo it did not ask for.
+ * Tempo is the synth's own until the transport reaches the audio plan.
+ */
+const SYNTH_DELAY = [
+  enumParam("delay-note", "Delay time", DELAY_NOTES.map((note) => note.label), "1/8"),
+  numberParam("delay-feedback", "Feedback", 0.35, 0, 0.95, 0.01),
+  numberParam("delay-wet", "Delay wet", 0, 0, 1, 0.01),
+  numberParam("delay-spread", "Spread", 1, 0, 1, 0.01),
+  numberParam("delay-hicut", "Hi-cut", 200 * 100 ** 0.75, 200, 20000, 1, "Hz"),
+  enumParam("tape", "Tape speed", TAPE_SPEEDS.map((speed) => speed.label), "7.5 IPS"),
+  numberParam("tempo", "Tempo", 120, 20, 300, 1, "BPM"),
+];
 
 const SYNTH = defineModule({
   type: "m.synth",
@@ -240,6 +279,8 @@ const SYNTH = defineModule({
     numberParam("resonance", "Resonance", 1, 0.1, 30, 0.1, "Q"),
     numberParam("key-follow", "Key follow", 0.25, 0, 1, 0.01),
     numberParam("filter-amount", "Filter amount", 1.5, -8, 8, 0.1, "oct"),
+    // The original's envelope amount, −100…+100 %, linear in hertz.
+    numberParam("filter-env", "Env amount", 0, -1, 1, 0.01),
     numberParam("filter-attack", "Filter attack", 10, 0, 4000, 1, "ms"),
     numberParam("filter-decay", "Filter decay", 250, 0, 4000, 1, "ms"),
     numberParam("filter-sustain", "Filter sustain", 0.4, 0, 1, 0.01),
@@ -251,6 +292,15 @@ const SYNTH = defineModule({
     levelParam(),
     numberParam("pan", "Pan", 0, -1, 1, 0.01),
     numberParam("max-voices", "Voices", 16, 1, 32, 1),
+    // The master after the delay: the original's `volume · 0.3` is 0.21 here.
+    numberParam("volume", "Volume", 1, 0, 1, 0.001),
+    // One filter shared by every note, its envelope retriggered by each — the
+    // scale sequencer's structure, so its sound can be had exactly.
+    boolParam("classic", "Classic"),
+    ...SYNTH_LFOS,
+    ...SYNTH_DELAY,
+    // How long a morph to a library preset takes. The face's, not the voice's.
+    numberParam("morph-time", "Morph time", 5, 0.5, 30, 0.5, "s"),
     muteParam(),
     {
       id: "matrix",
@@ -267,19 +317,23 @@ const SYNTH = defineModule({
   ],
   face: [
     presetSection("synth-presets", "Synth presets", [
-      "cutoff", "resonance", "key-follow", "filter-amount",
+      "cutoff", "resonance", "key-follow", "filter-amount", "filter-env",
       "amp-attack", "amp-decay", "amp-sustain", "amp-release",
-      "level", "pan",
+      "level", "pan", "volume", "classic",
+      ...SYNTH_LFOS.map((parameter) => parameter.id),
+      ...SYNTH_DELAY.map((parameter) => parameter.id),
     ], "top"),
     // One tight panel: oscillators, filter, both envelopes drawn as curves
     // with handles, and the output. See ui/mlab/SynthFace.tsx.
     { ...section("synth", "Synth", [custom("synth-panel", "Synth", [
       ...OSC1.parameters, ...OSC2.parameters, ...OSC3.parameters,
     ].map((parameter) => parameter.id).concat([
-      "cutoff", "resonance", "key-follow", "filter-amount",
+      "cutoff", "resonance", "key-follow", "filter-amount", "filter-env",
       "filter-attack", "filter-decay", "filter-sustain", "filter-release",
       "amp-attack", "amp-decay", "amp-sustain", "amp-release",
-      "level", "pan", "max-voices", "mute", "matrix",
+      "level", "pan", "max-voices", "volume", "classic", "morph-time", "mute", "matrix",
+      ...SYNTH_LFOS.map((parameter) => parameter.id),
+      ...SYNTH_DELAY.map((parameter) => parameter.id),
     ]))]), showHeading: false },
   ],
 });

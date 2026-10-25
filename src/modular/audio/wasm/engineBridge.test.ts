@@ -882,7 +882,7 @@ describe("The plan-to-engine bridge", () => {
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update(plan([node("s", "m.synth")]));
-    expect(engine.params.get(`${rack.moduleIdOf("s")}.${PARAM_INDICES["m.synth"].level}`)).toBe(1);
+    expect(engine.params.get(`${rack.moduleIdOf("s")}.${PARAM_INDICES["m.synth"]["rack-fade"]}`)).toBe(1);
   });
 
   it("gives every synth parameter a distinct index", () => {
@@ -891,8 +891,8 @@ describe("The plan-to-engine bridge", () => {
     const indices = Object.values(PARAM_INDICES["m.synth"]);
     expect(new Set(indices).size).toBe(indices.length);
     // And none of them stray past what the Rust module declares: `Synth` in
-    // modules.rs has PARAM_COUNT = 42, so 41 is the last valid index.
-    expect(Math.max(...indices)).toBeLessThan(42);
+    // modules.rs has PARAM_COUNT = 64, so 63 is the last valid index.
+    expect(Math.max(...indices)).toBeLessThan(64);
   });
 
   it("every module kind it claims to support has parameter indices", () => {

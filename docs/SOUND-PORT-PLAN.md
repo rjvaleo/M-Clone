@@ -114,6 +114,56 @@ full, and add drum step programming. Automation is not ported.
      envelope amount and key follow as the original, ping-pong delay with tape
      glide and hi-cut, the 20 presets (fixing the LFO1 key bug), preset morph,
      and the *classic* shared-filter switch. Both backends' `m.synth`.
+     **Synth built** (branch `sound-synth`). The laws are `audio/synthLaws.ts`,
+     restated in `dsp-core` (`voice.rs`, `tape.rs`) and pinned on both sides
+     to the numbers `app.js` computes.
+     - **Filter.** Key follow from MIDI 60 by the note's true pitch, clamped
+       above only; envelope amount `filter-env` −100…+100 %, linear in hertz
+       (`base + amt·base·15`, sustain scaled, 20 Hz–20 kHz) alongside idMLab's
+       octave amount. Web Audio's lowpass on both backends (Rust:
+       `Biquad::set_web_lowpass`, Q in dB). Envelopes are straight lines on
+       both (Rust: `LinearEnvelope`), and a note's filter envelope is an offset
+       from the cutoff knob, as the original sums them.
+     - **Classic** (`classic`): classic voices skip their filter and pan and
+       feed one shared filter whose frequency is knob + envelope offset + LFO;
+       every note retriggers the offset and the newest note's key-up releases
+       it. Classic ignores pan (the original is mono).
+     - **LFOs** `lfo-a/b/c`: sine/triangle/saw, 0.05–20 Hz, depth, target none /
+       filter (depth·cutoff Hz into every filter) / resonance (10 Q) / volume /
+       pulse width / delay wet (each `level·(1 ± depth)`). Pulse width is read
+       per note as `sin(phase)·depth·0.45`, held 5–95 %; widths 5–95 % now.
+       Separate from the matrix's LFOs and from `m.lfo`. Depth starts at zero.
+     - **Delay**: ping-pong of two 4 s lines, hi-cut (Q 0.5 dB) and feedback in
+       each leg, spread panning, dry `1 − wet`, then `volume` (the master; the
+       original's `volume·0.3`). Synced to `tempo` (the synth's own until the
+       transport reaches the audio plan) at the original's eleven note values,
+       its "1/4T" = 1.33333 beats included. Retiming glides on tape — six
+       speeds, `|Δv|/12` s, overrun cap — as the browser's half-millisecond
+       curve, which the Rust line reads point for point. Wet starts at zero.
+     - **Presets and morph** (`audio/synthPresets.ts`): the twenty presets
+       read through every slider law, LFO 1's stale `lfoRateSlider` /
+       `lfoDepthSlider` / `lfoWaveSelect` keys mapped to LFO 1, unstored
+       controls at the original's page defaults, classic on, one oscillator.
+       Morph moves in slider space in whole slider steps over `morph-time`;
+       menus switch at the start. On the face: Load / Morph.
+     - **Rust fixes this needed**: envelope times were read as seconds (a 10 ms
+       attack took 10 s), resonance as 0–1, detune clamped to ±100 ¢, three
+       oscillators averaged, velocity linear, the descriptor's `level` on the
+       fade handle, and `RackNotePlayer` sent MIDI velocity where the engine
+       takes 0–1, so every Rust instrument played every note at full velocity.
+       The matrix's cutoff and resonance ranges now match the browser's.
+     - **Not exact, and why**: Rust's oscillators are PolyBLEP rather than
+       Web Audio's wavetables, scaled to their peak normalisation (the pulse's
+       at narrow widths approximately); Rust's LFO shapes are ideal where the
+       browser band-limits them. The original's 85 % gate is its sequencer's;
+       here notes are as long as the sequence makes them, and a gate shorter
+       than attack + decay follows idMLab's release rather than the original's
+       event order. The pulse LFO advances by the time between notes, which on
+       the original's step grid is its per-step advance. Volume and delay-wet
+       LFOs scale by the live level (the original by the level when the LFO
+       was last touched). On Rust the cutoff knob moves through the rack's
+       5 ms ramp, the original's through a 15 ms exponential; per-voice notes
+       follow the knob live on Rust and take it at the next note on Web Audio.
    - Drums: a drum step-programming module (Numerology DrumSeq look: rows per
      pad, per-step velocity, probability, flam/ratchet, swing, per-row length)
      driving `m.percussion`; a 909 starter kit from `Audio - Archival
