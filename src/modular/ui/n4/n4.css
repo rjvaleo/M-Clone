@@ -947,3 +947,58 @@
 .mm-perf td:first-child { isolation: isolate; }
 .mm-perf .is-warn { color: #ff6f7d; }
 .n4-playhead-root { display: contents; }
+
+/* ===== The Drum Sequencer: Numerology's DrumSeq, in its red ===== */
+.mm-node[data-module-type="m.drum-seq"] { --n4-step: 22px; --n4-gap: 2px; --n4-drum-head: 156px; }
+.mm-node[data-module-type="m.drum-seq"] .n4 {
+  --n4-accent: #f2545b;
+  width: calc(var(--n4-drum-head) + 4px + 16 * var(--n4-step) + 15 * var(--n4-gap) + 4px + 14px + 10px + 10px);
+}
+.mm-node[data-module-type="m.drum-seq"] .n4-toolbar { flex-wrap: wrap; row-gap: 2px; }
+.n4-rowgrid--drum { grid-template-columns: var(--n4-drum-head) max-content 14px; }
+.mm-node[data-module-type="m.drum-seq"] .n4-steplabels,
+.mm-node[data-module-type="m.drum-seq"] .n4-lane__area,
+.n4-drumrow__pads {
+  display: grid; grid-template-columns: repeat(16, var(--n4-step)); column-gap: var(--n4-gap); justify-content: start;
+}
+.mm-node[data-module-type="m.drum-seq"] .n4-rowgrid .n4-scrollbar,
+.mm-node[data-module-type="m.drum-seq"] .n4-rowgrid .n4-scrollbar.is-empty { width: calc(16 * var(--n4-step) + 15 * var(--n4-gap)); }
+
+/* A row's head: name, note, own length, mute. */
+.n4-drumrow__head { display: flex; align-items: center; gap: 3px; min-width: 0; padding-left: 2px; border-left: 2px solid transparent; }
+.n4-drumrow__head.is-edit { border-left-color: var(--n4-accent); }
+.n4-drumrow__name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+  background: none; border: 0; padding: 0 2px; cursor: pointer; font: 600 9px var(--n4-sans); letter-spacing: 0.04em; color: var(--n4-text);
+}
+.n4-drumrow__head.is-edit .n4-drumrow__name { color: var(--n4-accent); text-shadow: 0 0 6px var(--n4-glow); }
+.n4-drumrow__rename { flex: 1; min-width: 0; height: 14px; font-size: 9px; }
+.n4-drumrow__note { width: 3.2em; height: 14px; font-size: 9px; }
+.n4-drumrow__len select {
+  height: 14px; width: 3.8em; font: 9px var(--n4-mono); color: var(--n4-end); background: var(--n4-well);
+  border: 1px solid var(--n4-deep); border-radius: 3px; padding: 0 1px;
+}
+.n4-drumrow__head .n4-button--icon { min-height: 14px; line-height: 12px; min-width: 15px; font-size: 9px; }
+
+/* The pads: lit when on, filled to their velocity. */
+.n4-drumrow__pads { height: 16px; }
+.n4-drumrow__pads.is-muted { opacity: 0.45; }
+.n4-pad {
+  position: relative; overflow: hidden; padding: 0; border: 0; border-radius: 2px; cursor: pointer;
+  background: linear-gradient(180deg, var(--n4-cell), var(--n4-cell));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.n4-pad:nth-child(8n+5), .n4-pad:nth-child(8n+6), .n4-pad:nth-child(8n+7), .n4-pad:nth-child(8n+8) { background: linear-gradient(180deg, #141920, #0f1217); }
+.n4-pad:hover { background: var(--n4-hover); }
+.n4-pad.is-dim { opacity: 0.28; }
+.n4-pad.is-on { background: color-mix(in srgb, var(--n4-accent) 22%, var(--n4-deep)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--n4-accent) 55%, transparent); }
+.n4-pad__vel {
+  position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--n4-accent) 100%, #fff 20%), var(--n4-accent));
+  box-shadow: 0 0 6px var(--n4-glow);
+}
+.n4-pad i { position: absolute; font: 7px/8px var(--n4-pixel); font-style: normal; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; -webkit-font-smoothing: none; }
+.n4-pad__ratchet { top: 0; right: 1px; }
+.n4-pad__flam { top: 0; left: 1px; }
+.n4-pad__prob { bottom: 0; left: 0; right: 0; text-align: center; }
+.n4-pad.is-playing { box-shadow: inset 0 0 0 1px #fff, 0 0 8px var(--n4-glow); }
+.n4-pad.is-playing .n4-pad__vel { filter: brightness(1.3); }
