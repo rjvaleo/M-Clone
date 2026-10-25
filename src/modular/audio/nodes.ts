@@ -28,10 +28,40 @@ export interface AnalyserNodeLike extends AudioNodeLike {
 
 export interface GainNodeLike extends AudioNodeLike {
   readonly gain: AudioParamLike;
+  /**
+   * How the node mixes what reaches it. Set only where the channel count is
+   * the point: the synth's delay hears its bus folded to one channel, as the
+   * scale sequencer's mono filter fed its delay.
+   */
+  channelCount?: number;
+  channelCountMode?: "max" | "clamped-max" | "explicit";
+  channelInterpretation?: "speakers" | "discrete";
+}
+
+/**
+ * A parameter that can follow a drawn curve — the synth's tape delay glides
+ * its time along one. Separate from `AudioParamLike` because only the delay's
+ * time needs it.
+ */
+export interface CurveParamLike extends AudioParamLike {
+  setValueCurveAtTime(values: Float32Array, startTime: number, duration: number): void;
+  /** Not in every browser; where missing, a cancel and a pinned value stand in. */
+  cancelAndHoldAtTime?(cancelTime: number): void;
 }
 
 export interface DelayNodeLike extends AudioNodeLike {
-  readonly delayTime: AudioParamLike;
+  readonly delayTime: CurveParamLike;
+}
+
+/**
+ * A constant signal with a movable level. The synth's classic filter sums two
+ * of these into its frequency — the knob's base and the envelope's offset —
+ * so turning the knob never cancels a sweep, the scale sequencer's own fix.
+ */
+export interface ConstantSourceNodeLike extends AudioNodeLike {
+  readonly offset: AudioParamLike;
+  start(when?: number): void;
+  stop(when?: number): void;
 }
 
 export interface BiquadFilterNodeLike extends AudioNodeLike {
@@ -214,4 +244,5 @@ export interface SynthContext extends SampleContext {
   // `createStereoPanner` is inherited too, for the same kind of reason: the
   // synth was its first caller, and it stopped being its only one.
   createPeriodicWave(real: Float32Array, imag: Float32Array): PeriodicWaveLike;
+  createConstantSource(): ConstantSourceNodeLike;
 }
