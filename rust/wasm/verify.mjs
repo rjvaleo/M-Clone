@@ -22,7 +22,10 @@ const KIND = { HOST_INPUT: 0, GAIN: 1, AUDIO_OUTPUT: 2, SYNTH: 3 };
 /** Matches `Gain::GAIN` / `LEVEL` / `MUTE`. */
 const GAIN_PARAM = { GAIN: 0, LEVEL: 1, MUTE: 2 };
 /** Matches the `Synth` constants in dsp-core/src/modules.rs. */
-const SYNTH_PARAM = { LEVEL: 0, LFO1_RATE: 28 + 2 };
+const SYNTH_PARAM = {
+  LEVEL: 0, CUTOFF: 16, AMP_ATTACK: 20, AMP_SUSTAIN: 22, AMP_RELEASE: 23, LFO1_RATE: 28 + 2,
+  VOLUME: 39, CLASSIC: 44, SLFO_BASE: 45, DELAY_NOTE: 57, DELAY_FEEDBACK: 58, DELAY_WET: 59, TAPE: 62, TEMPO: 63,
+};
 /** `ModSource` and `ModDest` in dsp-core/src/modmatrix.rs. */
 const MOD = { LFO1: 0, VOLUME: 11 };
 const SAMPLE_RATE = 48000;
@@ -215,6 +218,96 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   api.set_modulation(synth, 0, 0, Number.NaN);
   check("bad note and routing data is refused, not fatal [R-ABI-04]", Number.isFinite(run(4)));
   api.all_notes_off(synth);
+}
+
+// ---- the scale sequencer's parts of the synth -------------------------------
+// The classic shared filter, the ping-pong delay at a tempo, its tape glide and
+// the original's LFOs, each driven across the real ABI. The laws are proved in
+// `modules.rs`; this proves the indices and the module reach the browser.
+{
+  api.init(SAMPLE_RATE);
+  const synth = u32(api.add_module(KIND.SYNTH));
+  const out = u32(api.add_module(KIND.AUDIO_OUTPUT));
+  api.connect(synth, 0, out, 0);
+  api.connect(synth, 1, out, 1);
+  api.set_io(NO_MODULE, out);
+  api.set_param(synth, SYNTH_PARAM.LEVEL, 1.0);
+  const left = () => new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM);
+  const right = () => new Float32Array(api.memory.buffer, api.output_ptr() + QUANTUM * 4, QUANTUM);
+  /** Render `blocks`, returning the frame of the first sound and the loudest. */
+  const listen = (blocks) => {
+    let first = -1;
+    let loudest = 0;
+    let lopsided = 0;
+    for (let b = 0; b < blocks; b++) {
+      api.process_quantum();
+      const l = left();
+      const r = right();
+      for (let i = 0; i < QUANTUM; i++) {
+        const level = Math.max(Math.abs(l[i]), Math.abs(r[i]));
+        if (first < 0 && level > 1e-4) first = b * QUANTUM + i;
+        loudest = Math.max(loudest, level);
+        lopsided = Math.max(lopsided, Math.abs(l[i] - r[i]));
+      }
+    }
+    return { first, loudest, lopsided };
+  };
+
+  api.set_param(synth, SYNTH_PARAM.CLASSIC, 1);
+  api.process_quantum();
+  api.note_on(synth, 60, 1.0, 0.0);
+  const classic = listen(16);
+  check("classic plays through the shared filter over the ABI", classic.loudest > 0.01, `peak ${classic.loudest}`);
+  check("classic voices are mono, as the original's filter was", classic.lopsided < 1e-6);
+  api.all_notes_off(synth);
+
+  // All wet, no feedback, 1/16 at 240 BPM: the echo alone, 62.5 ms late. A
+  // fresh rack, so the delay is timed from these values when it is built.
+  api.init(SAMPLE_RATE);
+  {
+    const s = u32(api.add_module(KIND.SYNTH));
+    const o = u32(api.add_module(KIND.AUDIO_OUTPUT));
+    api.connect(s, 0, o, 0);
+    api.connect(s, 1, o, 1);
+    api.set_io(NO_MODULE, o);
+    for (const [index, value] of [
+      [SYNTH_PARAM.LEVEL, 1], [SYNTH_PARAM.TEMPO, 240], [SYNTH_PARAM.DELAY_NOTE, 1],
+      [SYNTH_PARAM.DELAY_WET, 1], [SYNTH_PARAM.DELAY_FEEDBACK, 0], [SYNTH_PARAM.AMP_ATTACK, 0],
+      [SYNTH_PARAM.AMP_RELEASE, 1], [SYNTH_PARAM.TAPE, 5],
+    ]) api.set_param(s, index, value);
+    api.process_quantum();
+    api.note_on(s, 69, 1.0, 0.0);
+    api.process_quantum();
+    api.note_off(s, 69);
+    const echo = listen(40);
+    check(`the delay answers one sixteenth at 240 BPM later (${echo.first} frames)`,
+      Math.abs(echo.first + QUANTUM - 3000) <= 2);
+    listen(100);
+
+    // Retimed to an eighth on the slowest tape: it glides there, then holds.
+    api.set_param(s, SYNTH_PARAM.DELAY_NOTE, 3);
+    listen(Math.ceil(0.4 * SAMPLE_RATE / QUANTUM));
+    api.note_on(s, 69, 1.0, 0.0);
+    api.process_quantum();
+    api.note_off(s, 69);
+    const glided = listen(80);
+    check(`after its tape glide the delay is an eighth (${glided.first} frames)`,
+      Math.abs(glided.first + QUANTUM - 6000) <= 2);
+    listen(200);
+
+    // An original LFO on the volume, at 4 Hz and full depth, swings the level.
+    api.set_param(s, SYNTH_PARAM.DELAY_WET, 0);
+    api.set_param(s, SYNTH_PARAM.AMP_SUSTAIN, 1);
+    api.set_param(s, SYNTH_PARAM.SLFO_BASE, 4);
+    api.set_param(s, SYNTH_PARAM.SLFO_BASE + 1, 1);
+    api.set_param(s, SYNTH_PARAM.SLFO_BASE + 3, 3);
+    api.note_on(s, 60, 1.0, 0.0);
+    const swings = [];
+    for (let w = 0; w < 8; w++) swings.push(listen(12).loudest);
+    const swing = Math.max(...swings) - Math.min(...swings);
+    check(`an original LFO on the volume moves it over the ABI (swing ${swing.toFixed(3)})`, swing > 0.05);
+    api.all_notes_off(s);
+  }
 }
 
 

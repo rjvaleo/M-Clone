@@ -20,10 +20,17 @@ import type { AudioNodeSpec } from "./audioPlan";
  * is about that contract holding — the sound itself is `synthVoice.test.ts`.
  */
 
+/**
+ * Nodes of a kind made since the module was built — the voices'. The module's
+ * own chain (its LFOs, the delay's hi-cuts, the classic filter) is built once
+ * with it and is `chain.test`'s business, not a note's.
+ */
+const builtAt = new WeakMap<FakeAudioContext, number>();
+const mark = (ctx: FakeAudioContext) => builtAt.set(ctx, ctx.created.length);
 const of = <T extends FakeNode>(
   ctx: FakeAudioContext,
   Kind: abstract new (...args: never[]) => T,
-): T[] => ctx.created.filter((node): node is T => node instanceof Kind);
+): T[] => ctx.created.slice(builtAt.get(ctx) ?? 0).filter((node): node is T => node instanceof Kind);
 
 const spec = (overrides: Partial<AudioNodeSpec> = {}): AudioNodeSpec => ({
   nodeId: "synth",
@@ -39,6 +46,7 @@ const rig = (overrides: Partial<AudioNodeSpec> = {}) => {
   const context = new FakeAudioContext();
   const player = new SynthPlayer(context, spec(overrides), 0, { samples: () => undefined },
     () => "linear");
+  mark(context);
   return { context, player };
 };
 
@@ -139,10 +147,16 @@ describe("Playing notes", () => {
 
 describe("Reading the settings a document stores", () => {
   it("falls back to a patch that makes a sound", () => {
-    // Plus an empty matrix: a patch is the settings and their routings.
-    const { matrix, ...settings } = readSynthSettings({}, {});
+    // Plus an empty matrix and the module's chain: a patch is the settings,
+    // their routings, and what comes after the voices.
+    const { matrix, classic, volume, lfos, delay, ...settings } = readSynthSettings({}, {});
     expect(settings).toEqual(defaultSynthSettings());
     expect(matrix).toEqual(emptyMatrix());
+    // Nothing the scale sequencer added is heard until it is asked for.
+    expect(classic).toBe(false);
+    expect(volume).toBe(1);
+    expect(lfos.map((lfo) => lfo.depth)).toEqual([0, 0, 0]);
+    expect(delay.wet).toBe(0);
   });
 
   it("reads the oscillators from flat parameters", () => {
@@ -213,6 +227,7 @@ describe("Modulation reaching a note", () => {
         matrix: [{ source: "velocity", destination: "filter-cutoff", amount: 1 }],
       },
     }), 0, { samples: () => undefined }, () => "linear");
+    mark(context);
 
     player.noteOn(60, 127, 1);
     player.noteOn(72, 1, 1);
@@ -228,6 +243,7 @@ describe("Modulation reaching a note", () => {
       parameters: { cutoff: 1000, "filter-amount": 0, "key-follow": 0 },
       structure: { matrix: [{ source: "random", destination: "filter-cutoff", amount: 1 }] },
     }), 0, { samples: () => undefined, random: () => (draw += 0.5) - 0.5 }, () => "linear");
+    mark(context);
 
     player.noteOn(60, 100, 1);
     player.noteOn(62, 100, 1);

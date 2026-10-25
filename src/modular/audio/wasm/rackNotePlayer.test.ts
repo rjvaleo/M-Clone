@@ -18,10 +18,21 @@ describe("RackNotePlayer", () => {
 
   it("schedules note on for the moment the score asked for", () => {
     const rack = sink();
-    new RackNotePlayer("n1", rack).noteOn(60, 0.8, 12.5);
+    new RackNotePlayer("n1", rack).noteOn(60, 127, 12.5);
     expect(rack.schedule).toHaveBeenCalledWith("n1", 12.5, [
-      { type: "note-on", note: 60, velocity: 0.8, detuneCents: 0 },
+      { type: "note-on", note: 60, velocity: 1, detuneCents: 0 },
     ]);
+  });
+
+  it("hands the engine velocity as 0–1, from MIDI's 0–127", () => {
+    // The note adapter speaks MIDI velocity, as every Web Audio player reads
+    // it; the engine takes a unit. Unscaled, 100 clamped to full velocity.
+    const rack = sink();
+    const player = new RackNotePlayer("n1", rack);
+    player.noteOn(60, 63.5, 1);
+    player.noteOn(60, 300, 2);
+    player.noteOn(60, -5, 3);
+    expect(rack.schedule.mock.calls.map((call) => call[2][0].velocity)).toEqual([0.5, 1, 0]);
   });
 
   it("carries the microtonal remainder a scale quantiser produced", () => {
@@ -29,9 +40,9 @@ describe("RackNotePlayer", () => {
     // would make every scale in the tuning library sound like 12-TET while the
     // quantiser upstream reported that it had worked.
     const rack = sink();
-    new RackNotePlayer("n1", rack).noteOn(60, 0.8, 12.5, -33.4);
+    new RackNotePlayer("n1", rack).noteOn(60, 127, 12.5, -33.4);
     expect(rack.schedule).toHaveBeenCalledWith("n1", 12.5, [
-      { type: "note-on", note: 60, velocity: 0.8, detuneCents: -33.4 },
+      { type: "note-on", note: 60, velocity: 1, detuneCents: -33.4 },
     ]);
   });
 

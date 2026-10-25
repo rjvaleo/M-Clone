@@ -5,12 +5,33 @@
 //! matrix run alongside, **evaluated on every sample**, which is the whole
 //! difference from the browser build.
 //!
+//! # The scale sequencer's laws
+//!
+//! The filter envelope and key follow are the scale sequencer's, restated from
+//! `src/modular/audio/synthLaws.ts` and pinned to the same numbers: the cutoff
+//! follows the key from middle C, and the envelope's percentage amount is
+//! linear in hertz, +100 % peaking four octaves up. Both envelopes are drawn in
+//! straight lines as Web Audio draws them (`LinearEnvelope`), the filter is
+//! Web Audio's lowpass with its Q in decibels, and each wave is scaled to the
+//! peak a browser oscillator normalises it to — so this voice and the Web
+//! Audio voice play the same patch the same way.
+//!
 //! # Why the filter is per voice
 //!
 //! The scale sequencer this design came from shared one filter across the whole
 //! instrument, and that is what made its cutoff knob cancel the envelopes of
 //! notes already sounding. A filter envelope belongs to a note, so the filter
-//! does too. It costs one biquad per voice, which is nothing.
+//! does too. It costs one biquad per voice, which is nothing. A *classic* voice
+//! is the exception the module asks for: it skips its filter and pan, and the
+//! module puts every classic voice through one shared filter, as the original
+//! does (see `Synth` in `modules.rs`).
+//!
+//! # The filter follows the knob
+//!
+//! A note's envelope is worked out when it starts, as offsets in hertz from
+//! the cutoff knob — the original's own trick of summing a base and an offset
+//! — so turning the knob (or an LFO mapped to it) moves a sounding note's
+//! filter without cancelling its sweep.
 //!
 //! # The order of the modulation
 //!
@@ -19,8 +40,8 @@
 //! sample's LFO 1 rather than last sample's, and — more importantly — that no
 //! destination can depend on the order the code happens to apply them in.
 
-use crate::envelope::Adsr;
-use crate::filter::{Biquad, BiquadKind};
+use crate::envelope::LinearEnvelope;
+use crate::filter::Biquad;
 use crate::lfo::{Lfo, LfoShape, LfoTrigger};
 use crate::modmatrix::{apply, ModDest, ModMatrix, ModSource, DEST_COUNT, SOURCE_COUNT};
 use crate::osc::{Osc, Wave};
@@ -39,11 +60,65 @@ pub const KEY_FOLLOW_PIVOT_MIDI: f32 = 60.0;
 pub const MIN_CUTOFF_HZ: f32 = 20.0;
 pub const MAX_CUTOFF_HZ: f32 = 20_000.0;
 
+/// A full filter envelope reaches the base cutoff times this: `2^4 − 1`.
+pub const FILTER_ENV_SPAN: f32 = 15.0;
+
+/// Where a modulated pulse width is held.
+pub const MIN_MODULATED_PW: f32 = 0.05;
+pub const MAX_MODULATED_PW: f32 = 0.95;
+
+/// How far past its plateau a band-limited edge rings: Gibbs, about 9 % of
+/// a jump of two. A browser oscillator normalises its wave to a peak of one,
+/// ringing included, so its plateaus sit this much lower than an ideal wave's.
+const GIBBS_OVERSHOOT: f32 = 0.179;
+
 /// Convert a MIDI note to hertz, fractional notes included so that pitch
 /// modulation and detune land between the keys.
 #[inline]
 pub fn note_to_hz(note: f32) -> f32 {
     A4_HZ * ((note - A4_MIDI) / 12.0).exp2()
+}
+
+/// The cutoff a note starts from: the knob moved by key follow, measured from
+/// middle C by the note's true pitch. Clamped above only, as the original.
+pub fn key_followed_cutoff(cutoff_hz: f32, pitch: f32, key_follow: f32) -> f32 {
+    let semitones = (pitch - KEY_FOLLOW_PIVOT_MIDI) * clamp(key_follow, 0.0, 1.0);
+    (cutoff_hz * (semitones / 12.0).exp2()).min(MAX_CUTOFF_HZ)
+}
+
+/// Where a filter envelope goes: `(base, peak, sustain)` in hertz.
+///
+/// `amount` is the original's −1…+1, linear in hertz — `base + amount · base ·
+/// 15`, the sustain scaled by its level — and `octaves` is idMLab's own
+/// exponential amount alongside it. Peak and sustain are held to 20 Hz–20 kHz.
+pub fn filter_sweep(base: f32, octaves: f32, amount: f32, sustain: f32) -> (f32, f32, f32) {
+    let oct = clamp(octaves, -8.0, 8.0);
+    let reach = clamp(amount, -1.0, 1.0) * FILTER_ENV_SPAN * base;
+    let s = clamp(sustain, 0.0, 1.0);
+    (
+        base,
+        clamp(base * oct.exp2() + reach, MIN_CUTOFF_HZ, MAX_CUTOFF_HZ),
+        clamp(base * (oct * s).exp2() + reach * s, MIN_CUTOFF_HZ, MAX_CUTOFF_HZ),
+    )
+}
+
+/// The gain that brings a wave to a browser oscillator's level.
+///
+/// Web Audio normalises every wave so its peak is one. A sine and a triangle
+/// already peak at one; a saw and a square ring past their plateaus by the
+/// Gibbs overshoot, so their plateaus sit at `1 / 1.179`; and a pulse with its
+/// DC removed peaks at `2·max(w, 1 − w)` before the same ringing. The pulse
+/// figure is the ringing of a long series, which the original's 256-partial
+/// pulse approaches but does not equal exactly at the narrowest widths.
+pub fn web_audio_gain(wave: Wave, width: f32) -> f32 {
+    match wave {
+        Wave::Sine | Wave::Triangle => 1.0,
+        Wave::Sawtooth | Wave::Square => 1.0 / (1.0 + GIBBS_OVERSHOOT),
+        Wave::Pulse => {
+            let w = clamp(width, MIN_MODULATED_PW, MAX_MODULATED_PW);
+            1.0 / (2.0 * w.max(1.0 - w) + GIBBS_OVERSHOOT)
+        }
+    }
 }
 
 /// Everything a voice needs that the performer sets rather than the note.
@@ -61,10 +136,14 @@ pub struct VoiceSettings {
     pub levels: [f32; OSC_COUNT],
     pub pulse_width: [f32; OSC_COUNT],
 
+    /// The cutoff knob, live.
     pub cutoff_hz: f32,
+    /// Q in decibels, as Web Audio's lowpass reads it.
     pub resonance: f32,
     /// How much the filter envelope opens the cutoff, in octaves.
     pub filter_env_octaves: f32,
+    /// The original's envelope amount, −1…+1, linear in hertz.
+    pub filter_env_amount: f32,
     /// 0 = cutoff is the same at every pitch, 1 = it tracks the keyboard.
     pub key_follow: f32,
 
@@ -75,7 +154,17 @@ pub struct VoiceSettings {
     pub matrix: ModMatrix,
 
     pub pan: f32,
-    pub volume: f32,
+    /// The voice's peak, before velocity.
+    pub level: f32,
+
+    /// A new note skips its own filter and pan, for the module's shared one.
+    pub classic: bool,
+    /// The pulse width swing a new note is built with — the module's pulse
+    /// LFOs, read at the note.
+    pub pw_swing: f32,
+    /// What the module's LFOs add to every voice filter, this sample.
+    pub lfo_cutoff_hz: f32,
+    pub lfo_q: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -106,8 +195,9 @@ impl Default for VoiceSettings {
             levels: [1.0, 0.0, 0.0],
             pulse_width: [0.5; OSC_COUNT],
             cutoff_hz: 8_000.0,
-            resonance: 0.3,
+            resonance: 1.0,
             filter_env_octaves: 0.0,
+            filter_env_amount: 0.0,
             key_follow: 0.0,
             amp: AdsrSettings { attack: 0.005, decay: 0.1, sustain: 0.8, release: 0.15 },
             filter_env: AdsrSettings { attack: 0.005, decay: 0.2, sustain: 0.4, release: 0.2 },
@@ -129,24 +219,35 @@ impl Default for VoiceSettings {
             ],
             matrix: ModMatrix::new(),
             pan: 0.0,
-            volume: 0.8,
+            level: 1.0,
+            classic: false,
+            pw_swing: 0.0,
+            lfo_cutoff_hz: 0.0,
+            lfo_q: 0.0,
         }
     }
 }
 
 /// What one voice produces for one sample.
+///
+/// `classic` is a classic voice's output: mono, unfiltered, for the module's
+/// shared filter. A voice is one or the other, so one of the two is silent.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StereoSample {
     pub left: f32,
     pub right: f32,
+    pub classic: f32,
 }
 
 pub struct Voice {
     sample_rate: f32,
     oscs: [Osc; OSC_COUNT],
     filter: Biquad,
-    amp: Adsr,
-    filter_env: Adsr,
+    amp: LinearEnvelope,
+    /// The filter envelope as offsets from the cutoff knob, in hertz.
+    filter_env: LinearEnvelope,
+    /// The same envelope as 0…1, for the matrix's `FilterEnv` source.
+    filter_unit: LinearEnvelope,
     lfos: [Lfo; 2],
     rng: Rng,
 
@@ -165,6 +266,11 @@ pub struct Voice {
     /// the life of a note rather than noise.
     note_random: f32,
     mod_wheel: f32,
+    /// Fixed when the note starts: its shared-filter routing, its pulse swing,
+    /// and the offset its filter envelope releases to.
+    classic: bool,
+    pw_swing: f32,
+    base_offset: f32,
 }
 
 impl Voice {
@@ -176,8 +282,9 @@ impl Voice {
             sample_rate: rate,
             oscs: [Osc::new(rate), Osc::new(rate), Osc::new(rate)],
             filter: Biquad::identity(),
-            amp: Adsr::new(rate),
-            filter_env: Adsr::new(rate),
+            amp: LinearEnvelope::new(rate),
+            filter_env: LinearEnvelope::new(rate),
+            filter_unit: LinearEnvelope::new(rate),
             // Separate seeds so the two LFOs' random shapes do not move in
             // lockstep, which would make them one source with two names.
             lfos: [Lfo::new(rate, seed ^ 0x5EED), Lfo::new(rate, seed ^ 0xA5A5)],
@@ -187,6 +294,9 @@ impl Voice {
             velocity: 0.0,
             note_random,
             mod_wheel: 0.0,
+            classic: false,
+            pw_swing: 0.0,
+            base_offset: 0.0,
         }
     }
 
@@ -210,14 +320,6 @@ impl Voice {
             osc.set_wave(settings.waves[index]);
             osc.set_width(settings.pulse_width[index]);
         }
-        self.amp.set_attack(settings.amp.attack);
-        self.amp.set_decay(settings.amp.decay);
-        self.amp.set_sustain(settings.amp.sustain);
-        self.amp.set_release(settings.amp.release);
-        self.filter_env.set_attack(settings.filter_env.attack);
-        self.filter_env.set_decay(settings.filter_env.decay);
-        self.filter_env.set_sustain(settings.filter_env.sustain);
-        self.filter_env.set_release(settings.filter_env.release);
         for (index, lfo) in self.lfos.iter_mut().enumerate() {
             let config = settings.lfo[index];
             lfo.set_shape(config.shape);
@@ -236,31 +338,51 @@ impl Voice {
     /// as an argument rather than inferring it is what keeps every tuning
     /// system in the library a property of the score rather than of the
     /// synthesiser.
+    ///
+    /// `velocity` is 0…1 and is heard squared, as the browser voice hears it.
     pub fn start(&mut self, note: u8, velocity: f32, detune_cents: f32, settings: &VoiceSettings) {
         self.configure(settings);
         self.note = Some(note);
         // A non-finite value would poison the oscillator frequency for the
         // life of the voice, and there is no sound to recover to.
         self.detune_cents = if detune_cents.is_finite() { detune_cents } else { 0.0 };
-        self.velocity = clamp(velocity, 0.0, 1.0);
+        self.velocity = if velocity.is_finite() { clamp(velocity, 0.0, 1.0) } else { 0.0 };
         self.note_random = self.rng.next_bipolar();
-        self.amp.gate_on();
-        self.filter_env.gate_on();
+        self.classic = settings.classic;
+        self.pw_swing = if settings.pw_swing.is_finite() { settings.pw_swing } else { 0.0 };
+
+        let amp = settings.amp;
+        // A retriggered voice starts from where it is rather than clicking to
+        // silence; a free one starts from silence, as a browser voice does.
+        let from = if self.amp.is_active() { self.amp.value() } else { 0.0 };
+        self.amp.trigger(from, 1.0, clamp(amp.sustain, 0.0, 1.0), amp.attack, amp.decay);
+
+        let env = settings.filter_env;
+        let knob = positive(settings.cutoff_hz, 2_000.0);
+        let pitch = note as f32 + self.detune_cents / 100.0;
+        let base = key_followed_cutoff(knob, pitch, settings.key_follow);
+        let (base, peak, sustain) =
+            filter_sweep(base, settings.filter_env_octaves, settings.filter_env_amount, env.sustain);
+        self.base_offset = base - knob;
+        self.filter_env.trigger(base - knob, peak - knob, sustain - knob, env.attack, env.decay);
+        self.filter_unit.trigger(0.0, 1.0, clamp(env.sustain, 0.0, 1.0), env.attack, env.decay);
         for lfo in self.lfos.iter_mut() {
             lfo.retrigger();
         }
     }
 
     /// Note off. The voice keeps sounding through its release.
-    pub fn release(&mut self) {
-        self.amp.gate_off();
-        self.filter_env.gate_off();
+    pub fn release(&mut self, settings: &VoiceSettings) {
+        self.amp.release(0.0, settings.amp.release);
+        self.filter_env.release(self.base_offset, settings.filter_env.release);
+        self.filter_unit.release(0.0, settings.filter_env.release);
     }
 
     /// Silence now, for voice stealing.
     pub fn steal(&mut self) {
         self.amp.kill();
         self.filter_env.kill();
+        self.filter_unit.kill();
         self.note = None;
         self.detune_cents = 0.0;
         for osc in self.oscs.iter_mut() {
@@ -297,10 +419,11 @@ impl Voice {
 
         // 1. Read every source for this sample.
         let amp_env = self.amp.next();
-        let filter_env = self.filter_env.next();
+        let filter_offset = self.filter_env.next();
+        let filter_unit = self.filter_unit.next();
         let lfo1 = self.lfos[0].next();
         let lfo2 = self.lfos[1].next();
-        let sources = self.sources(amp_env, filter_env, lfo1, lfo2);
+        let sources = self.sources(amp_env, filter_unit, lfo1, lfo2);
 
         // 2. Evaluate the whole matrix once. Every destination below reads from
         //    this, so none of them can be affected by the order they are applied.
@@ -338,50 +461,54 @@ impl Voice {
                 / 1200.0;
             let tuned = base * detune.exp2();
             self.oscs[index].set_frequency(apply(pitch_dest, tuned, m[pitch_dest as usize]));
-            self.oscs[index].set_width(settings.pulse_width[index]);
+            // The knob's width, live, plus the swing this note was built with.
+            let width = clamp(settings.pulse_width[index] + self.pw_swing, MIN_MODULATED_PW, MAX_MODULATED_PW);
+            self.oscs[index].set_width(width);
 
             let level = clamp(apply(level_dest, settings.levels[index], m[level_dest as usize]), 0.0, 1.0);
             if level > 0.0 {
-                mixed += self.oscs[index].next() * level;
+                mixed += self.oscs[index].next() * level * web_audio_gain(settings.waves[index], width);
             } else {
                 // Still advanced, so an oscillator turned back up rejoins in
                 // phase with the others rather than wherever it was left.
                 self.oscs[index].next();
             }
         }
-        // Three oscillators at unity would clip; scaling by the count keeps a
-        // full stack inside the rails without touching a single-oscillator patch.
-        mixed /= OSC_COUNT as f32;
+        // Summed, not averaged: the browser voice sums three gains into its
+        // filter, and a single oscillator at full level is the original's
+        // whole voice.
 
-        // 5. Filter: envelope, key follow, then matrix.
-        let key_offset = self
-            .note
-            .map(|n| (n as f32 - KEY_FOLLOW_PIVOT_MIDI) / 12.0 * settings.key_follow)
-            .unwrap_or(0.0);
-        let env_offset = filter_env * settings.filter_env_octaves;
-        let cutoff = settings.cutoff_hz * (key_offset + env_offset).exp2();
+        // 5. Amplitude: the envelope, velocity squared, the voice's level.
+        let level = clamp(apply(ModDest::Volume, settings.level, m[ModDest::Volume as usize]), 0.0, 1.0);
+        let gain = amp_env * self.velocity * self.velocity * level;
+        if self.classic {
+            return StereoSample { classic: mixed * gain, ..StereoSample::default() };
+        }
+
+        // 6. Filter: the knob, this note's envelope offset, the module's LFOs,
+        //    then the matrix. Web Audio's lowpass, Q in decibels.
+        let cutoff = settings.cutoff_hz + filter_offset + settings.lfo_cutoff_hz;
         let cutoff = apply(ModDest::FilterCutoff, cutoff, m[ModDest::FilterCutoff as usize]);
-        let cutoff = clamp(cutoff, MIN_CUTOFF_HZ, MAX_CUTOFF_HZ.min(self.sample_rate * 0.49));
-        let resonance = clamp(
+        let q = clamp(
             apply(ModDest::FilterResonance, settings.resonance, m[ModDest::FilterResonance as usize]),
-            0.0,
-            1.0,
-        );
-        // Q from 0.5 (gentle) to 12 (singing), logarithmic because resonance is
-        // heard that way.
-        let q = 0.5 * (24.0f32).powf(resonance);
-        self.filter.set(BiquadKind::LowPass, cutoff, q, 0.0, self.sample_rate);
-        let filtered = self.filter.process(mixed);
+            0.0001,
+            30.0,
+        ) + settings.lfo_q;
+        self.filter.set_web_lowpass(cutoff, q, self.sample_rate);
+        let amplitude = self.filter.process(mixed) * gain;
 
-        // 6. Amplitude, then pan.
-        let volume = clamp(apply(ModDest::Volume, settings.volume, m[ModDest::Volume as usize]), 0.0, 1.0);
-        let amplitude = filtered * amp_env * self.velocity * volume;
-
+        // 7. Pan, equal power, so a sweep holds its loudness through the centre.
         let pan = clamp(apply(ModDest::Pan, settings.pan, m[ModDest::Pan as usize]), -1.0, 1.0);
-        // Equal power, so a pan sweep holds its loudness through the centre
-        // rather than dipping.
         let angle = (pan + 1.0) * 0.25 * core::f32::consts::PI;
-        StereoSample { left: amplitude * angle.cos(), right: amplitude * angle.sin() }
+        StereoSample { left: amplitude * angle.cos(), right: amplitude * angle.sin(), classic: 0.0 }
+    }
+}
+
+fn positive(value: f32, fallback: f32) -> f32 {
+    if value.is_finite() && value > 0.0 {
+        value
+    } else {
+        fallback
     }
 }
 
@@ -422,7 +549,7 @@ mod tests {
         voice.start(60, 1.0, 0.0, &settings);
         assert!(peak(&render(&mut voice, &settings, 0.1)) > 0.05);
 
-        voice.release();
+        voice.release(&settings);
         render(&mut voice, &settings, 0.5);
         assert!(!voice.is_active(), "still sounding after its release");
         assert_eq!(peak(&render(&mut voice, &settings, 0.05)), 0.0);
@@ -503,20 +630,28 @@ mod tests {
         soft.start(60, 0.25, 0.0, &settings);
         let soft_peak = peak(&render(&mut soft, &settings, 0.1));
 
-        assert!((soft_peak / loud_peak - 0.25).abs() < 0.05, "{soft_peak} vs {loud_peak}");
+        // Heard squared, as the browser voice hears it: a quarter of the
+        // velocity is a sixteenth of the level.
+        assert!((soft_peak / loud_peak - 0.0625).abs() < 0.01, "{soft_peak} vs {loud_peak}");
     }
 
     #[test]
-    fn a_full_stack_of_oscillators_stays_inside_the_rails() {
-        // Three saws at unity would clip without the mix scaling.
+    fn a_full_stack_of_oscillators_is_summed_as_the_browser_voice_sums_it() {
+        // Three gains into one filter, not an average: a single oscillator at
+        // full level is the scale sequencer's whole voice, and it has to be as
+        // loud here as there. The master chain's limiter catches a stack.
+        let single = {
+            let (mut voice, mut settings) = voice();
+            settings.cutoff_hz = 20_000.0;
+            voice.start(60, 1.0, 0.0, &settings);
+            peak(&render(&mut voice, &settings, 0.3))
+        };
         let (mut voice, mut settings) = voice();
         settings.levels = [1.0; OSC_COUNT];
-        settings.detune_cents = [-12.0, 0.0, 12.0];
         settings.cutoff_hz = 20_000.0;
         voice.start(60, 1.0, 0.0, &settings);
         let p = peak(&render(&mut voice, &settings, 0.3));
-        assert!(p <= 1.0, "clipped at {p}");
-        assert!(p > 0.1, "barely sounded: {p}");
+        assert!((p / single - 3.0).abs() < 0.2, "{p} vs {single}");
     }
 
     #[test]
@@ -700,7 +835,7 @@ mod tests {
             voice.start(note, 1.0, 0.0, &settings);
             for sample in render(&mut voice, &settings, 0.2) {
                 assert!(sample.left.is_finite() && sample.right.is_finite(), "not finite on note {note}");
-                assert!(sample.left.abs() <= 4.0, "ran away on note {note}: {}", sample.left);
+                assert!(sample.left.abs() <= 64.0, "ran away on note {note}: {}", sample.left);
             }
         }
     }
@@ -738,5 +873,71 @@ mod tests {
         // the second raises the level rather than partially cancelling.
         assert!(peak(&render(&mut b, &both, 0.05)) > 0.0);
     }
-}
 
+    #[test]
+    fn each_wave_is_scaled_to_a_browser_oscillators_peak() {
+        assert_eq!(web_audio_gain(Wave::Sine, 0.5), 1.0);
+        assert_eq!(web_audio_gain(Wave::Triangle, 0.5), 1.0);
+        assert!((web_audio_gain(Wave::Sawtooth, 0.5) - 1.0 / 1.179).abs() < 1e-6);
+        assert_eq!(web_audio_gain(Wave::Square, 0.5), web_audio_gain(Wave::Pulse, 0.5));
+        assert!((web_audio_gain(Wave::Pulse, 0.1) - 1.0 / (1.8 + 0.179)).abs() < 1e-6);
+        assert_eq!(web_audio_gain(Wave::Pulse, 0.0), web_audio_gain(Wave::Pulse, 0.05));
+    }
+
+    #[test]
+    fn a_notes_filter_envelope_is_an_offset_that_follows_the_knob() {
+        let (mut voice, mut settings) = voice();
+        settings.cutoff_hz = 1_000.0;
+        settings.filter_env_amount = 1.0;
+        settings.filter_env = AdsrSettings { attack: 0.01, decay: 0.15, sustain: 0.3, release: 0.3 };
+        // An amp that outlasts the filter's release, so the voice keeps running.
+        settings.amp.release = 0.5;
+        voice.start(60, 1.0, 0.0, &settings);
+        let offsets: Vec<f32> = (0..9_000).map(|_| {
+            voice.next(&settings);
+            voice.filter_env.value()
+        }).collect();
+        assert!(offsets[0].abs() < 1e-3);
+        assert!((offsets[480] - 15_000.0).abs() < 1.0);
+        assert!((offsets[8_999] - 4_500.0).abs() < 1e-2);
+        // Turning the knob mid-note moves the filter, not the envelope.
+        settings.cutoff_hz = 3_000.0;
+        voice.next(&settings);
+        assert!((voice.filter_env.value() - 4_500.0).abs() < 1e-2);
+        voice.release(&settings);
+        render(&mut voice, &settings, 0.35);
+        assert!(voice.filter_env.value().abs() < 1e-3, "released to the base");
+    }
+
+    #[test]
+    fn a_classic_voice_hands_its_sound_on_unfiltered_and_unpanned() {
+        let (mut voice, mut settings) = voice();
+        settings.classic = true;
+        settings.pan = -1.0;
+        voice.start(60, 1.0, 0.0, &settings);
+        let samples = render(&mut voice, &settings, 0.05);
+        assert!(samples.iter().all(|s| s.left == 0.0 && s.right == 0.0));
+        assert!(samples.iter().any(|s| s.classic.abs() > 0.1));
+    }
+
+    #[test]
+    fn a_notes_pulse_swing_widens_its_pulse_for_the_life_of_the_note() {
+        let duty = |swing: f32| {
+            let (mut voice, mut settings) = voice();
+            settings.classic = true;
+            settings.waves = [Wave::Pulse; OSC_COUNT];
+            settings.pw_swing = swing;
+            voice.start(60, 1.0, 0.0, &settings);
+            settings.pw_swing = 0.0;
+            let samples = render(&mut voice, &settings, 0.1);
+            samples[1_000..].iter().filter(|s| s.classic > 0.0).count() as f32 / (samples.len() - 1_000) as f32
+        };
+        assert!((duty(0.0) - 0.5).abs() < 0.03);
+        assert!((duty(0.3) - 0.8).abs() < 0.03);
+        assert!((duty(0.9) - 0.95).abs() < 0.03);
+        let (mut voice, mut settings) = voice();
+        settings.pw_swing = f32::NAN;
+        voice.start(60, f32::NAN, 0.0, &settings);
+        assert!(render(&mut voice, &settings, 0.01).iter().all(|s| s.left == 0.0));
+    }
+}

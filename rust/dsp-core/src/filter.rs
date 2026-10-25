@@ -213,6 +213,46 @@ impl Biquad {
         }
     }
 
+    /// Web Audio's `lowpass`, exactly as its spec draws it.
+    ///
+    /// The scale sequencer's filters are `BiquadFilterNode`s, and two things
+    /// about them differ from `set`. **Q is in decibels**: the spec's
+    /// `α = sin ω0 / (2 · 10^(Q/20))`, so a Q of 0 is a Butterworth-ish
+    /// 0.707 dB-flat corner, not a filter with no resonance. And the frequency
+    /// is clamped to `0..=Nyquist` rather than nudged inside it, with the spec's
+    /// two edge cases: at Nyquist everything passes, at zero nothing does. The
+    /// synth's classic filter is summed from a knob, an envelope and an LFO, and
+    /// the sum can and does leave the audible range.
+    ///
+    /// Leaves the filter's state alone, so it can be called every sample.
+    pub fn set_web_lowpass(&mut self, hz: f32, q_db: f32, sample_rate: f32) {
+        let nyquist = sample_rate * 0.5;
+        let f = if hz.is_finite() { clamp(hz / nyquist, 0.0, 1.0) } else { 0.0 };
+        let (b0, b1, b2, a1, a2) = if f >= 1.0 {
+            (1.0, 0.0, 0.0, 0.0, 0.0)
+        } else if f <= 0.0 {
+            (0.0, 0.0, 0.0, 0.0, 0.0)
+        } else {
+            let w0 = PI * f;
+            let (sin_w0, cos_w0) = (w0.sin(), w0.cos());
+            let q_db = if q_db.is_finite() { clamp(q_db, -200.0, 200.0) } else { 0.0 };
+            let alpha = sin_w0 / (2.0 * (10.0f32).powf(q_db / 20.0));
+            let a0 = 1.0 + alpha;
+            (
+                (1.0 - cos_w0) * 0.5 / a0,
+                (1.0 - cos_w0) / a0,
+                (1.0 - cos_w0) * 0.5 / a0,
+                -2.0 * cos_w0 / a0,
+                (1.0 - alpha) / a0,
+            )
+        };
+        self.b0 = b0;
+        self.b1 = b1;
+        self.b2 = b2;
+        self.a1 = a1;
+        self.a2 = a2;
+    }
+
     /// Magnitude response at `hz`. For tests, not for the audio path.
     pub fn magnitude_at(&self, hz: f32, sample_rate: f32) -> f32 {
         let w = 2.0 * PI * hz / sample_rate;
@@ -234,6 +274,37 @@ mod tests {
 
     fn db(x: f32) -> f32 {
         20.0 * x.log10()
+    }
+
+    #[test]
+    fn a_web_lowpass_reads_q_in_decibels_as_the_spec_does() {
+        // At the corner a lowpass's gain is its linear Q, and Web Audio's Q is
+        // that in decibels: Q = 6 dB peaks at 10^(6/20) ≈ 1.995 at the corner.
+        let mut f = Biquad::identity();
+        f.set_web_lowpass(1_000.0, 6.0, SR);
+        assert!((f.magnitude_at(1_000.0, SR) - (10.0f32).powf(6.0 / 20.0)).abs() < 1e-3);
+        f.set_web_lowpass(1_000.0, 0.0, SR);
+        assert!((f.magnitude_at(1_000.0, SR) - 1.0).abs() < 1e-3);
+        // A negative Q is legal there too, and damps the corner.
+        f.set_web_lowpass(1_000.0, -6.0, SR);
+        assert!((f.magnitude_at(1_000.0, SR) - (10.0f32).powf(-6.0 / 20.0)).abs() < 1e-3);
+        assert!(f.magnitude_at(20.0, SR) > 0.99);
+        assert!(f.magnitude_at(10_000.0, SR) < 0.02);
+    }
+
+    #[test]
+    fn a_web_lowpass_at_nyquist_passes_everything_and_at_zero_passes_nothing() {
+        let mut open = Biquad::identity();
+        open.set_web_lowpass(40_000.0, 3.0, SR);
+        assert_eq!(open.process(0.7), 0.7);
+        let mut shut = Biquad::identity();
+        shut.set_web_lowpass(-500.0, 3.0, SR);
+        assert_eq!(shut.process(0.7), 0.0);
+        shut.set_web_lowpass(f32::NAN, f32::NAN, SR);
+        assert_eq!(shut.process(0.7), 0.0);
+        let mut odd = Biquad::identity();
+        odd.set_web_lowpass(1_000.0, f32::NAN, SR);
+        assert!((odd.magnitude_at(1_000.0, SR) - 1.0).abs() < 1e-3);
     }
 
     #[test]
