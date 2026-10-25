@@ -681,6 +681,7 @@ button { cursor: pointer; }
 .mm-pool__detail { font-size: 10px; color: var(--tx-400); }
 .mm-pool__footer { padding: 10px 12px; border-top: 1px solid var(--bd-100); background: rgb(var(--s-page)); }
 .mm-pool__footer button { width: 100%; }
+.mm-pool__footer button + button { margin-top: 6px; }
 
 @media (max-width: 760px) {
   .mm-pool { width: 100%; }
@@ -730,6 +731,13 @@ button { cursor: pointer; }
 }
 .mm-slots__clear:disabled { opacity: .35; }
 .mm-slots__hint { margin: 4px 2px 0; font-size: 10px; color: var(--tx-400); }
+/* The kit loader above the slots: a kit, from the library or from a folder. */
+.mm-slots__kit { display: flex; gap: 6px; align-items: center; padding: 0 2px 4px; }
+.mm-slots__kit select, .mm-slots__kit button {
+  height: 22px; padding: 0 8px; font-size: 10px; color: var(--tx-700); background: transparent;
+  border: 1px solid var(--bd-200); border-radius: 4px;
+}
+.mm-slots__kit button:hover { background: var(--hv-100); color: var(--tx-max); }
 
 /* ---- preset pad ---------------------------------------------------------- */
 /*

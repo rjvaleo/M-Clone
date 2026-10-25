@@ -13,9 +13,10 @@
  * zero means no choking, which is what a kick and a snare want.
  */
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import type { JsonValue, NodeInstance } from "../model/graph";
 import type { AssetEntry } from "../audio/assets";
+import { DRUM_KITS } from "../drums/drumKits";
 
 /**
  * The pool, as node faces see it.
@@ -28,6 +29,12 @@ import type { AssetEntry } from "../audio/assets";
 export const SoundPoolContext = createContext<{
   assets: AssetEntry[];
   preview: (assetId: string) => void;
+  /**
+   * Load a drum kit into the pool and onto a Percussion module's slots (every
+   * Percussion module when no node is named): from the dev server's sample
+   * library, or from the files of a folder the user picked.
+   */
+  loadKit?: (kitId: string, source: "library" | File[], nodeId?: string) => void;
 }>({ assets: [], preview: () => {} });
 
 export const useSoundPool = () => useContext(SoundPoolContext);
@@ -42,6 +49,8 @@ export type Slot = {
   assetId: string;
   chokeGroup: number;
   gain: number;
+  /** Not edited here, but carried through every edit so a kit's placement survives. */
+  pan: number;
 };
 
 const asSlot = (value: unknown, index: number): Slot => {
@@ -53,12 +62,14 @@ const asSlot = (value: unknown, index: number): Slot => {
     assetId: typeof raw.assetId === "string" ? raw.assetId : "",
     chokeGroup: Math.trunc(number(raw.chokeGroup, 0)),
     gain: number(raw.gain, 1),
+    pan: number(raw.pan, 0),
   };
 };
 
+/** At least eight rows, and every slot a kit brought beyond them. */
 export const readSlots = (value: JsonValue | undefined): Slot[] => {
   const list = Array.isArray(value) ? value : [];
-  return Array.from({ length: SLOT_COUNT }, (_, index) => asSlot(list[index], index));
+  return Array.from({ length: Math.max(SLOT_COUNT, list.length) }, (_, index) => asSlot(list[index], index));
 };
 
 /** Middle C is C3 here, matching the note numbering Classic M shows. */
@@ -127,8 +138,10 @@ export function PercussionSlots({
   node: NodeInstance;
   setParameter: (id: string, value: JsonValue) => void;
 }) {
-  const { assets, preview: onPreview } = useSoundPool();
+  const { assets, preview: onPreview, loadKit } = useSoundPool();
   const slots = readSlots(node.parameters.slots);
+  const folderInput = useRef<HTMLInputElement | null>(null);
+  const [kitId, setKitId] = useState(DRUM_KITS[0].id);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
   const byId = new Map(assets.map((entry) => [entry.id, entry]));
 
@@ -139,6 +152,32 @@ export function PercussionSlots({
 
   return (
     <div className="mm-slots" role="group" aria-label="Percussion slots">
+      {loadKit ? (
+        <div className="mm-slots__kit">
+          <select value={kitId} aria-label="Drum kit" onChange={(event) => setKitId(event.currentTarget.value)}>
+            {DRUM_KITS.map((kit) => <option key={kit.id} value={kit.id}>{kit.name}</option>)}
+          </select>
+          <button type="button" title="Load this kit from the sample library onto these slots (dev server)"
+            onClick={() => loadKit(kitId, "library", node.id)}>Load kit</button>
+          <button type="button" title="Pick the kit's folder: every file the kit names is loaded onto these slots"
+            onClick={() => folderInput.current?.click()}>From folder…</button>
+          <input
+            ref={(element) => {
+              folderInput.current = element;
+              // A whole folder, not single files: not in React's attribute types.
+              element?.setAttribute("webkitdirectory", "");
+            }}
+            type="file"
+            multiple
+            style={{ display: "none" }}
+            onChange={(event) => {
+              const files = [...(event.currentTarget.files ?? [])];
+              event.currentTarget.value = "";
+              if (files.length > 0) loadKit(kitId, files, node.id);
+            }}
+          />
+        </div>
+      ) : null}
       <div className="mm-slots__head">
         <span>Note</span><span>Sample</span><span>Choke</span><span>Gain</span><span />
       </div>

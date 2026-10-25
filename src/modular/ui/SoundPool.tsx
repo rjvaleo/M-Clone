@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssetEntry } from "../audio/assets";
+import { DRUM_KITS } from "../drums/drumKits";
 import { isSilent, peaksToPath } from "../audio/waveform";
 
 const THUMBNAIL = { width: 132, height: 34 } as const;
@@ -36,6 +37,8 @@ export type SoundPoolProps = {
   onStop: () => void;
   onRemove: (assetId: string) => void;
   onClose: () => void;
+  /** Load a drum kit from the sample library, onto every Percussion module. */
+  onLoadKit?: (kitId: string) => void;
 };
 
 function Waveform({ entry }: { entry: AssetEntry }) {
@@ -67,6 +70,7 @@ export function SoundPool({
   onStop,
   onRemove,
   onClose,
+  onLoadKit,
 }: SoundPoolProps) {
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -171,6 +175,12 @@ export function SoundPool({
         <button type="button" onClick={() => fileInputRef.current?.click()} disabled={!ready}>
           Add files
         </button>
+        {onLoadKit ? DRUM_KITS.map((kit) => (
+          <button type="button" key={kit.id} onClick={() => onLoadKit(kit.id)} disabled={!ready}
+            title={`Load the ${kit.name} kit from the sample library, onto every Percussion module`}>
+            Load {kit.name} kit
+          </button>
+        )) : null}
         <input
           ref={fileInputRef}
           type="file"

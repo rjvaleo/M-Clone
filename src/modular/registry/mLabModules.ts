@@ -66,7 +66,7 @@ const project = createDefaultProject();
 const QUANTIZE = ["now", "beat", "bar"] as const;
 
 /** The header every Numerology module has: a comment, and its minimize state. */
-const headerParams = (): ParameterDescriptor[] => [
+export const headerParams = (): ParameterDescriptor[] => [
   stringParam("comment", "Comment", "..."),
   boolParam("collapsed", "Minimized", false),
   boolParam("advanced", "Advanced settings open", false),
@@ -74,10 +74,10 @@ const headerParams = (): ParameterDescriptor[] => [
   jsonParam("presets", "Presets", []),
   numberParam("preset-slot", "Preset slot in play", -1, -1, 5, 1),
 ];
-const HEADER_IDS = ["comment", "collapsed", "advanced", "presets", "preset-slot"];
+export const HEADER_IDS = ["comment", "collapsed", "advanced", "presets", "preset-slot"];
 
 /** A module whose whole face is one custom Numerology panel. */
-const panel = (id: string, label: string, parameters: ParameterDescriptor[], commands: string[] = []) => [
+export const panel = (id: string, label: string, parameters: ParameterDescriptor[], commands: string[] = []) => [
   { ...section("panel", label, [custom(id, label, [...HEADER_IDS, ...parameters.map((p) => p.id)], commands)]), showHeading: false },
 ];
 
