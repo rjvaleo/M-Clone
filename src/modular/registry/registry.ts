@@ -15,6 +15,7 @@ import { MODULATOR_MODULES } from "./modulatorModules";
 import { PLAYER_MODULES } from "./playerModules";
 import { M_MODULE } from "./mModule";
 import { M_LAB_MODULES } from "./mLabModules";
+import { DRUM_MODULES } from "./drumModules";
 import { PRESET_SLOTS } from "./descriptorKit";
 
 const numberParameter = (
@@ -975,6 +976,7 @@ export type ModuleRegistry = ReadonlyMap<ModuleTypeId, ModuleDescriptor>;
 export const moduleRegistry: ModuleRegistry = new Map(
   [M_MODULE,
     ...M_LAB_MODULES,
+    ...DRUM_MODULES,
     ...CLASSIC_MODULES,
     ...AUDIO_MODULES,
     ...PRISM_MODULES,

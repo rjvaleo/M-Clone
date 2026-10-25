@@ -36,6 +36,7 @@ export const APP_MENUS: AppMenu[] = [
       { id: "template8", label: "8 Streams", hint: "Replace the patch with an eight-stream template" },
       { id: "template16", label: "16 Streams", hint: "Replace the patch with a sixteen-stream template" },
       { id: "templateM", label: "M Rack", hint: "Replace the patch with M built from its modules" },
+      { id: "templateDrums", label: "Drum Machine", hint: "Replace the patch with a Drum Sequencer playing Percussion" },
       "separator",
       { id: "open", label: "Open…", hint: "Open a saved project" },
       { id: "save", label: "Save", hint: "Save the project manifest" },

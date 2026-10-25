@@ -31,7 +31,7 @@ describe("what each menu holds", () => {
   const items = (title: string) =>
     menuLabels(APP_MENUS.find((menu) => menu.title === title)!.items);
 
-  it("puts documents, the stream templates and the M Rack under File", () => {
+  it("puts documents, the stream templates, the M Rack and the Drum Machine under File", () => {
     expect(items("File")).toEqual([
       "New",
       "1 Stream",
@@ -39,6 +39,7 @@ describe("what each menu holds", () => {
       "8 Streams",
       "16 Streams",
       "M Rack",
+      "Drum Machine",
       "Open…",
       "Save",
       "Save with Samples",
