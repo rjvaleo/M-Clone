@@ -17,6 +17,8 @@ export type PresetList = (Preset | null)[];
 /** What a snapshot leaves out: the header, the view, and the presets themselves. */
 export const NOT_IN_PRESETS: ReadonlySet<string> = new Set([
   "comment", "collapsed", "advanced", "presets", "preset-slot", "scroll", "pitch-view",
+  // The Drum Sequencer's view: which lane is shown under the grid, for which row.
+  "edit-lane", "edit-row",
 ]);
 
 export function snapshotOf(params: Readonly<Record<string, JsonValue>>): Record<string, JsonValue> {

@@ -118,6 +118,31 @@ full, and add drum step programming. Automation is not ported.
      pad, per-step velocity, probability, flam/ratchet, swing, per-row length)
      driving `m.percussion`; a 909 starter kit from `Audio - Archival
      LIBRARY/rj_s 909` loadable from the library.
+     **Drums built** (branch `sound-drums`).
+     - `m.drum-seq` (Sequencers): sixteen rows, ten in play by default, each
+       a note (36/38/42/46 first, then the 909 kit's pads and GM's), a name,
+       a mute and its own length (polymeter; "Pat" follows the pattern
+       length, and *free rows* stops the pattern restarting them). Per step:
+       on/off, velocity, chance, flam (grace note up to half a step early, at
+       the Flam level) and ratchet (1–8 repeats). MPC swing 50–75 %, rate,
+       pattern length up to 64, Play/Stop (stopped keeps its place), ⏮, Sync
+       In. Chances are drawn from the project seed, the module's Seed, the row
+       and the step's count since the reset, so playback repeats exactly.
+       Model `drums/drumSeq.ts`, processor `runtime/drumSeqProcessor.ts`,
+       face `ui/mlab/DrumSeqFace.tsx` (the N4 kit, in red).
+     - The 909 kit is a manifest (`drums/drumKits.ts`: 36 files, ten pads
+       mapped onto Percussion's slots and the first ten rows, hats choked
+       together). It loads two ways, through the pool's ordinary decode, so
+       the samples get content-hash ids and no audio enters the repo:
+       *from the library* — the dev server serves the gitignored library at
+       `/__library/<folder>/<file>` (`vite.library.ts`; it looks in
+       `$IDMLAB_LIBRARY`, this checkout, then a worktree's main checkout) —
+       or *from a folder* the user picks, which also works in a built app.
+       Buttons: Percussion's slots (that module) and the sound pool (every
+       Percussion module). The Percussion face now shows every slot a kit
+       brings and keeps each slot's pan when edited.
+     - File › Drum Machine: transport → Drum Sequencer → Percussion → output.
+     - No Rust change: the sequencer only sends notes.
 
 ## Known facts this rests on
 

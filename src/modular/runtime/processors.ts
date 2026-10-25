@@ -22,6 +22,7 @@ import { PPQN, stepTicks, type Tick, type TempoMap } from "./time";
 import { findScale, scaleById, type Scale } from "../tuning/scales";
 import { snapToChord, snapToScale, type ChordShape, type SnapDirection } from "../tuning/quantize";
 import { MConductorProcessor, MNoteSeqProcessor, MOrchestraProcessor } from "./mlabProcessors";
+import { DrumSeqProcessor } from "./drumSeqProcessor";
 
 export type ProcessWindow = {
   /** Inclusive start of the window in ticks. */
@@ -1318,6 +1319,7 @@ export const PROCESSOR_FACTORIES: Record<
   "m.lab-conductor": (build) => new MConductorProcessor(build),
   "m.lab-noteseq": (build) => new MNoteSeqProcessor(build),
   "m.lab-orchestra": (build) => new MOrchestraProcessor(build),
+  "m.drum-seq": (build) => new DrumSeqProcessor(build),
   // The players schedule exactly as a MIDI Output does — the difference is
   // entirely on the other side of the scheduler, where one adapter writes bytes
   // to a port and the other starts a buffer on the audio clock. Giving them a

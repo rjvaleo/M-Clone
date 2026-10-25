@@ -63,7 +63,10 @@ import { canAddModule } from "../model/limits";
 import { M_LAB_TYPES } from "../registry/mLabModules";
 import { quantizeMorph, variableLinkUpdates } from "../mlab/links";
 import { buildMRack } from "../mlab/rack";
+import { buildDrumRack } from "../drums/drumRack";
+import { findKit, kitFileUrl, kitSlots, pickKitFiles } from "../drums/drumKits";
 import { MLAB_FACES, MLabHostContext, N4_TITLES } from "./mlab";
+import { DrumSeqFace } from "./mlab/DrumSeqFace";
 import type { MLabHost } from "./mlab/common";
 import { N4Header } from "./n4/N4Header";
 import { N4Button, N4Knob, N4Spinner, N4Stepper } from "./n4/kit";
@@ -860,6 +863,10 @@ function CustomFace({ element, node, setParameter, setParameters }: {
   }
   if (element.id === "m-app") return <MNodeFace />;
   if (element.id === "lfo-map") return <LfoMapFace node={node} setParameter={setParameter} />;
+  // The Drum Sequencer is drawn with the same Numerology kit as the M faces.
+  if (element.id === "m-drum-seq") {
+    return <DrumSeqFace node={node} setParameter={setParameter} setParameters={setParameters} status={status} />;
+  }
   const MLabFace = MLAB_FACES[element.id];
   if (MLabFace) {
     return <MLabFace node={node} setParameter={setParameter} setParameters={setParameters} status={status} />;
@@ -2207,6 +2214,56 @@ export function ModularApp() {
     })();
   }, [refreshAssets, startAudio]);
 
+  /**
+   * A drum kit into the pool and onto Percussion slots — the one named, or
+   * every Percussion module. From the dev server's library route, or from the
+   * files of a picked folder (see drums/drumKits.ts).
+   */
+  const loadKit = useCallback((kitId: string, source: "library" | File[], nodeId?: string) => {
+    const kit = findKit(kitId);
+    const engine = startAudio();
+    if (!kit || !engine) return;
+    void (async () => {
+      let files: { name: string; bytes: Uint8Array }[];
+      if (source === "library") {
+        setMessage(`Loading the ${kit.name} kit…`);
+        const fetched = await Promise.all(kit.files.map(async (file): Promise<{ name: string; bytes: Uint8Array } | null> => {
+          try {
+            const response = await fetch(kitFileUrl(kit, file));
+            return response.ok ? { name: file, bytes: new Uint8Array(await response.arrayBuffer()) } : null;
+          } catch {
+            return null;
+          }
+        }));
+        files = fetched.filter((file): file is { name: string; bytes: Uint8Array } => file !== null);
+      } else {
+        const picked = pickKitFiles(kit, source.map((file) => file.webkitRelativePath || file.name));
+        files = await Promise.all(picked.map(async ({ index, file }) => ({
+          name: file,
+          bytes: new Uint8Array(await source[index].arrayBuffer()),
+        })));
+      }
+      if (files.length === 0) {
+        setMessage(source === "library"
+          ? `The ${kit.name} kit is not in the sample library here — use From folder… on a Percussion module`
+          : `None of the ${kit.name} kit's files are in that folder`);
+        return;
+      }
+      const result = await engine.addFiles(files);
+      refreshAssets();
+      const slots = kitSlots(kit, new Map(result.added.map((record) => [record.name.toLowerCase(), record.id])));
+      const targets = nodeId ? [nodeId] : Object.values(graphRef.current.nodes)
+        .filter((node) => node.moduleType === "m.percussion").map((node) => node.id);
+      for (const target of targets) {
+        dispatch({ type: "set-parameter", nodeId: target, parameterId: "slots", value: slots as unknown as JsonValue });
+      }
+      const where = targets.length === 0 ? "into the pool"
+        : `onto ${targets.length === 1 ? "Percussion" : `${targets.length} Percussion modules`}`;
+      setMessage(`Loaded ${result.added.length} ${kit.name} samples ${where}`
+        + (result.failed.length > 0 ? `; could not decode ${result.failed.map((entry) => entry.name).join(", ")}` : ""));
+    })();
+  }, [refreshAssets, startAudio]);
+
   const playAsset = useCallback((assetId: string) => {
     const engine = audioRef.current;
     if (!engine) return;
@@ -2374,6 +2431,7 @@ export function ModularApp() {
     template8: { run: () => loadGraph(streamTemplate(8)) },
     template16: { run: () => loadGraph(streamTemplate(16)) },
     templateM: { run: () => loadGraph(centred(buildMRack())) },
+    templateDrums: { run: () => loadGraph(centred(buildDrumRack())) },
     open: { run: () => openInputRef.current?.click() },
     save: { run: save },
     savePack: { run: savePack },
@@ -2456,7 +2514,7 @@ export function ModularApp() {
   const graphStore = useMemo(() => new GraphStore(graph), []);
   useLayoutEffect(() => { graphStore.set(graph); }, [graph, graphStore]);
 
-  return <SoundPoolContext.Provider value={{ assets, preview: playAsset }}>
+  return <SoundPoolContext.Provider value={{ assets, preview: playAsset, loadKit }}>
   <KitContext.Provider value={kitId}>
   <MFaceHostContext.Provider value={{ themeId, onSelectTheme: setThemeId, kitId, onSelectKit: setKitId, zoom }}>
   <StatusStoreContext.Provider value={statusStore}>
@@ -2616,6 +2674,7 @@ export function ModularApp() {
       onStop={stopAsset}
       onRemove={removeAsset}
       onClose={() => setPoolOpen(false)}
+      onLoadKit={(kitId) => loadKit(kitId, "library")}
     /> : null}
     <footer className="mm-status-bar"><span>{message}</span><span>{Object.keys(graph.nodes).length} nodes · {Object.keys(graph.edges).length} cable{audioOn ? ` · ${audioNodes} audio · ${engineKind === "rust" ? "Rust" : "Web Audio"}` : ""}{rackReport ? ` · ${rackReport.modules} in engine · ${rackReport.samples} sample${rackReport.samples === 1 ? "" : "s"}` : ""}</span></footer>
   {perfOpen && <PerfPanel onClose={() => setPerfOpen(false)} />}
