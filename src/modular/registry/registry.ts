@@ -1118,7 +1118,8 @@ export function withDeclaredParameters(graph: GraphDocument): GraphDocument {
       ...node,
       parameters: {
         ...node.parameters,
-        ...Object.fromEntries(missing.map((parameter) => [parameter.id, structuredClone(parameter.defaultValue)])),
+        ...Object.fromEntries(missing.map((parameter) =>
+          [parameter.id, structuredClone(parameter.missingValue ?? parameter.defaultValue)])),
       },
     }];
   }));
