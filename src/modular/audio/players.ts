@@ -39,6 +39,7 @@ import type {
   SynthContext,
 } from "./nodes";
 import { clampPan, VoiceBank } from "./voices";
+import { readPercussionSlots, type PercussionSlot } from "./percussionSlots";
 import { GRAIN_WAKE_MS, GrainScheduler, type GrainSettings } from "./grains";
 import type { SmoothingLookup } from "./effects";
 import { SynthPlayer } from "./synthPlayer";
@@ -107,7 +108,7 @@ abstract class PlayerModule implements ManagedAudioNode, NotePlayer {
   protected readonly structure: Readonly<Record<string, unknown>>;
   private readonly inputGain: GainNodeLike;
   private readonly outputGain: GainNodeLike;
-  private readonly panner: StereoPannerNodeLike;
+  protected readonly panner: StereoPannerNodeLike;
   private disposed = false;
 
   constructor(
@@ -207,39 +208,9 @@ abstract class PlayerModule implements ManagedAudioNode, NotePlayer {
 
 // ---- Percussion -------------------------------------------------------------
 
-export type PercussionSlot = {
-  /** MIDI note that fires this slot. */
-  note: number;
-  /** Empty means the slot is unassigned and silent. */
-  assetId: string;
-  /** Slots sharing a non-zero group silence each other — the hihat rule. */
-  chokeGroup: number;
-  /** Per-slot trim, so a loud snare can be balanced without editing the file. */
-  gain: number;
-  /**
-   * Where this pad sits, −1 to +1, before the module's own pan.
-   *
-   * `AUDIO_ENGINE_SPEC.md` §4 asks for per-pad pan, and a kit is the one place
-   * it genuinely earns its node: hats to one side and a floor tom to the other
-   * is most of what makes a programmed kit sound like it was played in a room
-   * rather than summed to a point.
-   */
-  pan: number;
-};
-
-export const readPercussionSlots = (value: unknown): PercussionSlot[] => {
-  if (!Array.isArray(value)) return [];
-  return value.map((raw) => {
-    const slot = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
-    return {
-      note: Math.trunc(numberOr(slot.note, 36)),
-      assetId: stringOr(slot.assetId, ""),
-      chokeGroup: Math.trunc(numberOr(slot.chokeGroup, 0)),
-      gain: numberOr(slot.gain, 1),
-      pan: clampPan(numberOr(slot.pan, 0)),
-    };
-  });
-};
+// The slot list is read in percussionSlots.ts, which the WASM bridge shares,
+// so both backends take a kit from a document by the same rules.
+export { readPercussionSlots, type PercussionSlot } from "./percussionSlots";
 
 class PercussionPlayer extends PlayerModule {
   private slots: PercussionSlot[];
@@ -247,6 +218,14 @@ class PercussionPlayer extends PlayerModule {
   constructor(...args: ConstructorParameters<typeof PlayerModule>) {
     super(...args);
     this.slots = readPercussionSlots(this.structure.slots);
+    // Every pad into the kit's pan as stereo. A centred pad has no panner of
+    // its own and is mono; left to the default, the panner counts channels
+    // from what is sounding, so a kit of centred pads came out 3 dB down and a
+    // kick jumped 3 dB whenever a panned hat was ringing. Explicit stereo
+    // up-mixes a centred pad to both sides at full level, always.
+    this.panner.channelCount = 2;
+    this.panner.channelCountMode = "explicit";
+    this.panner.channelInterpretation = "speakers";
   }
 
   /**

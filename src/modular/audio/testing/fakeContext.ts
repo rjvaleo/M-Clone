@@ -302,6 +302,10 @@ export class FakeConstantSource extends FakeNode implements ConstantSourceNodeLi
 
 export class FakeStereoPanner extends FakeNode implements StereoPannerNodeLike {
   readonly pan = new FakeParam(0);
+  // A real StereoPannerNode's defaults.
+  channelCount = 2;
+  channelCountMode: "max" | "clamped-max" | "explicit" = "clamped-max";
+  channelInterpretation: "speakers" | "discrete" = "speakers";
   constructor() {
     super("stereo-panner");
   }

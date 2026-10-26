@@ -24,12 +24,18 @@ pub const SLOT_COUNT: usize = 128;
 /// Nothing assigned. Matches the engine's own `NO_MODULE` convention.
 pub const NO_SAMPLE: u32 = u32::MAX;
 
-/// How many notes may sound at once before the oldest is taken.
-pub const MAX_VOICES: usize = 16;
+/// How many notes may sound at once before the oldest is taken. The browser
+/// kit's `DEFAULT_MAX_VOICES`.
+pub const MAX_VOICES: usize = 32;
 
-/// The release applied when a voice is stolen or the bank is silenced, in
-/// seconds. Short enough to be immediate, long enough not to click.
-const STEAL_FADE_SEC: f32 = 0.005;
+/// Room for the ceiling plus voices still fading out, which the browser no
+/// longer counts once a choke or a steal has taken them.
+const VOICE_SLOTS: usize = MAX_VOICES * 2;
+
+/// How long a choked, stolen or silenced voice takes to get out of the way:
+/// the browser's `CHOKE_SEC`, as a `setTargetAtTime` time constant, stopped
+/// two of them later.
+pub const CHOKE_SEC: f32 = 0.02;
 
 #[derive(Clone, Copy, Debug)]
 pub struct SamplerSettings {
@@ -42,11 +48,16 @@ pub struct SamplerSettings {
     pub loop_start: f32,
     pub loop_end: f32,
     pub reverse: bool,
-    /// Amplitude release once the note ends, in seconds.
+    /// Amplitude release once the note ends, in seconds — or, with
+    /// `hit_decay`, the time constant of the hit's decay.
     pub decay_sec: f32,
     /// True: the note sounds only while held. False: it runs to the end
     /// regardless, which is what a drum hit wants.
     pub gate: bool,
+    /// The browser kit's envelope: from the strike the level falls as
+    /// `setTargetAtTime(0, start, decay)` does, and the voice stops three time
+    /// constants in.
+    pub hit_decay: bool,
 }
 
 impl Default for SamplerSettings {
@@ -60,6 +71,7 @@ impl Default for SamplerSettings {
             reverse: false,
             decay_sec: 0.5,
             gate: false,
+            hit_decay: false,
         }
     }
 }
@@ -67,6 +79,23 @@ impl Default for SamplerSettings {
 /// Semitones to a frequency ratio. Twelve of them double it.
 pub fn semitone_ratio(semitones: f32) -> f32 {
     2.0f32.powf(clamp(semitones, -60.0, 60.0) / 12.0)
+}
+
+/// What a kit pad does to its sample beyond naming it.
+#[derive(Clone, Copy)]
+struct Shape {
+    gain: f32,
+    /// Left and right gains, or `None` for a centred pad, which the browser
+    /// plays with no panner of its own: the same signal in both channels.
+    pan: Option<(f32, f32)>,
+    /// Pads sharing a positive group silence each other.
+    choke: i32,
+}
+
+impl Default for Shape {
+    fn default() -> Self {
+        Self { gain: 1.0, pan: None, choke: 0 }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -77,12 +106,24 @@ struct Voice {
     /// Read head in frames.
     position: f32,
     advance: f32,
+    /// Level at the strike: pad gain × velocity².
     amplitude: f32,
     /// Per-sample amplitude step while releasing; 0 while sustaining.
     release_step: f32,
     /// Held down. A gated voice releases when this goes false.
     held: bool,
+    /// Frames since the strike.
     age: u32,
+    /// The hit decay's time constant in frames, or 0 for none.
+    decay_frames: f32,
+    /// Frames the voice may play for, or infinity.
+    life_frames: f32,
+    pan: Option<(f32, f32)>,
+    choke: i32,
+    /// Set once the voice is choked, stolen or silenced: the level it fades
+    /// from, and the frames since.
+    fade_from: Option<f32>,
+    fade_age: u32,
 }
 
 impl Default for Voice {
@@ -97,22 +138,48 @@ impl Default for Voice {
             release_step: 0.0,
             held: false,
             age: 0,
+            decay_frames: 0.0,
+            life_frames: f32::INFINITY,
+            pan: None,
+            choke: 0,
+            fade_from: None,
+            fade_age: 0,
         }
+    }
+}
+
+impl Voice {
+    /// The level this frame plays at.
+    fn level(&self, choke_frames: f32) -> f32 {
+        if let Some(from) = self.fade_from {
+            return from * (-(self.fade_age as f32) / choke_frames).exp();
+        }
+        if self.decay_frames > 0.0 {
+            self.amplitude * (-(self.age as f32) / self.decay_frames).exp()
+        } else {
+            self.amplitude
+        }
+    }
+
+    fn fading(&self) -> bool {
+        self.fade_from.is_some()
     }
 }
 
 /// A polyphonic sample player.
 pub struct Sampler {
-    voices: [Voice; MAX_VOICES],
+    voices: [Voice; VOICE_SLOTS],
     slots: [u32; SLOT_COUNT],
+    shapes: [Shape; SLOT_COUNT],
     sample_rate: f32,
 }
 
 impl Sampler {
     pub fn new(sample_rate: f32) -> Self {
         Self {
-            voices: [Voice::default(); MAX_VOICES],
+            voices: [Voice::default(); VOICE_SLOTS],
             slots: [NO_SAMPLE; SLOT_COUNT],
+            shapes: [Shape::default(); SLOT_COUNT],
             sample_rate: if sample_rate > 0.0 { sample_rate } else { 48_000.0 },
         }
     }
@@ -129,26 +196,58 @@ impl Sampler {
         }
     }
 
+    /// A kit pad's gain, pan (−1 to +1) and choke group, as the browser kit
+    /// reads them: pan clamped, and a pan of exactly 0 meaning no panner.
+    pub fn set_slot_shape(&mut self, slot: u32, gain: f32, pan: f32, choke: i32) {
+        let Some(shape) = self.shapes.get_mut(slot as usize) else { return };
+        let pan = if pan.is_finite() { clamp(pan, -1.0, 1.0) } else { 0.0 };
+        let angle = (pan + 1.0) * core::f32::consts::FRAC_PI_4;
+        *shape = Shape {
+            gain: if gain.is_finite() { gain } else { 1.0 },
+            pan: if pan == 0.0 { None } else { Some((angle.cos(), angle.sin())) },
+            choke,
+        };
+    }
+
     /// What a note plays, or `NO_SAMPLE`.
     pub fn slot(&self, note: u8) -> u32 {
         self.slots[note as usize]
     }
 
+    /// Voices making sound, those fading out included.
     pub fn active_voices(&self) -> usize {
         self.voices.iter().filter(|voice| voice.active).count()
     }
 
-    pub fn clear(&mut self) {
-        self.voices = [Voice::default(); MAX_VOICES];
+    /// Voices that count toward the ceiling: sounding and not on their way out.
+    pub fn sounding_voices(&self) -> usize {
+        self.voices.iter().filter(|voice| voice.active && !voice.fading()).count()
     }
 
-    /// Release everything, without a click.
+    pub fn clear(&mut self) {
+        self.voices = [Voice::default(); VOICE_SLOTS];
+    }
+
+    /// Fade everything out over the choke time, as the browser's panic does.
     pub fn all_notes_off(&mut self) {
-        let step = self.fade_step(STEAL_FADE_SEC);
+        let choke_frames = self.choke_frames();
         for voice in &mut self.voices {
             voice.held = false;
-            voice.release_step = step;
+            if voice.active && !voice.fading() {
+                Self::fade_out(voice, choke_frames);
+            }
         }
+    }
+
+    fn choke_frames(&self) -> f32 {
+        CHOKE_SEC * self.sample_rate
+    }
+
+    /// Start a voice's fade from the level it is at now.
+    fn fade_out(voice: &mut Voice, choke_frames: f32) {
+        voice.fade_from = Some(voice.level(choke_frames));
+        voice.fade_age = 0;
+        voice.release_step = 0.0;
     }
 
     fn fade_step(&self, seconds: f32) -> f32 {
@@ -161,6 +260,9 @@ impl Sampler {
     /// Compounds with `settings.pitch_semitones` rather than replacing it —
     /// one is what the patch does to every note, the other is what the score
     /// asked of this one.
+    ///
+    /// The level is the pad's gain times velocity squared, as the browser's
+    /// `velocityGain` has it: loudness is not linear in velocity.
     pub fn note_on(
         &mut self,
         bank: &SampleBank,
@@ -190,7 +292,33 @@ impl Sampler {
         }
         let last = (frames - 1) as f32;
         let position = if settings.reverse { last } else { 0.0 };
+        let shape = self.shapes[note as usize];
+        let choke_frames = self.choke_frames();
 
+        // The browser's order: the group is choked, then the ceiling enforced,
+        // then the new voice starts.
+        if shape.choke > 0 {
+            for voice in &mut self.voices {
+                if voice.active && !voice.fading() && voice.choke == shape.choke {
+                    Self::fade_out(voice, choke_frames);
+                }
+            }
+        }
+        while self.sounding_voices() >= MAX_VOICES {
+            let oldest = (0..VOICE_SLOTS)
+                .filter(|&i| self.voices[i].active && !self.voices[i].fading())
+                .max_by_key(|&i| self.voices[i].age)
+                .unwrap_or(0);
+            Self::fade_out(&mut self.voices[oldest], choke_frames);
+        }
+
+        let velocity = if velocity.is_finite() { clamp(velocity, 0.0, 1.0) } else { 0.0 };
+        let (decay_frames, life_frames) = if settings.hit_decay {
+            let tau = settings.decay_sec.max(0.001) * self.sample_rate;
+            (tau, 3.0 * tau)
+        } else {
+            (0.0, f32::INFINITY)
+        };
         let index = self.free_or_oldest();
         self.voices[index] = Voice {
             active: true,
@@ -198,10 +326,16 @@ impl Sampler {
             sample,
             position,
             advance,
-            amplitude: clamp(velocity, 0.0, 1.0),
+            amplitude: shape.gain * velocity * velocity,
             release_step: 0.0,
             held: true,
             age: 0,
+            decay_frames,
+            life_frames,
+            pan: shape.pan,
+            choke: shape.choke,
+            fade_from: None,
+            fade_age: 0,
         };
     }
 
@@ -215,29 +349,37 @@ impl Sampler {
                 // Only a gated voice cares. A drum hit runs to the end whether
                 // the key is still down or not, which is the whole difference
                 // between a kit and a keyboard.
-                if settings.gate {
+                if settings.gate && !voice.fading() {
                     voice.release_step = step;
                 }
             }
         }
     }
 
+    /// A free voice, or failing that the one furthest through its fade.
     fn free_or_oldest(&mut self) -> usize {
         let mut oldest = 0;
         for (index, voice) in self.voices.iter().enumerate() {
             if !voice.active {
                 return index;
             }
-            if voice.age > self.voices[oldest].age {
+            if voice.fade_age > self.voices[oldest].fade_age {
                 oldest = index;
             }
         }
         oldest
     }
 
-    /// One output sample, summing every sounding voice.
+    /// One output sample for a source with no panned pads, summing every voice.
     pub fn process(&mut self, bank: &SampleBank, settings: &SamplerSettings) -> f32 {
-        let mut sum = 0.0;
+        self.process_stereo(bank, settings)[0]
+    }
+
+    /// One stereo frame. A centred pad is the same in both channels; a panned
+    /// one takes Web Audio's equal-power law for a mono source.
+    pub fn process_stereo(&mut self, bank: &SampleBank, settings: &SamplerSettings) -> [f32; 2] {
+        let choke_frames = self.choke_frames();
+        let mut sum = [0.0f32; 2];
         for voice in &mut self.voices {
             if !voice.active {
                 continue;
@@ -249,10 +391,31 @@ impl Sampler {
             let frames = audio.frames();
             let last = (frames - 1) as f32;
 
-            sum += audio.read(0, voice.position) * voice.amplitude;
+            let value = audio.read(0, voice.position) * voice.level(choke_frames);
+            match voice.pan {
+                Some((left, right)) => {
+                    sum[0] += value * left;
+                    sum[1] += value * right;
+                }
+                None => {
+                    sum[0] += value;
+                    sum[1] += value;
+                }
+            }
             voice.position += voice.advance;
             voice.age += 1;
 
+            if voice.fading() {
+                voice.fade_age += 1;
+                if voice.fade_age as f32 >= 2.0 * choke_frames {
+                    voice.active = false;
+                    continue;
+                }
+            }
+            if voice.age as f32 >= voice.life_frames {
+                voice.active = false;
+                continue;
+            }
             if voice.release_step > 0.0 {
                 voice.amplitude -= voice.release_step;
                 if voice.amplitude <= 0.0 {
@@ -530,24 +693,26 @@ mod tests {
             sampler.set_slot(u32::from(note), 0);
             sampler.note_on(&bank, note, 1.0, 0.0, &settings());
         }
-        assert_eq!(sampler.active_voices(), MAX_VOICES);
+        assert_eq!(sampler.sounding_voices(), MAX_VOICES);
         assert!(sampler.process(&bank, &settings()).abs() > 0.0);
     }
 
     #[test]
-    fn all_notes_off_silences_everything_without_a_click() {
+    fn all_notes_off_fades_everything_as_the_browsers_panic_does() {
+        // `setTargetAtTime(0, now, CHOKE_SEC)`, stopped two time constants on —
+        // where the browser's fade still stands at e^-2, and so does this one.
         let (bank, mut sampler) = rig();
         sampler.note_on(&bank, 60, 1.0, 0.0, &settings());
         sampler.all_notes_off();
-        let mut previous = sampler.process(&bank, &settings());
-        let mut biggest_step = 0.0f32;
-        for _ in 0..((RATE * 0.02) as usize) {
-            let current = sampler.process(&bank, &settings());
-            biggest_step = biggest_step.max((current - previous).abs());
-            previous = current;
+        let first = sampler.process(&bank, &settings());
+        assert!((first - 1.0).abs() < 1e-6, "the fade did not start from where it was: {first}");
+        let mut last = first;
+        for _ in 1..((RATE * 2.0 * CHOKE_SEC) as usize) {
+            last = sampler.process(&bank, &settings());
         }
+        let expected = (-(2.0 * CHOKE_SEC * RATE - 1.0) / (CHOKE_SEC * RATE)).exp();
+        assert!((last - expected).abs() < 1e-5, "{last} vs {expected}");
         assert_eq!(sampler.active_voices(), 0);
-        assert!(biggest_step < 0.01, "the fade had a step in it: {biggest_step}");
     }
 
     #[test]
@@ -565,6 +730,176 @@ mod tests {
         assert_eq!(sampler.slot(60), 0);
     }
 
+    // ---- the browser kit's laws ---------------------------------------------
+    //
+    // The same hit `src/modular/audio/voices.test.ts` reads off Web Audio's
+    // timeline: pad gain 0.9, velocity 64, decay 0.5 s. (The module's level of
+    // 0.8 is applied after the sampler, by its shell.)
+
+    const PAD_GAIN: f32 = 0.9;
+    const VELOCITY: f32 = 64.0 / 127.0;
+    const DECAY: f32 = 0.5;
+
+    fn kit() -> SamplerSettings {
+        SamplerSettings { decay_sec: DECAY, hit_decay: true, ..settings() }
+    }
+
+    /// Four seconds of DC on notes 42, 46 and 60, so the output is the envelope.
+    fn kit_rig() -> (SampleBank, Sampler) {
+        let mut bank = SampleBank::new();
+        bank.allocate(0, 1, (RATE * 4.0) as usize, RATE);
+        for slot in bank.get_mut(0).unwrap().data_mut() {
+            *slot = 1.0;
+        }
+        // Sample 1 is silence: a pad that sounds nothing but still chokes.
+        bank.allocate(1, 1, (RATE * 4.0) as usize, RATE);
+        let mut sampler = Sampler::new(RATE);
+        for note in [42, 46, 60] {
+            sampler.set_slot(note, 0);
+        }
+        (bank, sampler)
+    }
+
+    /// Render `frames` and return the last frame's pair.
+    fn render(sampler: &mut Sampler, bank: &SampleBank, settings: &SamplerSettings, frames: usize) -> [f32; 2] {
+        let mut out = [0.0; 2];
+        for _ in 0..frames {
+            out = sampler.process_stereo(bank, settings);
+        }
+        out
+    }
+
+    fn near(a: f32, b: f32) -> bool {
+        (a - b).abs() <= 1e-6 * b.abs().max(1e-3)
+    }
+
+    #[test]
+    fn velocity_scales_a_hit_by_its_square() {
+        let (bank, mut sampler) = kit_rig();
+        sampler.note_on(&bank, 60, VELOCITY, 0.0, &kit());
+        let first = sampler.process_stereo(&bank, &kit());
+        assert!(near(first[0], VELOCITY * VELOCITY), "{} vs {}", first[0], VELOCITY * VELOCITY);
+    }
+
+    #[test]
+    fn a_pads_gain_trims_its_hit() {
+        let (bank, mut sampler) = kit_rig();
+        sampler.set_slot_shape(46, PAD_GAIN, 0.0, 0);
+        sampler.note_on(&bank, 46, VELOCITY, 0.0, &kit());
+        let start = PAD_GAIN * VELOCITY * VELOCITY;
+        assert!(near(sampler.process_stereo(&bank, &kit())[0], start));
+    }
+
+    #[test]
+    fn a_hit_decays_from_its_start_as_set_target_at_time_does() {
+        let (bank, mut sampler) = kit_rig();
+        sampler.set_slot_shape(46, PAD_GAIN, 0.0, 0);
+        sampler.note_on(&bank, 46, VELOCITY, 0.0, &kit());
+        let start = PAD_GAIN * VELOCITY * VELOCITY;
+        // Frame 4800 is 0.1 s in.
+        let at = render(&mut sampler, &bank, &kit(), 4801)[0];
+        assert!(near(at, start * (-0.1f32 / DECAY).exp()), "{at}");
+    }
+
+    #[test]
+    fn a_hit_stops_three_time_constants_in() {
+        let (bank, mut sampler) = kit_rig();
+        sampler.note_on(&bank, 60, 1.0, 0.0, &kit());
+        let life = (3.0 * DECAY * RATE) as usize;
+        render(&mut sampler, &bank, &kit(), life);
+        assert_eq!(sampler.active_voices(), 0, "a hit outlived 3 × its decay");
+    }
+
+    #[test]
+    fn a_centred_pad_is_full_level_in_both_channels() {
+        let (bank, mut sampler) = kit_rig();
+        sampler.note_on(&bank, 60, 1.0, 0.0, &kit());
+        assert_eq!(sampler.process_stereo(&bank, &kit()), [1.0, 1.0]);
+    }
+
+    #[test]
+    fn a_panned_pad_takes_web_audios_mono_panner_law() {
+        let (bank, mut sampler) = kit_rig();
+        sampler.set_slot_shape(42, 1.0, 0.35, 0);
+        sampler.note_on(&bank, 42, 1.0, 0.0, &kit());
+        let out = sampler.process_stereo(&bank, &kit());
+        let angle = (0.35f32 + 1.0) * core::f32::consts::FRAC_PI_4;
+        // Read off Chrome's own StereoPannerNode: 0.4886212, 0.8724960.
+        assert!(near(out[0], angle.cos()) && near(out[1], angle.sin()), "{out:?}");
+        assert!(near(out[0], 0.488_621_23) && near(out[1], 0.872_496_0), "{out:?}");
+    }
+
+    #[test]
+    fn a_choke_fades_the_group_from_where_it_is() {
+        let (bank, mut sampler) = kit_rig();
+        sampler.set_slot_shape(46, PAD_GAIN, 0.0, 1);
+        sampler.set_slot_shape(42, 1.0, 0.0, 1);
+        sampler.note_on(&bank, 46, VELOCITY, 0.0, &kit());
+        let start = PAD_GAIN * VELOCITY * VELOCITY;
+        // 0.12 s of open hat, then the closed hat strikes on frame 5760.
+        render(&mut sampler, &bank, &kit(), 5760);
+        sampler.set_slot(42, 1); // a silent closed hat: hear only the open hat's fade
+        sampler.note_on(&bank, 42, 1.0, 0.0, &kit());
+        let at_choke = start * (-0.12f32 / DECAY).exp();
+        let first = sampler.process_stereo(&bank, &kit())[0];
+        assert!(near(first, at_choke), "{first} vs {at_choke}");
+        // 10 ms later it is down by e^(−0.01 / 0.02).
+        let later = render(&mut sampler, &bank, &kit(), 480)[0];
+        assert!(near(later, at_choke * (-0.5f32).exp()), "{later}");
+        // And it stops 40 ms after the choke, leaving only the silent hat.
+        render(&mut sampler, &bank, &kit(), 1920 - 481);
+        assert_eq!(sampler.active_voices(), 1);
+    }
+
+    #[test]
+    fn a_choke_spares_other_groups_and_ungrouped_pads() {
+        let (bank, mut sampler) = kit_rig();
+        sampler.set_slot_shape(46, 1.0, 0.0, 1);
+        sampler.set_slot_shape(60, 1.0, 0.0, 0);
+        sampler.set_slot_shape(42, 1.0, 0.0, 2);
+        sampler.note_on(&bank, 46, 1.0, 0.0, &kit());
+        sampler.note_on(&bank, 60, 1.0, 0.0, &kit());
+        sampler.note_on(&bank, 42, 1.0, 0.0, &kit());
+        render(&mut sampler, &bank, &kit(), 2000);
+        assert_eq!(sampler.active_voices(), 3);
+    }
+
+    #[test]
+    fn a_voice_is_its_own_group_when_it_strikes_again() {
+        // The browser chokes every voice of the group, the same pad's last hit
+        // included.
+        let (bank, mut sampler) = kit_rig();
+        sampler.set_slot_shape(46, 1.0, 0.0, 1);
+        sampler.note_on(&bank, 46, 1.0, 0.0, &kit());
+        render(&mut sampler, &bank, &kit(), 100);
+        sampler.note_on(&bank, 46, 1.0, 0.0, &kit());
+        render(&mut sampler, &bank, &kit(), 1920);
+        assert_eq!(sampler.active_voices(), 1);
+    }
+
+    #[test]
+    fn a_stolen_voice_fades_the_way_a_choked_one_does() {
+        let (bank, mut sampler) = kit_rig();
+        for note in 0..MAX_VOICES as u8 {
+            sampler.set_slot(u32::from(note), 0);
+            sampler.note_on(&bank, note, 1.0, 0.0, &kit());
+        }
+        render(&mut sampler, &bank, &kit(), 9600);
+        sampler.note_on(&bank, 60, 1.0, 0.0, &kit());
+        assert_eq!(sampler.sounding_voices(), MAX_VOICES);
+        assert_eq!(sampler.active_voices(), MAX_VOICES + 1, "the oldest should still be fading");
+        render(&mut sampler, &bank, &kit(), 1920);
+        assert_eq!(sampler.active_voices(), MAX_VOICES);
+    }
+
+    #[test]
+    fn an_out_of_range_shape_is_ignored() {
+        let (bank, mut sampler) = kit_rig();
+        sampler.set_slot_shape(9_999, 0.0, 0.0, 0);
+        sampler.note_on(&bank, 60, 1.0, 0.0, &kit());
+        assert_eq!(sampler.process_stereo(&bank, &kit()), [1.0, 1.0]);
+    }
+
     #[test]
     fn stays_finite_across_the_whole_control_surface() {
         let (bank, mut sampler) = rig();
@@ -579,6 +914,7 @@ mod tests {
                 reverse: step % 3 == 0,
                 decay_sec: t * 4.0 - 1.0,
                 gate: step % 4 == 0,
+                hit_decay: step % 5 == 0,
             };
             sampler.note_on(&bank, 60, 1.0, 0.0, &hostile);
             for _ in 0..2_000 {

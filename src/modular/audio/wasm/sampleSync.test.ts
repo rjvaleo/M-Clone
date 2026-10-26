@@ -47,8 +47,29 @@ describe("planSampleRefs", () => {
       ]),
     );
     expect(refs).toEqual([
-      { nodeId: "p", slot: 36, assetId: "kick" },
-      { nodeId: "p", slot: 38, assetId: "snare" },
+      { nodeId: "p", slot: 36, assetId: "kick", shape: { gain: 1, pan: 0, chokeGroup: 0 } },
+      { nodeId: "p", slot: 38, assetId: "snare", shape: { gain: 1, pan: 0, chokeGroup: 0 } },
+    ]);
+  });
+
+  it("carries each pad's gain, pan and choke group, read as the Web Audio kit reads them", () => {
+    // The same reader as the browser player: pan clamped, choke groups whole,
+    // a slot with a sample and no note fired from 36.
+    const refs = planSampleRefs(
+      plan([
+        node("p", "m.percussion", {
+          slots: [
+            { note: 46, assetId: "ohat", gain: 0.9, pan: 0.35, chokeGroup: 1 },
+            { note: 42.7, assetId: "chat", pan: 4, chokeGroup: 1.6 },
+            { assetId: "kick" },
+          ],
+        }),
+      ]),
+    );
+    expect(refs).toEqual([
+      { nodeId: "p", slot: 46, assetId: "ohat", shape: { gain: 0.9, pan: 0.35, chokeGroup: 1 } },
+      { nodeId: "p", slot: 42, assetId: "chat", shape: { gain: 1, pan: 1, chokeGroup: 1 } },
+      { nodeId: "p", slot: 36, assetId: "kick", shape: { gain: 1, pan: 0, chokeGroup: 0 } },
     ]);
   });
 
@@ -61,7 +82,7 @@ describe("planSampleRefs", () => {
         }),
       ]),
     );
-    expect(refs).toEqual([{ nodeId: "p", slot: 36, assetId: "kick" }]);
+    expect(refs).toEqual([{ nodeId: "p", slot: 36, assetId: "kick", shape: { gain: 1, pan: 0, chokeGroup: 0 } }]);
   });
 
   it("ignores modules that do not read samples", () => {

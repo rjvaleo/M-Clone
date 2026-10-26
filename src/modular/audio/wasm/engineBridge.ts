@@ -695,6 +695,8 @@ export interface EngineExports {
   all_notes_off(module: number): void;
   set_modulation(module: number, source: number, dest: number, amount: number): void;
   set_sample_slot(module: number, slot: number, sample: number): void;
+  /** A kit pad's gain, pan and choke group; see `Sampler::set_slot_shape`. */
+  set_slot_shape(module: number, slot: number, gain: number, pan: number, chokeGroup: number): void;
   // The sample-bank half of the ABI; see sampleTransfer.ts for why the
   // transfer is two calls rather than one.
   sample_alloc(id: number, channels: number, frames: number, sampleRate: number): number;
@@ -967,10 +969,12 @@ export class WasmRack {
       const moduleId = this.built.get(ref.nodeId)?.moduleId;
       const sample = this.sampleMap[ref.assetId];
       if (moduleId === undefined || sample === undefined) continue;
-      const key = `${moduleId}:${ref.slot}:${sample}`;
+      const shape = ref.shape;
+      const key = `${moduleId}:${ref.slot}:${sample}` + (shape ? `:${shape.gain}:${shape.pan}:${shape.chokeGroup}` : "");
       if (this.assignedSlots.has(key)) continue;
       this.assignedSlots.add(key);
       this.engine.set_sample_slot(moduleId, ref.slot, sample);
+      if (shape) this.engine.set_slot_shape(moduleId, ref.slot, shape.gain, shape.pan, shape.chokeGroup);
     }
   }
 

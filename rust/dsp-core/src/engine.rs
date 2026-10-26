@@ -207,6 +207,9 @@ pub trait Module: Send {
     /// most modules are not samplers.
     fn set_sample_slot(&mut self, _slot: u32, _sample: u32) {}
 
+    /// A kit pad's gain, pan and choke group. Default no-op: only a kit has pads.
+    fn set_slot_shape(&mut self, _slot: u32, _gain: f32, _pan: f32, _choke_group: i32) {}
+
     /// `detune_cents` is the part of the pitch MIDI cannot say — a required
     /// argument rather than an optional one, so that a module which grows the
     /// ability to bend cannot quietly keep ignoring it.
@@ -427,6 +430,14 @@ impl Engine {
     pub fn set_sample_slot(&mut self, id: ModuleId, slot: u32, sample: u32) {
         if let Some(target) = self.slot_mut(id) {
             target.module.set_sample_slot(slot, sample);
+        }
+    }
+
+    /// Give a kit pad its gain, pan and choke group. Ignored by modules with no
+    /// pads, and by ids that no longer exist.
+    pub fn set_slot_shape(&mut self, id: ModuleId, slot: u32, gain: f32, pan: f32, choke_group: i32) {
+        if let Some(target) = self.slot_mut(id) {
+            target.module.set_slot_shape(slot, gain, pan, choke_group);
         }
     }
 

@@ -15,6 +15,7 @@
 
 import type { AudioPlan } from "../audioPlan";
 import { PRISM_SOUND_TYPES } from "../../registry/prismModules";
+import { readPercussionSlots } from "../percussionSlots";
 
 /** Modules whose single `asset-id` names their whole source. */
 const SINGLE_SOURCE: ReadonlySet<string> = new Set(["m.looper", "m.granular", "m.grain-engine", ...PRISM_SOUND_TYPES]);
@@ -37,6 +38,15 @@ export interface SampleRef {
   /** The engine-side slot: a MIDI note for a kit, 0 for a single source. */
   slot: number;
   assetId: string;
+  /** A kit pad's trim, position and choke group; absent for a single source. */
+  shape?: SlotShape;
+}
+
+/** What a kit pad does to its sample beyond naming it. See `set_slot_shape`. */
+export interface SlotShape {
+  gain: number;
+  pan: number;
+  chokeGroup: number;
 }
 
 /**
@@ -58,17 +68,16 @@ export function planSampleRefs(plan: AudioPlan): SampleRef[] {
     }
     if (!SLOT_KIT.has(spec.moduleType)) continue;
 
-    // A saved document can hold anything here, so every level is checked
-    // rather than trusted — a malformed kit should cost its own sound and
-    // nothing else.
-    const slots = spec.structure["slots"];
-    if (!Array.isArray(slots)) continue;
-    for (const entry of slots) {
-      if (typeof entry !== "object" || entry === null) continue;
-      const { note, assetId } = entry as { note?: unknown; assetId?: unknown };
-      if (typeof note !== "number" || !Number.isFinite(note)) continue;
-      if (typeof assetId !== "string" || assetId === "") continue;
-      refs.push({ nodeId: spec.nodeId, slot: Math.round(note), assetId });
+    // The browser player's own reader, so a kit is the same kit on both
+    // backends: a malformed slot costs its own sound and nothing else.
+    for (const slot of readPercussionSlots(spec.structure["slots"])) {
+      if (slot.assetId === "") continue;
+      refs.push({
+        nodeId: spec.nodeId,
+        slot: slot.note,
+        assetId: slot.assetId,
+        shape: { gain: slot.gain, pan: slot.pan, chokeGroup: slot.chokeGroup },
+      });
     }
   }
   return refs;

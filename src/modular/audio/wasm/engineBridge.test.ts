@@ -104,6 +104,9 @@ class FakeEngine implements EngineExports {
   set_sample_slot(module: number, slot: number, sample: number): void {
     this.calls.push(`slot:${module}.${slot}=${sample}`);
   }
+  set_slot_shape(module: number, slot: number, gain: number, pan: number, chokeGroup: number): void {
+    this.calls.push(`shape:${module}.${slot}=${gain},${pan},${chokeGroup}`);
+  }
   /** A real little allocator, so the transfer's pointer maths is exercised. */
   private sampleLens = new Map<number, number>();
   private samplePtrs = new Map<number, number>();
@@ -224,6 +227,31 @@ describe("Samplers and their audio", () => {
     rack.update(kit([{ note: 36, assetId: "kick" }, { note: 38, assetId: "snare" }]));
     const id = rack.moduleIdOf("p")!;
     expect(engine.of("slot")).toEqual([`slot:${id}.36=0`, `slot:${id}.38=1`]);
+  });
+
+  it("gives the engine each pad's gain, pan and choke group", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.setSampleMap({ ohat: 0, chat: 1 });
+    rack.update(kit([
+      { note: 46, assetId: "ohat", gain: 0.9, pan: 0.35, chokeGroup: 1 },
+      { note: 42, assetId: "chat", chokeGroup: 1 },
+    ]));
+    const id = rack.moduleIdOf("p")!;
+    expect(engine.of("shape")).toEqual([`shape:${id}.46=0.9,0.35,1`, `shape:${id}.42=1,0,1`]);
+  });
+
+  it("sends a pad's shape again when it changes, and not when it does not", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.setSampleMap({ ohat: 0 });
+    rack.update(kit([{ note: 46, assetId: "ohat", pan: 0.35 }]));
+    const first = rack.moduleIdOf("p")!;
+    rack.update(kit([{ note: 46, assetId: "ohat", pan: 0.35 }]));
+    // A slot is structure, so a moved pad rebuilds the kit under a new id.
+    rack.update(kit([{ note: 46, assetId: "ohat", pan: -0.5 }]));
+    const second = rack.moduleIdOf("p")!;
+    expect(engine.of("shape")).toEqual([`shape:${first}.46=1,0.35,0`, `shape:${second}.46=1,-0.5,0`]);
   });
 
   it("assigns nothing for an asset the engine was never told about", () => {

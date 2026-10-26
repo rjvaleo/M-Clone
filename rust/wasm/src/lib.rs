@@ -357,6 +357,16 @@ pub extern "C" fn set_sample_slot(module: u32, slot: u32, sample: u32) {
     }
 }
 
+/// A kit pad's gain, pan (−1 to +1) and choke group. The group arrives as a
+/// float, the one number type the bridge sends, and is taken whole.
+#[no_mangle]
+pub extern "C" fn set_slot_shape(module: u32, slot: u32, gain: f32, pan: f32, choke_group: f32) {
+    if let Some(engine) = engine() {
+        let group = if choke_group.is_finite() { choke_group.trunc() as i32 } else { 0 };
+        engine.set_slot_shape(module, slot, gain, pan, group);
+    }
+}
+
 /// Reserve zeroed room for a sample. Returns 1 on success, 0 on a shape that
 /// cannot hold audio. Replaces whatever the id already held.
 #[no_mangle]
