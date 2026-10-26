@@ -5,6 +5,18 @@
  * after is. Screens and readouts use Home Video, the shippable display face.
  * Positions come from the layout, inline; everything here is appearance. */
 
+/* The lettering: Barlow Condensed for the hardware looks, IBM Plex Sans
+ * Condensed for Graph first. Both are under the SIL Open Font License 1.1,
+ * shipped with their licences beside them in public/fonts. Barlow has no 400
+ * here, so its Medium answers for normal weight too. */
+@font-face { font-family: "Barlow Condensed"; src: url("/fonts/BarlowCondensed-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("/fonts/BarlowCondensed-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("/fonts/BarlowCondensed-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "IBM Plex Sans Condensed"; src: url("/fonts/IBMPlexSansCondensed-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "IBM Plex Sans Condensed"; src: url("/fonts/IBMPlexSansCondensed-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "IBM Plex Sans Condensed"; src: url("/fonts/IBMPlexSansCondensed-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("/fonts/BarlowCondensed-Medium.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+
 .pnl {
   position: relative;
   overflow: hidden;
