@@ -74,8 +74,8 @@ pub fn render() -> String {
                 None => "null".to_string(),
             };
             format!(
-                "      {{ key: {}, label: {}, min: {}, max: {}, default: {}, log: {}, unit: {}, kind: \"{kind}\", choices: {choices}, when: {when} }}",
-                text(p.key), text(p.label), number(p.min), number(p.max), number(p.default), p.log, text(p.unit),
+                "      {{ key: {}, label: {}, min: {}, max: {}, default: {}, log: {}, unit: {}, kind: \"{kind}\", choices: {choices}, when: {when}, inert: {} }}",
+                text(p.key), text(p.label), number(p.min), number(p.max), number(p.default), p.log, text(p.unit), p.inert,
             )
         });
         let groups = d.panel.groups.iter().map(|g| {
