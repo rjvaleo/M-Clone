@@ -231,33 +231,35 @@ const OSC3 = oscillatorParams(3, { wave: "sine", detune: -1200, level: 0.3 });
  *
  * Separate from the matrix's two (`lfo1`, `lfo2`) and from the LFO modules
  * that map to knobs: these are the original's own, free-running, shared by
- * every note, and each drives exactly what the original's menu offers. Depth
- * starts at zero so an existing patch sounds as it did; the rates and targets
- * are the original's.
+ * every note, and each drives exactly what the original's menu offers. Rates,
+ * depths and targets start where the original's page does (20 % on the
+ * filter, 25 % on the pulse width, the third off); a patch saved before the
+ * depths existed is given zero, so it sounds as it did.
  */
-const synthLfoParams = (id: "a" | "b" | "c", n: number, rate: number, target: string) => [
+const synthLfoParams = (id: "a" | "b" | "c", n: number, rate: number, target: string, depth: number) => [
   numberParam(`lfo-${id}-rate`, `LFO ${n} rate`, rate, 0.05, 20, 0.01, "Hz"),
-  numberParam(`lfo-${id}-depth`, `LFO ${n} depth`, 0, 0, 1, 0.01),
+  { ...numberParam(`lfo-${id}-depth`, `LFO ${n} depth`, depth, 0, 1, 0.01), missingValue: 0 },
   enumParam(`lfo-${id}-wave`, `LFO ${n} wave`, LFO_WAVES, "sine"),
   enumParam(`lfo-${id}-target`, `LFO ${n} target`, LFO_TARGETS, target),
 ];
 
 const SYNTH_LFOS = [
-  ...synthLfoParams("a", 1, 1, "filter"),
-  ...synthLfoParams("b", 2, 0.05 * 400 ** 0.4, "pw"),
-  ...synthLfoParams("c", 3, 0.05 * 400 ** 0.4, "none"),
+  ...synthLfoParams("a", 1, 1, "filter", 0.2),
+  ...synthLfoParams("b", 2, 0.05 * 400 ** 0.4, "pw", 0.25),
+  ...synthLfoParams("c", 3, 0.05 * 400 ** 0.4, "none", 0),
 ];
 
 /**
  * The original's ping-pong delay, after the voices: tempo-synced, with a
  * hi-cut in its feedback and a tape transport that glides when it is retimed.
- * Wet starts at zero, so an existing patch has no echo it did not ask for.
+ * Wet starts at the original's 25 %; a patch saved before it existed is given
+ * zero, so it has no echo it did not ask for.
  * Tempo is the synth's own until the transport reaches the audio plan.
  */
 const SYNTH_DELAY = [
   enumParam("delay-note", "Delay time", DELAY_NOTES.map((note) => note.label), "1/8"),
   numberParam("delay-feedback", "Feedback", 0.35, 0, 0.95, 0.01),
-  numberParam("delay-wet", "Delay wet", 0, 0, 1, 0.01),
+  { ...numberParam("delay-wet", "Delay wet", 0.25, 0, 1, 0.01), missingValue: 0 },
   numberParam("delay-spread", "Spread", 1, 0, 1, 0.01),
   numberParam("delay-hicut", "Hi-cut", 200 * 100 ** 0.75, 200, 20000, 1, "Hz"),
   enumParam("tape", "Tape speed", TAPE_SPEEDS.map((speed) => speed.label), "7.5 IPS"),

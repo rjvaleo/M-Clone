@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createNode, moduleRegistry, validateModuleDescriptor } from "./registry";
+import { createNode, moduleRegistry, validateModuleDescriptor, withDeclaredParameters } from "./registry";
 import type { ModuleDescriptor } from "../model/graph";
 import { MODULE_ACCENT_SLOTS } from "../theme/moduleAccents";
 import { PRESET_SLOTS } from "./descriptorKit";
@@ -322,5 +322,27 @@ describe("Modular module registry", () => {
   it("refuses to build a node from a module type it does not have", () => {
     expect(() => createNode("m.imaginary", "n", { x: 0, y: 0 }))
       .toThrow("Unknown module type: m.imaginary");
+  });
+});
+
+describe("A synth's starting LFOs and echo", () => {
+  // The scale sequencer's page starts LFO 1 on the filter at 20 %, LFO 2 on
+  // the pulse width at 25 %, LFO 3 off, and the delay at 25 % wet.
+  it("starts a new synth where the original's page starts", () => {
+    const node = createNode("m.synth", "s1", { x: 0, y: 0 });
+    expect(node.parameters["lfo-a-depth"]).toBe(0.2);
+    expect(node.parameters["lfo-b-depth"]).toBe(0.25);
+    expect(node.parameters["lfo-c-depth"]).toBe(0);
+    expect(node.parameters["delay-wet"]).toBe(0.25);
+  });
+
+  it("keeps a patch saved before these controls existed sounding as it did", () => {
+    const old = createNode("m.synth", "s1", { x: 0, y: 0 });
+    for (const id of ["lfo-a-depth", "lfo-b-depth", "delay-wet"]) delete old.parameters[id];
+    const graph = withDeclaredParameters({ nodes: { s1: old }, connections: {} } as never);
+    const loaded = (graph as { nodes: Record<string, { parameters: Record<string, unknown> }> }).nodes.s1.parameters;
+    expect(loaded["lfo-a-depth"]).toBe(0);
+    expect(loaded["lfo-b-depth"]).toBe(0);
+    expect(loaded["delay-wet"]).toBe(0);
   });
 });

@@ -42,6 +42,12 @@ export type ParameterDescriptor = {
   label: string;
   kind: "number" | "boolean" | "enum" | "string" | "json";
   defaultValue: JsonValue;
+  /**
+   * What a patch saved before this control existed is given for it, when that
+   * is not the default: a new module can start where the original instrument
+   * does while an older patch keeps sounding as it did.
+   */
+  missingValue?: JsonValue;
   minimum?: number;
   maximum?: number;
   step?: number;

@@ -230,12 +230,15 @@ full, and add drum step programming. Automation is not ported.
          wet from before the preset; here a load is one moment and every LFO
          takes the preset's wet (and LFO 1's stale keys stay fixed, as
          agreed).
-       - idMLab's own, not the original's: velocity (the original plays every
-         note at full level; idMLab's sequencers send velocities), the voice
-         ceiling (held notes only; the original has none), all-notes-off
-         (Rust releases, Web Audio fades), and a fresh module's LFO depths
-         and wet at zero where the original's page starts at 20 %, 25 % and
-         25 % (the imported presets carry the original's values).
+       - idMLab's own, not the original's, by RJ's choice (26 Oct 2026):
+         velocity is heard (the original plays every note at full level;
+         idMLab's sequencers send velocities). Also idMLab's own: the voice
+         ceiling (held notes only; the original has none) and all-notes-off
+         (Rust releases, Web Audio fades).
+       - A fresh synth starts where the original's page does: LFO 1 at 20 % on
+         the filter, LFO 2 at 25 % on the pulse width, LFO 3 off, the delay
+         25 % wet. A patch saved before those controls existed is given zero
+         for them (`missingValue`), so it sounds as it did.
    - Drums: a drum step-programming module (Numerology DrumSeq look: rows per
      pad, per-step velocity, probability, flam/ratchet, swing, per-row length)
      driving `m.percussion`; a 909 starter kit from `Audio - Archival
