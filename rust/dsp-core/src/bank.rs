@@ -1,26 +1,29 @@
 //! Polyphony — a fixed pool of voices and the rules for handing them out.
 //!
-//! Three decisions worth stating, because each one is audible when it is wrong.
+//! Four decisions worth stating, because each one is audible when it is wrong.
 //!
 //! **Fixed capacity, allocated once.** A bank that grew under load would
 //! allocate on the audio thread at exactly the moment it is busiest, which is
-//! the textbook way to turn a dense passage into a dropout. Sixteen voices is
-//! more than a keyboard has fingers and costs a few kilobytes.
+//! the textbook way to turn a dense passage into a dropout. The whole pool is
+//! allocated up front; the polyphony knob limits how much of it held notes use.
 //!
-//! **A voice frees itself.** `Adsr` lands exactly on zero rather than
-//! approaching it, so "is this voice finished" is a fact rather than a
-//! threshold someone has to tune. Sample players elsewhere in this codebase
-//! need a silence policy; this does not.
+//! **A voice frees itself.** Its oscillators stop 50 ms after the amp release
+//! ends, as the browser voice's do, so "is this voice finished" is a fact.
 //!
-//! **Retriggering a held note reuses its voice.** Otherwise a trill allocates
-//! a new voice per repetition, the bank fills with copies of one note, and the
-//! oldest *other* note gets stolen — so holding a chord and repeating one note
-//! silences the chord.
+//! **A note struck again is a new voice**, as it is in the browser build and
+//! in the scale sequencer, where every note is a new oscillator: the note
+//! already sounding is let go and rings out its release while the new one
+//! starts from silence.
+//!
+//! **Polyphony limits held notes.** A note let go — or a sequenced note,
+//! written with its release — rings to its end without counting, as the
+//! browser build's do. When held notes reach the limit the oldest is stolen
+//! with a short fade; only when every slot is sounding is one cut outright,
+//! the oldest released one first.
 
-use crate::voice::{StereoSample, Voice, VoiceSettings};
+use crate::voice::{StereoSample, Voice, VoiceSettings, WaveContext};
 
-/// More than a keyboard has fingers, and enough for a sustain pedal held over
-/// a chord change.
+/// The polyphony a module starts with.
 pub const DEFAULT_POLYPHONY: usize = 16;
 
 /// Never fewer than this, however the host is configured.
@@ -38,13 +41,8 @@ pub struct VoiceBank {
     slots: Vec<Slot>,
     settings: VoiceSettings,
     next_serial: u64,
-    /// How many slots `claim` may hand out, of the ones allocated.
-    ///
-    /// Separate from `slots.len()` so polyphony can be a knob. Shrinking the
-    /// pool by reallocating would mean allocating on the audio thread the
-    /// moment someone drags the control, which is the one thing a real-time
-    /// callback must never do; the slots above the limit simply go unused.
     limit: usize,
+    waves: WaveContext,
 }
 
 impl VoiceBank {
@@ -52,46 +50,46 @@ impl VoiceBank {
         let capacity = capacity.clamp(MIN_POLYPHONY, MAX_POLYPHONY);
         let slots: Vec<Slot> = (0..capacity)
             .map(|index| Slot {
-                // A different seed per voice, so the `Random` matrix source
-                // does not hand every voice in a chord the same value.
                 voice: Voice::new(sample_rate, seed.wrapping_add(index as u32).wrapping_mul(2_654_435_761)),
                 started: 0,
             })
             .collect();
         let limit = slots.len();
-        Self { slots, settings: VoiceSettings::default(), next_serial: 1, limit }
+        Self { slots, settings: VoiceSettings::default(), next_serial: 1, limit, waves: WaveContext::new(sample_rate) }
     }
 
     pub fn capacity(&self) -> usize {
         self.limit
     }
 
-    /// Set the polyphony, within what was allocated.
-    ///
-    /// Voices already sounding above the new limit are left to finish rather
-    /// than cut off: lowering the control mid-chord should thin what comes
-    /// next, not silence what is already ringing.
     pub fn set_capacity(&mut self, voices: usize) {
         self.limit = voices.clamp(MIN_POLYPHONY, self.slots.len());
     }
 
-    /// Voices currently producing sound, including those in their release.
     pub fn active_count(&self) -> usize {
         self.slots.iter().filter(|slot| slot.voice.is_active()).count()
+    }
+
+    /// Notes sounding and not yet let go.
+    pub fn held_count(&self) -> usize {
+        self.slots.iter().filter(|slot| slot.voice.is_active() && !slot.voice.is_released()).count()
     }
 
     pub fn settings(&self) -> &VoiceSettings {
         &self.settings
     }
 
-    /// Edit the patch. Takes effect on the next sample for every voice,
-    /// including ones already sounding.
     pub fn settings_mut(&mut self) -> &mut VoiceSettings {
         &mut self.settings
     }
 
     pub fn set_settings(&mut self, settings: VoiceSettings) {
         self.settings = settings;
+    }
+
+    /// The shared wave tables, for the module's LFOs.
+    pub fn waves_mut(&mut self) -> &mut WaveContext {
+        &mut self.waves
     }
 
     pub fn set_mod_wheel(&mut self, value: f32) {
@@ -101,59 +99,57 @@ impl VoiceBank {
     }
 
     pub fn set_sample_rate(&mut self, sample_rate: f32) {
-        // Rebuilding is the honest way to re-derive every coefficient, and this
-        // only ever happens off the audio thread when a context changes rate.
         let capacity = self.slots.len();
         *self = Self::new(sample_rate, capacity, 1);
     }
 
-    /// Which slot should take a new note.
-    ///
-    /// In order: the one already holding this note, then any idle one, then
-    /// the oldest. Never fails — the bank always sounds the note it was asked
-    /// for, because a silently dropped note is far harder to diagnose than a
-    /// stolen one.
-    fn claim(&mut self, note: u8) -> usize {
-        // Every search is over `..limit` rather than the whole pool, which is
-        // what makes the limit real: a voice above it can be finishing a note
-        // from before the control moved, but it can never take a new one.
-        let live = &self.slots[..self.limit];
-        if let Some(index) = live
-            .iter()
-            .position(|slot| slot.voice.note() == Some(note) && slot.voice.is_active())
-        {
+    fn claim(&mut self) -> usize {
+        // Held notes at the limit: the oldest is stolen, with its fade.
+        if self.held_count() >= self.limit {
+            if let Some(oldest) = self
+                .slots
+                .iter_mut()
+                .filter(|slot| slot.voice.is_active() && !slot.voice.is_released())
+                .min_by_key(|slot| slot.started)
+            {
+                oldest.voice.steal();
+            }
+        }
+        if let Some(index) = self.slots.iter().position(|slot| !slot.voice.is_active()) {
             return index;
         }
-        if let Some(index) = live.iter().position(|slot| !slot.voice.is_active()) {
-            return index;
-        }
-        live.iter()
-            .enumerate()
-            .min_by_key(|(_, slot)| slot.started)
-            .map(|(index, _)| index)
-            .unwrap_or(0)
+        // Every slot sounding: cut the oldest, a released one before a held one.
+        let oldest = |released: bool| {
+            self.slots
+                .iter()
+                .enumerate()
+                .filter(|(_, slot)| slot.voice.is_released() == released)
+                .min_by_key(|(_, slot)| slot.started)
+                .map(|(index, _)| index)
+        };
+        let index = oldest(true).or_else(|| oldest(false)).unwrap_or(0);
+        self.slots[index].voice.kill();
+        index
     }
 
-    /// `detune_cents` is the microtonal remainder; see `Voice::start`.
-    ///
-    /// It deliberately plays no part in `claim`, which still matches on the
-    /// MIDI note alone: two notes a few cents apart are the same key being
-    /// re-struck, and giving each its own voice would let a slow scale sweep
-    /// exhaust the bank.
+    /// A note played live: it holds until its note-off.
     pub fn note_on(&mut self, note: u8, velocity: f32, detune_cents: f32) {
-        let index = self.claim(note);
+        self.note_on_gated(note, velocity, detune_cents, None);
+    }
+
+    /// A note, with — for a sequenced one — how long after its start it
+    /// releases.
+    pub fn note_on_gated(&mut self, note: u8, velocity: f32, detune_cents: f32, release_after: Option<f32>) {
+        // The same key struck again lets the one sounding go first.
+        self.note_off(note);
+        let index = self.claim();
         let serial = self.next_serial;
         self.next_serial += 1;
         let settings = &self.settings;
-        self.slots[index].voice.start(note, velocity, detune_cents, settings);
+        self.slots[index].voice.start(note, velocity, detune_cents, settings, release_after, &mut self.waves);
         self.slots[index].started = serial;
     }
 
-    /// Release every voice holding this note.
-    ///
-    /// Every, not the first: a stolen note can leave two slots believing they
-    /// hold it, and releasing only one would strand the other until it was
-    /// stolen in turn.
     pub fn note_off(&mut self, note: u8) {
         for slot in self.slots.iter_mut() {
             if slot.voice.note() == Some(note) {
@@ -162,30 +158,19 @@ impl VoiceBank {
         }
     }
 
-    /// Release everything, letting each voice finish its tail.
     pub fn all_notes_off(&mut self) {
         for slot in self.slots.iter_mut() {
             slot.voice.release(&self.settings);
         }
     }
 
-    /// Silence everything now. For a transport stop, where a tail would run on
-    /// past the end of the piece.
     pub fn panic(&mut self) {
         for slot in self.slots.iter_mut() {
-            slot.voice.steal();
+            slot.voice.kill();
             slot.started = 0;
         }
     }
 
-    /// One sample, summed across every sounding voice.
-    ///
-    /// Deliberately not scaled by the voice count: dividing would make a single
-    /// note quieter simply because the instrument *could* play sixteen, and a
-    /// player would compensate by turning up, undoing it. The master chain's
-    /// limiter is what catches a dense chord.
-    ///
-    /// Named `next` to match every other per-sample source in the crate.
     #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn next(&mut self) -> StereoSample {
@@ -197,7 +182,7 @@ impl VoiceBank {
             if !slot.voice.is_active() {
                 continue;
             }
-            let sample = slot.voice.next(settings);
+            let sample = slot.voice.next(settings, &mut self.waves);
             left += sample.left;
             right += sample.right;
             classic += sample.classic;
@@ -243,7 +228,10 @@ mod tests {
         for note in [60, 62, 64, 65] {
             bank.note_on(note, 1.0, 0.0);
         }
-        assert!(bank.active_count() <= 2, "more voices sounded than the limit allows");
+        assert!(bank.held_count() <= 2, "more notes held than the limit allows");
+        // The stolen ones fade out and free their slots.
+        render(&mut bank, 0.05);
+        assert_eq!(bank.active_count(), 2);
     }
 
     #[test]
@@ -336,10 +324,10 @@ mod tests {
     }
 
     #[test]
-    fn retriggering_a_held_note_reuses_its_voice() {
-        // The defect this prevents: a trill allocates a voice per repetition,
-        // the bank fills with copies of one note, and the oldest *other* note
-        // is stolen — so holding a chord and repeating one note silences it.
+    fn a_note_struck_again_lets_the_last_one_ring_and_spares_the_chord() {
+        // As in the browser build and the original: the repeated note is a new
+        // voice, the one before it rings out its release — and when the bank
+        // fills with those tails, a tail is cut, never the note still held.
         let mut bank = new_bank(4);
         bank.note_on(60, 1.0, 0.0);
         bank.note_on(64, 1.0, 0.0);
@@ -347,7 +335,29 @@ mod tests {
             bank.note_on(60, 1.0, 0.0);
             render(&mut bank, 0.005);
         }
-        assert_eq!(bank.active_count(), 2, "a trill consumed the whole bank");
+        assert_eq!(bank.held_count(), 2);
+        assert!(bank.slots.iter().any(|s| s.voice.note() == Some(64) && !s.voice.is_released()));
+        assert_eq!(bank.slots.iter().filter(|s| s.voice.note() == Some(60) && !s.voice.is_released()).count(), 1);
+    }
+
+    #[test]
+    fn a_sequenced_note_rings_without_counting_against_the_limit() {
+        let mut bank = new_bank(8);
+        bank.set_capacity(1);
+        bank.settings_mut().amp.release = 0.5;
+        for note in [60, 62, 64] {
+            bank.note_on_gated(note, 1.0, 0.0, Some(0.01));
+        }
+        assert_eq!(bank.held_count(), 0);
+        assert_eq!(bank.active_count(), 3);
+        // A full bank of tails gives up its oldest.
+        let mut full = new_bank(2);
+        full.settings_mut().amp.release = 5.0;
+        for note in [60, 62, 64] {
+            full.note_on_gated(note, 1.0, 0.0, Some(0.0));
+        }
+        assert_eq!(full.active_count(), 2);
+        assert!(full.slots.iter().all(|s| s.voice.note() != Some(60)));
     }
 
     #[test]

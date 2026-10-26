@@ -1215,6 +1215,20 @@ describe("MIDI Output processor", () => {
     expect(scheduled[0].noteId).toBe(scheduled[1].noteId);
   });
 
+  it("tells the note-on its step: the note's length before its gate", () => {
+    const { bus, scheduled, processor } = midiOutput();
+    feed(bus, "mo", "notes-in", [
+      { kind: "note-event", atTick: 0, durationTicks: 216, note: 60, velocity: 90, channel: 1, gate: 0.9 },
+      { kind: "note-event", atTick: 0, durationTicks: 100, note: 62, velocity: 90, channel: 1, gate: 0 },
+    ]);
+    bus.beginNode("mo", 64);
+    processor.process(window(0, 960));
+    expect(scheduled[0].stepTicks).toBeCloseTo(240, 9);
+    // A note with no gate recorded is its own step; a release has none.
+    expect(scheduled[2].stepTicks).toBe(100);
+    expect(scheduled[1].stepTicks).toBe(0);
+  });
+
   it("gives every note a distinct id", () => {
     const { bus, scheduled, processor } = midiOutput();
     feed(bus, "mo", "notes-in", [

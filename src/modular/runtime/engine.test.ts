@@ -147,6 +147,21 @@ describe("Clock-to-note vertical slice", () => {
     }
   });
 
+  it("tells each attack its step, before the gate shortened the note", () => {
+    // A 1/16 step is 240 ticks; the Note Editor's 90 % gate makes the note 216
+    // long, and records the 0.9 it applied — so the step is recovered whole.
+    // At 120 BPM that is an eighth of a second, known when the note starts.
+    const rig = harness();
+    rig.runtime.start();
+    run(rig, 1.2);
+    for (const attack of noteOns(rig.recorder)) {
+      expect(attack.stepTicks).toBeCloseTo(240, 9);
+      expect(attack.stepSec).toBeCloseTo(0.125, 9);
+    }
+    const releases = rig.recorder.events.filter((event) => event.type === "note-off");
+    expect(releases.every((event) => event.stepTicks === 0 && event.stepSec === 0)).toBe(true);
+  });
+
   it("converts ticks to seconds through the tempo map", () => {
     const rig = harness();
     rig.runtime.start();
@@ -531,6 +546,7 @@ describe("Recording adapter", () => {
     const pooled = {
       type: "note-on" as const, atTick: 10, atSec: 1, sequence: 0, portId: "mo",
       channel: 1, note: 60, detuneCents: 0, velocity: 90, program: 0, controller: 0, value: 0, noteId: 3,
+      stepTicks: 0, stepSec: 0,
     };
     adapter.send([pooled], 1);
     pooled.note = 99;
@@ -546,6 +562,7 @@ describe("Recording adapter", () => {
     const event = {
       type: "note-on" as const, atTick: 0, atSec: 0, sequence: 0, portId: "mo",
       channel: 1, note: 60, detuneCents: 0, velocity: 90, program: 0, controller: 0, value: 0, noteId: 0,
+      stepTicks: 0, stepSec: 0,
     };
     adapter.send([event, event, event], 2);
     expect(adapter.events).toHaveLength(2);

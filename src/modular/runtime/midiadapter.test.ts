@@ -44,6 +44,8 @@ const event = (overrides: Partial<RuntimeEvent> = {}): RuntimeEvent => ({
   controller: 0,
   value: 0,
   noteId: 0,
+  stepTicks: 0,
+  stepSec: 0,
   ...overrides,
 });
 

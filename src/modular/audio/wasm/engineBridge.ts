@@ -245,6 +245,8 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     "delay-hicut": 61,
     tape: 62,
     tempo: 63,
+    gate: 64,
+    "lfo-touch": 65,
   },
   // Mirrors `BlackholeVerb` in rust/dsp-core/src/modules.rs. `line-count` is
   // absent on purpose: it is a structural parameter, so changing it rebuilds
@@ -691,6 +693,8 @@ export interface EngineExports {
   module_telemetry(module: number): number;
   set_param(module: number, index: number, value: number): void;
   note_on(module: number, note: number, velocity: number, detuneCents: number): void;
+  /** A note that knows its step as sequenced; see `Module::note_on_with_step`. */
+  note_on_with_step(module: number, note: number, velocity: number, detuneCents: number, stepSec: number): void;
   note_off(module: number, note: number): void;
   all_notes_off(module: number): void;
   set_modulation(module: number, source: number, dest: number, amount: number): void;
@@ -1075,7 +1079,11 @@ export class WasmRack {
     if (moduleId === undefined) return;
     switch (event.type) {
       case "note-on":
-        this.engine.note_on(moduleId, event.note, event.velocity, event.detuneCents);
+        if (event.stepSec !== undefined) {
+          this.engine.note_on_with_step(moduleId, event.note, event.velocity, event.detuneCents, event.stepSec);
+        } else {
+          this.engine.note_on(moduleId, event.note, event.velocity, event.detuneCents);
+        }
         break;
       case "note-off":
         this.engine.note_off(moduleId, event.note);

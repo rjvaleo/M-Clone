@@ -34,6 +34,21 @@
  * scheduled. So the envelope writes `setValueAtTime` and
  * `linearRampToValueAtTime` directly. No `.value =` assignment appears here or
  * anywhere else — that is the rule the safety contract actually enforces.
+ *
+ * They are the scale sequencer's calls, made the way `playNote` makes them
+ * (`envelopeEvents` in `synthLaws.ts`): a sequenced note knows its length, so
+ * its release — the sustain set at the gate, a ramp down — is written with the
+ * rest when it starts, and the browser's timeline puts the five in order. A
+ * note played live writes the same release when its key comes up, without
+ * cancelling what is already there, so from then on it runs as the original
+ * would have.
+ *
+ * ## The voice filter follows the knob
+ *
+ * A voice's filter frequency is the module's cutoff knob — a constant source,
+ * gliding as the original's does — plus this note's envelope, written as
+ * offsets from the knob. Turning the knob moves a sounding note's filter,
+ * exactly as it moves the original's one shared filter.
  */
 
 import type {
@@ -49,7 +64,15 @@ import type { AudioParamLike } from "./params";
 import { rampParam } from "./params";
 import { pulseWaveCoefficients } from "./dsp";
 import { rootHzForMidi } from "../tuning/tuning";
-import { filterSweep, keyFollowedCutoff, KEY_FOLLOW_REFERENCE_MIDI } from "./synthLaws";
+import {
+  envelopeEvents,
+  filterSweep,
+  keyFollowedCutoff,
+  KEY_FOLLOW_REFERENCE_MIDI,
+  NOTE_TAIL_SEC,
+  releaseEvents,
+  type EnvelopeEvent,
+} from "./synthLaws";
 import {
   applyRoutings,
   modulate,
@@ -117,10 +140,23 @@ export type VoiceRouting = {
   filterFrequencyMod?: AudioNodeLike;
   filterQMod?: AudioNodeLike;
   pitch?: number;
+  /** When a sequenced note releases — its gate. Absent for a note played live. */
+  releaseAtSec?: number;
+  /**
+   * The module's cutoff knob as a signal, summed into the voice filter's
+   * frequency; the voice's own automation is then offsets from `knobHz`.
+   */
+  cutoffBase?: AudioNodeLike;
+  knobHz?: number;
 };
 
-/** How long after its release a voice's oscillators are stopped. */
-const TAIL_SEC = 0.05;
+/** Write an envelope's calls onto a parameter, in the order given. */
+export function applyEnvelope(param: AudioParamLike, events: readonly EnvelopeEvent[]): void {
+  for (const event of events) {
+    if (event.kind === "set") param.setValueAtTime(event.value, event.time);
+    else param.linearRampToValueAtTime(event.value, event.time);
+  }
+}
 
 /** A voice stolen mid-note fades over this rather than clicking. */
 const STEAL_FADE_SEC = 0.02;
@@ -229,31 +265,6 @@ const velocityGain = (velocity: number): number => {
   return unit * unit;
 };
 
-/**
- * Schedule an attack–decay–sustain shape.
- *
- * Returns the value the parameter is left holding, which the release stage
- * needs as its starting point.
- */
-export function scheduleAttackDecay(
-  param: AudioParamLike,
-  atSec: number,
-  from: number,
-  peak: number,
-  sustain: number,
-  adsr: AdsrSeconds,
-): number {
-  const attack = Math.max(0, adsr.attack);
-  const decay = Math.max(0, adsr.decay);
-  param.cancelScheduledValues(atSec);
-  param.setValueAtTime(from, atSec);
-  if (attack > 0) param.linearRampToValueAtTime(peak, atSec + attack);
-  else param.setValueAtTime(peak, atSec);
-  if (decay > 0) param.linearRampToValueAtTime(sustain, atSec + attack + decay);
-  else param.setValueAtTime(sustain, atSec + attack);
-  return sustain;
-}
-
 /** One sounding note. */
 export class SynthVoice {
   readonly note: number;
@@ -263,7 +274,9 @@ export class SynthVoice {
   private readonly panner: StereoPannerNodeLike | null;
   private readonly filter: BiquadFilterNodeLike | null;
   private readonly routing: VoiceRouting;
-  private filterBaseHz = 0;
+  /** The filter envelope's resting offset from the knob, and its sustain. */
+  private filterFromHz = 0;
+  private sustainOffsetHz = 0;
   private readonly settings: SynthSettings;
   private released = false;
   private stopped = false;
@@ -318,38 +331,50 @@ export class SynthVoice {
       this.ampGain.connect(this.panner);
       this.panner.connect(destination);
       rampParam(this.panner.pan, clamp(settings.pan, -1, 1), atSec, "none");
-      // The LFOs add to the scheduled sweep rather than replacing it.
+      // The knob and the LFOs add to the scheduled sweep rather than replacing it.
+      routing.cutoffBase?.connect(this.filter.frequency as unknown as AudioNodeLike);
       routing.filterFrequencyMod?.connect(this.filter.frequency as unknown as AudioNodeLike);
       routing.filterQMod?.connect(this.filter.Q as unknown as AudioNodeLike);
     } else {
       this.ampGain.connect(destination);
     }
 
-    this.scheduleEnvelopes(atSec, velocity, routing.pitch ?? note);
+    this.scheduleEnvelopes(atSec, velocity, routing.pitch ?? note, routing.releaseAtSec);
 
     this.oscillators[0].onended = () => this.finish();
     for (const oscillator of this.oscillators) oscillator.start(atSec);
+    if (routing.releaseAtSec !== undefined) {
+      // Its release is already written; a key coming up changes nothing.
+      this.released = true;
+      this.stopAt(this.stopTime(routing.releaseAtSec));
+    }
   }
 
-  /** Let the note go: both envelopes fall, then the oscillators stop. */
+  /** Whether the note has been let go — or was written with its release. */
+  get isReleased(): boolean {
+    return this.released;
+  }
+
+  /**
+   * Let the note go: the sustain set now and a ramp down, written over what
+   * is scheduled rather than cancelling it, then the oscillators stop.
+   */
   release(atSec: number): void {
     if (this.released) return;
     this.released = true;
-    const ampRelease = Math.max(0, this.settings.amp.release);
-    const filterRelease = Math.max(0, this.settings.filter.adsr.release);
-
-    this.ampGain.gain.cancelScheduledValues(atSec);
-    this.ampGain.gain.setValueAtTime(this.sustainLevel, atSec);
-    this.ampGain.gain.linearRampToValueAtTime(0, atSec + ampRelease);
-
+    applyEnvelope(this.ampGain.gain, releaseEvents(atSec, this.sustainLevel, 0, this.settings.amp.release));
     if (this.filter) {
-      this.filter.frequency.cancelScheduledValues(atSec);
-      this.filter.frequency.setValueAtTime(this.sustainCutoff, atSec);
-      this.filter.frequency.linearRampToValueAtTime(this.filterBaseHz, atSec + filterRelease);
+      applyEnvelope(
+        this.filter.frequency,
+        releaseEvents(atSec, this.sustainOffsetHz, this.filterFromHz, this.settings.filter.adsr.release),
+      );
     }
+    this.stopAt(this.stopTime(atSec));
+  }
 
-    // A classic voice's filter is the module's; only its own amp has to end.
-    this.stopAt(atSec + (this.filter ? Math.max(ampRelease, filterRelease) : ampRelease) + TAIL_SEC);
+  /** The original stops a note 50 ms after its amp release ends. */
+  private stopTime(releaseAtSec: number): number {
+    return releaseAtSec + Math.max(0, this.settings.amp.release) + NOTE_TAIL_SEC;
   }
 
   /** Cut the note short to make room for another, without a click. */
@@ -368,6 +393,7 @@ export class SynthVoice {
       oscillator.disconnect();
     }
     if (this.filter) {
+      this.routing.cutoffBase?.disconnect(this.filter.frequency as unknown as AudioNodeLike);
       this.routing.filterFrequencyMod?.disconnect(this.filter.frequency as unknown as AudioNodeLike);
       this.routing.filterQMod?.disconnect(this.filter.Q as unknown as AudioNodeLike);
       this.filter.disconnect();
@@ -377,28 +403,30 @@ export class SynthVoice {
   }
 
   private sustainLevel = 0;
-  private sustainCutoff = 0;
 
-  private scheduleEnvelopes(atSec: number, velocity: number, pitch: number): void {
+  private scheduleEnvelopes(atSec: number, velocity: number, pitch: number, releaseAtSec: number | undefined): void {
     const peak = clamp(this.settings.level, 0, 1) * velocityGain(velocity);
-    this.sustainLevel = scheduleAttackDecay(
+    this.sustainLevel = peak * clamp(this.settings.amp.sustain, 0, 1);
+    applyEnvelope(
       this.ampGain.gain,
-      atSec,
-      0,
-      peak,
-      peak * clamp(this.settings.amp.sustain, 0, 1),
-      this.settings.amp,
+      envelopeEvents(atSec, 0, peak, this.sustainLevel, this.settings.amp, releaseAtSec),
     );
 
     if (!this.filter) return;
     // Key follow before the envelope, so the sweep starts from the pitch-
     // corrected cutoff rather than sweeping away from it — the scale
-    // sequencer's laws, both of them (`synthLaws.ts`).
+    // sequencer's laws, both of them (`synthLaws.ts`). Written as offsets
+    // from the knob when the knob arrives as a signal.
     const { filter } = this.settings;
-    this.filterBaseHz = keyFollowedCutoff(positive(filter.cutoffHz, 2000), pitch, filter.keyFollow);
-    const sweep = filterSweep(this.filterBaseHz, filter.envAmountOctaves, filter.envAmount, filter.adsr.sustain);
-    this.sustainCutoff = sweep.sustain;
-    scheduleAttackDecay(this.filter.frequency, atSec, sweep.base, sweep.peak, sweep.sustain, filter.adsr);
+    const knob = this.routing.cutoffBase ? (this.routing.knobHz ?? 0) : 0;
+    const base = keyFollowedCutoff(positive(filter.cutoffHz, 2000), pitch, filter.keyFollow);
+    const sweep = filterSweep(base, filter.envAmountOctaves, filter.envAmount, filter.adsr.sustain);
+    this.filterFromHz = sweep.base - knob;
+    this.sustainOffsetHz = sweep.sustain - knob;
+    applyEnvelope(
+      this.filter.frequency,
+      envelopeEvents(atSec, this.filterFromHz, sweep.peak - knob, this.sustainOffsetHz, filter.adsr, releaseAtSec),
+    );
   }
 
   private stopAt(atSec: number): void {
@@ -422,7 +450,12 @@ export class SynthVoice {
  * a runaway pattern must degrade rather than allocate without limit.
  */
 export class SynthVoiceBank {
+  /** Notes still held: what the ceiling counts and a key-up releases. */
   private voices: SynthVoice[] = [];
+  /** Notes let go — or sequenced, written with their release — until they end. */
+  private ringing: SynthVoice[] = [];
+  /** Notes stolen or silenced, fading out; no longer counted. */
+  private fading: SynthVoice[] = [];
   private disposed = false;
   private readonly maxVoices: number;
 
@@ -434,7 +467,13 @@ export class SynthVoiceBank {
     this.maxVoices = Math.max(1, Math.round(maxVoices));
   }
 
+  /** Notes sounding: held, or ringing out their release. */
   get activeCount(): number {
+    return this.voices.length + this.ringing.length;
+  }
+
+  /** Notes still held — what the ceiling limits. */
+  get heldCount(): number {
     return this.voices.length;
   }
 
@@ -455,7 +494,11 @@ export class SynthVoiceBank {
       this.context, routing.destination ?? this.destination, settings, note, velocity, atSec, routing,
     );
     voice.onended = () => this.forget(voice);
-    this.voices.push(voice);
+    // A sequenced note is let go when it is written, as the original's are:
+    // it rings to its end without counting against the ceiling, which only
+    // ever limits notes still held.
+    if (voice.isReleased) this.ringing.push(voice);
+    else this.voices.push(voice);
   }
 
   noteOff(note: number, atSec: number): void {
@@ -464,21 +507,29 @@ export class SynthVoiceBank {
 
   /** Everything off, now. */
   panic(atSec: number): void {
-    for (const voice of this.voices) voice.steal(atSec);
+    for (const voice of [...this.voices, ...this.ringing]) voice.steal(atSec);
+    this.fading.push(...this.voices, ...this.ringing);
     this.voices = [];
+    this.ringing = [];
   }
 
   dispose(): void {
     this.disposed = true;
-    for (const voice of this.voices) voice.dispose();
+    for (const voice of [...this.voices, ...this.ringing, ...this.fading]) voice.dispose();
     this.voices = [];
+    this.ringing = [];
+    this.fading = [];
   }
 
   private release(note: number, atSec: number): void {
     const remaining: SynthVoice[] = [];
     for (const voice of this.voices) {
-      if (voice.note === note) voice.release(atSec);
-      else remaining.push(voice);
+      if (voice.note === note) {
+        voice.release(atSec);
+        this.ringing.push(voice);
+      } else {
+        remaining.push(voice);
+      }
     }
     this.voices = remaining;
   }
@@ -491,11 +542,14 @@ export class SynthVoiceBank {
       }
       const [victim] = this.voices.splice(oldest, 1);
       victim.steal(atSec);
+      this.fading.push(victim);
     }
   }
 
   private forget(voice: SynthVoice): void {
     this.voices = this.voices.filter((candidate) => candidate !== voice);
+    this.ringing = this.ringing.filter((candidate) => candidate !== voice);
+    this.fading = this.fading.filter((candidate) => candidate !== voice);
   }
 }
 

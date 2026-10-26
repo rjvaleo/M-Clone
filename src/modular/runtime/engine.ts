@@ -492,6 +492,11 @@ export class ModularRuntime {
     for (let i = 0; i < drained; i++) {
       const event = this.drainBuffer[i];
       event.atSec = this.tempo.tickToSeconds(event.atTick);
+      // A note's step in seconds, known when it starts — as the original
+      // knows each step's length when it schedules the note.
+      event.stepSec = event.type === "note-on" && event.stepTicks > 0
+        ? this.tempo.tickToSeconds(event.atTick + event.stepTicks) - event.atSec
+        : 0;
       // A stale release still repairs a device; a stale attack is just noise.
       if (event.type === "note-on" && event.atSec < cutoff) {
         this.eventPool.release(event);

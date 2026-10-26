@@ -1097,6 +1097,7 @@ export class MidiOutputProcessor extends BaseProcessor {
         change.portId = this.nodeId;
         change.channel = channel;
         change.program = clampInt(note.controlValue, 0, 127);
+        change.stepTicks = 0;
         change.sequence = this.sequence++;
         this.sink.submit(change);
         continue;
@@ -1116,6 +1117,9 @@ export class MidiOutputProcessor extends BaseProcessor {
       on.detuneCents = note.detuneCents;
       on.velocity = note.velocity;
       on.noteId = noteId;
+      // The note's slot: its length before the gate shaped it, as a gate
+      // processor records the multiplier it applied.
+      on.stepTicks = note.gate > 0 ? note.durationTicks / note.gate : duration;
       on.sequence = this.sequence++;
       this.sink.submit(on);
 
@@ -1128,6 +1132,7 @@ export class MidiOutputProcessor extends BaseProcessor {
       off.detuneCents = note.detuneCents;
       off.velocity = 0;
       off.noteId = noteId;
+      off.stepTicks = 0;
       off.sequence = this.sequence++;
       this.sink.submit(off);
     }

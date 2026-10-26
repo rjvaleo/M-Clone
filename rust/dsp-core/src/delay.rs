@@ -78,6 +78,26 @@ impl DelayLine {
         newer + (older - newer) * frac
     }
 
+    /// Read at a fractional delay exactly as Chromium's `Delay` reads: the
+    /// read position `write + length − delay` in double precision, the two
+    /// samples either side, and `s1 + f·(s2 − s1)` with `f` in single. Read
+    /// *before* pushing the current sample; the delay is held to one sample
+    /// or more, which a delay inside a feedback loop always is.
+    #[inline(always)]
+    pub fn read_web(&self, delay_samples: f64) -> f32 {
+        let length = self.buffer.len() as f64;
+        let d = delay_samples.clamp(1.0, self.max_delay_samples() as f64);
+        let mut position = self.write as f64 + length - d;
+        if position >= length {
+            position -= length;
+        }
+        let first = position as usize;
+        let factor = (position - first as f64) as f32;
+        let s1 = self.buffer[first & self.mask];
+        let s2 = self.buffer[(first + 1) & self.mask];
+        s1 + factor * (s2 - s1)
+    }
+
     /// Read at a fractional delay, cubic Hermite.
     ///
     /// Four-point Catmull-Rom. Linear interpolation would be cheaper and is what
@@ -401,5 +421,28 @@ mod tests {
         }
         let ratio = (energy_out / energy_in).sqrt();
         assert!((ratio - 1.0).abs() < 0.05, "in-band chain gain {ratio}");
+    }
+
+    #[test]
+    fn a_web_read_is_the_chromium_delays_and_agrees_with_the_linear_one() {
+        let mut line = DelayLine::new(0.1, 1_000.0);
+        for i in 0..50 {
+            line.push(i as f32);
+        }
+        // The input from 10.25 samples ago: a quarter of the way from 40 to 39.
+        assert!((line.read_web(10.25) - 39.75).abs() < 1e-5);
+        assert!((line.read_web(10.25) - line.read_linear(10.25)).abs() < 1e-5);
+        assert_eq!(line.read_web(0.0), 49.0);
+        // A delay this long reads its fraction in double: at 191 999.3
+        // samples the fraction an f32 delay keeps is 0.3125 — this keeps 0.3.
+        let mut long = DelayLine::new(4.01, 48_000.0);
+        for i in 0..200_000 {
+            long.push((i % 7) as f32);
+        }
+        let d = 191_999.3;
+        let newer = ((200_000 - 191_999) % 7) as f32;
+        let older = ((200_000 - 192_000) % 7) as f32;
+        let expected = newer + (older - newer) * 0.3;
+        assert!((long.read_web(d) - expected).abs() < 1e-4, "{}", long.read_web(d));
     }
 }

@@ -36,6 +36,59 @@ const clamp = (value: number, low: number, high: number): number =>
   Math.max(low, Math.min(high, value));
 
 /**
+ * How much of its step a note holds before it releases: `noteDur = stepDur
+ * · 0.85`. A sequenced note's step is its slot in the sequence, before any
+ * gate of the sequencer's own shortened it; the note releases at 85 % of it,
+ * whatever note-off follows.
+ */
+export const ORIGINAL_GATE = 0.85;
+export const MIN_GATE = 0.05;
+export const MAX_GATE = 1;
+
+/** When a note on a step of `stepSec`, starting at `atSec`, releases. */
+export const gateReleaseSec = (atSec: number, stepSec: number, gate: number): number =>
+  atSec + stepSec * clamp(Number.isFinite(gate) ? gate : ORIGINAL_GATE, MIN_GATE, MAX_GATE);
+
+/** An oscillator stops this long after its release: `osc.stop(time + noteDur + r + 0.05)`. */
+export const NOTE_TAIL_SEC = 0.05;
+
+/** One automation call, as `playNote` makes it. */
+export type EnvelopeEvent = { kind: "set" | "linear"; value: number; time: number };
+
+/**
+ * An envelope as `playNote` schedules it, all at once: `from` at the note,
+ * a ramp to `peak` over the attack and to `sustain` over the decay — and,
+ * when the release time is known, the sustain set at it and a ramp back to
+ * `from` over the release. The original writes these whatever their order in
+ * time; a timeline sorts them, so a gate inside the attack holds `from` until
+ * the gate, then jumps to the sustain and ramps on to the peak.
+ */
+export function envelopeEvents(
+  atSec: number,
+  from: number,
+  peak: number,
+  sustain: number,
+  times: { attack: number; decay: number; release: number },
+  releaseAtSec?: number,
+): EnvelopeEvent[] {
+  const attack = Math.max(0, times.attack);
+  const decay = Math.max(0, times.decay);
+  const events: EnvelopeEvent[] = [
+    { kind: "set", value: from, time: atSec },
+    { kind: "linear", value: peak, time: atSec + attack },
+    { kind: "linear", value: sustain, time: atSec + attack + decay },
+  ];
+  if (releaseAtSec !== undefined) events.push(...releaseEvents(releaseAtSec, sustain, from, times.release));
+  return events;
+}
+
+/** The release the original writes at the gate: the sustain, then a ramp to `to`. */
+export const releaseEvents = (atSec: number, sustain: number, to: number, releaseSec: number): EnvelopeEvent[] => [
+  { kind: "set", value: sustain, time: atSec },
+  { kind: "linear", value: to, time: atSec + Math.max(0, releaseSec) },
+];
+
+/**
  * The cutoff a note starts from: the knob, moved by key follow.
  *
  * `pitch` is fractional — the original measures the note from its frequency
@@ -87,7 +140,15 @@ export type LfoWave = (typeof LFO_WAVES)[number];
 export const MIN_LFO_RATE_HZ = 0.05;
 export const MAX_LFO_RATE_HZ = 20;
 
-/** What an LFO's depth is scaled against. */
+/**
+ * What an LFO's depth is scaled against.
+ *
+ * `cutoffHz` is the knob now: `updateFilter` rescales a filter LFO whenever
+ * the cutoff moves. `volume` and `delayWet` are the levels *as of the last
+ * time that LFO's own controls moved* — `updateVol` and `updateDelay` never
+ * touch an LFO's gain, so a volume LFO keeps the swing it was given until
+ * its rate, depth, wave or target is next touched.
+ */
 export type LfoScales = { cutoffHz: number; volume: number; delayWet: number };
 
 /**
@@ -111,6 +172,29 @@ export function lfoTargetGain(target: LfoTarget, depth: number, scales: LfoScale
     default:
       return 0;
   }
+}
+
+/** Where a note sits on the step grid: when it starts and its step's length. */
+export type PulseStep = { onsetSec: number; stepSec?: number };
+
+const known = (seconds: number | undefined): seconds is number =>
+  seconds !== undefined && Number.isFinite(seconds) && seconds > 0;
+
+/**
+ * How far a pulse LFO moves before a note — in seconds of its rate.
+ *
+ * The original advances it by `rate · stepDur` at every step, rests included,
+ * before the step plays. So from one note to the next it moves through the
+ * steps after the earlier note's, and this note's own:
+ * `(onset − previous onset) − previous step + this step`. A run's first note
+ * moves it by its own step. Without step lengths (notes played live) it moves
+ * by the time between notes, and not at all for the first.
+ */
+export function pulseAdvanceSec(previous: PulseStep | null, current: PulseStep): number {
+  if (!known(current.stepSec)) return previous ? current.onsetSec - previous.onsetSec : 0;
+  if (!previous) return current.stepSec;
+  if (!known(previous.stepSec)) return current.onsetSec - previous.onsetSec;
+  return current.onsetSec - previous.onsetSec - previous.stepSec + current.stepSec;
 }
 
 /**

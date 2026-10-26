@@ -211,6 +211,12 @@ pub trait Module: Send {
     /// argument rather than an optional one, so that a module which grows the
     /// ability to bend cannot quietly keep ignoring it.
     fn note_on(&mut self, _note: u8, _velocity: f32, _detune_cents: f32) {}
+    /// A sequenced note, which knows its step — its slot in the sequence, in
+    /// seconds — when it starts. An instrument that has no use for the step
+    /// plays it as any note; its note-off follows either way.
+    fn note_on_with_step(&mut self, note: u8, velocity: f32, detune_cents: f32, _step_sec: f32) {
+        self.note_on(note, velocity, detune_cents);
+    }
     fn note_off(&mut self, _note: u8) {}
     fn all_notes_off(&mut self) {}
 
@@ -435,6 +441,13 @@ impl Engine {
     pub fn note_on(&mut self, id: ModuleId, note: u8, velocity: f32, detune_cents: f32) {
         if let Some(slot) = self.slot_mut(id) {
             slot.module.note_on(note, velocity, detune_cents);
+        }
+    }
+
+    /// A sequenced note, with its step in seconds; see `Module::note_on_with_step`.
+    pub fn note_on_with_step(&mut self, id: ModuleId, note: u8, velocity: f32, detune_cents: f32, step_sec: f32) {
+        if let Some(slot) = self.slot_mut(id) {
+            slot.module.note_on_with_step(note, velocity, detune_cents, step_sec);
         }
     }
 
