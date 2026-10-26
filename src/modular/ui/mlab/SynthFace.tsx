@@ -122,7 +122,6 @@ export function SynthFace({ node, setParameter, setParameters, status }: MLabFac
               {knob("level", "Lvl", 0, 1, 0.01)}
               {knob("pan", "Pan", -1, 1, 0.01)}
               {knob("max-voices", "Vce", 1, 32, 1)}
-              {knob("gate", "Gate", 0.05, 1, 0.01)}
               {knob("volume", "Vol", 0, 1, 0.001)}
               <Scope width={40} height={26} read={(into) => host?.readScope?.(node.id, into) ?? false} />
             </div>

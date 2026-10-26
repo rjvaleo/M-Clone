@@ -8,7 +8,6 @@ import {
 } from "./synthVoice";
 import { emptyMatrix, setRouting, type ModSourceValues } from "./modMatrix";
 import { orderTimeline, timelineValueAt, type TimelineEvent } from "./webAudioLaws";
-import { ORIGINAL_GATE } from "./synthLaws";
 import {
   FakeAudioContext,
   FakeBiquad,
@@ -196,36 +195,32 @@ describe("The amplitude envelope", () => {
     expect(timelineValueAt(events, 96000, 48000)).toBe(1);
   });
 
-  it("writes a sequenced note's release at its gate, with the rest", () => {
+  it("holds its sustain until it is released, then releases over the release time", () => {
     // The numbers `voice.rs` pins: a 10 ms attack, 80 ms decay to 0.6, a
-    // 200 ms release, a 125 ms step gated at 85 %. Played at 0 s.
+    // 200 ms release. Played at 0 s. No gate: whatever its step, nothing is
+    // written for a release until the note-off.
     const ctx = context();
     const voice = play(ctx, {
       amp: { attack: 0.01, decay: 0.08, sustain: 0.6, release: 0.2 }, level: 1,
-    }, 69, 127, 0, { releaseAtSec: 0.125 * ORIGINAL_GATE });
+    }, 69, 127, 0);
+    expect(voice.isReleased).toBe(false);
+    const held = timeline(ampGain(ctx).gain);
+    // Past 85 % of a 125 ms step (5 100), past the step (6 000), and on.
+    expect([0, 240, 480, 2400, 4320, 5100, 6000, 12000].map((k) => timelineValueAt(held, k, 48000)))
+      .toEqual([0, 0.5, 1, 0.800000011920929, 0.6000000238418579, 0.6000000238418579, 0.6000000238418579, 0.6000000238418579]);
+    expect(of(ctx, FakeOscillator)[0].stops).toEqual([]);
+    // Released at 250 ms: the sustain, then down over 200 ms.
+    voice.release(0.25);
     expect(voice.isReleased).toBe(true);
-    const events = timeline(ampGain(ctx).gain);
-    expect([0, 240, 480, 2400, 4320, 5100, 5101, 9900, 14700].map((k) => timelineValueAt(events, k, 48000)))
-      .toEqual([0, 0.5, 1, 0.800000011920929, 0.6000000238418579, 0.6000000238418579, 0.5999374985694885, 0.30000001192092896, 0]);
+    const released = timeline(ampGain(ctx).gain);
+    expect([12000, 16800, 21600].map((k) => timelineValueAt(released, k, 48000)))
+      .toEqual([0.6000000238418579, 0.30000001192092896, 0]);
     // The oscillators stop 50 ms after the release ends.
-    expect(of(ctx, FakeOscillator)[0].stops).toEqual([0.125 * ORIGINAL_GATE + 0.2 + 0.05]);
-    // And a key coming up changes nothing.
-    voice.release(0.05);
-    expect(of(ctx, FakeOscillator)[0].stops).toHaveLength(1);
-  });
-
-  it("holds silence until a gate that falls inside the attack, as the original's events sort", () => {
-    const ctx = context();
-    play(ctx, {
-      amp: { attack: 0.15, decay: 0.08, sustain: 0.6, release: 0.2 }, level: 1,
-    }, 69, 127, 0, { releaseAtSec: 0.10625 });
-    const events = timeline(ampGain(ctx).gain);
-    expect([100, 5099, 5100, 5101, 6000, 7200, 9000, 11040].map((k) => timelineValueAt(events, k, 48000)))
-      .toEqual([0, 0, 0.6000000238418579, 0.6001905202865601, 0.7714285850524902, 1, 0.8125, 0.6000000238418579]);
+    expect(of(ctx, FakeOscillator)[0].stops).toEqual([0.25 + 0.2 + 0.05]);
   });
 
   it("writes a live release over the envelope without cancelling it", () => {
-    // From the key-up on, exactly the curve of a note sequenced to it.
+    // From the key-up on, the original's release curve, written over what is there.
     const ctx = context();
     const voice = play(ctx, {
       amp: { attack: 0.15, decay: 0.08, sustain: 0.6, release: 0.2 }, level: 1,
@@ -439,10 +434,13 @@ describe("Polyphony", () => {
     expect(voices.heldCount).toBe(1);
   });
 
-  it("lets a sequenced note ring without counting against the ceiling", () => {
+  it("lets a released note ring without counting against the ceiling", () => {
     const ctx = context();
     const voices = bank(ctx, 1);
-    for (const note of [60, 62, 64]) voices.noteOn(defaultSynthSettings(), note, 100, 0, { releaseAtSec: 0.1 });
+    for (const note of [60, 62, 64]) {
+      voices.noteOn(defaultSynthSettings(), note, 100, 0);
+      voices.noteOff(note, 0.1);
+    }
     expect(voices.heldCount).toBe(0);
     expect(voices.activeCount).toBe(3);
     voices.panic(1);

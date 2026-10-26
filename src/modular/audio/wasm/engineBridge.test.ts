@@ -931,8 +931,11 @@ describe("The plan-to-engine bridge", () => {
     const indices = Object.values(PARAM_INDICES["m.synth"]);
     expect(new Set(indices).size).toBe(indices.length);
     // And none of them stray past what the Rust module declares: `Synth` in
-    // modules.rs has PARAM_COUNT = 66, so 65 — the LFO touch — is the last valid index.
-    expect(Math.max(...indices)).toBe(65);
+    // modules.rs has PARAM_COUNT = 65, so 64 — the LFO touch — is the last valid index.
+    expect(Math.max(...indices)).toBe(64);
+    expect(PARAM_INDICES["m.synth"]["lfo-touch"]).toBe(64);
+    // The synth has no gate: note length is the sequencer's, by note-off.
+    expect(PARAM_INDICES["m.synth"]).not.toHaveProperty("gate");
   });
 
   it("every module kind it claims to support has parameter indices", () => {
@@ -1282,6 +1285,17 @@ describe("LFOs and their routes", () => {
     expect(engine.of("route")).toHaveLength(1);
     rack.update({ ...lfo([]), generation: 3 });
     expect(engine.of("unroute")).toEqual([`unroute:${l}:0→${d}.${PARAM_INDICES["m.audio-delay"].feedback}`]);
+  });
+
+  it("forgets a route when the module it reaches is removed, which drops the route itself", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(lfo([{ nodeId: "d", parameterId: "feedback" }]));
+    const l = rack.moduleIdOf("l")!;
+    rack.update({ ...plan([], [], 2), modulators: [node("l", "m.lfo", { rate: 2, shape: 0, amount: 0.5, phase: 0 })] });
+    expect(rack.moduleIdOf("l")).toBe(l);
+    // The engine dropped it with the module; there is nothing left to unroute.
+    expect(engine.of("unroute")).toEqual([]);
   });
 
   it("reports each LFO's phase and value", () => {

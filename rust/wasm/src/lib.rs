@@ -195,7 +195,8 @@ pub extern "C" fn note_on(module: u32, note: u32, velocity: f32, detune_cents: f
 }
 
 /// A sequenced note that knows its step — its slot in the sequence, in
-/// seconds — so the synth can gate it as the scale sequencer does.
+/// seconds — which the synth's pulse LFOs advance by. The step never sets the
+/// note's length: it holds until `note_off`.
 #[no_mangle]
 pub extern "C" fn note_on_with_step(module: u32, note: u32, velocity: f32, detune_cents: f32, step_sec: f32) {
     if !velocity.is_finite() || note > 127 {

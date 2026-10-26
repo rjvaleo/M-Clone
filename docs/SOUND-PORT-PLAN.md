@@ -171,21 +171,20 @@ full, and add drum step programming. Automation is not ported.
          `2/(nπ)·sin(nπw)`, its DC term dropped by the wave, normalised the
          same way — built per note at the note's width and kept for its life,
          on both backends (Rust used to read the width live).
-       - *Gate.* A sequenced note now knows its step when it starts (the
-         runtime carries `stepSec` on the note-on: the note's slot before any
-         gate shortened it) and releases at 85 % of it — `gate`, default 0.85
-         — with its release written with the rest of its envelope, as
-         `playNote` writes all five calls at once. The browser's timeline
-         sorts them, so a gate inside the attack holds silence until the gate
-         and jumps to the sustain, exactly as the original; Rust evaluates the
-         same timeline (`ParamTimeline`). Its note-off changes nothing.
-         Only idMLab's step sequencers send a step. M's notes (the
-         `playOnNode` path) carry none, so they keep M's own lengths and
-         release at M's note-off: M's Legato stays in charge of them. RJ's
-         choice, 26 Oct 2026. The
-         oscillators stop 50 ms after the release ends. A live note writes
-         the same release at its key-up, over what is scheduled rather than
-         cancelling it.
+       - *No gate.* The synth has no gate: note length is the sequencer's,
+         by note-off. On note-on the attack, decay and sustain run, and the
+         release plays out only when that note's note-off arrives, whatever
+         sent it — idMLab's step sequencers, M's notes (`playOnNode`) or a
+         key — on both backends; nothing schedules a release at note-on. The
+         classic shared filter follows the same rule: the latest note's
+         note-off releases its envelope. The 85 % was the original scale
+         sequencer's own note length (`noteDur = stepDur · 0.85` in its
+         `playNote`), the sequencer choosing how long its notes are; it was
+         wrongly ported into the synth as a `gate` parameter and is gone (RJ,
+         26 Oct 2026). The runtime still carries `stepSec` on a sequenced
+         note-on, only so the pulse LFOs can advance step by step. A release
+         is written over what is scheduled rather than cancelling it, and
+         the oscillators stop 50 ms after it ends.
        - *Cutoff glide.* `cancelAndHoldAtTime` + `setTargetAtTime(cutoff, now,
          0.015)` on Web Audio; on Rust the same curve (`TargetGlide`: the
          discrete time constant `1 − e^(−1/(fs·τ))`, converged at a render
@@ -225,10 +224,9 @@ full, and add drum step programming. Automation is not ported.
          ramp has started (jumping it back to the sustain) or not, run to run;
          and in the browser a knob move lands at the next render quantum, in
          Rust at the next sample.
-       - A live note (no step) cannot know its gate in advance: from its
-         key-up it follows the original's curve, but a key-up inside the
-         attack cannot give the silence the original's sorted events give
-         before the gate. Sequenced notes are exact.
+       - A note-off inside the attack is written over the attack from that
+         moment, so it does not give the silence the original's sorted
+         events give when its own 85 % note length falls inside the attack.
        - Loading a preset, the original applies the delay wet after the LFO
          sliders, so an LFO whose menus the preset does not store keeps the
          wet from before the preset; here a load is one moment and every LFO

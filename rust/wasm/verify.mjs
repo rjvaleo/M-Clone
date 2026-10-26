@@ -25,7 +25,7 @@ const GAIN_PARAM = { GAIN: 0, LEVEL: 1, MUTE: 2 };
 const SYNTH_PARAM = {
   LEVEL: 0, OSC1_WAVE: 1, CUTOFF: 16, RESONANCE: 17, AMP_ATTACK: 20, AMP_DECAY: 21, AMP_SUSTAIN: 22, AMP_RELEASE: 23,
   LFO1_RATE: 28 + 2, VOLUME: 39, CLASSIC: 44, SLFO_BASE: 45, DELAY_NOTE: 57, DELAY_FEEDBACK: 58, DELAY_WET: 59,
-  TAPE: 62, TEMPO: 63, GATE: 64,
+  TAPE: 62, TEMPO: 63, LFO_TOUCH: 64,
 };
 /** `ModSource` and `ModDest` in dsp-core/src/modmatrix.rs. */
 const MOD = { LFO1: 0, VOLUME: 11 };
@@ -313,8 +313,9 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
 
 // ---- the original, exactly ------------------------------------------------
 // The behaviours that make m.synth the scale sequencer's rather than like it,
-// each across the real ABI: the 85 % gate on a sequenced note's step, the
-// cutoff's 15 ms setTargetAtTime glide, and a volume LFO keeping the level it
+// each across the real ABI: no gate — a sequenced note holds until its
+// note-off, past its step, as a live note does — the cutoff's 15 ms
+// setTargetAtTime glide, and a volume LFO keeping the level it
 // was last touched at. The maths is pinned in `webaudio.rs` and `modules.rs`.
 {
   check("exports note_on_with_step", "note_on_with_step" in api);
@@ -345,31 +346,32 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
     return out;
   };
 
-  // A 125 ms step: held to 106.25 ms (quantum 41), silent from 107.25 ms on.
-  let s = rig([]);
-  api.note_on_with_step(s, 60, 1.0, 0.0, 0.125);
-  api.note_off(s, 60);
-  let level = levels(60);
-  check(`a sequenced note holds 85 % of its step (${level[38].toFixed(3)} at 101 ms)`, level[38] > 0.1);
-  check(`and is silent once released (${level[43].toExponential(1)} at 115 ms)`, level[43] < 1e-6);
-
-  s = rig([[SYNTH_PARAM.GATE, 0.5]]);
-  api.note_on_with_step(s, 60, 1.0, 0.0, 0.125);
-  level = levels(30);
-  check("a gate of a half releases at half the step", level[22] > 0.1 && level[26] < 1e-6);
-
-  s = rig([]);
-  api.note_on_with_step(s, 60, 1.0, 0.0, Number.NaN);
-  level = levels(60);
-  check("a step that is no step holds like a live note", level[55] > 0.1);
+  // No gate: a note sent with its 125 ms step keeps sounding past 85 % of it
+  // (106.25 ms, quantum 41), past the step (quantum 47) and on, until its
+  // note-off; then it releases over its 1 ms release and is silent.
+  for (const [label, start] of [
+    ["a sequenced note", (s) => api.note_on_with_step(s, 60, 1.0, 0.0, 0.125)],
+    ["a live note", (s) => api.note_on(s, 60, 1.0, 0.0)],
+    ["a step that is no step", (s) => api.note_on_with_step(s, 60, 1.0, 0.0, Number.NaN)],
+  ]) {
+    const s = rig([]);
+    start(s);
+    const held = levels(120);
+    check(`${label} holds past 85 % of the step (${held[44].toFixed(3)} at 120 ms)`, held[44] > 0.1);
+    check(`${label} holds past the step (${held[60].toFixed(3)} at 160 ms)`, held[60] > 0.1);
+    check(`${label} holds until its note-off (${held[119].toFixed(3)} at 320 ms)`, held[119] > 0.1);
+    api.note_off(s, 60);
+    const released = levels(4);
+    check(`${label} releases at its note-off (${released[3].toExponential(1)} 8 ms after)`, released[3] < 1e-6);
+  }
 
   // The knob from 100 Hz to 1 kHz under a 1 kHz sine: 5 ms on, a 15 ms
   // time constant has the cutoff near 355 Hz — still well down.
-  s = rig([[SYNTH_PARAM.CUTOFF, 100], [SYNTH_PARAM.RESONANCE, 0]]);
+  let s = rig([[SYNTH_PARAM.CUTOFF, 100], [SYNTH_PARAM.RESONANCE, 0]]);
   api.note_on(s, 83, 1.0, 0.0);
   levels(40);
   api.set_param(s, SYNTH_PARAM.CUTOFF, 1000);
-  level = levels(2);
+  let level = levels(2);
   const early = levels(1)[0];
   level = levels(40);
   const settled = level[39];

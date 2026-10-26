@@ -826,7 +826,7 @@
 .mm-node.mm-node--n4 .n4-synth__wave .n4-spinner select { min-height: 0; padding: 0; border: 0; background: none; width: 34px; height: 9px; text-align: center; font: 7px/8px var(--n4-pixel); -webkit-font-smoothing: none; text-shadow: none; }
 .n4-synth__outhead { display: flex; align-items: center; gap: 3px; }
 .n4-synth__outhead .n4-button { min-width: 0; height: 9px; min-height: 9px; padding: 0 3px; line-height: 7px; font-size: 6.5px; }
-.n4-synth__out { display: grid; grid-template-columns: repeat(3, 26px) 40px; gap: 1px; align-items: center; }
+.n4-synth__out { display: grid; grid-template-columns: repeat(4, 26px) 40px; gap: 1px; align-items: center; }
 .n4-scope { display: block; border-radius: 2px; background: var(--n4-well); box-shadow: inset 0 0 0 1px var(--n4-deep); }
 .n4-synth__side { display: grid; gap: 3px; align-content: start; min-width: 0; }
 .n4-synth__row { align-content: start; }

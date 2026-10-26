@@ -35,7 +35,7 @@ use crate::sampler::{semitone_ratio, Sampler, SamplerSettings, NO_SAMPLE};
 use crate::reverb::Blackhole;
 use crate::voice::{
     filter_sweep, key_followed_cutoff, write_envelope, write_release, AdsrSettings, LfoSettings, VoiceSettings,
-    ORIGINAL_GATE, OSC_COUNT,
+    OSC_COUNT,
 };
 use crate::webaudio::{BasicShape, ParamTimeline, TargetGlide, WebLowpass, WebOsc};
 use crate::tape::{delay_seconds, TapeDelay, DELAY_BEATS, TAPE_IPS, TEMPO_GLIDE_DELAY_S};
@@ -294,8 +294,9 @@ impl Module for AudioOutput {
 ///   original never rescales those when the level moves.
 /// - **The pulse LFOs** advance step by step, rests included, before each step
 ///   plays: from one note to the next, through the steps between and its own.
-/// - **The gate**: a sequenced note knows its step and releases at 85 % of it,
-///   its release written with the rest of its envelope.
+/// - **No gate**: a note holds on its sustain until its note-off, whatever
+///   sent it, so its length is the sequencer's. A step only moves the pulse
+///   LFOs; it never schedules a release.
 /// - Then a dry path and the ping-pong tape delay (`tape.rs`), then the master.
 ///
 /// # Units
@@ -343,13 +344,11 @@ pub struct Synth {
     classic_filter: WebLowpass,
     /// The classic filter's envelope, as an offset from the knob in hertz.
     classic_env: ParamTimeline,
-    /// The live note that owns the classic envelope, and what it releases to.
+    /// The note that owns the classic envelope, and what it releases to.
     classic_hold: Option<ClassicHold>,
     delay: TapeDelay,
     /// The note value and tempo the delay was last timed for, as raw values.
     timed: Option<(f32, f32)>,
-    /// How much of a sequenced note's step it holds.
-    gate: f32,
 }
 
 /// A cutoff that is a positive number, or the fallback.
@@ -440,12 +439,10 @@ impl Synth {
     pub const DELAY_HICUT: usize = 61;
     pub const TAPE: usize = 62;
     pub const TEMPO: usize = 63;
-    /// How much of a sequenced note's step it holds: the original's 0.85.
-    pub const GATE: usize = 64;
     /// Moved by a preset load or a morph frame, which touch all three LFOs.
-    pub const LFO_TOUCH: usize = 65;
+    pub const LFO_TOUCH: usize = 64;
 
-    pub const PARAM_COUNT: usize = 66;
+    pub const PARAM_COUNT: usize = 65;
 
     /// An LFO's targets, in the original's menu order — the wire value.
     pub const TARGET_NONE: u32 = 0;
@@ -485,7 +482,6 @@ impl Synth {
             classic_hold: None,
             delay: TapeDelay::new(rate),
             timed: None,
-            gate: ORIGINAL_GATE,
         }
     }
 
@@ -689,16 +685,15 @@ impl Synth {
         swing
     }
 
-    /// A note, sequenced (with its step) or live.
+    /// A note, sequenced (with its step) or live. Either way it holds until
+    /// its note-off: the step only advances the pulse LFOs.
     fn start_note(&mut self, note: u8, velocity: f32, detune_cents: f32, step: Option<f64>) {
         let swing = self.pulse_swing(step);
         // Kept on the module's settings too, so the next sample's copy to the
         // bank carries it rather than resetting it.
         self.settings.pw_swing = swing;
         self.bank.settings_mut().pw_swing = swing;
-        let gate = clamp(self.gate, 0.05, 1.0) as f64;
-        let release_after = step.filter(|s| s.is_finite() && *s > 0.0).map(|s| (s * gate) as f32);
-        self.bank.note_on_gated(note, velocity, detune_cents, release_after);
+        self.bank.note_on(note, velocity, detune_cents);
 
         if self.settings.classic {
             // Retrigger the shared filter, as `playNote` does.
@@ -710,13 +705,9 @@ impl Synth {
                 base, self.settings.filter_env_octaves, self.settings.filter_env_amount, env.sustain,
             );
             let now = self.clock;
-            let release_at = release_after.map(|r| now + r as f64);
             self.classic_env.cancel_scheduled_values(now);
-            write_envelope(&mut self.classic_env, now, base - knob, peak - knob, sustain - knob, env, release_at);
-            self.classic_hold = match release_at {
-                Some(_) => None,
-                None => Some(ClassicHold { note, sustain: sustain - knob, base: base - knob, release: env.release }),
-            };
+            write_envelope(&mut self.classic_env, now, base - knob, peak - knob, sustain - knob, env);
+            self.classic_hold = Some(ClassicHold { note, sustain: sustain - knob, base: base - knob, release: env.release });
         }
     }
 }
@@ -724,7 +715,6 @@ impl Synth {
 impl Module for Synth {
     fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
         self.read(ports);
-        self.gate = Self::finite(ports.param(Self::GATE), ORIGINAL_GATE);
         self.follow_knob(ports);
         self.run_lfos(ports);
         self.time_delay(ports);
@@ -803,7 +793,7 @@ impl Module for Synth {
 
     fn note_off(&mut self, note: u8) {
         self.bank.note_off(note);
-        // Only the live note that last struck the shared filter releases it,
+        // Only the note that last struck the shared filter releases it,
         // written over what is scheduled, as the original writes its release.
         if let Some(hold) = self.classic_hold.filter(|hold| hold.note == note) {
             write_release(&mut self.classic_env, self.clock, hold.sustain, hold.base, hold.release);
@@ -900,7 +890,6 @@ impl Module for Synth {
             Self::DELAY_HICUT => 200.0 * 100f32.powf(0.75),
             Self::TAPE => 2.0,
             Self::TEMPO => 120.0,
-            Self::GATE => ORIGINAL_GATE,
             _ => 0.0,
         }
     }
@@ -5397,32 +5386,36 @@ mod scale_sequencer_tests {
     }
 
     #[test]
-    fn a_sequenced_note_releases_at_85_percent_of_its_step() {
-        let mut bench = Bench::new();
-        bench.set(Synth::CLASSIC, 1.0).set(Synth::AMP_ATTACK, 1.0).set(Synth::AMP_DECAY, 1.0);
-        bench.set(Synth::AMP_SUSTAIN, 1.0).set(Synth::AMP_RELEASE, 1.0);
-        bench.set(Synth::OSC_BASE + Synth::OSC_WAVE, 3.0);
-        bench.step();
-        bench.synth.note_on_with_step(60, 1.0, 0.0, 0.125);
-        // A note-off before the gate changes nothing: the release is written.
-        bench.synth.note_off(60);
-        let samples = bench.run(0.2);
-        let held = peak(&samples[4_000..5_000]);
-        assert!(held > 0.3, "{held}");
-        // 0.85 · 125 ms = 106.25 ms, then a 1 ms release and a 50 ms tail.
-        assert!(peak(&samples[5_200..]) < held * 0.01);
-        assert_eq!(bench.synth.active_voices(), 0);
-        // A gate of a half.
-        bench.set(Synth::GATE, 0.5);
-        bench.step();
-        bench.synth.note_on_with_step(62, 1.0, 0.0, 0.125);
-        let short = bench.run(0.1);
-        assert!(peak(&short[2_800..2_900]) > 0.3);
-        assert!(peak(&short[3_100..3_200]) < 1e-3);
-        // A step that is no step is a live note.
-        bench.synth.note_on_with_step(64, 1.0, 0.0, f32::NAN);
-        bench.run(0.2);
-        assert_eq!(bench.synth.active_voices(), 1);
+    fn a_note_holds_its_sustain_until_its_note_off_whatever_sent_it() {
+        // No gate: a step is no release. Sequenced (with its step) or live,
+        // the note holds past 85 % of a 125 ms step and past the step itself,
+        // and releases over the release time from its note-off.
+        for step in [Some(0.125f32), None] {
+            let mut bench = Bench::new();
+            bench.set(Synth::CLASSIC, 1.0).set(Synth::AMP_ATTACK, 1.0).set(Synth::AMP_DECAY, 1.0);
+            bench.set(Synth::AMP_SUSTAIN, 1.0).set(Synth::AMP_RELEASE, 100.0);
+            bench.set(Synth::OSC_BASE + Synth::OSC_WAVE, 0.0);
+            bench.step();
+            match step {
+                Some(step) => bench.synth.note_on_with_step(60, 1.0, 0.0, step),
+                None => bench.synth.note_on(60, 1.0, 0.0),
+            }
+            let held = bench.run(0.3);
+            let level = peak(&held[1_000..2_000]);
+            assert!(level > 0.3, "{step:?}: {level}");
+            // 85 % of the step is frame 5 100, the step 6 000; held to 300 ms.
+            assert!(peak(&held[5_100..6_000]) > level * 0.99, "{step:?}");
+            assert!(peak(&held[6_000..7_000]) > level * 0.99, "{step:?}");
+            assert!(peak(&held[13_400..14_400]) > level * 0.99, "{step:?}");
+            assert_eq!(bench.synth.active_voices(), 1);
+            bench.synth.note_off(60);
+            let released = bench.run(0.2);
+            // Halfway down the 100 ms release, then silent and free.
+            let half = peak(&released[2_350..2_450]);
+            assert!(half > level * 0.45 && half < level * 0.55, "{step:?}: {half} of {level}");
+            assert!(peak(&released[4_850..]) < level * 1e-3, "{step:?}");
+            assert_eq!(bench.synth.active_voices(), 0);
+        }
     }
 
     #[test]
@@ -5574,6 +5567,33 @@ mod scale_sequencer_tests {
         bench.run(0.2);
         assert!((bench.synth.classic_offset() - 4_500.0).abs() < 1e-2);
         // …the newest note's does, back to its base over the release.
+        bench.synth.note_off(72);
+        bench.run(0.15);
+        assert!((bench.synth.classic_offset() - 2_250.0).abs() < 20.0);
+        bench.run(0.2);
+        assert!(bench.synth.classic_offset().abs() < 1e-3);
+    }
+
+    #[test]
+    fn classic_holds_a_sequenced_notes_shared_envelope_until_the_last_note_off() {
+        // No gate on the shared filter either: past 85 % of its step and past
+        // the step, the sustain holds; the latest note's note-off releases it.
+        let mut bench = Bench::new();
+        bench.set(Synth::CLASSIC, 1.0).set(Synth::CUTOFF, 1_000.0).set(Synth::FILTER_ENV_AMOUNT, 1.0);
+        bench.set(Synth::FILTER_ATTACK, 10.0).set(Synth::FILTER_DECAY, 150.0);
+        bench.set(Synth::FILTER_SUSTAIN, 0.3).set(Synth::FILTER_RELEASE, 300.0);
+        bench.run(0.05);
+        bench.synth.note_on_with_step(60, 1.0, 0.0, 0.125);
+        bench.run(0.25);
+        assert!((bench.synth.classic_offset() - 4_500.0).abs() < 1e-2, "{}", bench.synth.classic_offset());
+        bench.synth.note_on_with_step(72, 1.0, 0.0, 0.125);
+        bench.run(0.5);
+        assert!((bench.synth.classic_offset() - 4_500.0).abs() < 1e-2);
+        // The older note's note-off leaves it alone…
+        bench.synth.note_off(60);
+        bench.run(0.1);
+        assert!((bench.synth.classic_offset() - 4_500.0).abs() < 1e-2);
+        // …the latest note's releases it, back to its base over the release.
         bench.synth.note_off(72);
         bench.run(0.15);
         assert!((bench.synth.classic_offset() - 2_250.0).abs() < 20.0);

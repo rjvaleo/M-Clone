@@ -75,7 +75,8 @@ export type ScheduledEvent =
    * library ended up sounding like 12-TET on this path.
    *
    * `stepSec` is the note's step as sequenced, when it has one — what the
-   * synth gates a note by (see `NotePlayer.noteOn`).
+   * synth's pulse LFOs advance by (see `NotePlayer.noteOn`). It never sets
+   * the note's length: the note-off does.
    */
   | { type: "note-on"; note: number; velocity: number; detuneCents: number; stepSec?: number }
   | { type: "note-off"; note: number }

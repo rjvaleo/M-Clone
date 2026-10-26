@@ -291,9 +291,6 @@ const SYNTH = defineModule({
     numberParam("amp-decay", "Decay", 150, 0, 4000, 1, "ms"),
     numberParam("amp-sustain", "Sustain", 0.7, 0, 1, 0.01),
     numberParam("amp-release", "Release", 250, 0, 8000, 1, "ms"),
-    // How much of a sequenced note's step it holds before it releases: the
-    // scale sequencer's 85 %. A note played live holds until its key-up.
-    numberParam("gate", "Gate", 0.85, 0.05, 1, 0.01),
     levelParam(),
     numberParam("pan", "Pan", 0, -1, 1, 0.01),
     numberParam("max-voices", "Voices", 16, 1, 32, 1),
@@ -326,7 +323,7 @@ const SYNTH = defineModule({
   face: [
     presetSection("synth-presets", "Synth presets", [
       "cutoff", "resonance", "key-follow", "filter-amount", "filter-env",
-      "amp-attack", "amp-decay", "amp-sustain", "amp-release", "gate",
+      "amp-attack", "amp-decay", "amp-sustain", "amp-release",
       "level", "pan", "volume", "classic",
       ...SYNTH_LFOS.map((parameter) => parameter.id),
       ...SYNTH_DELAY.map((parameter) => parameter.id),
@@ -338,7 +335,7 @@ const SYNTH = defineModule({
     ].map((parameter) => parameter.id).concat([
       "cutoff", "resonance", "key-follow", "filter-amount", "filter-env",
       "filter-attack", "filter-decay", "filter-sustain", "filter-release",
-      "amp-attack", "amp-decay", "amp-sustain", "amp-release", "gate",
+      "amp-attack", "amp-decay", "amp-sustain", "amp-release",
       "level", "pan", "max-voices", "volume", "classic", "morph-time", "lfo-touch", "mute", "matrix",
       ...SYNTH_LFOS.map((parameter) => parameter.id),
       ...SYNTH_DELAY.map((parameter) => parameter.id),

@@ -5,6 +5,7 @@ import { isNotePlayer } from "./players";
 import {
   FakeAudioContext,
   FakeBiquad,
+  FakeGain,
   FakeNode,
   FakeOscillator,
 } from "./testing/fakeContext";
@@ -111,21 +112,27 @@ describe("Playing notes", () => {
     expect(player.activeVoices).toBe(0);
   });
 
-  it("gates a sequenced note at 85 % of its step, whatever note-off follows", () => {
-    const { context, player } = rig({ parameters: { "amp-release": 200 } });
-    player.noteOn(60, 100, 1, 0, 0.5);
+  // The synth has no gate: a note's length is whatever sent it, by its note-off.
+  it.each([
+    ["a sequenced note", 0.5],
+    ["a live note", undefined],
+  ])("holds %s on its sustain until its note-off, then releases", (_kind, stepSec) => {
+    const { context, player } = rig({ parameters: { "amp-attack": 10, "amp-decay": 80, "amp-release": 200 } });
+    player.noteOn(60, 100, 1, 0, stepSec);
     const voiceOsc = of(context, FakeOscillator).slice(-3)[0];
-    expect(voiceOsc.stops).toEqual([1 + 0.5 * 0.85 + 0.2 + 0.05]);
-    player.noteOff(60, 1.1);
-    expect(voiceOsc.stops).toHaveLength(1);
-  });
-
-  it("gates by its own gate, and plays a step that is no step as a live note", () => {
-    const { context, player } = rig({ parameters: { gate: 0.5, "amp-release": 100 } });
-    player.noteOn(60, 100, 1, 0, 0.5);
-    expect(of(context, FakeOscillator).slice(-3)[0].stops).toEqual([1 + 0.25 + 0.1 + 0.05]);
-    player.noteOn(62, 100, 2, 0, 0);
-    expect(of(context, FakeOscillator).slice(-3)[0].stops).toEqual([]);
+    const amp = of(context, FakeGain)[0];
+    // Attack, decay, then the sustain: nothing written for a release.
+    expect(amp.gain.moves().map((call) => [call.method, call.time])).toEqual([
+      ["set", 1], ["linear", 1.01], ["linear", 1.09],
+    ]);
+    expect(voiceOsc.stops).toEqual([]);
+    // Past 85 % of the step and past the step itself, still held.
+    expect(player.activeVoices).toBe(1);
+    player.noteOff(60, 2);
+    expect(amp.gain.moves().slice(3).map((call) => [call.method, call.time])).toEqual([
+      ["set", 2], ["linear", 2.2],
+    ]);
+    expect(voiceOsc.stops).toEqual([2 + 0.2 + 0.05]);
   });
 
   it("plays several notes at once", () => {
@@ -168,13 +175,11 @@ describe("Reading the settings a document stores", () => {
   it("falls back to a patch that makes a sound", () => {
     // Plus an empty matrix and the module's chain: a patch is the settings,
     // their routings, and what comes after the voices.
-    const { matrix, classic, gate, volume, lfos, delay, ...settings } = readSynthSettings({}, {});
+    const { matrix, classic, volume, lfos, delay, ...settings } = readSynthSettings({}, {});
     expect(settings).toEqual(defaultSynthSettings());
     expect(matrix).toEqual(emptyMatrix());
     // Nothing the scale sequencer added is heard until it is asked for.
     expect(classic).toBe(false);
-    // The original's gate, on any note that arrives with its step.
-    expect(gate).toBe(0.85);
     expect(volume).toBe(1);
     expect(lfos.map((lfo) => lfo.depth)).toEqual([0, 0, 0]);
     expect(delay.wet).toBe(0);

@@ -16,11 +16,11 @@
 //!   as the original builds a `PeriodicWave` per note.
 //! - **Frequency** is computed as the browser computes it: the note's hertz
 //!   as an `AudioParam` holds it, times `2^(detune/1200)` in single precision.
-//! - **Envelopes** are the calls `playNote` makes, on a Web Audio timeline
-//!   (`ParamTimeline`). A sequenced note knows its gate and writes its release
-//!   at the start, so a gate inside the attack holds silence until the gate
-//!   and then jumps to the sustain, as the original does. A note played live
-//!   writes the same release when its key comes up, over what is there.
+//! - **Envelopes** are the original's calls, on a Web Audio timeline
+//!   (`ParamTimeline`). A note starts with its attack, decay and sustain, and
+//!   the sustain holds: the synth has no gate, so a note's length is decided
+//!   by whatever sent it. Its release is written when its note-off arrives —
+//!   from a sequencer or a key alike — over what is there.
 //! - **The filter** is Web Audio's lowpass (`WebLowpass`), its frequency the
 //!   module's cutoff knob — gliding as the original's `setTargetAtTime` does —
 //!   plus this note's envelope as an offset from the knob, plus the LFOs.
@@ -71,8 +71,6 @@ pub const FILTER_ENV_SPAN: f32 = 15.0;
 pub const MIN_MODULATED_PW: f32 = 0.05;
 pub const MAX_MODULATED_PW: f32 = 0.95;
 
-/// The original's gate: a note holds 85 % of its step.
-pub const ORIGINAL_GATE: f32 = 0.85;
 /// An oscillator stops this long after its amp release ends.
 pub const NOTE_TAIL_SEC: f32 = 0.05;
 /// A stolen voice fades on this time constant, and stops after twice it.
@@ -116,29 +114,19 @@ pub fn filter_sweep(base: f32, octaves: f32, amount: f32, sustain: f32) -> (f32,
     )
 }
 
-/// The calls `playNote` makes for one envelope, onto `timeline`: `from` at the
-/// note, ramps to `peak` and `sustain`, and — when the release time is known —
-/// the sustain at it and a ramp back to `from`. Times in seconds from the note.
-pub fn write_envelope(
-    timeline: &mut ParamTimeline,
-    at: f64,
-    from: f32,
-    peak: f32,
-    sustain: f32,
-    times: AdsrSettings,
-    release_at: Option<f64>,
-) {
+/// One envelope as a note starts it, onto `timeline`: `from` at the note,
+/// ramps to `peak` and `sustain`, and the sustain holds. Nothing is written
+/// for the release: the synth has no gate, so a note releases only at its
+/// note-off (`write_release`). Times in seconds.
+pub fn write_envelope(timeline: &mut ParamTimeline, at: f64, from: f32, peak: f32, sustain: f32, times: AdsrSettings) {
     let attack = times.attack.max(0.0) as f64;
     let decay = times.decay.max(0.0) as f64;
     timeline.set_value_at_time(from, at);
     timeline.linear_ramp_to_value_at_time(peak, at + attack);
     timeline.linear_ramp_to_value_at_time(sustain, at + attack + decay);
-    if let Some(release) = release_at {
-        write_release(timeline, release, sustain, from, times.release);
-    }
 }
 
-/// The release the original writes at the gate: the sustain, then a ramp to `to`.
+/// The release written at a note-off: the sustain, then a ramp to `to`.
 pub fn write_release(timeline: &mut ParamTimeline, at: f64, sustain: f32, to: f32, release: f32) {
     timeline.set_value_at_time(sustain, at);
     timeline.linear_ramp_to_value_at_time(to, at + release.max(0.0) as f64);
@@ -446,18 +434,9 @@ impl Voice {
     /// Note on.
     ///
     /// `detune_cents` is the part of the pitch MIDI cannot say. `velocity` is
-    /// 0…1 and is heard squared, as the browser voice hears it. `release_after`
-    /// is, for a sequenced note, how long after its start it releases — the
-    /// gate — so its release is written with the rest of its envelope.
-    pub fn start(
-        &mut self,
-        note: u8,
-        velocity: f32,
-        detune_cents: f32,
-        settings: &VoiceSettings,
-        release_after: Option<f32>,
-        ctx: &mut WaveContext,
-    ) {
+    /// 0…1 and is heard squared, as the browser voice hears it. The note holds
+    /// on its sustain until `release`: there is no gate.
+    pub fn start(&mut self, note: u8, velocity: f32, detune_cents: f32, settings: &VoiceSettings, ctx: &mut WaveContext) {
         self.configure(settings);
         self.note = Some(note);
         // A non-finite value would poison the oscillator frequency for the
@@ -486,11 +465,10 @@ impl Voice {
             }
         }
 
-        let release_at = release_after.filter(|t| t.is_finite()).map(|t| t.max(0.0) as f64);
         let amp = settings.amp;
         self.sustain = clamp(amp.sustain, 0.0, 1.0);
         self.amp.clear();
-        write_envelope(&mut self.amp, 0.0, 0.0, 1.0, self.sustain, amp, release_at);
+        write_envelope(&mut self.amp, 0.0, 0.0, 1.0, self.sustain, amp);
 
         let env = settings.filter_env;
         let knob = positive(settings.knob_hz, 2_000.0);
@@ -501,25 +479,21 @@ impl Voice {
         self.filter_from = base - knob;
         self.sustain_offset = sustain - knob;
         self.filter_env.clear();
-        write_envelope(&mut self.filter_env, 0.0, self.filter_from, peak - knob, self.sustain_offset, env, release_at);
+        write_envelope(&mut self.filter_env, 0.0, self.filter_from, peak - knob, self.sustain_offset, env);
         self.filter_unit.clear();
-        write_envelope(&mut self.filter_unit, 0.0, 0.0, 1.0, clamp(env.sustain, 0.0, 1.0), env, release_at);
-        if let Some(release) = release_at {
-            self.released = true;
-            self.stop_at(release, amp.release);
-        }
+        write_envelope(&mut self.filter_unit, 0.0, 0.0, 1.0, clamp(env.sustain, 0.0, 1.0), env);
         for lfo in self.lfos.iter_mut() {
             lfo.retrigger();
         }
     }
 
-    fn stop_at(&mut self, release_at: f64, release: f32) {
-        let stop = release_at + release.max(0.0) as f64 + NOTE_TAIL_SEC as f64;
+    fn stop_at(&mut self, released_at: f64, release: f32) {
+        let stop = released_at + release.max(0.0) as f64 + NOTE_TAIL_SEC as f64;
         self.stop_frame = Some((stop * self.sample_rate as f64).ceil() as u64);
     }
 
     /// Note off: the sustain set now and a ramp down, written over what is
-    /// there. A note already let go — or written with its release — is left.
+    /// there. A note already let go is left.
     pub fn release(&mut self, settings: &VoiceSettings) {
         if self.released || !self.sounding {
             return;
@@ -706,10 +680,7 @@ mod tests {
             Self { voice: Voice::new(RATE, seed), ctx: WaveContext::new(RATE) }
         }
         fn start(&mut self, note: u8, velocity: f32, detune: f32, settings: &VoiceSettings) {
-            self.voice.start(note, velocity, detune, settings, None, &mut self.ctx);
-        }
-        fn start_gated(&mut self, note: u8, settings: &VoiceSettings, release_after: f32) {
-            self.voice.start(note, 1.0, 0.0, settings, Some(release_after), &mut self.ctx);
+            self.voice.start(note, velocity, detune, settings, &mut self.ctx);
         }
         fn next(&mut self, settings: &VoiceSettings) -> StereoSample {
             self.voice.next(settings, &mut self.ctx)
@@ -1136,53 +1107,41 @@ mod tests {
     }
 
     #[test]
-    fn a_sequenced_note_writes_its_release_at_the_gate() {
-        // Pinned in synthLaws.test.ts: a 10 ms attack, 80 ms decay to 0.6,
-        // a 200 ms release, a 125 ms step gated at 85 %.
+    fn a_note_holds_its_sustain_until_released_then_releases_over_the_release_time() {
+        // Pinned in synthVoice.test.ts: a 10 ms attack, 80 ms decay to 0.6, a
+        // 200 ms release. No gate: nothing is written for a release at the
+        // start, so the sustain holds past any step until the note-off.
         let (mut voice, mut settings) = voice();
         settings.classic = true;
         settings.amp = AdsrSettings { attack: 0.01, decay: 0.08, sustain: 0.6, release: 0.2 };
-        voice.start_gated(60, &settings, 0.125 * ORIGINAL_GATE);
-        assert!(voice.is_released());
-        let mut values = Vec::new();
-        for _ in 0..16_000 {
-            voice.next(&settings);
-            values.push(voice.amp.value());
-        }
-        for (k, expected) in [(0, 0.0f32), (240, 0.5), (480, 1.0), (2_400, 0.8), (4_320, 0.6), (5_100, 0.6), (5_101, 0.599_937_5), (9_900, 0.3), (14_700, 0.0)] {
-            assert!((values[k] - expected).abs() < 1e-5, "amp[{k}] = {}", values[k]);
-        }
-        // Stopped 50 ms after the release ends: 106.25 + 200 + 50 ms.
-        render(&mut voice, &settings, 0.022);
-        assert!(voice.is_active());
-        render(&mut voice, &settings, 0.002);
-        assert!(!voice.is_active());
-        settings.classic = false;
-        voice.start_gated(60, &settings, 0.0);
-        render(&mut voice, &settings, 0.2);
-        assert!(voice.is_active());
-        render(&mut voice, &settings, 0.06);
-        assert!(!voice.is_active());
-    }
-
-    #[test]
-    fn a_gate_inside_the_attack_holds_silence_until_the_gate() {
-        // The original's own event order: the sustain set at the gate sorts
-        // before the attack's end, so the note is silent until the gate, then
-        // jumps to the sustain and ramps on to the peak.
-        let (mut voice, mut settings) = voice();
-        settings.amp = AdsrSettings { attack: 0.15, decay: 0.08, sustain: 0.6, release: 0.2 };
-        voice.start_gated(60, &settings, 0.106_25);
+        voice.start(60, 1.0, 0.0, &settings);
+        assert!(!voice.is_released());
         let mut values = Vec::new();
         for _ in 0..12_000 {
             voice.next(&settings);
             values.push(voice.amp.value());
         }
-        // (Frame 5 100 is the gate itself; the step crosses the ABI as an f32,
-        // so a frame exactly on the gate is the one place the two can differ.)
-        for (k, expected) in [(100, 0.0f32), (5_099, 0.0), (5_101, 0.600_190_5), (6_000, 0.771_428_6), (7_200, 1.0), (9_000, 0.812_5), (11_040, 0.6)] {
-            assert!((values[k] - expected).abs() < 1e-4, "amp[{k}] = {}", values[k]);
+        // 85 % of a 125 ms step is frame 5 100, the step 6 000.
+        for (k, expected) in [(0, 0.0f32), (240, 0.5), (480, 1.0), (2_400, 0.8), (4_320, 0.6), (5_100, 0.6), (6_000, 0.6), (11_999, 0.6)] {
+            assert!((values[k] - expected).abs() < 1e-5, "amp[{k}] = {}", values[k]);
         }
+        assert!(voice.is_active());
+        // Released at 250 ms: the sustain, then down over 200 ms.
+        voice.release(&settings);
+        assert!(voice.is_released());
+        values.clear();
+        for _ in 0..9_601 {
+            voice.next(&settings);
+            values.push(voice.amp.value());
+        }
+        for (k, expected) in [(0, 0.6f32), (4_800, 0.3), (9_600, 0.0)] {
+            assert!((values[k] - expected).abs() < 1e-5, "release[{k}] = {}", values[k]);
+        }
+        // Stopped 50 ms after the release ends: 250 + 200 + 50 ms.
+        render(&mut voice, &settings, 0.049);
+        assert!(voice.is_active());
+        render(&mut voice, &settings, 0.002);
+        assert!(!voice.is_active());
     }
 
     #[test]
