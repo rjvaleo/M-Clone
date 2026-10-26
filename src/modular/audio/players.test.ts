@@ -474,15 +474,21 @@ describe("Routing note events to players", () => {
     controller: 0,
     value: 0,
     noteId: 1,
+    stepTicks: 0,
+    stepSec: 0,
     ...overrides,
   });
 
   class Spy {
     readonly nodeId = "p1";
     readonly ons: { note: number; at: number }[] = [];
+    readonly lengths: (number | undefined)[] = [];
     readonly offs: number[] = [];
     silenced = 0;
-    noteOn(note: number, _velocity: number, atSec: number) { this.ons.push({ note, at: atSec }); }
+    noteOn(note: number, _velocity: number, atSec: number, _detune?: number, stepSec?: number) {
+      this.ons.push({ note, at: atSec });
+      this.lengths.push(stepSec);
+    }
     noteOff(_note: number, atSec: number) { this.offs.push(atSec); }
     silence() { this.silenced += 1; }
   }
@@ -506,6 +512,12 @@ describe("Routing note events to players", () => {
     adapter.send([event({ atSec: 12 })], 1);
     expect(player.ons).toEqual([{ note: 36, at: 102 }]);
     expect(adapter.deliveredCount).toBe(1);
+  });
+
+  it("hands a sequenced note its step, and a live one none", () => {
+    const { player, adapter } = rig(100, 10);
+    adapter.send([event({ atSec: 12, stepSec: 0.25 }), event({ atSec: 12 })], 2);
+    expect(player.lengths).toEqual([0.25, undefined]);
   });
 
   it("plays a late note now rather than dropping it", () => {

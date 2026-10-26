@@ -7,11 +7,14 @@ import {
   type SynthSettings,
 } from "./synthVoice";
 import { emptyMatrix, setRouting, type ModSourceValues } from "./modMatrix";
+import { orderTimeline, timelineValueAt, type TimelineEvent } from "./webAudioLaws";
+import { ORIGINAL_GATE } from "./synthLaws";
 import {
   FakeAudioContext,
   FakeBiquad,
   FakeGain,
   FakeNode,
+  FakeConstantSource,
   FakeOscillator,
   FakeStereoPanner,
 } from "./testing/fakeContext";
@@ -43,10 +46,24 @@ const play = (
   note = 69,
   velocity = 100,
   atSec = 1,
+  routing: ConstructorParameters<typeof SynthVoice>[6] = {},
 ) => {
-  const voice = new SynthVoice(ctx, ctx.createGain(), settings(overrides), note, velocity, atSec);
+  const voice = new SynthVoice(ctx, ctx.createGain(), settings(overrides), note, velocity, atSec, routing);
   return voice;
 };
+
+/**
+ * A parameter's automation as the browser's timeline holds it: its calls,
+ * ordered as `InsertEvent` orders them, cancels applied.
+ */
+type TimelineCall = TimelineEvent | { kind: "cancel"; time: number };
+const timeline = (param: FakeGain["gain"]): TimelineEvent[] =>
+  orderTimeline(param.calls.flatMap((call): TimelineCall[] => {
+    if (call.method === "set") return [{ kind: "set", value: call.value, time: call.time }];
+    if (call.method === "linear") return [{ kind: "linear", value: call.value, time: call.time }];
+    if (call.method === "cancel") return [{ kind: "cancel", time: call.time }];
+    return [];
+  }));
 
 describe("Building a voice", () => {
   it("starts three oscillators, one per oscillator setting", () => {
@@ -167,16 +184,57 @@ describe("The amplitude envelope", () => {
   });
 
   it("snaps to the peak when there is no attack, and holds it when there is no decay", () => {
-    // A percussive organ patch: straight to full, no fall. Both stages have to
-    // be schedulable as an instant rather than a ramp of length zero.
+    // A percussive organ patch: straight to full, no fall. A ramp that ends
+    // at the moment it starts is a step on the browser's timeline.
     const ctx = context();
     play(ctx, {
       amp: { attack: 0, decay: 0, sustain: 1, release: 0.1 }, level: 1,
     }, 69, 127);
-    const moves = ampGain(ctx).gain.moves();
-    expect(moves.every((call) => call.method === "set")).toBe(true);
-    expect(moves.slice(-1)[0].value).toBeCloseTo(1, 6);
-    expect(moves.slice(-1)[0].time).toBe(1);
+    const events = timeline(ampGain(ctx).gain);
+    expect(timelineValueAt(events, 47999, 48000)).toBe(0);
+    expect(timelineValueAt(events, 48000, 48000)).toBe(1);
+    expect(timelineValueAt(events, 96000, 48000)).toBe(1);
+  });
+
+  it("writes a sequenced note's release at its gate, with the rest", () => {
+    // The numbers `voice.rs` pins: a 10 ms attack, 80 ms decay to 0.6, a
+    // 200 ms release, a 125 ms step gated at 85 %. Played at 0 s.
+    const ctx = context();
+    const voice = play(ctx, {
+      amp: { attack: 0.01, decay: 0.08, sustain: 0.6, release: 0.2 }, level: 1,
+    }, 69, 127, 0, { releaseAtSec: 0.125 * ORIGINAL_GATE });
+    expect(voice.isReleased).toBe(true);
+    const events = timeline(ampGain(ctx).gain);
+    expect([0, 240, 480, 2400, 4320, 5100, 5101, 9900, 14700].map((k) => timelineValueAt(events, k, 48000)))
+      .toEqual([0, 0.5, 1, 0.800000011920929, 0.6000000238418579, 0.6000000238418579, 0.5999374985694885, 0.30000001192092896, 0]);
+    // The oscillators stop 50 ms after the release ends.
+    expect(of(ctx, FakeOscillator)[0].stops).toEqual([0.125 * ORIGINAL_GATE + 0.2 + 0.05]);
+    // And a key coming up changes nothing.
+    voice.release(0.05);
+    expect(of(ctx, FakeOscillator)[0].stops).toHaveLength(1);
+  });
+
+  it("holds silence until a gate that falls inside the attack, as the original's events sort", () => {
+    const ctx = context();
+    play(ctx, {
+      amp: { attack: 0.15, decay: 0.08, sustain: 0.6, release: 0.2 }, level: 1,
+    }, 69, 127, 0, { releaseAtSec: 0.10625 });
+    const events = timeline(ampGain(ctx).gain);
+    expect([100, 5099, 5100, 5101, 6000, 7200, 9000, 11040].map((k) => timelineValueAt(events, k, 48000)))
+      .toEqual([0, 0, 0.6000000238418579, 0.6001905202865601, 0.7714285850524902, 1, 0.8125, 0.6000000238418579]);
+  });
+
+  it("writes a live release over the envelope without cancelling it", () => {
+    // From the key-up on, exactly the curve of a note sequenced to it.
+    const ctx = context();
+    const voice = play(ctx, {
+      amp: { attack: 0.15, decay: 0.08, sustain: 0.6, release: 0.2 }, level: 1,
+    }, 69, 127, 0);
+    voice.release(0.10625);
+    const events = timeline(ampGain(ctx).gain);
+    expect(ampGain(ctx).gain.calls.some((call) => call.method === "cancel")).toBe(false);
+    expect([5100, 6000, 7200, 9000, 11040].map((k) => timelineValueAt(events, k, 48000)))
+      .toEqual([0.6000000238418579, 0.7714285850524902, 1, 0.8125, 0.6000000238418579]);
   });
 
   it("releases only once, however many times the key comes up", () => {
@@ -191,6 +249,36 @@ describe("The amplitude envelope", () => {
 
 describe("The filter envelope", () => {
   const filterOf = (ctx: FakeAudioContext) => of(ctx, FakeBiquad)[0];
+
+  it("is written in hertz when the knob comes without its value", () => {
+    const ctx = context();
+    const knob = ctx.createConstantSource();
+    play(ctx, {
+      filter: { ...defaultSynthSettings().filter, cutoffHz: 1000, keyFollow: 0, envAmountOctaves: 0 },
+    }, 60, 100, 1, { cutoffBase: knob });
+    expect(timeline(filterOf(ctx).frequency)[0].value).toBe(1000);
+  });
+
+  it("is written as offsets from the knob, which arrives as a signal and moves sounding notes", () => {
+    const ctx = context();
+    const knob = ctx.createConstantSource() as FakeConstantSource;
+    const voice = play(ctx, {
+      filter: {
+        cutoffHz: 1000, resonance: 1, keyFollow: 1, envAmountOctaves: 0, envAmount: 1,
+        adsr: { attack: 0.01, decay: 0.15, sustain: 0.3, release: 0.3 },
+      },
+    }, 72, 100, 1, { cutoffBase: knob, knobHz: 1000 });
+    const filter = filterOf(ctx);
+    expect(knob.outgoing.has(filter.frequency as unknown as FakeNode)).toBe(true);
+    // Key follow an octave up: base 2 kHz, peak 2 + 30 kHz held at 20, all
+    // less the knob's 1 kHz.
+    const events = timeline(filter.frequency);
+    expect(events.map((event) => event.value)).toEqual([1000, 19000, 2000 + 0.3 * 30000 - 1000]);
+    voice.release(2);
+    expect(timeline(filter.frequency).slice(-2).map((event) => event.value)).toEqual([2000 + 0.3 * 30000 - 1000, 1000]);
+    voice.dispose();
+    expect(knob.outgoing.has(filter.frequency as unknown as FakeNode)).toBe(false);
+  });
 
   it("sweeps the cutoff by its own envelope, in octaves", () => {
     const ctx = context();
@@ -324,15 +412,41 @@ describe("Polyphony", () => {
     expect(voices.activeCount).toBe(2);
   });
 
-  it("releases the voice a note-off names, and only that one", () => {
+  it("releases the voice a note-off names, and only that one, which rings out", () => {
     const ctx = context();
     const voices = bank(ctx);
     voices.noteOn(defaultSynthSettings(), 60, 100, 0);
     voices.noteOn(defaultSynthSettings(), 64, 100, 0);
     voices.noteOff(60, 1);
-    expect(voices.activeCount).toBe(1);
+    expect(voices.heldCount).toBe(1);
+    expect(voices.activeCount).toBe(2);
     voices.noteOff(99, 1);
+    expect(voices.heldCount).toBe(1);
+    of(ctx, FakeOscillator)[0].finish();
     expect(voices.activeCount).toBe(1);
+  });
+
+  it("steals the earliest-started voice, whatever order the notes arrived in", () => {
+    const ctx = context();
+    const voices = bank(ctx, 2);
+    voices.noteOn(defaultSynthSettings(), 60, 100, 0.5);
+    voices.noteOn(defaultSynthSettings(), 62, 100, 0.1);
+    voices.noteOn(defaultSynthSettings(), 64, 100, 0.6);
+    // 62 began first, so 62 went: releasing it does nothing, 60 is still held.
+    voices.noteOff(62, 1);
+    expect(voices.heldCount).toBe(2);
+    voices.noteOff(60, 1);
+    expect(voices.heldCount).toBe(1);
+  });
+
+  it("lets a sequenced note ring without counting against the ceiling", () => {
+    const ctx = context();
+    const voices = bank(ctx, 1);
+    for (const note of [60, 62, 64]) voices.noteOn(defaultSynthSettings(), note, 100, 0, { releaseAtSec: 0.1 });
+    expect(voices.heldCount).toBe(0);
+    expect(voices.activeCount).toBe(3);
+    voices.panic(1);
+    expect(voices.activeCount).toBe(0);
   });
 
   it("steals the oldest voice at the ceiling rather than refusing to play", () => {
@@ -347,12 +461,13 @@ describe("Polyphony", () => {
     expect(voices.activeCount).toBe(2);
   });
 
-  it("retunes a note that is struck again rather than stacking voices", () => {
+  it("lets a note struck again ring out and starts it afresh, as the original does", () => {
     const ctx = context();
     const voices = bank(ctx);
     voices.noteOn(defaultSynthSettings(), 60, 100, 0);
     voices.noteOn(defaultSynthSettings(), 60, 100, 0.5);
-    expect(voices.activeCount).toBe(1);
+    expect(voices.heldCount).toBe(1);
+    expect(voices.activeCount).toBe(2);
   });
 
   it("goes silent on demand", () => {

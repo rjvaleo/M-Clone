@@ -92,6 +92,9 @@ class FakeEngine implements EngineExports {
   note_on(module: number, note: number, velocity: number, detuneCents: number): void {
     this.calls.push(`noteon:${module}.${note}@${velocity}+${detuneCents}`);
   }
+  note_on_with_step(module: number, note: number, velocity: number, detuneCents: number, stepSec: number): void {
+    this.calls.push(`noteon:${module}.${note}@${velocity}+${detuneCents}~${stepSec}`);
+  }
   note_off(module: number, note: number): void {
     this.calls.push(`noteoff:${module}.${note}`);
   }
@@ -718,6 +721,15 @@ describe("The plan-to-engine bridge", () => {
     expect(engine.of("allnotesoff")).toEqual([`allnotesoff:${synth}`]);
   });
 
+  it("hands a sequenced note's step to the engine with the note", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule("s", 0, [{ type: "note-on", note: 62, velocity: 1, detuneCents: 0, stepSec: 0.125 }]);
+    rack.process(0);
+    expect(engine.of("noteon")).toEqual([`noteon:${rack.moduleIdOf("s")}.62@1+0~0.125`]);
+  });
+
   it("cancels the future when the transport resets", () => {
     // The scheduled notes belong to a passage that is no longer playing.
     const engine = new FakeEngine();
@@ -919,8 +931,8 @@ describe("The plan-to-engine bridge", () => {
     const indices = Object.values(PARAM_INDICES["m.synth"]);
     expect(new Set(indices).size).toBe(indices.length);
     // And none of them stray past what the Rust module declares: `Synth` in
-    // modules.rs has PARAM_COUNT = 64, so 63 is the last valid index.
-    expect(Math.max(...indices)).toBeLessThan(64);
+    // modules.rs has PARAM_COUNT = 66, so 65 — the LFO touch — is the last valid index.
+    expect(Math.max(...indices)).toBe(65);
   });
 
   it("every module kind it claims to support has parameter indices", () => {

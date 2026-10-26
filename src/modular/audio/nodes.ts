@@ -59,7 +59,8 @@ export interface DelayNodeLike extends AudioNodeLike {
  * so turning the knob never cancels a sweep, the scale sequencer's own fix.
  */
 export interface ConstantSourceNodeLike extends AudioNodeLike {
-  readonly offset: AudioParamLike;
+  /** The knob's base glides as the original's: `cancelAndHoldAtTime`, then `setTargetAtTime`. */
+  readonly offset: AudioParamLike & Pick<CurveParamLike, "cancelAndHoldAtTime">;
   start(when?: number): void;
   stop(when?: number): void;
 }

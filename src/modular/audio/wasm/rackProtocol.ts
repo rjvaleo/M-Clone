@@ -73,8 +73,11 @@ export type ScheduledEvent =
    * into a note plus this remainder, and a message shape that made the
    * remainder easy to forget is exactly how all eighty-one scales in the
    * library ended up sounding like 12-TET on this path.
+   *
+   * `stepSec` is the note's step as sequenced, when it has one — what the
+   * synth gates a note by (see `NotePlayer.noteOn`).
    */
-  | { type: "note-on"; note: number; velocity: number; detuneCents: number }
+  | { type: "note-on"; note: number; velocity: number; detuneCents: number; stepSec?: number }
   | { type: "note-off"; note: number }
   | { type: "all-notes-off" };
 
