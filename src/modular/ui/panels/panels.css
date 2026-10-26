@@ -1,0 +1,225 @@
+/* Module panels: four new looks and the originals' own.
+ *
+ * Each look commits to its hardware rather than following the app's theme: a
+ * Cabinet is black and wood whatever the theme, as the instrument it is drawn
+ * after is. Screens and readouts use Home Video, the shippable display face.
+ * Positions come from the layout, inline; everything here is appearance. */
+
+.pnl {
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  --pnl-screen-font: "Home Video", ui-monospace, monospace;
+  --pnl-condensed: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+}
+.pnl-group, .pnl-display, .pnl-control { position: absolute; box-sizing: border-box; }
+.pnl-group__label { position: absolute; left: 6px; top: 3px; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap; }
+.pnl-display { overflow: hidden; }
+.pnl-display svg { display: block; }
+
+/* ---- shared control anatomy ---- */
+
+.pnl-knob { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+.pnl-knob__dial { position: relative; height: calc(100% - 24px); aspect-ratio: 1; max-width: 100%; cursor: ns-resize; touch-action: none; outline: none; }
+.pnl-knob__dial svg { width: 100%; height: 100%; overflow: visible; }
+.pnl-knob__dial:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 50%; }
+.pnl-knob__body { fill: #1e1f22; }
+.pnl-knob__track { fill: none; stroke: rgba(255, 255, 255, 0.18); stroke-width: 2.6; stroke-linecap: round; }
+.pnl-knob__arc { fill: none; stroke: var(--pnl-accent, currentColor); stroke-width: 2.6; stroke-linecap: round; }
+.pnl-knob__pointer { stroke: var(--pnl-ink, #f2ede0); stroke-width: 2.4; stroke-linecap: round; }
+.pnl-knob__value { display: block; text-align: center; font: 11px var(--pnl-screen-font); white-space: nowrap; line-height: 12px; }
+.pnl-knob__label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; line-height: 12px; text-align: center; }
+.pnl-knob__live { position: absolute; right: 0; top: 0; font: 9px var(--pnl-screen-font); color: var(--mod-color); }
+
+.mm-mod-target.is-modulated .pnl-knob__dial { border-radius: 50%; box-shadow: 0 0 0 2px var(--mod-color), 0 0 0 4px var(--mod-color-2), 0 0 8px var(--mod-color); }
+.mm-mod-target.is-modulated .pnl-slider__track { box-shadow: 0 0 0 2px var(--mod-color), 0 0 6px var(--mod-color); }
+.mm-canvas-viewport.is-mapping .mm-mod-target :is(.pnl-knob__dial, .pnl-slider__track) { outline: 2px dashed currentColor; outline-offset: 3px; cursor: crosshair; }
+.pnl-slider__mod { position: absolute; right: 0; top: 0; width: 14px; height: 14px; }
+
+.pnl-slider { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.pnl-slider--v { flex-direction: column; gap: 4px; }
+.pnl-slider__label, .pnl-slider__value { white-space: nowrap; letter-spacing: 0.08em; }
+.pnl-slider__value { font: 11px var(--pnl-screen-font); }
+.pnl-slider--v .pnl-slider__value { font-size: 10px; }
+.pnl-slider__label small { font-size: 8px; letter-spacing: 0; text-transform: none; opacity: 0.7; }
+.pnl-slider--h .pnl-slider__label { width: 48px; flex: none; text-transform: uppercase; }
+.pnl-slider--h .pnl-slider__value { min-width: 40px; flex: none; text-align: right; }
+.pnl-slider__track { position: relative; flex: 1; align-self: stretch; cursor: pointer; touch-action: none; outline: none; }
+.pnl-slider--h .pnl-slider__track { height: 100%; }
+.pnl-slider__fill { position: absolute; background: var(--pnl-accent, currentColor); opacity: 0.85; }
+.pnl-slider--h .pnl-slider__fill { left: 0; top: 40%; bottom: 40%; width: calc(var(--pnl-fill) * 100%); }
+.pnl-slider--v .pnl-slider__fill { left: 40%; right: 40%; bottom: 0; height: calc(var(--pnl-fill) * 100%); }
+.pnl-slider__handle { position: absolute; background: var(--pnl-ink); border-radius: 2px; }
+.pnl-slider--h .pnl-slider__handle { top: 0; bottom: 0; width: 10px; left: calc(var(--pnl-fill) * 100% - 5px); }
+.pnl-slider--v .pnl-slider__handle { left: 2px; right: 2px; height: 12px; bottom: calc(var(--pnl-fill) * 100% - 6px); }
+
+.pnl-switch { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 6px; font: inherit; font-size: 11px; letter-spacing: 0.08em; cursor: pointer; border: 1px solid; border-radius: 3px; }
+.pnl-switch__lamp { width: 8px; height: 8px; border-radius: 50%; flex: none; background: rgba(0, 0, 0, 0.35); }
+.is-on > .pnl-switch__lamp { background: var(--pnl-lamp, #f3a43a); box-shadow: 0 0 6px var(--pnl-lamp, #f3a43a); }
+.pnl-switch__text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.pnl-select { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 3px; }
+.pnl-select button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 0; font: inherit; font-size: 10px; letter-spacing: 0.04em; cursor: pointer; border: 1px solid; border-radius: 3px; min-width: 0; overflow: hidden; }
+.pnl-select .pnl-switch__lamp { width: 16px; height: 4px; border-radius: 2px; }
+
+.pnl-readout { display: flex; align-items: center; justify-content: space-between; padding: 0 8px; cursor: ns-resize; touch-action: none; border-radius: 4px; }
+.pnl-readout__label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; }
+.pnl-readout__value { font: 20px var(--pnl-screen-font); }
+
+.pnl-asset .mm-asset-slot { height: 100%; box-sizing: border-box; min-height: 0; padding: 2px 8px; font-size: 11px; display: flex; align-items: center; }
+.pnl-inert { opacity: 0.38; display: flex; align-items: center; justify-content: center; font-size: 11px; border: 1px dashed; border-radius: 9px; cursor: help; }
+.pnl-inert--knob { border-radius: 50%; }
+
+.pnl-screen__top, .pnl-screen__bottom { position: absolute; left: 6px; right: 6px; font: 12px var(--pnl-screen-font); white-space: nowrap; overflow: hidden; }
+.pnl-screen__top { top: 3px; }
+.pnl-screen__bottom { bottom: 3px; opacity: 0.75; }
+.pnl-screen__wave { position: absolute; left: 4px; top: 18px; }
+.pnl-plot__grid { fill: none; stroke-width: 1; }
+.pnl-plot__line { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.pnl-plot__text { font: 11px var(--pnl-screen-font); }
+
+/* ======================================================================
+ * Cabinet — after the Minimoog and Diva: black panel, cream lettering,
+ * wood cheeks, an amber screen.
+ * ==================================================================== */
+.pnl--cabinet { background: linear-gradient(180deg, #1d1e21, #141517); color: #e9e1cc; font-family: var(--pnl-condensed); --pnl-ink: #f2ede0; --pnl-accent: #e9e1cc; --pnl-lamp: #f3a43a; }
+.pnl--cabinet .pnl-group { border-right: 1px solid rgba(233, 225, 204, 0.08); }
+.pnl--cabinet .pnl-group__label { left: 8px; right: 8px; display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: 0.3em; font-size: 11px; justify-content: center; }
+.pnl--cabinet .pnl-group__label::before, .pnl--cabinet .pnl-group__label::after { content: ""; flex: 1; height: 1px; background: #e9e1cc; }
+.pnl--cabinet .pnl-display--cheek { background: linear-gradient(90deg, #4a2914, #8a5530 45%, #6b3d1f); }
+.pnl--cabinet .pnl-knob__body { fill: #0d0d0e; stroke: #3b3c40; stroke-width: 1.5; }
+.pnl--cabinet .pnl-knob__track { stroke: #e9e1cc; stroke-dasharray: 0.6 4.1; stroke-width: 2.4; stroke-linecap: butt; }
+.pnl--cabinet .pnl-knob__arc { display: none; }
+.pnl--cabinet .pnl-knob__value { color: #f3a43a; }
+.pnl--cabinet .pnl-knob__label { font-weight: 600; font-size: 10px; letter-spacing: 0.04em; }
+.pnl--cabinet .pnl-switch { background: #222326; border-color: #4a463d; color: #e9e1cc; font-size: 10px; letter-spacing: 0.04em; gap: 4px; padding: 0 4px; }
+.pnl--cabinet .pnl-select button { background: #222326; border-color: #4a463d; color: #a59d88; }
+.pnl--cabinet .pnl-select button.is-on { color: #fff4dc; }
+.pnl--cabinet :is(.pnl-display--grain-screen, .pnl-readout) { background: #0b0a08; border: 2px solid #3a332a; border-radius: 4px; color: #f3a43a; }
+.pnl--cabinet .pnl-screen__spray { fill: rgba(243, 164, 58, 0.16); }
+.pnl--cabinet .pnl-screen__trace { fill: rgba(243, 164, 58, 0.35); stroke: #f3a43a; stroke-width: 0.8; }
+.pnl--cabinet .pnl-screen__head { stroke: #ffd79a; stroke-width: 2; }
+.pnl--cabinet .pnl-key { fill: #e9e1cc; stroke: #0d0d0e; stroke-width: 1; }
+.pnl--cabinet .pnl-key--black { fill: #0d0d0e; }
+.pnl--cabinet .pnl-key.is-root { fill: #f3a43a; }
+.pnl--cabinet .pnl-asset .mm-asset-slot { background: #222326; border: 1px solid #4a463d; color: #e9e1cc; border-radius: 3px; }
+
+/* ======================================================================
+ * Night console — after Omnisphere and KULT: dark cells, a lit display,
+ * each group in its own colour.
+ * ==================================================================== */
+.pnl--night { background: #0b0f13; color: #c9d6de; font-family: var(--pnl-condensed); --pnl-ink: #eaf6fb; }
+.pnl--night .pnl-group { background: #10171d; border: 1px solid #22303a; border-radius: 4px; --pnl-accent: var(--pnl-tint, #5fe3ff); }
+.pnl--night .pnl-group[data-tint="input"] { --pnl-tint: #f3c94a; }
+.pnl--night .pnl-group[data-tint="tank"] { --pnl-tint: #5fe3ff; }
+.pnl--night .pnl-group[data-tint="mod"] { --pnl-tint: #ff6fd8; }
+.pnl--night .pnl-group[data-tint="out"] { --pnl-tint: #9df29a; }
+.pnl--night .pnl-group__label { left: 0; right: 0; top: 0; height: 16px; line-height: 16px; padding-left: 8px; background: #141e26; border-bottom: 1px solid #22303a; color: var(--pnl-tint); font-size: 10px; letter-spacing: 0.22em; }
+.pnl--night .pnl-knob__body { fill: #0b0f13; stroke: #22303a; stroke-width: 1; }
+.pnl--night .pnl-knob__track { stroke: #1d2a33; stroke-width: 3.2; }
+.pnl--night .pnl-knob__arc { stroke-width: 3.2; }
+.pnl--night .pnl-knob__pointer { display: none; }
+/* The value sits in the middle of the dial, which is the box less its label. */
+.pnl--night .pnl-knob__value { position: absolute; left: 0; right: 0; top: calc((100% - 24px) / 2 - 6px); color: #eaf6fb; font-size: 12px; pointer-events: none; }
+.pnl--night .pnl-knob__label { color: #8ea3af; font-size: 10px; }
+.pnl--night .pnl-display--plate-tail { background: #070a0d; border: 1px solid #22303a; border-radius: 4px; color: #5fe3ff; }
+.pnl--night .pnl-plot__grid { stroke: #14212a; }
+.pnl--night .pnl-plot__fill { fill: rgba(95, 227, 255, 0.12); }
+.pnl--night .pnl-plot__tick { fill: #4c6170; font: 9px var(--pnl-screen-font); }
+.pnl--night .pnl-plot__line { stroke: #5fe3ff; }
+.pnl--night .pnl-plot__line--high { stroke: #ff6fd8; stroke-dasharray: 5 4; stroke-width: 1.6; }
+.pnl--night .pnl-plot__marker { stroke: #f3c94a; stroke-width: 1.5; }
+.pnl--night .pnl-switch { background: #0b0f13; border-color: #2c3d49; color: #c9d6de; --pnl-lamp: #9df29a; }
+/* Each control takes the colour of the one group the layout places it in. */
+.pnl--night .pnl-control { --pnl-accent: #5fe3ff; }
+.pnl--night .pnl-control[data-tint="input"] { --pnl-accent: #f3c94a; }
+.pnl--night .pnl-control[data-tint="mod"] { --pnl-accent: #ff6fd8; }
+.pnl--night .pnl-control[data-tint="out"] { --pnl-accent: #9df29a; }
+
+/* ======================================================================
+ * Graph first — after the AG Controller and the MOTM-300: black on cream,
+ * the curve large, one red for what is being changed.
+ * ==================================================================== */
+.pnl--graph { background: #efece4; color: #141414; font-family: "IBM Plex Sans Condensed", var(--pnl-condensed); --pnl-ink: #141414; --pnl-accent: #141414; --pnl-lamp: #c4321c; }
+.pnl--graph .pnl-group { border: 1.5px solid #141414; margin: -0.75px; }
+.pnl--graph .pnl-group__label { left: 0; right: 0; top: 0; height: 15px; line-height: 15px; padding-left: 6px; border-bottom: 1.5px solid #141414; font-weight: 600; font-size: 10px; letter-spacing: 0.24em; }
+.pnl--graph .pnl-display { border: 1.5px solid #141414; background: #f8f6f0; margin: -0.75px; }
+.pnl--graph .pnl-plot__grid { stroke: #d8d4c8; }
+.pnl--graph .pnl-plot__unity { stroke: #b3ad9e; stroke-dasharray: 4 4; }
+.pnl--graph .pnl-plot__knee { fill: rgba(196, 50, 28, 0.08); }
+.pnl--graph .pnl-plot__line { stroke: #141414; stroke-width: 2.4; }
+.pnl--graph .pnl-plot__point { fill: #efece4; stroke: #c4321c; stroke-width: 2.5; }
+.pnl--graph .pnl-plot__text { fill: #c4321c; }
+.pnl--graph .pnl-slider__track { background: none; }
+.pnl--graph .pnl-slider--v .pnl-slider__track::before { content: ""; position: absolute; left: calc(50% - 2px); width: 4px; top: 0; bottom: 0; background: #141414; }
+.pnl--graph .pnl-slider--h .pnl-slider__track::before { content: ""; position: absolute; top: calc(50% - 2px); height: 4px; left: 0; right: 0; background: #141414; }
+.pnl--graph .pnl-slider__fill { display: none; }
+.pnl--graph .pnl-slider__label { font-weight: 600; font-size: 10px; }
+.pnl--graph .pnl-switch { background: #f8f6f0; border-color: #141414; color: #141414; }
+.pnl--graph .pnl-display--levels { padding: 0 6px; }
+.pnl-levels__title { position: absolute; left: 6px; top: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.2em; }
+.pnl-levels__row { position: absolute; left: 6px; right: 6px; display: grid; grid-template-columns: 22px 1fr 30px; align-items: center; gap: 4px; font: 10px var(--pnl-screen-font); }
+.pnl-levels__row span:last-child { text-align: right; }
+.pnl-levels__bar { height: 60%; background: #c4321c; justify-self: start; min-width: 1px; }
+
+/* ======================================================================
+ * Engineering strip — after the Panharmonium: white on black, the response
+ * across the top, each stage its colour, a switch and lamp at its edge.
+ * ==================================================================== */
+.pnl--strip { background: #0f0f10; color: #f1f1ee; font-family: var(--pnl-condensed); --pnl-ink: #f1f1ee; }
+.pnl--strip .pnl-group { border: 1px solid #3a3a3d; border-top: 4px solid var(--pnl-tint, #f1f1ee); }
+.pnl--strip .pnl-group[data-tint="notch"] { --pnl-tint: #ff8a3d; }
+.pnl--strip .pnl-group[data-tint="resonator"] { --pnl-tint: #46d4e6; }
+.pnl--strip .pnl-group[data-tint="regalia"] { --pnl-tint: #b7e34a; }
+.pnl--strip .pnl-group[data-tint="damping"] { --pnl-tint: #b48cff; }
+.pnl--strip .pnl-group__label { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; }
+.pnl--strip .pnl-display--bank-response { background: #050506; border: 1px solid #3a3a3d; color: #7d7d79; }
+.pnl--strip .pnl-plot__grid { stroke: #1d1d20; }
+.pnl--strip .pnl-plot__line { stroke: #f1f1ee; stroke-width: 2.2; }
+.pnl--strip .pnl-plot__text { fill: #7d7d79; }
+.pnl--strip .pnl-plot__marker { stroke-width: 1; stroke-dasharray: 2 3; }
+.pnl--strip .pnl-plot__marker--notch { stroke: #ff8a3d; }
+.pnl--strip .pnl-plot__marker--resonator { stroke: #46d4e6; }
+.pnl--strip .pnl-plot__marker--regalia { stroke: #b7e34a; }
+.pnl--strip .pnl-plot__marker--damping { stroke: #b48cff; }
+.pnl--strip .pnl-knob__body { fill: #232326; stroke: #f1f1ee; stroke-width: 1; }
+.pnl--strip .pnl-knob__track { stroke: #f1f1ee; stroke-dasharray: 0.6 4.1; stroke-linecap: butt; }
+.pnl--strip .pnl-knob__arc { display: none; }
+.pnl--strip .pnl-knob__value { color: #9a9a96; }
+.pnl--strip .pnl-knob__label { font-weight: 600; }
+.pnl--strip .pnl-switch { flex-direction: column; border-radius: 11px; background: #0f0f10; border-color: #f1f1ee; color: #9a9a96; padding: 4px 0; font-size: 9px; }
+/* Each stage's colour marks its knobs' pointers and its lamp. */
+.pnl--strip .pnl-control[data-tint="notch"] { --pnl-ink: #ff8a3d; --pnl-lamp: #ff8a3d; }
+.pnl--strip .pnl-control[data-tint="resonator"] { --pnl-ink: #46d4e6; --pnl-lamp: #46d4e6; }
+.pnl--strip .pnl-control[data-tint="regalia"] { --pnl-ink: #b7e34a; --pnl-lamp: #b7e34a; }
+.pnl--strip .pnl-control[data-tint="damping"] { --pnl-ink: #b48cff; --pnl-lamp: #b48cff; }
+.pnl--strip .pnl-knob__pointer { stroke-width: 3; }
+
+/* ======================================================================
+ * SoundHack — as Tom Erbe's ++ plug-ins draw it: a light panel, dark dials
+ * with the value inside, a coloured badge, pill switches grey when on.
+ * ==================================================================== */
+.pnl--soundhack { background: #e8e6e1; color: #1d1e20; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; --pnl-ink: #f4f2ee; --pnl-accent: #d9702a; }
+.pnl--soundhack .pnl-group[data-tint="delay"] { background: rgba(217, 112, 42, 0.08); }
+.pnl--soundhack .pnl-group[data-tint="modulation"] { background: rgba(60, 116, 201, 0.08); }
+.pnl--soundhack .pnl-group[data-tint="filter"] { background: rgba(47, 143, 138, 0.09); }
+.pnl--soundhack .pnl-group[data-tint] .pnl-group__label { display: none; }
+.pnl--soundhack .pnl-group:first-child .pnl-group__label { left: 6px; top: 6px; height: 34px; line-height: 34px; padding: 0 14px; border-radius: 17px; background: #d9702a; color: #fff; font-size: 20px; font-weight: 700; letter-spacing: 0; text-transform: none; }
+.pnl--soundhack .pnl-knob { overflow: visible; }
+.pnl--soundhack .pnl-knob__dial { height: 100%; }
+.pnl--soundhack .pnl-knob__body { fill: #2a2b2e; }
+.pnl--soundhack .pnl-knob__track { stroke: #55575c; }
+.pnl--soundhack .pnl-knob__value { position: absolute; left: 0; right: 0; top: 62%; color: #f4f2ee; font: 600 9px "Helvetica Neue", Helvetica, Arial, sans-serif; pointer-events: none; }
+.pnl--soundhack .pnl-knob--big .pnl-knob__value { font-size: 14px; }
+.pnl--soundhack .pnl-knob--small .pnl-knob__value { font-size: 7px; top: 64%; }
+.pnl--soundhack .pnl-knob__label { position: absolute; top: 100%; left: -10px; right: -10px; margin-top: 1px; text-transform: none; letter-spacing: 0; font-size: 11px; }
+.pnl--soundhack .pnl-knob--big .pnl-knob__label { font-size: 14px; }
+.pnl--soundhack .pnl-knob--small .pnl-knob__label { font-size: 9px; }
+.pnl--soundhack .pnl-switch { border-radius: 9px; border: 1.5px solid #8d8b85; background: #fbfaf8; color: #1d1e20; font-size: 11px; letter-spacing: 0; }
+.pnl--soundhack .pnl-switch.is-on { background: #bdbab3; }
+.pnl--soundhack .pnl-switch__lamp { display: none; }
+.pnl--soundhack .pnl-inert { border-color: #8d8b85; color: #1d1e20; }
+.pnl--soundhack .pnl-inert--knob { background: conic-gradient(#e07a2e, #e0c12e, #4fb06a, #3c86d6, #9a5bd0, #e07a2e); border-style: solid; }
+
+/* The node around a panel: no padding, so the panel is the module's width. */
+.mm-node.mm-node--panel .mm-node__face--panel { padding: 0; display: block; }
