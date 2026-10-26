@@ -79,6 +79,8 @@ export type VoiceOptions = {
 type Voice = {
   source: AudioBufferSourceNodeLike;
   gain: GainNodeLike;
+  /** What the gain was told, so a fade can start from where it really is. */
+  envelope: VoiceOptions;
   /** Built only when the voice was given a pan; see `VoiceOptions.pan`. */
   panner: StereoPannerNodeLike | null;
   chokeGroup: number;
@@ -165,7 +167,7 @@ export class VoiceBank {
       gain.connect(this.destination);
     }
 
-    const voice: Voice = { source, gain, panner, chokeGroup, startedAtSec: at };
+    const voice: Voice = { source, gain, envelope: { ...options, atSec: at }, panner, chokeGroup, startedAtSec: at };
     source.onended = () => this.retire(voice);
     startSource(source, at, options.offsetSec, options.durationSec);
 
@@ -188,10 +190,7 @@ export class VoiceBank {
         remaining.push(voice);
         continue;
       }
-      // Cancel first: a voice partway through its own decay must fade from
-      // where it actually is, not from where its envelope was headed.
-      rampParam(voice.gain.gain, 0, at, "exponential", { durationSec: CHOKE_SEC });
-      stopSource(voice.source, at + CHOKE_SEC * 2);
+      fadeOut(voice, at);
     }
     this.voices = remaining;
   }
@@ -219,30 +218,33 @@ export class VoiceBank {
    * neither and just plays.
    */
   private applyEnvelope(gain: GainNodeLike, at: number, options: VoiceOptions): void {
+    // Written as plain events rather than through `rampParam`. A gain is new
+    // here, so there is nothing to cancel — and `rampParam` cancels and then
+    // pins `param.value`, which in a browser is the default of 1 until the
+    // audio thread has rendered. Its second call threw away the level its
+    // first had set, so every hit started at full gain whatever its velocity.
+    const param = gain.gain;
     const level = Math.max(0, options.level);
     const attack = Math.max(0, options.attackSec ?? 0);
 
     if (attack > 0) {
-      rampParam(gain.gain, 0, at, "none");
-      rampParam(gain.gain, level, at, "linear", { durationSec: attack });
+      param.setValueAtTime(0, at);
+      param.linearRampToValueAtTime(level, at + attack);
     } else {
-      rampParam(gain.gain, level, at, "none");
+      param.setValueAtTime(level, at);
     }
 
     const hold = options.holdSec;
     if (hold !== undefined && options.decaySec !== undefined) {
       // Grain window: rise, sit still, then fall. The flat middle is what keeps
       // overlapping grains from beating against each other.
-      rampParam(gain.gain, level, at + Math.max(attack, hold), "none");
-      rampParam(gain.gain, 0, at + Math.max(attack, hold), "exponential", {
-        durationSec: Math.max(0.001, options.decaySec),
-      });
+      const release = at + Math.max(attack, hold);
+      param.setValueAtTime(level, release);
+      param.setTargetAtTime(0, release, Math.max(0.001, options.decaySec));
       return;
     }
     if (options.decaySec !== undefined) {
-      rampParam(gain.gain, 0, at + attack, "exponential", {
-        durationSec: Math.max(0.001, options.decaySec),
-      });
+      param.setTargetAtTime(0, at + attack, Math.max(0.001, options.decaySec));
     }
   }
 
@@ -254,8 +256,7 @@ export class VoiceBank {
         if (this.voices[i].startedAtSec < this.voices[oldestIndex].startedAtSec) oldestIndex = i;
       }
       const [victim] = this.voices.splice(oldestIndex, 1);
-      rampParam(victim.gain.gain, 0, atSec, "exponential", { durationSec: CHOKE_SEC });
-      stopSource(victim.source, atSec + CHOKE_SEC * 2);
+      fadeOut(victim, atSec);
     }
   }
 
@@ -272,6 +273,34 @@ export class VoiceBank {
 /** Web Audio clamps this itself; doing it here keeps a bad value out of the graph. */
 export const clampPan = (value: number): number =>
   Number.isFinite(value) ? Math.min(1, Math.max(-1, value)) : 0;
+
+/**
+ * Where a voice's envelope is at a time, by the rules its events follow.
+ *
+ * A fade has to start from this, not from `param.value`: that is the last value
+ * the audio thread rendered, which with any look-ahead is not the value at the
+ * moment the fade is scheduled for.
+ */
+export function envelopeValueAt(options: VoiceOptions, t: number): number {
+  const at = Math.max(0, options.atSec);
+  const level = Math.max(0, options.level);
+  const attack = Math.max(0, options.attackSec ?? 0);
+  if (attack > 0 && t < at + attack) return t <= at ? 0 : (level * (t - at)) / attack;
+  if (options.decaySec === undefined) return level;
+  const release = options.holdSec !== undefined ? at + Math.max(attack, options.holdSec) : at + attack;
+  if (t <= release) return level;
+  return level * Math.exp(-(t - release) / Math.max(0.001, options.decaySec));
+}
+
+/** Fade a voice out from where it is, over the choke time, then stop it. */
+function fadeOut(voice: Voice, at: number): void {
+  const param = voice.gain.gain;
+  const from = envelopeValueAt(voice.envelope, at);
+  param.cancelScheduledValues(at);
+  param.setValueAtTime(from, at);
+  param.setTargetAtTime(0, at, CHOKE_SEC);
+  stopSource(voice.source, at + CHOKE_SEC * 2);
+}
 
 /**
  * When a voice has become inaudible, or null when it plays to its own end.

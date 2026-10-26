@@ -52,6 +52,20 @@ fn equal_power_pan(mono: f32, pan: f32) -> (f32, f32) {
     (mono * angle.cos(), mono * angle.sin())
 }
 
+/// Web Audio's `StereoPannerNode` on a stereo pair: the side panned away from
+/// is folded into the other at equal power, and at 0 the pair passes untouched.
+fn web_stereo_pan(pair: [f32; 2], pan: f32) -> [f32; 2] {
+    let pan = if pan.is_finite() { clamp(pan, -1.0, 1.0) } else { 0.0 };
+    let half_pi = core::f32::consts::FRAC_PI_2;
+    if pan <= 0.0 {
+        let x = (pan + 1.0) * half_pi;
+        [pair[0] + pair[1] * x.cos(), pair[1] * x.sin()]
+    } else {
+        let x = pan * half_pi;
+        [pair[0] * x.cos(), pair[1] + pair[0] * x.sin()]
+    }
+}
+
 /// How long a parameter takes to reach a new value.
 ///
 /// Five milliseconds is under the ~10 ms where a level change starts to be
@@ -1913,6 +1927,8 @@ impl PercussionModule {
             // A hit runs to the end whatever the key does. That is what makes
             // this a kit rather than a keyboard.
             gate: false,
+            // And it decays from the strike, as the browser kit's does.
+            hit_decay: true,
             ..SamplerSettings::default()
         }
     }
@@ -1925,14 +1941,14 @@ impl Module for PercussionModule {
         for &(note, velocity, detune_cents) in &notes[..count] {
             self.sampler.note_on(ctx.samples, note, velocity, detune_cents, &settings);
         }
-        let wet = self.sampler.process(ctx.samples, &settings);
+        let wet = self.sampler.process_stereo(ctx.samples, &settings);
         // A source has no dry path — there is no input to blend against — so
         // the shell sees silence as its dry signal and `mix` behaves as a
         // straight wet level.
-        let out = self.shell.finish(ports, 0.0, wet, Self::MIX);
-        let (left, right) = equal_power_pan(out, ports.param(Self::PAN));
-        ports.output(0, left);
-        ports.output(1, right);
+        let out = self.shell.finish_stereo(ports, [0.0; 2], wet, Self::MIX);
+        // The pads arrive as a stereo pair, centred ones in both channels, so
+        // the kit's own pan is Web Audio's stereo law, as the browser kit's is.
+        output_stereo(ports, web_stereo_pan(out, ports.param(Self::PAN)));
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -1947,6 +1963,10 @@ impl Module for PercussionModule {
 
     fn set_sample_slot(&mut self, slot: u32, sample: u32) {
         self.sampler.set_slot(slot, sample);
+    }
+
+    fn set_slot_shape(&mut self, slot: u32, gain: f32, pan: f32, choke_group: i32) {
+        self.sampler.set_slot_shape(slot, gain, pan, choke_group);
     }
 
     fn note_on(&mut self, note: u8, velocity: f32, detune_cents: f32) {
@@ -2068,6 +2088,7 @@ impl LooperModule {
             reverse: ports.param(Self::REVERSE) >= 0.5,
             gate: ports.param(Self::GATE) >= 0.5,
             decay_sec: 0.02,
+            hit_decay: false,
         }
     }
 }
@@ -3493,6 +3514,62 @@ mod tests {
     }
 
     #[test]
+    fn the_kits_pan_is_web_audios_stereo_panner() {
+        // Read off Chrome's own StereoPannerNode, fed a stereo pair.
+        let near = |a: [f32; 2], b: [f32; 2]| (a[0] - b[0]).abs() < 1e-6 && (a[1] - b[1]).abs() < 1e-6;
+        assert!(near(web_stereo_pan([1.2, 1.7], -0.4), [2.199_235, 1.375_328_9]));
+        assert!(near(web_stereo_pan([1.2, 1.7], 0.3), [1.069_208, 2.244_788_6]));
+        assert_eq!(web_stereo_pan([0.5, 0.25], 0.0), [0.5, 0.25]);
+    }
+
+    /// A kit with the browser's hit on note 46: level 0.8, both outputs wired.
+    fn kit_chain() -> (Engine, u32, u32) {
+        let mut engine = Engine::new(RATE);
+        engine.samples_mut().allocate(0, 1, RATE as usize * 4, RATE);
+        for slot in engine.samples_mut().get_mut(0).unwrap().data_mut() {
+            *slot = 1.0;
+        }
+        let kit = engine.add(ModuleKind::Percussion.build());
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: kit, port: 0 }, PortRef { module: output, port: 0 });
+        engine.connect(PortRef { module: kit, port: 1 }, PortRef { module: output, port: 1 });
+        engine.set_param(kit, PercussionModule::LEVEL, 0.8);
+        engine.set_param(kit, PercussionModule::MIX, 1.0);
+        engine.set_param(kit, PercussionModule::DECAY_SECONDS, 0.5);
+        engine.set_sample_slot(kit, 46, 0);
+        // Let the level's glide arrive before anything is struck.
+        for _ in 0..1_000 {
+            engine.process();
+        }
+        (engine, kit, output)
+    }
+
+    #[test]
+    fn a_centred_pad_comes_out_full_level_in_both_channels() {
+        let (mut engine, kit, output) = kit_chain();
+        engine.note_on(kit, 46, 1.0, 0.0);
+        // The output module hears its cable one frame on.
+        engine.process();
+        engine.process();
+        assert!((engine.output_of(output, 0) - 0.8).abs() < 1e-6);
+        assert!((engine.output_of(output, 1) - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_pads_shape_reaches_the_kit_through_the_engine() {
+        let (mut engine, kit, output) = kit_chain();
+        engine.set_slot_shape(kit, 46, 0.9, 0.35, 1);
+        let velocity = 64.0f32 / 127.0;
+        engine.note_on(kit, 46, velocity, 0.0);
+        engine.process();
+        engine.process();
+        let start = 0.8 * 0.9 * velocity * velocity;
+        let angle = 1.35f32 * core::f32::consts::FRAC_PI_4;
+        assert!((engine.output_of(output, 0) - start * angle.cos()).abs() < 1e-6);
+        assert!((engine.output_of(output, 1) - start * angle.sin()).abs() < 1e-6);
+    }
+
+    #[test]
     fn every_sampler_is_reachable_by_its_wire_number() {
         assert_eq!(ModuleKind::from_u32(13), Some(ModuleKind::Percussion));
         assert_eq!(ModuleKind::from_u32(14), Some(ModuleKind::Looper));
@@ -3541,10 +3618,10 @@ mod tests {
     }
 
     #[test]
-    fn a_centred_sampler_holds_its_loudness() {
-        // Equal power, the same law the synth voice uses: centre must not be a
-        // dip relative to hard left, or every existing patch gets quieter the
-        // moment pan exists.
+    fn the_kit_pans_as_the_browsers_stereo_panner_does() {
+        // A centred pad reaches the kit's pan in both channels, so the pan is
+        // Web Audio's stereo law: untouched at the centre, and hard left folds
+        // the right channel into the left — twice the level on one side.
         let peak_of = |pan: f32, port: usize| {
             let (mut engine, player, output) =
                 sampler_chain(ModuleKind::Percussion, PercussionModule::LEVEL);
@@ -3553,17 +3630,15 @@ mod tests {
             engine.set_param(player, PercussionModule::PAN, pan);
             settle(&mut engine);
             engine.note_on(player, 60, 1.0, 0.0);
-            let mut peak = 0.0f32;
-            for _ in 0..2_000 {
-                engine.process();
-                peak = peak.max(engine.output_of(output, port).abs());
-            }
-            peak
+            // The output module hears its cable one frame on.
+            engine.process();
+            engine.process();
+            engine.output_of(output, port)
         };
-        let centre = (peak_of(0.0, 0).powi(2) + peak_of(0.0, 1).powi(2)).sqrt();
-        let hard_left = (peak_of(-1.0, 0).powi(2) + peak_of(-1.0, 1).powi(2)).sqrt();
-        assert!((centre / hard_left - 1.0).abs() < 0.1,
-            "panning changed the loudness: centre {centre} vs hard left {hard_left}");
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-5;
+        assert!(near(peak_of(0.0, 0), 1.0) && near(peak_of(0.0, 1), 1.0));
+        assert!(near(peak_of(-1.0, 0), 2.0) && near(peak_of(-1.0, 1), 0.0));
+        assert!(near(peak_of(1.0, 0), 0.0) && near(peak_of(1.0, 1), 2.0));
     }
 
     #[test]

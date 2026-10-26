@@ -58,7 +58,7 @@ console.log("exports:", Object.keys(api).sort().join(", "));
 // ---- the shape of the ABI ---------------------------------------------------
 for (const name of [
   "init", "add_module", "remove_module", "connect", "disconnect", "set_param",
-  "set_bypassed", "set_io", "reset", "input_ptr", "output_ptr", "quantum_size",
+  "set_bypassed", "set_io", "reset", "set_slot_shape", "input_ptr", "output_ptr", "quantum_size",
   "module_count", "cable_count", "process_quantum", "memory",
 ]) {
   check(`exports ${name}`, name in api);
@@ -560,6 +560,49 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   check("a note plays it", peak(up) > 0.05);
   const f = hz(up);
   check("an octave over the root plays an octave up", Math.abs(f - 440) < 25, `${f.toFixed(1)} Hz`);
+}
+
+// ---- the kit's pads, through the real ABI ----------------------------------
+// Percussion is kind 13. The browser kit's hit: level 0.8, pad gain 0.9, pan
+// +0.35, velocity 64 — level × gain × velocity², then Web Audio's mono panner
+// law. Two hats in choke group 1: the closed one fades the open one out.
+{
+  const PERCUSSION = 13;
+  const P = { DECAY: 1, MIX: 2, LEVEL: 3 };
+  api.init(SAMPLE_RATE);
+  check("exports set_slot_shape", typeof api.set_slot_shape === "function");
+  api.sample_alloc(3, 1, SAMPLE_RATE * 2, SAMPLE_RATE);
+  new Float32Array(api.memory.buffer, api.sample_ptr(3), SAMPLE_RATE * 2).fill(1);
+  const kit = u32(api.add_module(PERCUSSION));
+  const out = u32(api.add_module(KIND.AUDIO_OUTPUT));
+  api.connect(kit, 0, out, 0);
+  api.connect(kit, 1, out, 1);
+  api.set_io(NO_MODULE, out);
+  api.set_param(kit, P.LEVEL, 0.8);
+  api.set_param(kit, P.MIX, 1);
+  api.set_param(kit, P.DECAY, 0.5);
+  api.set_sample_slot(kit, 46, 3);
+  api.sample_alloc(4, 1, SAMPLE_RATE, SAMPLE_RATE); // silence: a hat heard only by its choke
+  api.set_sample_slot(kit, 42, 4);
+  api.set_slot_shape(kit, 46, 0.9, 0.35, 1);
+  api.set_slot_shape(kit, 42, 1, 0, 1);
+  for (let b = 0; b < 20; b++) api.process_quantum();
+  const sides = () => [
+    Array.from(new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM)),
+    Array.from(new Float32Array(api.memory.buffer, api.output_ptr() + QUANTUM * 4, QUANTUM)),
+  ];
+  const v = 64 / 127;
+  api.note_on(kit, 46, v, 0);
+  api.process_quantum();
+  const [l, r] = sides();
+  const start = 0.8 * 0.9 * v * v;
+  const angle = (0.35 + 1) * Math.PI / 4;
+  check("a pad starts at level × gain × velocity²", near(l[1], start * Math.cos(angle), 1e-5), `${l[1]}`);
+  check("and sits where its pan puts it", near(r[1], start * Math.sin(angle), 1e-5), `${r[1]}`);
+  api.note_on(kit, 42, 1, 0);
+  for (let b = 0; b < 17; b++) api.process_quantum(); // past the 40 ms fade and the output's one frame
+  const [after] = sides();
+  check("the closed hat chokes the open one out", after.every((x) => x === 0), `${Math.max(...after.map(Math.abs))}`);
 }
 
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);

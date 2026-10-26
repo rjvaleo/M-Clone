@@ -133,6 +133,10 @@ export interface OscillatorNodeLike extends AudioNodeLike {
 /** Places a signal in the stereo field; −1 is hard left, +1 hard right. */
 export interface StereoPannerNodeLike extends AudioNodeLike {
   readonly pan: AudioParamLike;
+  /** Set only where it matters: Percussion's pan takes every pad as stereo. */
+  channelCount?: number;
+  channelCountMode?: "max" | "clamped-max" | "explicit";
+  channelInterpretation?: "speakers" | "discrete";
 }
 
 /**

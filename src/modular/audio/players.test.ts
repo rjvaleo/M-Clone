@@ -321,10 +321,9 @@ describe("The players", () => {
       player.noteOn(36, velocity, 0);
       const source = sources(context)[0];
       const gain = [...source.outgoing][0] as never as { gain: { moves(): { value: number }[] } };
-      // The second scheduled write is the level. The first is `rampParam`
-      // pinning the gain's existing value, and the last is the decay's target
-      // of zero — so neither the start nor the end says how hard it hit.
-      return gain.gain.moves()[1].value;
+      // The first scheduled write is the level; the last is the decay's target
+      // of zero. voices.test.ts reads the same hit off Web Audio's timeline.
+      return gain.gain.moves()[0].value;
     };
     expect(struck(127)).toBeGreaterThan(struck(64));
     expect(struck(64)).toBeGreaterThan(struck(16));
