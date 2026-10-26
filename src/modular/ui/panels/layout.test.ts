@@ -121,6 +121,47 @@ describe("Checking a panel against its module", () => {
   });
 });
 
+describe("A panel with pages", () => {
+  const paged = (): PanelLayout => ({
+    ...good(),
+    pages: [{ id: "one", label: "One" }, { id: "two", label: "Two" }],
+    controls: [
+      { param: "gain", kind: "knob", page: "one", x: 10, y: 10, w: 40, h: 40 },
+      { param: "on", kind: "switch", page: "two", x: 10, y: 10, w: 40, h: 40 },
+      { param: "gain", kind: "knob", page: "two", alias: true, x: 60, y: 10, w: 30, h: 30 },
+      { param: "shape", kind: "select", x: 110, y: 10, w: 80, h: 20 },
+      { param: "asset-id", kind: "asset", x: 110, y: 40, w: 80, h: 40 },
+    ],
+  });
+
+  it("lets controls on different pages share a place", () => {
+    expect(validateLayout(paged(), descriptor)).toEqual([]);
+  });
+
+  it("lets a control appear again as an alias, as the Lexicon soft row does", () => {
+    const layout = paged();
+    layout.controls[2] = { ...layout.controls[2], alias: false };
+    expect(validateLayout(layout, descriptor)).toContain("gain: placed twice");
+  });
+
+  it("still finds an alias of nothing, a page that does not exist, and overlaps on one page", () => {
+    const layout = paged();
+    layout.controls.push({ param: "nope", kind: "knob", alias: true, page: "one", x: 60, y: 60, w: 20, h: 20 });
+    layout.controls.push({ param: "shape", kind: "select", alias: true, page: "three", x: 110, y: 85, w: 20, h: 10 });
+    layout.controls.push({ param: "on", kind: "switch", alias: true, page: "one", x: 20, y: 20, w: 10, h: 10 });
+    const errors = validateLayout(layout, descriptor);
+    expect(errors).toContain("nope: not a parameter of test.module");
+    expect(errors).toContain("shape: on a page the panel does not have");
+    expect(errors).toContain("on: overlaps gain");
+  });
+
+  it("finds an alias that is the only placing of its control", () => {
+    const layout = paged();
+    layout.controls[1] = { ...layout.controls[1], alias: true };
+    expect(validateLayout(layout, descriptor)).toContain("on: not on the panel");
+  });
+});
+
 describe("A control's group", () => {
   it("is the group it sits inside", () => {
     expect(groupOf(good(), good().controls[2])?.id).toBe("b");
@@ -148,13 +189,25 @@ describe("Every panel in the app", () => {
     expect(panelFor("m.synth")).toBeUndefined();
   });
 
-  it("covers the five panels of phase one", () => {
+  it("covers every panel built so far", () => {
     expect(PANEL_LAYOUTS.map((layout) => layout.moduleType).sort()).toEqual([
       "m.grain-engine",
       "m.prism-compressor",
       "m.prism-dattorro-filter-bank",
       "m.prism-dattorro-plate",
+      "m.prism-lxp-chamber",
+      "m.prism-lxp-hall",
+      "m.prism-lxp-plate",
+      "m.prism-lxp-room",
+      "m.prism-sh-bubbler",
+      "m.prism-sh-chebyshev",
+      "m.prism-sh-compand",
+      "m.prism-sh-decimate",
       "m.prism-sh-delay",
+      "m.prism-sh-flipper",
+      "m.prism-sh-matrix",
+      "m.prism-sh-phasor",
+      "m.prism-sh-pitchdelay",
     ]);
   });
 });

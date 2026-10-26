@@ -13,6 +13,8 @@ export const SH_DELAY: PanelLayout = {
   moduleType: "m.prism-sh-delay",
   style: "soundhack",
   width: 474,
+  // Bare numbers to two places, as the plug-ins print them.
+  readout: { decimals: 2 },
   height: 302,
   groups: [
     { id: "head", label: "++delay", x: 0, y: 0, w: 474, h: 46 },

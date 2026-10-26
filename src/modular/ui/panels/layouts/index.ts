@@ -6,8 +6,10 @@ import { COMP_GRAPH } from "./compGraph";
 import { GRAIN_CABINET } from "./grainCabinet";
 import { PLATE_NIGHT } from "./plateNight";
 import { SH_DELAY } from "./shDelay";
+import { LEXICON_PANELS } from "./lexicon";
+import { SOUNDHACK_PANELS } from "./soundhack";
 
-export const PANEL_LAYOUTS: readonly PanelLayout[] = [GRAIN_CABINET, PLATE_NIGHT, COMP_GRAPH, BANK_STRIP, SH_DELAY];
+export const PANEL_LAYOUTS: readonly PanelLayout[] = [GRAIN_CABINET, PLATE_NIGHT, COMP_GRAPH, BANK_STRIP, SH_DELAY, ...SOUNDHACK_PANELS, ...LEXICON_PANELS];
 
 const BY_TYPE = new Map(PANEL_LAYOUTS.map((layout) => [layout.moduleType, layout]));
 

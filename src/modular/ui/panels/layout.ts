@@ -7,9 +7,10 @@
 
 import type { ModuleDescriptor, ParameterDescriptor } from "../../model/graph";
 import type { Travel } from "./travel";
+import type { Readout } from "./readout";
 
 /** The looks a panel can wear: four new ones and the originals' own. */
-export type PanelStyle = "cabinet" | "night" | "graph" | "strip" | "soundhack";
+export type PanelStyle = "cabinet" | "night" | "graph" | "strip" | "soundhack" | "lexicon";
 
 export type ControlKind = "knob" | "hslider" | "vslider" | "switch" | "select" | "asset" | "readout";
 
@@ -28,6 +29,15 @@ export type PanelControl = Box & {
   states?: readonly [string, string];
   /** What a control reads at zero when zero means something else ("AUTO"). */
   zero?: string;
+  /** The page it is on, when the panel has pages; on every page otherwise. */
+  page?: string;
+  /**
+   * A second place for a control already on the panel, as the Lexicon soft
+   * row repeats six controls from the other pages. Not its one placing.
+   */
+  alias?: boolean;
+  /** How its number reads, where the original printed it its own way. */
+  readout?: Readout;
 };
 
 export type PanelGroup = Box & { id: string; label: string; tint?: string };
@@ -35,7 +45,10 @@ export type PanelGroup = Box & { id: string; label: string; tint?: string };
 export type PanelDisplay = Box & { kind: string };
 
 /** A control the original drew that this port has no parameter for. Drawn, dimmed. */
-export type InertControl = Box & { label: string; kind: ControlKind; why: string };
+export type InertControl = Box & { label: string; kind: ControlKind; why: string; page?: string };
+
+/** One page of a panel whose controls take turns in the same place. */
+export type PanelPage = { id: string; label: string };
 
 export type PanelLayout = {
   moduleType: string;
@@ -46,6 +59,14 @@ export type PanelLayout = {
   controls: PanelControl[];
   displays: PanelDisplay[];
   inert?: InertControl[];
+  /** Pages, the first shown first. A control with no page is on all of them. */
+  pages?: PanelPage[];
+  /** The panel's own colour, where its look has one (a SoundHack badge). */
+  accent?: string;
+  /** Lettering on the accent, when white would not read on it. */
+  accentInk?: string;
+  /** How every control's number reads, unless the control says otherwise. */
+  readout?: Readout;
 };
 
 /** The group a control sits in, which gives it its colour. */
@@ -99,14 +120,18 @@ export function validateLayout(layout: PanelLayout, module: ModuleDescriptor): s
   const parameters = new Map(module.parameters.map((p) => [p.id, p]));
   const seen = new Set<string>();
 
+  const pages = new Set((layout.pages ?? []).map((page) => page.id));
   for (const control of layout.controls) {
     const parameter = parameters.get(control.param);
     if (!parameter) {
       errors.push(`${control.param}: not a parameter of ${module.type}`);
       continue;
     }
-    if (seen.has(control.param)) errors.push(`${control.param}: placed twice`);
-    seen.add(control.param);
+    if (control.page !== undefined && !pages.has(control.page)) errors.push(`${control.param}: on a page the panel does not have`);
+    if (!control.alias) {
+      if (seen.has(control.param)) errors.push(`${control.param}: placed twice`);
+      seen.add(control.param);
+    }
     const { kinds, needs } = allowed(parameter);
     if (!kinds.includes(control.kind)) errors.push(`${control.param}: ${needs}, not a ${control.kind}`);
   }
@@ -116,14 +141,17 @@ export function validateLayout(layout: PanelLayout, module: ModuleDescriptor): s
 
   const panel = { x: 0, y: 0, w: layout.width, h: layout.height };
   const placed = [
-    ...layout.controls.map((c) => ({ box: c, name: c.param })),
-    ...(layout.inert ?? []).map((c) => ({ box: c, name: `${c.label} (inert)` })),
+    ...layout.controls.map((c) => ({ box: c, name: c.param, page: c.page })),
+    ...(layout.inert ?? []).map((c) => ({ box: c, name: `${c.label} (inert)`, page: c.page })),
   ];
-  placed.forEach(({ box, name }, index) => {
+  // Two controls collide only when they can be seen together: on one page,
+  // or either of them on every page.
+  const together = (a?: string, b?: string) => a === undefined || b === undefined || a === b;
+  placed.forEach(({ box, name, page }, index) => {
     if (!inside(box, panel)) errors.push(`${name}: runs off the panel`);
     if (layout.groups.filter((group) => inside(box, group)).length !== 1) errors.push(`${name}: not inside one group`);
     for (const other of placed.slice(0, index)) {
-      if (overlaps(box, other.box)) errors.push(`${name}: overlaps ${other.name}`);
+      if (together(page, other.page) && overlaps(box, other.box)) errors.push(`${name}: overlaps ${other.name}`);
     }
   });
   for (const display of layout.displays) {
