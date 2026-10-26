@@ -178,7 +178,11 @@ full, and add drum step programming. Automation is not ported.
          `playNote` writes all five calls at once. The browser's timeline
          sorts them, so a gate inside the attack holds silence until the gate
          and jumps to the sustain, exactly as the original; Rust evaluates the
-         same timeline (`ParamTimeline`). Its note-off changes nothing. The
+         same timeline (`ParamTimeline`). Its note-off changes nothing.
+         Only idMLab's step sequencers send a step. M's notes (the
+         `playOnNode` path) carry none, so they keep M's own lengths and
+         release at M's note-off: M's Legato stays in charge of them. RJ's
+         choice, 26 Oct 2026. The
          oscillators stop 50 ms after the release ends. A live note writes
          the same release at its key-up, over what is scheduled rather than
          cancelling it.
