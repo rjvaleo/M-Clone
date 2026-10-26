@@ -23,8 +23,9 @@ const KIND = { HOST_INPUT: 0, GAIN: 1, AUDIO_OUTPUT: 2, SYNTH: 3 };
 const GAIN_PARAM = { GAIN: 0, LEVEL: 1, MUTE: 2 };
 /** Matches the `Synth` constants in dsp-core/src/modules.rs. */
 const SYNTH_PARAM = {
-  LEVEL: 0, CUTOFF: 16, AMP_ATTACK: 20, AMP_SUSTAIN: 22, AMP_RELEASE: 23, LFO1_RATE: 28 + 2,
-  VOLUME: 39, CLASSIC: 44, SLFO_BASE: 45, DELAY_NOTE: 57, DELAY_FEEDBACK: 58, DELAY_WET: 59, TAPE: 62, TEMPO: 63,
+  LEVEL: 0, OSC1_WAVE: 1, CUTOFF: 16, RESONANCE: 17, AMP_ATTACK: 20, AMP_DECAY: 21, AMP_SUSTAIN: 22, AMP_RELEASE: 23,
+  LFO1_RATE: 28 + 2, VOLUME: 39, CLASSIC: 44, SLFO_BASE: 45, DELAY_NOTE: 57, DELAY_FEEDBACK: 58, DELAY_WET: 59,
+  TAPE: 62, TEMPO: 63, GATE: 64,
 };
 /** `ModSource` and `ModDest` in dsp-core/src/modmatrix.rs. */
 const MOD = { LFO1: 0, VOLUME: 11 };
@@ -308,6 +309,83 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
     check(`an original LFO on the volume moves it over the ABI (swing ${swing.toFixed(3)})`, swing > 0.05);
     api.all_notes_off(s);
   }
+}
+
+// ---- the original, exactly ------------------------------------------------
+// The behaviours that make m.synth the scale sequencer's rather than like it,
+// each across the real ABI: the 85 % gate on a sequenced note's step, the
+// cutoff's 15 ms setTargetAtTime glide, and a volume LFO keeping the level it
+// was last touched at. The maths is pinned in `webaudio.rs` and `modules.rs`.
+{
+  check("exports note_on_with_step", "note_on_with_step" in api);
+  /** A fresh classic synth with a sine, straight to the output. */
+  const rig = (values) => {
+    api.init(SAMPLE_RATE);
+    const s = u32(api.add_module(KIND.SYNTH));
+    const o = u32(api.add_module(KIND.AUDIO_OUTPUT));
+    api.connect(s, 0, o, 0);
+    api.connect(s, 1, o, 1);
+    api.set_io(NO_MODULE, o);
+    for (const [index, value] of [
+      [SYNTH_PARAM.LEVEL, 1], [SYNTH_PARAM.CLASSIC, 1], [SYNTH_PARAM.OSC1_WAVE, 0],
+      [SYNTH_PARAM.AMP_ATTACK, 1], [SYNTH_PARAM.AMP_DECAY, 1], [SYNTH_PARAM.AMP_SUSTAIN, 1],
+      [SYNTH_PARAM.AMP_RELEASE, 1], [SYNTH_PARAM.DELAY_WET, 0], ...values,
+    ]) api.set_param(s, index, value);
+    api.process_quantum();
+    return s;
+  };
+  const left = () => new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM);
+  /** The loudest sample of each of the next `blocks` quanta. */
+  const levels = (blocks) => {
+    const out = [];
+    for (let b = 0; b < blocks; b++) {
+      api.process_quantum();
+      out.push(left().reduce((m, v) => Math.max(m, Math.abs(v)), 0));
+    }
+    return out;
+  };
+
+  // A 125 ms step: held to 106.25 ms (quantum 41), silent from 107.25 ms on.
+  let s = rig([]);
+  api.note_on_with_step(s, 60, 1.0, 0.0, 0.125);
+  api.note_off(s, 60);
+  let level = levels(60);
+  check(`a sequenced note holds 85 % of its step (${level[38].toFixed(3)} at 101 ms)`, level[38] > 0.1);
+  check(`and is silent once released (${level[43].toExponential(1)} at 115 ms)`, level[43] < 1e-6);
+
+  s = rig([[SYNTH_PARAM.GATE, 0.5]]);
+  api.note_on_with_step(s, 60, 1.0, 0.0, 0.125);
+  level = levels(30);
+  check("a gate of a half releases at half the step", level[22] > 0.1 && level[26] < 1e-6);
+
+  s = rig([]);
+  api.note_on_with_step(s, 60, 1.0, 0.0, Number.NaN);
+  level = levels(60);
+  check("a step that is no step holds like a live note", level[55] > 0.1);
+
+  // The knob from 100 Hz to 1 kHz under a 1 kHz sine: 5 ms on, a 15 ms
+  // time constant has the cutoff near 355 Hz — still well down.
+  s = rig([[SYNTH_PARAM.CUTOFF, 100], [SYNTH_PARAM.RESONANCE, 0]]);
+  api.note_on(s, 83, 1.0, 0.0);
+  levels(40);
+  api.set_param(s, SYNTH_PARAM.CUTOFF, 1000);
+  level = levels(2);
+  const early = levels(1)[0];
+  level = levels(40);
+  const settled = level[39];
+  check(`the cutoff glides on the original's 15 ms (${(early / settled).toFixed(2)} of the way at 6 ms)`,
+    early / settled < 0.6);
+
+  // A volume LFO at full depth swings around the volume it was set at; the
+  // volume moving later does not rescale it.
+  s = rig([[SYNTH_PARAM.VOLUME, 0.5], [SYNTH_PARAM.SLFO_BASE, 4], [SYNTH_PARAM.SLFO_BASE + 1, 1],
+    [SYNTH_PARAM.SLFO_BASE + 3, 3], [SYNTH_PARAM.CUTOFF, 20000]]);
+  api.set_param(s, SYNTH_PARAM.VOLUME, 1);
+  api.note_on(s, 57, 1.0, 0.0);
+  level = levels(200).slice(20);
+  const ratio = Math.min(...level) / Math.max(...level);
+  check(`a volume LFO keeps the level it was touched at (low/high ${ratio.toFixed(2)}, 1/3 expected)`,
+    Math.abs(ratio - 1 / 3) < 0.05);
 }
 
 

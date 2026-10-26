@@ -58,9 +58,9 @@ import { rampParam } from "./params";
 import type { SmoothingLookup } from "./effects";
 import type { NotePlayer, PlayerRuntime } from "./players";
 import {
+  applyEnvelope,
   defaultSynthSettings,
   modulateSettings,
-  scheduleAttackDecay,
   SynthVoiceBank,
   type OscillatorSettings,
   type SynthSettings,
@@ -73,19 +73,25 @@ import {
   LFO_TARGETS,
   LFO_WAVES,
   MAX_DELAY_S,
+  ORIGINAL_GATE,
   TAPE_SPEEDS,
   TEMPO_GLIDE_DELAY_S,
   delaySeconds,
+  envelopeEvents,
   filterSweep,
+  gateReleaseSec,
   keyFollowedCutoff,
   lfoTargetGain,
   modulatedPulseWidth,
   planTapeGlide,
+  pulseAdvanceSec,
   pulseWidthSwing,
+  releaseEvents,
   tapeGlideCurve,
   tapeGlideValueAt,
   type LfoTarget,
   type LfoWave,
+  type PulseStep,
   type TapeGlide,
 } from "./synthLaws";
 
@@ -136,6 +142,8 @@ export type SynthDelay = {
 export type SynthPatch = SynthSettings & {
   matrix: ModMatrix;
   classic: boolean;
+  /** How much of a sequenced note's step it holds: the original's 85 %. */
+  gate: number;
   /** The master after the delay. */
   volume: number;
   lfos: readonly [SynthLfo, SynthLfo, SynthLfo];
@@ -211,6 +219,7 @@ export function readSynthSettings(
     pan: numberOr(parameters.pan, base.pan),
     matrix: readMatrix.fromJson(structure.matrix),
     classic: switchOf(parameters.classic),
+    gate: numberOr(parameters.gate, ORIGINAL_GATE),
     volume: numberOr(parameters.volume, 1),
     lfos: [lfo(0), lfo(1), lfo(2)],
     delay: {
@@ -228,8 +237,20 @@ export function readSynthSettings(
 /** Default polyphony: enough for both hands, bounded so a stuck patch degrades. */
 const DEFAULT_MAX_VOICES = 16;
 
-/** How the classic filter's base follows the knob: the original's `setTargetAtTime`. */
+/**
+ * How the cutoff follows the knob: the original's `setTargetAtTime` time
+ * constant. The knob is one constant source feeding the classic filter and
+ * every voice filter alike, so every note follows it the same way.
+ */
 export const CUTOFF_GLIDE_SEC = 0.015;
+
+/** An LFO's own controls: touching one rescales its volume and wet swing. */
+const LFO_CONTROL = /^lfo-([abc])-(rate|depth|wave|target)$/;
+/** A preset load or morph frame, which touches all three (`synthPresets.ts`). */
+const LFO_TOUCH = "lfo-touch";
+
+/** The levels a volume or delay-wet LFO swings around, as of its last touch. */
+type LfoLevels = { volume: number; delayWet: number };
 
 /** One LFO's nodes, and where its gain is plugged in now. */
 type LfoNodes = { osc: OscillatorNodeLike; gain: GainNodeLike; target: LfoTarget | null };
@@ -273,7 +294,12 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
 
   /** Pulse LFO phases in radians, advanced from note to note. */
   private readonly pwPhases = [0, 0, 0];
-  private pwClockSec: number;
+  /** The last note's place on the step grid; `null` at the start of a run. */
+  private pwLast: PulseStep | null = null;
+  /** Each LFO's volume and wet, as of the last time its controls moved. */
+  private readonly lfoLevels: LfoLevels[];
+  /** When each LFO was last touched: a level set in the same moment counts. */
+  private readonly lfoTouchedAt: number[];
   private glide: TapeGlide | null = null;
   private readonly delayAtBuild: number;
   private classicHold: ClassicHold | null = null;
@@ -292,7 +318,9 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
     this.structure = spec.structure;
     this.random = runtime.random ?? Math.random;
     this.patch = readSynthSettings(this.parameters, this.structure);
-    this.pwClockSec = atSec;
+    // `initAudio` connects each LFO with the levels of the moment.
+    this.lfoLevels = LFO_IDS.map(() => this.levels());
+    this.lfoTouchedAt = LFO_IDS.map(() => atSec);
 
     this.inputGain = context.createGain();
     this.outputGain = context.createGain();
@@ -410,8 +438,22 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
     this.parameters = { ...this.parameters, [parameterId]: value };
     this.patch = readSynthSettings(this.parameters, this.structure);
     if (parameterId === "cutoff") {
-      this.cutoffBase.offset.cancelScheduledValues(atSec);
-      this.cutoffBase.offset.setTargetAtTime(this.patch.filter.cutoffHz, atSec, CUTOFF_GLIDE_SEC);
+      // `cancelAndHoldAtTime(now)` then `setTargetAtTime(cutoff, now, 0.015)`.
+      const offset = this.cutoffBase.offset;
+      if (offset.cancelAndHoldAtTime) offset.cancelAndHoldAtTime(atSec);
+      else offset.cancelScheduledValues(atSec);
+      offset.setTargetAtTime(this.patch.filter.cutoffHz, atSec, CUTOFF_GLIDE_SEC);
+    }
+    // A touched LFO takes the levels of the moment — the whole moment, so a
+    // preset's volume lands on its LFOs whichever order its values arrive in,
+    // as it does on the Rust engine, where a moment is one sample.
+    const lfo = LFO_CONTROL.exec(parameterId);
+    if (lfo) this.touchLfo(LFO_IDS.indexOf(lfo[1] as (typeof LFO_IDS)[number]), atSec);
+    if (parameterId === LFO_TOUCH) LFO_IDS.forEach((_, index) => this.touchLfo(index, atSec));
+    if (parameterId === "volume" || parameterId === "delay-wet") {
+      this.lfoTouchedAt.forEach((touched, index) => {
+        if (touched === atSec) this.lfoLevels[index] = this.levels();
+      });
     }
     // A new note value glides at once; a new tempo after the original's
     // pause, which lets a dragged tempo knob settle before the tape follows.
@@ -429,18 +471,30 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
     /* a synth is a source: there is no dry path to balance against */
   }
 
-  noteOn(note: number, velocity: number, atSec: number, detuneCents = 0): void {
+  /**
+   * A note. `stepSec` is its step as sequenced, when it has one: the note
+   * then releases at the gate — 85 % of the step, as the original's do — with
+   * its release written when it starts, and its note-off changes nothing.
+   */
+  noteOn(note: number, velocity: number, atSec: number, detuneCents = 0, stepSec?: number): void {
     if (this.disposed) return;
     const pitch = note + detuneCents / 100;
-    const settings = this.settingsFor(note, velocity, detuneCents, this.pulseSwing(atSec));
+    const sequenced = stepSec !== undefined && Number.isFinite(stepSec) && stepSec > 0;
+    const releaseAtSec = sequenced ? gateReleaseSec(atSec, stepSec, this.patch.gate) : undefined;
+    const settings = this.settingsFor(note, velocity, detuneCents, this.pulseSwing(atSec, stepSec));
     if (this.patch.classic) {
-      this.bank.noteOn(settings, note, velocity, atSec, { classic: true, destination: this.classicIn, pitch });
-      this.triggerClassicFilter(settings, note, pitch, atSec);
+      this.bank.noteOn(settings, note, velocity, atSec, {
+        classic: true, destination: this.classicIn, pitch, releaseAtSec,
+      });
+      this.triggerClassicFilter(settings, note, pitch, atSec, releaseAtSec);
     } else {
       this.bank.noteOn(settings, note, velocity, atSec, {
         filterFrequencyMod: this.lfoFilterBus,
         filterQMod: this.lfoQBus,
+        cutoffBase: this.cutoffBase,
+        knobHz: positive(this.patch.filter.cutoffHz, 2000),
         pitch,
+        releaseAtSec,
       });
     }
   }
@@ -449,18 +503,18 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
     this.bank.noteOff(note, atSec);
     // Only the note that last struck the shared filter releases it: in the
     // original each note cancels the release the one before it scheduled.
+    // Written over what is there, as the original's release is.
     const hold = this.classicHold;
     if (hold?.note !== note) return;
-    const offset = this.filterEnv.offset;
-    offset.cancelScheduledValues(atSec);
-    offset.setValueAtTime(hold.sustainDelta, atSec);
-    offset.linearRampToValueAtTime(hold.baseDelta, atSec + hold.releaseSec);
+    applyEnvelope(this.filterEnv.offset, releaseEvents(atSec, hold.sustainDelta, hold.baseDelta, hold.releaseSec));
     this.classicHold = null;
   }
 
+  /** Everything off — the end of a run, so the next note starts the step grid again. */
   silence(atSec: number): void {
     this.bank.panic(atSec);
     this.classicHold = null;
+    this.pwLast = null;
   }
 
   dispose(): void {
@@ -504,11 +558,11 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
     set(this.panR.pan, delay.spread);
     set(this.hiCutLR.frequency, delay.hiCutHz);
     set(this.hiCutRL.frequency, delay.hiCutHz);
-    const scales = { cutoffHz: this.patch.filter.cutoffHz, volume, delayWet: delay.wet };
     this.patch.lfos.forEach((lfo, index) => {
       const nodes = this.lfoNodes[index];
       nodes.osc.type = lfo.wave;
       set(nodes.osc.frequency, lfo.rate);
+      const scales = { cutoffHz: this.patch.filter.cutoffHz, ...this.lfoLevels[index] };
       set(nodes.gain.gain, lfoTargetGain(lfo.target, lfo.depth, scales));
       if (nodes.target === lfo.target) return;
       if (nodes.target !== null) nodes.gain.disconnect();
@@ -516,6 +570,16 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
       if (destination) nodes.gain.connect(destination);
       nodes.target = lfo.target;
     });
+  }
+
+  /** The volume and wet now, for an LFO touched now. */
+  private levels(): LfoLevels {
+    return { volume: this.patch.volume, delayWet: this.patch.delay.wet };
+  }
+
+  private touchLfo(index: number, atSec: number): void {
+    this.lfoLevels[index] = this.levels();
+    this.lfoTouchedAt[index] = atSec;
   }
 
   private lfoDestination(target: LfoTarget): AudioNodeLike | undefined {
@@ -536,13 +600,15 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
   /**
    * The pulse-width swing this note is built with.
    *
-   * Each pulse LFO's phase moves on by its rate times the time since the last
-   * note — the original advances it a step at a time, which for notes on its
-   * grid is the same thing — and is read as a sine.
+   * Each pulse LFO's phase moves on by its rate through the steps since the
+   * last note's, this note's own included — the original advances it a step
+   * at a time, before the step plays (`pulseAdvanceSec`) — and is read as a
+   * sine.
    */
-  private pulseSwing(atSec: number): number {
-    const elapsed = atSec - this.pwClockSec;
-    this.pwClockSec = atSec;
+  private pulseSwing(atSec: number, stepSec: number | undefined): number {
+    const step: PulseStep = { onsetSec: atSec, stepSec };
+    const elapsed = pulseAdvanceSec(this.pwLast, step);
+    this.pwLast = step;
     const swinging: { phase: number; depth: number }[] = [];
     this.patch.lfos.forEach((lfo, index) => {
       if (lfo.target !== "pw") return;
@@ -553,24 +619,27 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
   }
 
   /**
-   * Retrigger the shared filter's envelope, as `playNote` does: the offset
-   * from the knob's cutoff jumps to this note's key-followed base, sweeps to
-   * the peak and settles on the sustain, cancelling whatever came before.
+   * Retrigger the shared filter's envelope, as `playNote` does: cancel what
+   * is scheduled from this note on, then the offset from the knob's cutoff
+   * jumps to this note's key-followed base, sweeps to the peak and settles on
+   * the sustain — and a sequenced note writes its release at the gate too.
    */
-  private triggerClassicFilter(settings: SynthSettings, note: number, pitch: number, atSec: number): void {
+  private triggerClassicFilter(
+    settings: SynthSettings, note: number, pitch: number, atSec: number, releaseAtSec: number | undefined,
+  ): void {
     const knob = positive(this.patch.filter.cutoffHz, 2000);
     const { filter } = settings;
     const base = keyFollowedCutoff(positive(filter.cutoffHz, 2000), pitch, filter.keyFollow);
     const sweep = filterSweep(base, filter.envAmountOctaves, filter.envAmount, filter.adsr.sustain);
-    scheduleAttackDecay(
-      this.filterEnv.offset, atSec, sweep.base - knob, sweep.peak - knob, sweep.sustain - knob, filter.adsr,
+    const offset = this.filterEnv.offset;
+    offset.cancelScheduledValues(atSec);
+    applyEnvelope(
+      offset,
+      envelopeEvents(atSec, sweep.base - knob, sweep.peak - knob, sweep.sustain - knob, filter.adsr, releaseAtSec),
     );
-    this.classicHold = {
-      note,
-      sustainDelta: sweep.sustain - knob,
-      baseDelta: sweep.base - knob,
-      releaseSec: Math.max(0, filter.adsr.release),
-    };
+    this.classicHold = releaseAtSec === undefined
+      ? { note, sustainDelta: sweep.sustain - knob, baseDelta: sweep.base - knob, releaseSec: Math.max(0, filter.adsr.release) }
+      : null;
   }
 
   /** Glide the delay to the time the tempo and note value now ask for. */

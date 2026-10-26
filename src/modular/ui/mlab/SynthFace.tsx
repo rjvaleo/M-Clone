@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { JsonValue } from "../../model/graph";
 import { DELAY_NOTES, LFO_TARGETS, LFO_WAVES, TAPE_SPEEDS } from "../../audio/synthLaws";
-import { SYNTH_PRESET_LIBRARY, morphValuesAt, planMorph } from "../../audio/synthPresets";
+import { SYNTH_PRESET_LIBRARY, morphValuesAt, planMorph, touchingLfos } from "../../audio/synthPresets";
 import { EnvelopeEditor } from "../n4/EnvelopeEditor";
 import { formatValue } from "../n4/format";
 import { N4Button, N4Knob, N4Panel, N4Spinner } from "../n4/kit";
@@ -63,7 +63,7 @@ export function SynthFace({ node, setParameter, setParameters, status }: MLabFac
   useEffect(() => stopMorph, []);
   const load = () => {
     stopMorph();
-    setParameters(SYNTH_PRESET_LIBRARY[picked].values);
+    setParameters(touchingLfos(SYNTH_PRESET_LIBRARY[picked].values, live.current));
   };
   const morph = () => {
     stopMorph();
@@ -73,7 +73,7 @@ export function SynthFace({ node, setParameter, setParameters, status }: MLabFac
     const seconds = n("morph-time", 5);
     const frame = (now: number) => {
       const t = Math.min(1, (now - started) / (seconds * 1000));
-      setParameters(morphValuesAt(plan, t));
+      setParameters(touchingLfos(morphValuesAt(plan, t), live.current));
       morphing.current = t < 1 ? requestAnimationFrame(frame) : null;
     };
     morphing.current = requestAnimationFrame(frame);
@@ -93,7 +93,7 @@ export function SynthFace({ node, setParameter, setParameters, status }: MLabFac
               </span>
               {knob(`osc${i}-detune`, "Det", -2400, 2400, 1, "¢")}
               {knob(`osc${i}-level`, "Lvl", 0, 1, 0.01)}
-              {knob(`osc${i}-width`, "Wid", 0.1, 0.9, 0.01)}
+              {knob(`osc${i}-width`, "Wid", 0.05, 0.95, 0.01)}
             </div>
           ))}
         </div>
@@ -122,6 +122,7 @@ export function SynthFace({ node, setParameter, setParameters, status }: MLabFac
               {knob("level", "Lvl", 0, 1, 0.01)}
               {knob("pan", "Pan", -1, 1, 0.01)}
               {knob("max-voices", "Vce", 1, 32, 1)}
+              {knob("gate", "Gate", 0.05, 1, 0.01)}
               {knob("volume", "Vol", 0, 1, 0.001)}
               <Scope width={40} height={26} read={(into) => host?.readScope?.(node.id, into) ?? false} />
             </div>

@@ -46,6 +46,14 @@ describe("RackNotePlayer", () => {
     ]);
   });
 
+  it("carries a sequenced note's step, for the synth's gate", () => {
+    const rack = sink();
+    new RackNotePlayer("n1", rack).noteOn(60, 127, 12.5, 0, 0.25);
+    expect(rack.schedule).toHaveBeenCalledWith("n1", 12.5, [
+      { type: "note-on", note: 60, velocity: 1, detuneCents: 0, stepSec: 0.25 },
+    ]);
+  });
+
   it("schedules note off for its own moment", () => {
     const rack = sink();
     new RackNotePlayer("n1", rack).noteOff(60, 12.5);

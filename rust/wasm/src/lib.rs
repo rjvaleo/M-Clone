@@ -194,6 +194,23 @@ pub extern "C" fn note_on(module: u32, note: u32, velocity: f32, detune_cents: f
     }
 }
 
+/// A sequenced note that knows its step — its slot in the sequence, in
+/// seconds — so the synth can gate it as the scale sequencer does.
+#[no_mangle]
+pub extern "C" fn note_on_with_step(module: u32, note: u32, velocity: f32, detune_cents: f32, step_sec: f32) {
+    if !velocity.is_finite() || note > 127 {
+        return;
+    }
+    let cents = if detune_cents.is_finite() { detune_cents } else { 0.0 };
+    if let Some(engine) = engine() {
+        if step_sec.is_finite() && step_sec > 0.0 {
+            engine.note_on_with_step(module, note as u8, velocity, cents, step_sec);
+        } else {
+            engine.note_on(module, note as u8, velocity, cents);
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn note_off(module: u32, note: u32) {
     if note > 127 {

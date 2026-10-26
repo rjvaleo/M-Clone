@@ -254,6 +254,43 @@ describe("The three LFOs", () => {
     expect(rig.lfoGains[1].outgoing).toEqual(new Set([rig.lfoQBus]));
   });
 
+  it("keep the volume and wet they were last touched at, as the original's do", () => {
+    // `updateVol` and `updateDelay` never rescale an LFO; touching one of the
+    // LFO's own controls does, with the levels of the moment.
+    const rig = build({
+      volume: 0.21, "delay-wet": 0.25,
+      "lfo-a-depth": 0.5, "lfo-a-target": 3, "lfo-c-depth": 1, "lfo-c-target": 5,
+    });
+    rig.player.setParameter("volume", 0.6, 1);
+    rig.player.setParameter("delay-wet", 0.8, 1);
+    expect(rig.lfoGains[0].gain.value).toBeCloseTo(0.105, 12);
+    expect(rig.lfoGains[2].gain.value).toBe(0.25);
+    rig.player.setParameter("lfo-a-rate", 2, 2);
+    expect(rig.lfoGains[0].gain.value).toBeCloseTo(0.3, 12);
+    expect(rig.lfoGains[2].gain.value).toBe(0.25);
+    rig.player.setParameter("lfo-c-wave", 1, 3);
+    expect(rig.lfoGains[2].gain.value).toBe(0.8);
+    rig.player.setParameter("lfo-b-target", 4, 4);
+    rig.player.setParameter("lfo-b-depth", 1, 4);
+    expect(rig.lfoGains[0].gain.value).toBeCloseTo(0.3, 12);
+  });
+
+  it("take the levels a whole moment lands on, and all three on a preset load", () => {
+    const rig = build({ volume: 0.21, "delay-wet": 0.25, "lfo-a-depth": 1, "lfo-a-target": 3, "lfo-c-depth": 1, "lfo-c-target": 5 });
+    // An LFO touched, then the volume set, in one moment: the volume counts.
+    rig.player.setParameter("lfo-a-depth", 0.5, 2);
+    rig.player.setParameter("volume", 0.6, 2);
+    expect(rig.lfoGains[0].gain.value).toBeCloseTo(0.3, 12);
+    // A later moment does not.
+    rig.player.setParameter("volume", 0.9, 3);
+    expect(rig.lfoGains[0].gain.value).toBeCloseTo(0.3, 12);
+    // A preset load touches all three, whatever changed.
+    rig.player.setParameter("delay-wet", 0.5, 4);
+    rig.player.setParameter("lfo-touch", 1, 4);
+    expect(rig.lfoGains[0].gain.value).toBeCloseTo(0.45, 12);
+    expect(rig.lfoGains[2].gain.value).toBe(0.5);
+  });
+
   it("swing the volume and the delay's wet around their own level", () => {
     const rig = build({
       volume: 0.21, "delay-wet": 0.25,
@@ -298,29 +335,42 @@ describe("The pulse LFO", () => {
     "lfo-b-depth": 1, "lfo-b-rate": 1, "osc1-wave": "pulse", "osc2-level": 0, "osc3-level": 0, ...extra,
   });
   /** The width a note's first oscillator was built with: its DC term is 2w − 1. */
-  const widthAt = (rig: ReturnType<typeof build>, note: number, atSec: number) => {
+  const widthAt = (rig: ReturnType<typeof build>, note: number, atSec: number, stepSec?: number) => {
     const before = rig.fresh(FakeOscillator).length;
-    rig.player.noteOn(note, 100, atSec);
+    rig.player.noteOn(note, 100, atSec, 0, stepSec);
     const osc = rig.fresh(FakeOscillator)[before];
     return { width: (osc.periodicWave!.real[0] + 1) / 2, osc };
   };
 
-  it("builds each note's pulse from a sine of the LFO's phase at that note", () => {
+  it("advances step by step, before each step plays, rests included", () => {
+    // Quarter-second steps at 1 Hz, as `modules.rs` plays them. The first
+    // step moves it a quarter turn before it sounds: sin = 1, +0.45 → 95 %.
     const rig = pulseRig();
-    // A quarter second at 1 Hz: a quarter turn, sin = 1, so +0.45 → 95 %.
-    const first = widthAt(rig, 60, 0.25);
+    const first = widthAt(rig, 60, 0.25, 0.25);
     expect(first.width).toBeCloseTo(0.95, 6);
     expect(Array.from(first.osc.periodicWave!.real)).toEqual(Array.from(pulseWaveCoefficients(0.95).real));
-    // Half a second on: three quarters of a turn, sin = −1 → 5 %.
-    expect(widthAt(rig, 62, 0.75).width).toBeCloseTo(0.05, 6);
-    // A chord shares one reading.
-    expect(widthAt(rig, 64, 0.75).width).toBeCloseTo(0.05, 6);
+    // After a rest, two steps on: three quarters of a turn, sin = −1 → 5 %.
+    expect(widthAt(rig, 62, 0.75, 0.25).width).toBeCloseTo(0.05, 6);
+    // A chord is one step.
+    expect(widthAt(rig, 64, 0.75, 0.25).width).toBeCloseTo(0.05, 6);
+  });
+
+  it("moves by the time between notes played live, and starts a run afresh", () => {
+    const rig = pulseRig();
+    // The first live note does not move it; the next moves by the time since.
+    expect(widthAt(rig, 60, 0.25).width).toBeCloseTo(0.5, 6);
+    expect(widthAt(rig, 62, 0.5).width).toBeCloseTo(0.95, 6);
+    // A sequenced note after a live one moves by the time between.
+    expect(widthAt(rig, 64, 0.75, 0.25).width).toBeCloseTo(0.5, 6);
+    // Silence ends the run: the next step moves by its own length.
+    rig.player.silence(1);
+    expect(widthAt(rig, 65, 3, 0.25).width).toBeCloseTo(0.05, 6);
   });
 
   it("swings by depth · 0.45 around the knob's width", () => {
     // A quarter turn at 0.5 Hz takes half a second.
     const rig = pulseRig({ "lfo-b-depth": 0.5, "lfo-b-rate": 0.5, "osc1-width": 0.3 });
-    expect(widthAt(rig, 60, 0.5).width).toBeCloseTo(0.3 + 0.5 * 0.45, 6);
+    expect(widthAt(rig, 60, 0.5, 0.5).width).toBeCloseTo(0.3 + 0.5 * 0.45, 6);
   });
 
   it("does not advance an LFO pointed elsewhere", () => {
@@ -394,6 +444,8 @@ describe("Classic: one filter for every note", () => {
     rig.player.noteOff(64, 1.5);
     expect(rig.filterEnv.offset.moves().slice(-2).map((call) => [call.method, call.time, call.value]))
       .toEqual([["set", 1.5, 4500], ["linear", 1.8, 0]]);
+    // Written over the sweep, not cancelling it.
+    expect(rig.filterEnv.offset.calls.slice(-3)[0].method).not.toBe("cancel");
     // Released once; a second key-up has nothing left to release.
     const after = rig.filterEnv.offset.calls.length;
     rig.player.noteOff(64, 1.6);
@@ -414,9 +466,42 @@ describe("Classic: one filter for every note", () => {
     rig.player.noteOn(60, 127, 1);
     const envelope = rig.filterEnv.offset.calls.length;
     rig.player.setParameter("cutoff", 4000, 1.1);
+    // `cancelAndHoldAtTime(now)` then `setTargetAtTime(cutoff, now, 0.015)`.
+    expect(rig.cutoffBase.offset.calls.slice(-2).map((call) => [call.method, call.time]))
+      .toEqual([["hold", 1.1], ["target", 1.1]]);
     expect(from(rig.cutoffBase.offset.calls, 1)).toMatchObject({ method: "target", time: 1.1, value: 4000 });
     expect(CUTOFF_GLIDE_SEC).toBe(0.015);
     expect(rig.filterEnv.offset.calls).toHaveLength(envelope);
+    // A browser without cancel-and-hold cancels instead.
+    (rig.cutoffBase.offset as { cancelAndHoldAtTime?: unknown }).cancelAndHoldAtTime = undefined;
+    rig.player.setParameter("cutoff", 3000, 1.2);
+    expect(rig.cutoffBase.offset.calls.slice(-2).map((call) => call.method)).toEqual(["cancel", "target"]);
+  });
+
+  it("is the same glide every per-voice note follows", () => {
+    const rig = build({ cutoff: 1000, "key-follow": 0 });
+    rig.player.noteOn(60, 127, 1);
+    const [voiceFilter] = rig.fresh(FakeBiquad);
+    expect(rig.cutoffBase.outgoing.has(voiceFilter.frequency as unknown as FakeNode)).toBe(true);
+    // The note's own automation is its offset from the knob — none here.
+    expect((voiceFilter.frequency as FakeParam).moves()[0].value).toBe(0);
+  });
+
+  it("writes a sequenced note's whole envelope, release included, after cancelling", () => {
+    const rig = classic();
+    rig.player.noteOn(60, 127, 1, 0, 0.5);
+    expect(rig.filterEnv.offset.calls.slice(-6).map((call) => [call.method, call.time, call.value])).toEqual([
+      ["cancel", 1, 0],
+      ["set", 1, 0],
+      ["linear", 1.01, 15000],
+      ["linear", 1.16, 4500],
+      ["set", 1 + 0.5 * 0.85, 4500],
+      ["linear", 1 + 0.5 * 0.85 + 0.3, 0],
+    ]);
+    // Nothing is left for a key-up to release.
+    const before = rig.filterEnv.offset.calls.length;
+    rig.player.noteOff(60, 1.2);
+    expect(rig.filterEnv.offset.calls).toHaveLength(before);
   });
 
   it("takes resonance on the shared filter, and leaves per-voice notes to their own", () => {

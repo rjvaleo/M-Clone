@@ -34,9 +34,12 @@ export class RackNotePlayer implements NotePlayer {
    * the engine's `note_on` takes 0–1. Without the scaling every note reached
    * Rust at full velocity — a velocity of 100 clamped to 1.
    */
-  noteOn(note: number, velocity: number, atSec: number, detuneCents = 0): void {
+  noteOn(note: number, velocity: number, atSec: number, detuneCents = 0, stepSec?: number): void {
     const unit = Math.max(0, Math.min(1, velocity / 127));
-    this.rack.schedule(this.nodeId, atSec, [{ type: "note-on", note, velocity: unit, detuneCents }]);
+    const event: ScheduledEvent = stepSec === undefined
+      ? { type: "note-on", note, velocity: unit, detuneCents }
+      : { type: "note-on", note, velocity: unit, detuneCents, stepSec };
+    this.rack.schedule(this.nodeId, atSec, [event]);
   }
 
   noteOff(note: number, atSec: number): void {
