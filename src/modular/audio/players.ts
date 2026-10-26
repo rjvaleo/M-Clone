@@ -61,8 +61,14 @@ export interface NotePlayer {
    * see `tuning/quantize.ts`. Optional because a sampler that only has a
    * playback rate can reasonably ignore it, and every existing caller
    * predates it.
+   *
+   * `stepSec` is the length of the note's step — its slot in the sequence,
+   * before any gate shortened it — when the note came from a sequence. The
+   * instrument hears it at the start, as the scale sequencer's synth knows
+   * each step's length when it schedules the note. A note played live has
+   * none. Its note-off follows either way.
    */
-  noteOn(note: number, velocity: number, atSec: number, detuneCents?: number): void;
+  noteOn(note: number, velocity: number, atSec: number, detuneCents?: number, stepSec?: number): void;
   noteOff(note: number, atSec: number): void;
   /** Silence everything sounding, without a click. */
   silence(atSec: number): void;

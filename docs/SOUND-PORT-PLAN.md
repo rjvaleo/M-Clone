@@ -121,18 +121,17 @@ full, and add drum step programming. Automation is not ported.
        above only; envelope amount `filter-env` −100…+100 %, linear in hertz
        (`base + amt·base·15`, sustain scaled, 20 Hz–20 kHz) alongside idMLab's
        octave amount. Web Audio's lowpass on both backends (Rust:
-       `Biquad::set_web_lowpass`, Q in dB). Envelopes are straight lines on
-       both (Rust: `LinearEnvelope`), and a note's filter envelope is an offset
-       from the cutoff knob, as the original sums them.
+       `webaudio::WebLowpass`, Q in dB), and a note's filter envelope is an
+       offset from the cutoff knob, as the original sums them.
      - **Classic** (`classic`): classic voices skip their filter and pan and
        feed one shared filter whose frequency is knob + envelope offset + LFO;
        every note retriggers the offset and the newest note's key-up releases
        it. Classic ignores pan (the original is mono).
      - **LFOs** `lfo-a/b/c`: sine/triangle/saw, 0.05–20 Hz, depth, target none /
        filter (depth·cutoff Hz into every filter) / resonance (10 Q) / volume /
-       pulse width / delay wet (each `level·(1 ± depth)`). Pulse width is read
-       per note as `sin(phase)·depth·0.45`, held 5–95 %; widths 5–95 % now.
-       Separate from the matrix's LFOs and from `m.lfo`. Depth starts at zero.
+       pulse width / delay wet. Pulse width is read per note as
+       `sin(phase)·depth·0.45`, held 5–95 %; widths 5–95 % now. Separate from
+       the matrix's LFOs and from `m.lfo`. Depth starts at zero.
      - **Delay**: ping-pong of two 4 s lines, hi-cut (Q 0.5 dB) and feedback in
        each leg, spread panning, dry `1 − wet`, then `volume` (the master; the
        original's `volume·0.3`). Synced to `tempo` (the synth's own until the
@@ -152,18 +151,91 @@ full, and add drum step programming. Automation is not ported.
        fade handle, and `RackNotePlayer` sent MIDI velocity where the engine
        takes 0–1, so every Rust instrument played every note at full velocity.
        The matrix's cutoff and resonance ranges now match the browser's.
-     - **Not exact, and why**: Rust's oscillators are PolyBLEP rather than
-       Web Audio's wavetables, scaled to their peak normalisation (the pulse's
-       at narrow widths approximately); Rust's LFO shapes are ideal where the
-       browser band-limits them. The original's 85 % gate is its sequencer's;
-       here notes are as long as the sequence makes them, and a gate shorter
-       than attack + decay follows idMLab's release rather than the original's
-       event order. The pulse LFO advances by the time between notes, which on
-       the original's step grid is its per-step advance. Volume and delay-wet
-       LFOs scale by the live level (the original by the level when the LFO
-       was last touched). On Rust the cutoff knob moves through the rack's
-       5 ms ramp, the original's through a 15 ms exponential; per-voice notes
-       follow the knob live on Rust and take it at the next note on Web Audio.
+     - **Exact since** (Web Audio's own maths in `rust/dsp-core/src/webaudio.rs`,
+       its reference `src/modular/audio/webAudioLaws.ts`, the same numbers
+       pinned on both sides; checked against Chromium's source, not memory):
+       - *Oscillators.* Rust plays Web Audio's band-limited tables: the spec's
+         Fourier series (sine `b₁ = 1`, square `4/(nπ)` odd, saw
+         `(−1)ⁿ⁺¹·2/(nπ)`, triangle `8·sin(nπ/2)/(nπ)²`) as
+         `GenerateBasicWaveform` computes them, a table per third of an
+         octave keeping `N/2·2^(−r/3)` partials (N = 4096 at 44.1/48 kHz),
+         DC and Nyquist cleared, all normalised by the fullest table's peak;
+         a note blends the two tables either side of `1 + 3·log2(f/f_low)`,
+         interpolating linearly within each, or by 3- and 5-point Lagrange
+         below 0.3 entries a sample, its read position in double. The LFOs
+         are the same oscillators. The PolyBLEP oscillator and the
+         peak-normalising gain are gone from the synth. Frequency is set as
+         the browser voice sets it: the note's hertz as a float, times
+         `2^(detune/1200)`.
+       - *Pulse.* The original's own `PeriodicWave`: 256 cosine terms
+         `2/(nπ)·sin(nπw)`, its DC term dropped by the wave, normalised the
+         same way — built per note at the note's width and kept for its life,
+         on both backends (Rust used to read the width live).
+       - *Gate.* A sequenced note now knows its step when it starts (the
+         runtime carries `stepSec` on the note-on: the note's slot before any
+         gate shortened it) and releases at 85 % of it — `gate`, default 0.85
+         — with its release written with the rest of its envelope, as
+         `playNote` writes all five calls at once. The browser's timeline
+         sorts them, so a gate inside the attack holds silence until the gate
+         and jumps to the sustain, exactly as the original; Rust evaluates the
+         same timeline (`ParamTimeline`). Its note-off changes nothing. The
+         oscillators stop 50 ms after the release ends. A live note writes
+         the same release at its key-up, over what is scheduled rather than
+         cancelling it.
+       - *Cutoff glide.* `cancelAndHoldAtTime` + `setTargetAtTime(cutoff, now,
+         0.015)` on Web Audio; on Rust the same curve (`TargetGlide`: the
+         discrete time constant `1 − e^(−1/(fs·τ))`, converged at a render
+         quantum as Chromium checks it). That one gliding value is every
+         filter's base — the classic filter's and every voice's — so a
+         sounding per-voice note follows the knob identically on both.
+       - *Volume and delay-wet LFOs* swing by `depth × level as of the LFO's
+         last touch` (its rate, depth, wave or target moving), as
+         `updateVol`/`updateDelay` never rescale them. A preset load or morph
+         frame touches all three (`lfo-touch`), as the original fires every
+         LFO slider's handler; a touch takes the levels of its whole moment.
+       - *Pulse LFO.* Advances step by step, rests included, before the step
+         plays: from one note to the next, through the steps after the
+         earlier note's and its own; a run's first note by its own step.
+       - *Also found and fixed:* the lowpass and the delay hi-cuts run as
+         Chromium runs a biquad (double precision, direct form I); the tape
+         delay reads its position in double, as Chromium's `Delay` does (an
+         f32 position kept only 1/64 of a sample at four seconds); a note
+         struck again is a new voice while the last rings out its release
+         (Rust used to retrigger the old voice from where it was); the
+         classic filter runs always, as a node does (Rust stopped it half a
+         second after the last classic note); the face's width knobs reach
+         5–95 %.
+     - **Not exact, and why**:
+       - Chromium's inverse FFT runs in single precision; the Rust tables are
+         computed in double and rounded once, so table entries agree to about
+         one part in ten million rather than bit for bit.
+       - Everything crossing the wasm ABI is an f32 (parameters, a note's
+         step), where the browser keeps JavaScript doubles; a time can differ
+         by under a microsecond, which moves an event by a frame only when it
+         falls that close to a frame boundary.
+       - Rust starts a note on a sample; the browser starts an oscillator and
+         its automation at the exact fractional time, with a sub-sample phase.
+       - The original's timing on its main thread cannot be reproduced: it
+         schedules up to 100 ms ahead from a 25 ms timer, so a classic note's
+         `cancelScheduledValues` can land after the previous note's release
+         ramp has started (jumping it back to the sustain) or not, run to run;
+         and in the browser a knob move lands at the next render quantum, in
+         Rust at the next sample.
+       - A live note (no step) cannot know its gate in advance: from its
+         key-up it follows the original's curve, but a key-up inside the
+         attack cannot give the silence the original's sorted events give
+         before the gate. Sequenced notes are exact.
+       - Loading a preset, the original applies the delay wet after the LFO
+         sliders, so an LFO whose menus the preset does not store keeps the
+         wet from before the preset; here a load is one moment and every LFO
+         takes the preset's wet (and LFO 1's stale keys stay fixed, as
+         agreed).
+       - idMLab's own, not the original's: velocity (the original plays every
+         note at full level; idMLab's sequencers send velocities), the voice
+         ceiling (held notes only; the original has none), all-notes-off
+         (Rust releases, Web Audio fades), and a fresh module's LFO depths
+         and wet at zero where the original's page starts at 20 %, 25 % and
+         25 % (the imported presets carry the original's values).
    - Drums: a drum step-programming module (Numerology DrumSeq look: rows per
      pad, per-step velocity, probability, flam/ratchet, swing, per-row length)
      driving `m.percussion`; a 909 starter kit from `Audio - Archival

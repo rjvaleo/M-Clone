@@ -18,7 +18,7 @@
 //! line here reads exactly that curve.
 
 use crate::delay::DelayLine;
-use crate::filter::Biquad;
+use crate::webaudio::WebLowpass;
 use crate::clamp;
 
 /// The delay's note values in beats, in the original's menu order — the wire
@@ -114,8 +114,8 @@ pub struct TapeDelay {
     sample_rate: f32,
     left: DelayLine,
     right: DelayLine,
-    hicut_lr: Biquad,
-    hicut_rl: Biquad,
+    hicut_lr: WebLowpass,
+    hicut_rl: WebLowpass,
     hicut_hz: f32,
     glide: Option<TapeGlide>,
     /// The time while no glide has happened.
@@ -130,8 +130,8 @@ impl TapeDelay {
             sample_rate: rate,
             left: DelayLine::new(MAX_DELAY_S + 0.01, rate),
             right: DelayLine::new(MAX_DELAY_S + 0.01, rate),
-            hicut_lr: Biquad::identity(),
-            hicut_rl: Biquad::identity(),
+            hicut_lr: WebLowpass::new(),
+            hicut_rl: WebLowpass::new(),
             hicut_hz: f32::NAN,
             glide: None,
             resting: 0.25,
@@ -168,16 +168,17 @@ impl TapeDelay {
             return;
         }
         self.hicut_hz = hz;
-        self.hicut_lr.set_web_lowpass(hz, HICUT_Q_DB, self.sample_rate);
-        self.hicut_rl.set_web_lowpass(hz, HICUT_Q_DB, self.sample_rate);
+        self.hicut_lr.set(hz, HICUT_Q_DB, self.sample_rate);
+        self.hicut_rl.set(hz, HICUT_Q_DB, self.sample_rate);
     }
 
     /// One sample in, the wet pair out — before the wet level.
     #[inline]
     pub fn process(&mut self, input: f32, t: f64, feedback: f32, spread: f32) -> [f32; 2] {
-        let d = (self.time_at(t) * self.sample_rate as f64) as f32;
-        let out_l = self.left.read_linear(d);
-        let out_r = self.right.read_linear(d);
+        // The delay in frames in double, as Chromium's `Delay` computes it.
+        let d = self.time_at(t) * self.sample_rate as f64;
+        let out_l = self.left.read_web(d);
+        let out_r = self.right.read_web(d);
         let fb_lr = feedback * self.hicut_lr.process(out_l);
         let fb_rl = feedback * self.hicut_rl.process(out_r);
         self.left.push(input + fb_rl);

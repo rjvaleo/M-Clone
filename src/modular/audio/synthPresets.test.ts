@@ -7,6 +7,8 @@ import {
   importScaleSequencerPreset,
   morphValuesAt,
   planMorph,
+  touchingLfos,
+  LFO_TOUCH,
 } from "./synthPresets";
 import { PLAYER_MODULES } from "../registry/playerModules";
 
@@ -172,5 +174,14 @@ describe("The preset morph", () => {
 
   it("takes the original's morph time", () => {
     expect(MORPH_TIME).toEqual({ min: 0.5, max: 30, step: 0.5, initial: 5 });
+  });
+});
+
+describe("Touching the LFOs", () => {
+  it("counts each preset load and morph frame, as the original fires its LFO sliders' handlers", () => {
+    expect(LFO_TOUCH).toBe("lfo-touch");
+    expect(touchingLfos({ cutoff: 500 }, {})).toEqual({ cutoff: 500, "lfo-touch": 1 });
+    expect(touchingLfos({}, { "lfo-touch": 4 })).toEqual({ "lfo-touch": 5 });
+    expect(touchingLfos({}, { "lfo-touch": "x" as never })).toEqual({ "lfo-touch": 1 });
   });
 });

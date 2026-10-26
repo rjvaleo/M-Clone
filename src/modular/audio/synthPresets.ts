@@ -188,6 +188,27 @@ export function importScaleSequencerPreset(state: ScaleSequencerPresetState): Re
 export const SYNTH_PRESET_LIBRARY: readonly { name: string; values: Record<string, JsonValue> }[] =
   SCALE_SEQUENCER_PRESETS.map((preset) => ({ name: preset.name, values: importScaleSequencerPreset(preset.state) }));
 
+/**
+ * The parameter a preset load or a morph frame moves to say the original's
+ * LFOs were touched.
+ *
+ * Loading a preset fires every slider's handler and each morph frame fires
+ * them again, LFO sliders included, so the original rescales each LFO to the
+ * volume and wet of that moment even when its own values do not change — and
+ * a volume or wet LFO swings around the level it was last touched at. A
+ * document only carries values that changed, so the face says so with this.
+ */
+export const LFO_TOUCH = "lfo-touch";
+
+/** `values`, plus a touch of the LFOs: one more than `current` had. */
+export function touchingLfos(
+  values: Readonly<Record<string, JsonValue>>,
+  current: Readonly<Record<string, JsonValue | undefined>>,
+): Record<string, JsonValue> {
+  const last = current[LFO_TOUCH];
+  return { ...values, [LFO_TOUCH]: (typeof last === "number" && Number.isFinite(last) ? last : 0) + 1 };
+}
+
 /** The original's morph time: 0.5–30 s in half seconds, five by default. */
 export const MORPH_TIME = { min: 0.5, max: 30, step: 0.5, initial: 5 } as const;
 

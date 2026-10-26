@@ -56,6 +56,14 @@ export type RuntimeEvent = {
   value: number;
   /** Identifies one sounding note across its on/off pair. */
   noteId: number;
+  /**
+   * A note-on's step in ticks — the slot the sequence gave it, before any
+   * gate shortened the note — or zero. Its note-off is scheduled separately;
+   * this is so an instrument knows the step when the note starts.
+   */
+  stepTicks: number;
+  /** `stepTicks` in seconds, worked out with `atSec`. Zero when unknown. */
+  stepSec: number;
 };
 
 /**
@@ -94,6 +102,8 @@ const blankEvent = (): RuntimeEvent => ({
   controller: 0,
   value: 0,
   noteId: 0,
+  stepTicks: 0,
+  stepSec: 0,
 });
 
 /**

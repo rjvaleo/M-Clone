@@ -34,10 +34,10 @@ use crate::grain::{GrainCloud, GrainSettings};
 use crate::sampler::{semitone_ratio, Sampler, SamplerSettings, NO_SAMPLE};
 use crate::reverb::Blackhole;
 use crate::voice::{
-    filter_sweep, key_followed_cutoff, AdsrSettings, LfoSettings, VoiceSettings, MAX_CUTOFF_HZ,
-    MIN_CUTOFF_HZ, OSC_COUNT,
+    filter_sweep, key_followed_cutoff, write_envelope, write_release, AdsrSettings, LfoSettings, VoiceSettings,
+    ORIGINAL_GATE, OSC_COUNT,
 };
-use crate::envelope::LinearEnvelope;
+use crate::webaudio::{BasicShape, ParamTimeline, TargetGlide, WebLowpass, WebOsc};
 use crate::tape::{delay_seconds, TapeDelay, DELAY_BEATS, TAPE_IPS, TEMPO_GLIDE_DELAY_S};
 use crate::{clamp, Smoothed};
 
@@ -278,21 +278,31 @@ impl Module for AudioOutput {
 /// # The scale sequencer's parts
 ///
 /// After the voices comes the original's chain, as `synthPlayer.ts` builds it
-/// on Web Audio: the *classic* shared filter (one lowpass for every classic
-/// voice, its frequency the cutoff knob plus an envelope offset each note
-/// retriggers, which the newest note owns until its key comes up), then a dry
-/// path and the ping-pong tape delay (`tape.rs`), then the master volume.
-/// Three free-running LFOs drive the original's targets — every filter's
-/// cutoff by a fraction of the knob, Q by ten units, the volume and the
-/// delay's wet around their own level — and a pulse-width LFO is read as a
-/// sine when each note starts.
+/// on Web Audio and as `scale-sequencer/app.js` builds it in the first place:
+///
+/// - **The cutoff knob** glides as `cancelAndHoldAtTime` + `setTargetAtTime`
+///   with a 15 ms time constant (`TargetGlide`), and that one gliding value is
+///   every filter's base — the classic filter's and every voice's — so every
+///   sounding note follows the knob alike.
+/// - **The classic filter** (one Web Audio lowpass for every classic voice)
+///   has the knob plus an envelope offset each note retriggers — cancelling
+///   what was scheduled from its start — plus the LFOs.
+/// - **The three LFOs** are browser oscillators (`WebOsc` on the band-limited
+///   sine, triangle and sawtooth) through gains into their targets: every
+///   filter's cutoff by depth × the knob now, Q by ten units, the volume and
+///   the delay's wet by depth × their level *as of the LFO's last touch* — the
+///   original never rescales those when the level moves.
+/// - **The pulse LFOs** advance step by step, rests included, before each step
+///   plays: from one note to the next, through the steps between and its own.
+/// - **The gate**: a sequenced note knows its step and releases at 85 % of it,
+///   its release written with the rest of its envelope.
+/// - Then a dry path and the ping-pong tape delay (`tape.rs`), then the master.
 ///
 /// # Units
 ///
 /// The parameters arrive in the descriptor's units, exactly as the Web Audio
 /// synth reads them: envelope times in milliseconds, resonance as Web Audio's
-/// Q in decibels, detune in cents. They used to arrive like that too, and be
-/// read as seconds and as a 0–1 resonance — a 10 ms attack took ten seconds.
+/// Q in decibels, detune in cents.
 ///
 /// Parameters are flat indices rather than a struct because that is what the
 /// ABI carries. The matrix is *not* among them — see `Module::set_modulation`.
@@ -300,34 +310,64 @@ pub struct Synth {
     bank: VoiceBank,
     /// The rack's fade handle.
     level: Tracked,
-    cutoff: Tracked,
+    /// The cutoff knob's base, gliding as the original's.
+    cutoff: TargetGlide,
+    /// The knob as last read, to see it move.
+    knob: f32,
     /// Rebuilt from the flat parameters once per sample. Cheap, and it keeps
     /// the mapping in one readable place instead of scattered across setters.
     settings: VoiceSettings,
     sample_rate: f32,
-    /// Seconds since the module was built, counted in samples.
+    /// Frames since the module was built, on the render-quantum grid.
+    frame: u64,
+    /// Seconds since the module was built.
     clock: f64,
-    /// The three LFOs' positions, in turns.
-    lfo_phase: [f32; 3],
+    /// The three LFOs' oscillators.
+    lfo_osc: [WebOsc; 3],
+    /// Each LFO's rate, depth, wave and target as last read, to see one move.
+    lfo_seen: [[f32; 4]; 3],
+    /// Each LFO's volume and wet, as of the last time its controls moved.
+    lfo_levels: [(f32, f32); 3],
+    /// The preset-load touch as last read.
+    lfo_touch: f32,
     /// Each LFO's rate, depth and target as of the last sample — what a note,
     /// which arrives between samples, reads its pulse swing from.
     lfo_setting: [(f32, f32, u32); 3],
-    /// The pulse LFOs' phases in radians, advanced from note to note.
+    /// The pulse LFOs' phases in radians, advanced step by step.
     pw_phase: [f64; 3],
-    pw_clock: f64,
-    /// What each sample's LFOs add to the master and the wet, as fractions.
+    /// The last note's onset and step; `None` at the start of a run.
+    pw_last: Option<(f64, Option<f64>)>,
+    /// What each sample's LFOs add to the master and the wet, absolutely.
     volume_swing: f32,
     wet_swing: f32,
-    classic_filter: Biquad,
+    classic_filter: WebLowpass,
     /// The classic filter's envelope, as an offset from the knob in hertz.
-    classic_env: LinearEnvelope,
-    classic_note: Option<u8>,
-    classic_base: f32,
-    /// Samples left in the shared filter's tail since a classic voice sounded.
-    classic_tail: u32,
+    classic_env: ParamTimeline,
+    /// The live note that owns the classic envelope, and what it releases to.
+    classic_hold: Option<ClassicHold>,
     delay: TapeDelay,
     /// The note value and tempo the delay was last timed for, as raw values.
     timed: Option<(f32, f32)>,
+    /// How much of a sequenced note's step it holds.
+    gate: f32,
+}
+
+/// A cutoff that is a positive number, or the fallback.
+fn positive(value: f32, fallback: f32) -> f32 {
+    if value.is_finite() && value > 0.0 {
+        value
+    } else {
+        fallback
+    }
+}
+
+/// The note that owns the classic filter's envelope, until its key comes up.
+#[derive(Clone, Copy, Debug)]
+struct ClassicHold {
+    note: u8,
+    sustain: f32,
+    base: f32,
+    release: f32,
 }
 
 impl Synth {
@@ -372,9 +412,9 @@ impl Synth {
     /// The master after the delay.
     pub const VOLUME: usize = 39;
     pub const MOD_WHEEL: usize = 40;
-    /// Polyphony. A knob rather than a construction argument because the bank
-    /// allocates its whole pool up front and only limits how much of it
-    /// `claim` may use — see `set_capacity` in `bank.rs`.
+    /// Polyphony of held notes. A knob rather than a construction argument
+    /// because the bank allocates its whole pool up front and only limits how
+    /// much of it held notes may use — see `bank.rs`.
     pub const MAX_VOICES: usize = 41;
 
     /// The voice's peak before velocity — the descriptor's `level`.
@@ -400,8 +440,12 @@ impl Synth {
     pub const DELAY_HICUT: usize = 61;
     pub const TAPE: usize = 62;
     pub const TEMPO: usize = 63;
+    /// How much of a sequenced note's step it holds: the original's 0.85.
+    pub const GATE: usize = 64;
+    /// Moved by a preset load or a morph frame, which touch all three LFOs.
+    pub const LFO_TOUCH: usize = 65;
 
-    pub const PARAM_COUNT: usize = 64;
+    pub const PARAM_COUNT: usize = 66;
 
     /// An LFO's targets, in the original's menu order — the wire value.
     pub const TARGET_NONE: u32 = 0;
@@ -411,6 +455,9 @@ impl Synth {
     pub const TARGET_PW: u32 = 4;
     pub const TARGET_DELAY_WET: u32 = 5;
 
+    /// How the cutoff follows the knob: `setTargetAtTime`'s time constant.
+    pub const CUTOFF_GLIDE_SEC: f64 = 0.015;
+
     pub fn new(sample_rate: f32) -> Self {
         let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
         Self {
@@ -418,23 +465,27 @@ impl Synth {
             // turning polyphony up mid-performance never allocates.
             bank: VoiceBank::new(rate, MAX_POLYPHONY, 0x1D_1AB),
             level: Tracked::new(0.0),
-            cutoff: Tracked::new(VoiceSettings::default().cutoff_hz),
+            cutoff: TargetGlide::new(VoiceSettings::default().cutoff_hz, Self::CUTOFF_GLIDE_SEC, rate),
+            knob: f32::NAN,
             settings: VoiceSettings::default(),
             sample_rate: rate,
+            frame: 0,
             clock: 0.0,
-            lfo_phase: [0.0; 3],
+            lfo_osc: [WebOsc::new(); 3],
+            lfo_seen: [[f32::NAN; 4]; 3],
+            lfo_levels: [(0.0, 0.0); 3],
+            lfo_touch: f32::NAN,
             lfo_setting: [(1.0, 0.0, Self::TARGET_FILTER), (0.55, 0.0, Self::TARGET_PW), (0.55, 0.0, Self::TARGET_NONE)],
             pw_phase: [0.0; 3],
-            pw_clock: 0.0,
+            pw_last: None,
             volume_swing: 0.0,
             wet_swing: 0.0,
-            classic_filter: Biquad::identity(),
-            classic_env: LinearEnvelope::new(rate),
-            classic_note: None,
-            classic_base: 0.0,
-            classic_tail: 0,
+            classic_filter: WebLowpass::new(),
+            classic_env: ParamTimeline::new(0.0),
+            classic_hold: None,
             delay: TapeDelay::new(rate),
             timed: None,
+            gate: ORIGINAL_GATE,
         }
     }
 
@@ -452,14 +503,17 @@ impl Synth {
         self.classic_env.value()
     }
 
-    /// One of the original's LFO waves at `phase` turns, starting where Web
-    /// Audio's oscillators start: a sine and a triangle at zero rising, a
-    /// sawtooth at zero rising to its top at half a turn.
-    pub fn lfo_wave(wave: u32, phase: f32) -> f32 {
+    /// The cutoff the filters run at now: the knob, gliding.
+    pub fn cutoff_now(&self) -> f32 {
+        self.cutoff.value()
+    }
+
+    /// The browser wave an LFO's wave menu names.
+    fn lfo_shape(wave: u32) -> BasicShape {
         match wave {
-            1 => 1.0 - 4.0 * ((phase + 0.25).rem_euclid(1.0) - 0.5).abs(),
-            2 => 2.0 * (phase + 0.5).rem_euclid(1.0) - 1.0,
-            _ => (phase * core::f32::consts::TAU).sin(),
+            1 => BasicShape::Triangle,
+            2 => BasicShape::Sawtooth,
+            _ => BasicShape::Sine,
         }
     }
 
@@ -467,6 +521,14 @@ impl Synth {
         let raw = ports.param(index);
         if raw.is_finite() && raw >= 0.0 && (raw.round() as u32) < count {
             raw.round() as u32
+        } else {
+            fallback
+        }
+    }
+
+    fn finite(value: f32, fallback: f32) -> f32 {
+        if value.is_finite() {
+            value
         } else {
             fallback
         }
@@ -521,31 +583,65 @@ impl Synth {
         self.settings.classic = ports.param(Self::CLASSIC) >= 0.5;
     }
 
+    /// The knob: a move starts a glide; the glide gives this sample's cutoff.
+    fn follow_knob(&mut self, ports: &Ports) {
+        let knob = Self::finite(ports.param(Self::CUTOFF), 2_000.0);
+        if self.knob.is_nan() {
+            // Built with the knob where it is, as `initAudio` builds it.
+            self.cutoff.reset(knob);
+        } else if knob != self.knob {
+            self.cutoff.set_target(knob);
+        }
+        self.knob = knob;
+        self.settings.knob_hz = knob;
+        self.settings.cutoff_hz = self.cutoff.next(self.frame);
+    }
+
     /// The three LFOs for this sample: what they add to every filter's cutoff
-    /// and Q, and the swings of the master and the wet. Each moves on a sample.
-    fn run_lfos(&mut self, ports: &Ports, cutoff: f32) {
-        let (mut hz, mut q, mut volume, mut wet) = (0.0, 0.0, 0.0, 0.0);
+    /// and Q, to the master and to the wet. Each oscillator always runs.
+    fn run_lfos(&mut self, ports: &Ports) {
+        let volume = Self::finite(ports.param(Self::VOLUME), 1.0);
+        let wet = Self::finite(ports.param(Self::DELAY_WET), 0.0);
+        let (mut hz, mut q, mut vol, mut wet_bus) = (0.0, 0.0, 0.0, 0.0);
+        // A preset load or morph frame touches all three, as the original's
+        // fires every LFO slider's handler.
+        let touch = ports.param(Self::LFO_TOUCH);
+        let touched = touch.to_bits() != self.lfo_touch.to_bits();
+        self.lfo_touch = touch;
         for index in 0..3 {
             let base = Self::SLFO_BASE + index * Self::SLFO_STRIDE;
-            let rate = clamp(ports.param(base + Self::SLFO_RATE), 0.0, 50.0);
-            let depth = clamp(ports.param(base + Self::SLFO_DEPTH), 0.0, 1.0);
+            let raw = [
+                ports.param(base + Self::SLFO_RATE),
+                ports.param(base + Self::SLFO_DEPTH),
+                ports.param(base + Self::SLFO_WAVE),
+                ports.param(base + Self::SLFO_TARGET),
+            ];
+            // `updateLFO` and `changeLFOTarget` are the only places the
+            // original sets an LFO's gain from the volume and the wet.
+            if touched || raw.iter().zip(self.lfo_seen[index].iter()).any(|(a, b)| a.to_bits() != b.to_bits()) {
+                self.lfo_seen[index] = raw;
+                self.lfo_levels[index] = (volume, wet);
+            }
+            let rate = Self::finite(raw[0], 0.0);
+            let depth = clamp(Self::finite(raw[1], 0.0), 0.0, 1.0);
             let wave = Self::choice(ports, base + Self::SLFO_WAVE, 3, 0);
             let target = Self::choice(ports, base + Self::SLFO_TARGET, 6, Self::TARGET_NONE);
             self.lfo_setting[index] = (rate, depth, target);
-            let value = Self::lfo_wave(wave, self.lfo_phase[index]) * depth;
+            let shape = Self::lfo_shape(wave);
+            let value = self.bank.waves_mut().basic_sample(&mut self.lfo_osc[index], shape, rate);
+            let (level_volume, level_wet) = self.lfo_levels[index];
             match target {
-                Self::TARGET_FILTER => hz += value * cutoff,
-                Self::TARGET_RESONANCE => q += value * 10.0,
-                Self::TARGET_VOLUME => volume += value,
-                Self::TARGET_DELAY_WET => wet += value,
+                Self::TARGET_FILTER => hz += value * (depth * self.knob),
+                Self::TARGET_RESONANCE => q += value * (depth * 10.0),
+                Self::TARGET_VOLUME => vol += value * (depth * level_volume),
+                Self::TARGET_DELAY_WET => wet_bus += value * (depth * level_wet),
                 _ => {}
             }
-            self.lfo_phase[index] = (self.lfo_phase[index] + rate / self.sample_rate).rem_euclid(1.0);
         }
         self.settings.lfo_cutoff_hz = hz;
         self.settings.lfo_q = q;
-        self.volume_swing = volume;
-        self.wet_swing = wet;
+        self.volume_swing = vol;
+        self.wet_swing = wet_bus;
     }
 
     /// Time the delay: at once when the module is built, on tape afterwards —
@@ -566,14 +662,71 @@ impl Synth {
         }
         self.timed = Some(raw);
     }
+
+    /// The pulse swing for a note now, on a step of `step` seconds if it has
+    /// one: each pulse LFO moves through the steps since the last note's, this
+    /// one's included (`pulseAdvanceSec`), and is heard as a sine.
+    fn pulse_swing(&mut self, step: Option<f64>) -> f32 {
+        let step = step.filter(|s| s.is_finite() && *s > 0.0);
+        let onset = self.clock;
+        let advance = match (self.pw_last, step) {
+            (None, None) => 0.0,
+            (Some((last, _)), None) => onset - last,
+            (None, Some(step)) => step,
+            (Some((last, None)), Some(_)) => onset - last,
+            (Some((last, Some(last_step))), Some(step)) => onset - last - last_step + step,
+        };
+        self.pw_last = Some((onset, step));
+        let mut swing = 0.0;
+        for index in 0..3 {
+            let (rate, depth, target) = self.lfo_setting[index];
+            if target != Self::TARGET_PW {
+                continue;
+            }
+            self.pw_phase[index] += rate as f64 * advance * core::f64::consts::TAU;
+            swing += self.pw_phase[index].sin() as f32 * depth * 0.45;
+        }
+        swing
+    }
+
+    /// A note, sequenced (with its step) or live.
+    fn start_note(&mut self, note: u8, velocity: f32, detune_cents: f32, step: Option<f64>) {
+        let swing = self.pulse_swing(step);
+        // Kept on the module's settings too, so the next sample's copy to the
+        // bank carries it rather than resetting it.
+        self.settings.pw_swing = swing;
+        self.bank.settings_mut().pw_swing = swing;
+        let gate = clamp(self.gate, 0.05, 1.0) as f64;
+        let release_after = step.filter(|s| s.is_finite() && *s > 0.0).map(|s| (s * gate) as f32);
+        self.bank.note_on_gated(note, velocity, detune_cents, release_after);
+
+        if self.settings.classic {
+            // Retrigger the shared filter, as `playNote` does.
+            let knob = positive(self.settings.knob_hz, 2_000.0);
+            let detune = if detune_cents.is_finite() { detune_cents } else { 0.0 };
+            let base = key_followed_cutoff(knob, note as f32 + detune / 100.0, self.settings.key_follow);
+            let env = self.settings.filter_env;
+            let (base, peak, sustain) = filter_sweep(
+                base, self.settings.filter_env_octaves, self.settings.filter_env_amount, env.sustain,
+            );
+            let now = self.clock;
+            let release_at = release_after.map(|r| now + r as f64);
+            self.classic_env.cancel_scheduled_values(now);
+            write_envelope(&mut self.classic_env, now, base - knob, peak - knob, sustain - knob, env, release_at);
+            self.classic_hold = match release_at {
+                Some(_) => None,
+                None => Some(ClassicHold { note, sustain: sustain - knob, base: base - knob, release: env.release }),
+            };
+        }
+    }
 }
 
 impl Module for Synth {
     fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
         self.read(ports);
-        let cutoff = self.cutoff.follow(clamp(ports.param(Self::CUTOFF), MIN_CUTOFF_HZ, MAX_CUTOFF_HZ));
-        self.settings.cutoff_hz = cutoff;
-        self.run_lfos(ports, cutoff);
+        self.gate = Self::finite(ports.param(Self::GATE), ORIGINAL_GATE);
+        self.follow_knob(ports);
+        self.run_lfos(ports);
         self.time_delay(ports);
         // The matrix lives on the bank rather than in the parameter array, so
         // it survives being overwritten here every sample.
@@ -589,20 +742,13 @@ impl Module for Synth {
 
         let sample = self.bank.next();
 
-        // The classic filter, run while a classic voice sounds and for half a
-        // second after, so its tail rings out.
-        let offset = self.classic_env.next();
-        if sample.classic != 0.0 {
-            self.classic_tail = (self.sample_rate * 0.5) as u32;
-        }
-        let mut shared = 0.0;
-        if self.classic_tail > 0 {
-            self.classic_tail -= 1;
-            let q = clamp(self.settings.resonance + self.settings.lfo_q, -100.0, 100.0);
-            self.classic_filter
-                .set_web_lowpass(cutoff + offset + self.settings.lfo_cutoff_hz, q, self.sample_rate);
-            shared = self.classic_filter.process(sample.classic);
-        }
+        // The classic filter runs always, as a node in the browser does: its
+        // frequency the knob, plus the envelope offset, plus the LFOs.
+        let offset = self.classic_env.value_at(self.frame, self.sample_rate as f64);
+        let frequency = (self.settings.cutoff_hz + offset) + self.settings.lfo_cutoff_hz;
+        let q = Self::finite(self.settings.resonance, 1.0) + self.settings.lfo_q;
+        self.classic_filter.set(frequency, q, self.sample_rate);
+        let shared = self.classic_filter.process(sample.classic);
 
         // The bus: per-voice voices in stereo, the shared filter's mono in both.
         let bus = [sample.left + shared, sample.right + shared];
@@ -611,15 +757,16 @@ impl Module for Synth {
         self.delay.set_hicut(ports.param(Self::DELAY_HICUT));
         let echo = self.delay.process(0.5 * (bus[0] + bus[1]), self.clock, feedback, spread);
         let wet = clamp(ports.param(Self::DELAY_WET), 0.0, 1.0);
-        let wet_gain = wet * (1.0 + self.wet_swing);
-        let volume = ports.param(Self::VOLUME).max(0.0) * (1.0 + self.volume_swing);
+        let wet_gain = wet + self.wet_swing;
+        let volume = Self::finite(ports.param(Self::VOLUME), 1.0) + self.volume_swing;
 
         let fade = self.level.follow(clamp(ports.param(Self::LEVEL), 0.0, 1.0));
         for side in 0..2 {
             let out = (bus[side] * (1.0 - wet) + echo[side] * wet_gain) * volume;
             ports.output(side, out * fade);
         }
-        self.clock += 1.0 / self.sample_rate as f64;
+        self.frame += 1;
+        self.clock = self.frame as f64 / self.sample_rate as f64;
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -627,70 +774,48 @@ impl Module for Synth {
             self.sample_rate = sample_rate;
         }
         self.level.set_sample_rate(sample_rate);
-        self.cutoff.set_sample_rate(sample_rate);
+        self.cutoff = TargetGlide::new(self.cutoff.value(), Self::CUTOFF_GLIDE_SEC, self.sample_rate);
+        self.knob = f32::NAN;
         self.bank.set_sample_rate(sample_rate);
-        self.classic_env = LinearEnvelope::new(self.sample_rate);
+        self.classic_env.clear();
         self.delay = TapeDelay::new(self.sample_rate);
         self.timed = None;
     }
 
     fn reset(&mut self) {
         self.level.reset();
-        self.cutoff.reset();
+        self.knob = f32::NAN;
         self.bank.panic();
-        self.classic_env.kill();
-        self.classic_note = None;
+        self.classic_env.clear();
+        self.classic_hold = None;
         self.classic_filter.clear();
         self.delay.clear();
+        self.pw_last = None;
     }
 
     fn note_on(&mut self, note: u8, velocity: f32, detune_cents: f32) {
-        // The pulse LFOs, read for this note: each phase moves on by its rate
-        // times the time since the last note, and is heard as a sine.
-        let elapsed = self.clock - self.pw_clock;
-        self.pw_clock = self.clock;
-        let mut swing = 0.0;
-        for index in 0..3 {
-            let (rate, depth, target) = self.lfo_setting[index];
-            if target != Self::TARGET_PW {
-                continue;
-            }
-            self.pw_phase[index] += rate as f64 * elapsed * core::f64::consts::TAU;
-            swing += self.pw_phase[index].sin() as f32 * depth * 0.45;
-        }
-        // Kept on the module's settings too, so the next sample's copy to the
-        // bank carries it rather than resetting it.
-        self.settings.pw_swing = swing;
-        self.bank.settings_mut().pw_swing = swing;
-        self.bank.note_on(note, velocity, detune_cents);
+        self.start_note(note, velocity, detune_cents, None);
+    }
 
-        if self.settings.classic {
-            // Retrigger the shared filter, as `playNote` does.
-            let knob = self.settings.cutoff_hz;
-            let detune = if detune_cents.is_finite() { detune_cents } else { 0.0 };
-            let base = key_followed_cutoff(knob, note as f32 + detune / 100.0, self.settings.key_follow);
-            let env = self.settings.filter_env;
-            let (base, peak, sustain) = filter_sweep(
-                base, self.settings.filter_env_octaves, self.settings.filter_env_amount, env.sustain,
-            );
-            self.classic_env.trigger(base - knob, peak - knob, sustain - knob, env.attack, env.decay);
-            self.classic_base = base - knob;
-            self.classic_note = Some(note);
-        }
+    fn note_on_with_step(&mut self, note: u8, velocity: f32, detune_cents: f32, step_sec: f32) {
+        self.start_note(note, velocity, detune_cents, Some(step_sec as f64));
     }
 
     fn note_off(&mut self, note: u8) {
         self.bank.note_off(note);
-        // Only the note that last struck the shared filter releases it.
-        if self.classic_note == Some(note) {
-            self.classic_env.release(self.classic_base, self.settings.filter_env.release);
-            self.classic_note = None;
+        // Only the live note that last struck the shared filter releases it,
+        // written over what is scheduled, as the original writes its release.
+        if let Some(hold) = self.classic_hold.filter(|hold| hold.note == note) {
+            write_release(&mut self.classic_env, self.clock, hold.sustain, hold.base, hold.release);
+            self.classic_hold = None;
         }
     }
 
     fn all_notes_off(&mut self) {
         self.bank.all_notes_off();
-        self.classic_note = None;
+        self.classic_hold = None;
+        // The end of a run: the next note starts the step grid again.
+        self.pw_last = None;
     }
 
     fn set_modulation(&mut self, source: u32, dest: u32, amount: f32) {
@@ -775,6 +900,7 @@ impl Module for Synth {
             Self::DELAY_HICUT => 200.0 * 100f32.powf(0.75),
             Self::TAPE => 2.0,
             Self::TEMPO => 120.0,
+            Self::GATE => ORIGINAL_GATE,
             _ => 0.0,
         }
     }
@@ -5111,11 +5237,34 @@ mod scale_sequencer_tests {
     }
 
     #[test]
-    fn the_lfo_waves_start_where_web_audios_oscillators_start() {
-        let at = |wave: u32, phase: f32| Synth::lfo_wave(wave, phase);
-        assert!(at(0, 0.0).abs() < 1e-6 && (at(0, 0.25) - 1.0).abs() < 1e-6);
-        assert!(at(1, 0.0).abs() < 1e-6 && (at(1, 0.25) - 1.0).abs() < 1e-6 && (at(1, 0.75) + 1.0).abs() < 1e-6);
-        assert!(at(2, 0.0).abs() < 1e-6 && (at(2, 0.25) - 0.5).abs() < 1e-6 && (at(2, 0.5) + 1.0).abs() < 1e-6);
+    fn the_lfos_are_browser_oscillators_started_with_the_module() {
+        // The band-limited sine, triangle and sawtooth, read as an
+        // `OscillatorNode` reads them: the triangle at 2.5 Hz is the one
+        // `webAudioLaws.test.ts` renders.
+        let mut bench = Bench::new();
+        let lfo = Synth::SLFO_BASE;
+        bench.set(Synth::CUTOFF, 1_000.0);
+        bench.set(lfo + Synth::SLFO_RATE, 2.5).set(lfo + Synth::SLFO_DEPTH, 1.0);
+        bench.set(lfo + Synth::SLFO_WAVE, 1.0).set(lfo + Synth::SLFO_TARGET, Synth::TARGET_FILTER as f32);
+        let values: Vec<f32> = (0..2_400).map(|_| {
+            bench.step();
+            bench.synth.settings.lfo_cutoff_hz / 1_000.0
+        }).collect();
+        for (k, expected) in [(100, 0.020_837_458f32), (1_000, 0.208_374_57), (2_399, 0.499_890_6)] {
+            assert!((values[k] - expected).abs() < 2e-6, "tri[{k}] = {}", values[k]);
+        }
+        // The sawtooth rises from zero to its top at half a turn.
+        let mut saw = Bench::new();
+        saw.set(Synth::CUTOFF, 1_000.0);
+        saw.set(lfo + Synth::SLFO_RATE, 1.0).set(lfo + Synth::SLFO_DEPTH, 1.0);
+        saw.set(lfo + Synth::SLFO_WAVE, 2.0).set(lfo + Synth::SLFO_TARGET, Synth::TARGET_FILTER as f32);
+        saw.step();
+        assert_eq!(saw.synth.settings.lfo_cutoff_hz, 0.0);
+        // Four tenths of a turn: 0.8 of the ideal ramp, under the peak the
+        // ringing at its edge is normalised to.
+        saw.run(0.4);
+        let at = saw.synth.settings.lfo_cutoff_hz;
+        assert!((at - 800.0 / 1.179).abs() < 2.0, "{at}");
     }
 
     #[test]
@@ -5137,6 +5286,7 @@ mod scale_sequencer_tests {
     #[test]
     fn the_resonance_volume_and_wet_lfos_scale_as_the_original() {
         let mut bench = Bench::new();
+        bench.set(Synth::VOLUME, 0.21).set(Synth::DELAY_WET, 0.25);
         for (index, target) in [Synth::TARGET_RESONANCE, Synth::TARGET_VOLUME, Synth::TARGET_DELAY_WET].iter().enumerate() {
             let lfo = Synth::SLFO_BASE + index * Synth::SLFO_STRIDE;
             bench.set(lfo + Synth::SLFO_RATE, 1.0).set(lfo + Synth::SLFO_DEPTH, 0.5);
@@ -5147,8 +5297,99 @@ mod scale_sequencer_tests {
         }
         // A quarter turn at 1 Hz: every sine at its top.
         assert!((bench.synth.settings.lfo_q - 5.0).abs() < 1e-3);
-        assert!((bench.synth.volume_swing - 0.5).abs() < 1e-3);
-        assert!((bench.synth.wet_swing - 0.5).abs() < 1e-3);
+        assert!((bench.synth.volume_swing - 0.5 * 0.21).abs() < 1e-4);
+        assert!((bench.synth.wet_swing - 0.5 * 0.25).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_volume_or_wet_lfo_keeps_the_level_it_was_last_touched_at() {
+        // `updateVol` and `updateDelay` never rescale an LFO; only touching
+        // the LFO's own controls does.
+        let mut bench = Bench::new();
+        bench.set(Synth::VOLUME, 0.21).set(Synth::DELAY_WET, 0.25);
+        let a = Synth::SLFO_BASE;
+        let b = Synth::SLFO_BASE + Synth::SLFO_STRIDE;
+        bench.set(a + Synth::SLFO_RATE, 1.0).set(a + Synth::SLFO_DEPTH, 0.5);
+        bench.set(a + Synth::SLFO_TARGET, Synth::TARGET_VOLUME as f32);
+        bench.set(b + Synth::SLFO_RATE, 1.0).set(b + Synth::SLFO_DEPTH, 0.5);
+        bench.set(b + Synth::SLFO_TARGET, Synth::TARGET_DELAY_WET as f32);
+        bench.step();
+        bench.set(Synth::VOLUME, 0.6).set(Synth::DELAY_WET, 0.8);
+        bench.run(0.25);
+        assert!((bench.synth.volume_swing - 0.5 * 0.21).abs() < 1e-4, "{}", bench.synth.volume_swing);
+        assert!((bench.synth.wet_swing - 0.5 * 0.25).abs() < 1e-4);
+        // Touch each LFO's depth — even back to the same value — and it takes
+        // the level of the moment.
+        bench.set(a + Synth::SLFO_DEPTH, 0.6);
+        bench.step();
+        bench.set(a + Synth::SLFO_DEPTH, 0.5).set(b + Synth::SLFO_WAVE, 1.0);
+        bench.run(1.0);
+        assert!((bench.synth.volume_swing - 0.5 * 0.6).abs() < 1e-3, "{}", bench.synth.volume_swing);
+        assert!(bench.synth.wet_swing.abs() < 0.5 * 0.8 + 1e-4);
+        assert!(bench.synth.lfo_levels[1] == (0.6, 0.8));
+        // A preset load touches all three, with the levels it lands on.
+        bench.set(Synth::VOLUME, 0.3).set(Synth::DELAY_WET, 0.4).set(Synth::LFO_TOUCH, 1.0);
+        bench.step();
+        assert!(bench.synth.lfo_levels.iter().all(|levels| *levels == (0.3, 0.4)));
+        bench.set(Synth::VOLUME, 0.9);
+        bench.step();
+        assert_eq!(bench.synth.lfo_levels[2], (0.3, 0.4));
+    }
+
+    #[test]
+    fn the_cutoff_glides_to_the_knob_as_set_target_does() {
+        // Pinned in webAudioLaws.test.ts: 1 kHz to 2 kHz on a 15 ms constant.
+        let mut bench = Bench::new();
+        bench.set(Synth::CUTOFF, 1_000.0);
+        bench.step();
+        assert_eq!(bench.synth.cutoff_now(), 1_000.0);
+        bench.set(Synth::CUTOFF, 2_000.0);
+        let glide: Vec<f32> = (0..7_000).map(|_| {
+            bench.step();
+            bench.synth.cutoff_now()
+        }).collect();
+        assert_eq!(glide[0], 1_000.0);
+        assert_eq!(glide[1], 1_001.387_939_5);
+        assert_eq!(glide[719], 1_631.609_9);
+        // Landed on the quantum the ratio converged at, frame 6 784.
+        assert_ne!(glide[6_782], 2_000.0);
+        assert_eq!(glide[6_783], 2_000.0);
+        // The filter LFO scales by the knob at once, not by the glide.
+        let lfo = Synth::SLFO_BASE;
+        bench.set(lfo + Synth::SLFO_RATE, 0.0).set(lfo + Synth::SLFO_DEPTH, 1.0);
+        bench.set(lfo + Synth::SLFO_TARGET, Synth::TARGET_FILTER as f32);
+        bench.set(Synth::CUTOFF, 3_000.0);
+        bench.step();
+        assert_eq!(bench.synth.knob, 3_000.0);
+    }
+
+    #[test]
+    fn a_sequenced_note_releases_at_85_percent_of_its_step() {
+        let mut bench = Bench::new();
+        bench.set(Synth::CLASSIC, 1.0).set(Synth::AMP_ATTACK, 1.0).set(Synth::AMP_DECAY, 1.0);
+        bench.set(Synth::AMP_SUSTAIN, 1.0).set(Synth::AMP_RELEASE, 1.0);
+        bench.set(Synth::OSC_BASE + Synth::OSC_WAVE, 3.0);
+        bench.step();
+        bench.synth.note_on_with_step(60, 1.0, 0.0, 0.125);
+        // A note-off before the gate changes nothing: the release is written.
+        bench.synth.note_off(60);
+        let samples = bench.run(0.2);
+        let held = peak(&samples[4_000..5_000]);
+        assert!(held > 0.3, "{held}");
+        // 0.85 · 125 ms = 106.25 ms, then a 1 ms release and a 50 ms tail.
+        assert!(peak(&samples[5_200..]) < held * 0.01);
+        assert_eq!(bench.synth.active_voices(), 0);
+        // A gate of a half.
+        bench.set(Synth::GATE, 0.5);
+        bench.step();
+        bench.synth.note_on_with_step(62, 1.0, 0.0, 0.125);
+        let short = bench.run(0.1);
+        assert!(peak(&short[2_800..2_900]) > 0.3);
+        assert!(peak(&short[3_100..3_200]) < 1e-3);
+        // A step that is no step is a live note.
+        bench.synth.note_on_with_step(64, 1.0, 0.0, f32::NAN);
+        bench.run(0.2);
+        assert_eq!(bench.synth.active_voices(), 1);
     }
 
     #[test]
@@ -5181,17 +5422,27 @@ mod scale_sequencer_tests {
         bench.set(Synth::OSC_BASE + Synth::OSC_WAVE, 4.0).set(Synth::OSC_BASE + Synth::OSC_WIDTH, 0.5);
         bench.set(lfo + Synth::SLFO_RATE, 1.0).set(lfo + Synth::SLFO_DEPTH, 0.5);
         bench.set(lfo + Synth::SLFO_TARGET, Synth::TARGET_PW as f32);
-        // A quarter second at 1 Hz: a quarter turn, sin = 1, 0.5 + 0.5 · 0.45.
+        // Quarter-second steps at 1 Hz. The first step advances before it
+        // plays: a quarter turn, sin = 1, 0.5 + 0.5 · 0.45.
         bench.run(0.25);
-        bench.synth.note_on(60, 1.0, 0.0);
+        bench.synth.note_on_with_step(60, 1.0, 0.0, 0.25);
         let first = duty(&mut bench);
         assert!((first - 0.725).abs() < 0.03, "{first}");
         assert!((bench.synth.settings.pw_swing - 0.225).abs() < 1e-3);
-        bench.synth.note_off(60);
-        // Another half second on: three quarters of a turn, sin = −1.
+        // The next step, after a rest: two steps on, three quarters, sin = −1.
         bench.run(0.4);
-        bench.synth.note_on(62, 1.0, 0.0);
+        bench.synth.note_on_with_step(62, 1.0, 0.0, 0.25);
+        assert!((bench.synth.settings.pw_swing + 0.225).abs() < 1e-3, "{}", bench.synth.settings.pw_swing);
+        // A run ends with all notes off; live notes move by the time between.
+        bench.synth.all_notes_off();
+        bench.synth.note_on(64, 1.0, 0.0);
         assert!((bench.synth.settings.pw_swing + 0.225).abs() < 1e-3);
+        bench.run(0.25);
+        bench.synth.note_on(65, 1.0, 0.0);
+        assert!(bench.synth.settings.pw_swing.abs() < 1e-3);
+        bench.run(0.25);
+        bench.synth.note_on_with_step(66, 1.0, 0.0, 0.25);
+        assert!((bench.synth.settings.pw_swing - 0.225).abs() < 1e-3);
     }
 
     #[test]
@@ -5312,7 +5563,7 @@ mod scale_sequencer_tests {
         // All notes off leaves nothing to release later.
         bench.synth.all_notes_off();
         bench.synth.note_off(72);
-        assert!(bench.synth.classic_note.is_none());
+        assert!(bench.synth.classic_hold.is_none());
     }
 
     #[test]

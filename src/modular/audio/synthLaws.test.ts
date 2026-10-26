@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   DELAY_NOTES,
   FILTER_ENV_SPAN,
+  NOTE_TAIL_SEC,
+  ORIGINAL_GATE,
+  envelopeEvents,
+  gateReleaseSec,
+  pulseAdvanceSec,
+  releaseEvents,
   TAPE_SPEEDS,
   delaySeconds,
   filterSweep,
@@ -200,5 +206,61 @@ describe("The tape glide", () => {
 
   it("knows the original's six tape speeds", () => {
     expect(TAPE_SPEEDS.map((speed) => speed.ips)).toEqual([30, 15, 7.5, 3.75, 1.875, 0.9375]);
+  });
+});
+
+describe("The gate", () => {
+  it("is 85 % of a sequenced note's step, as `noteDur = stepDur · 0.85`", () => {
+    expect(ORIGINAL_GATE).toBe(0.85);
+    expect(gateReleaseSec(1, 0.5, ORIGINAL_GATE)).toBe(1 + 0.5 * 0.85);
+    expect(gateReleaseSec(0, 1, 0.5)).toBe(0.5);
+    // Held to 5–100 %, and the original's when nonsense.
+    expect(gateReleaseSec(0, 1, 2)).toBe(1);
+    expect(gateReleaseSec(0, 1, 0)).toBe(0.05);
+    expect(gateReleaseSec(0, 1, Number.NaN)).toBe(0.85);
+    expect(NOTE_TAIL_SEC).toBe(0.05);
+  });
+});
+
+describe("An envelope, as playNote writes it", () => {
+  it("is from, a ramp to the peak and to the sustain — and the release when it is known", () => {
+    const times = { attack: 0.01, decay: 0.08, release: 0.2 };
+    expect(envelopeEvents(1, 0, 1, 0.6, times)).toEqual([
+      { kind: "set", value: 0, time: 1 },
+      { kind: "linear", value: 1, time: 1.01 },
+      { kind: "linear", value: 0.6, time: 1.09 },
+    ]);
+    expect(envelopeEvents(1, 300, 1000, 500, times, 1.5).slice(3)).toEqual([
+      { kind: "set", value: 500, time: 1.5 },
+      { kind: "linear", value: 300, time: 1.7 },
+    ]);
+    // Negative times are none.
+    expect(envelopeEvents(0, 0, 1, 1, { attack: -1, decay: -1, release: -1 }, 0.1).map((e) => e.time))
+      .toEqual([0, 0, 0, 0.1, 0.1]);
+    expect(releaseEvents(2, 0.6, 0, 0.3)).toEqual([
+      { kind: "set", value: 0.6, time: 2 },
+      { kind: "linear", value: 0, time: 2.3 },
+    ]);
+  });
+});
+
+describe("The pulse LFO's advance", () => {
+  it("moves through the steps since the last note's, this one's included", () => {
+    // The first step of a run advances by its own length, before it plays.
+    expect(pulseAdvanceSec(null, { onsetSec: 5, stepSec: 0.25 })).toBe(0.25);
+    // The next step: one step on.
+    expect(pulseAdvanceSec({ onsetSec: 5, stepSec: 0.25 }, { onsetSec: 5.25, stepSec: 0.25 })).toBe(0.25);
+    // After a rest: two. A chord: none.
+    expect(pulseAdvanceSec({ onsetSec: 5, stepSec: 0.25 }, { onsetSec: 5.5, stepSec: 0.25 })).toBe(0.5);
+    expect(pulseAdvanceSec({ onsetSec: 5, stepSec: 0.25 }, { onsetSec: 5, stepSec: 0.25 })).toBe(0);
+    // Steps of different lengths: the rest of the earlier, then this whole one.
+    expect(pulseAdvanceSec({ onsetSec: 0, stepSec: 0.5 }, { onsetSec: 1, stepSec: 0.25 })).toBe(0.75);
+  });
+
+  it("moves by the time between notes played live", () => {
+    expect(pulseAdvanceSec(null, { onsetSec: 3 })).toBe(0);
+    expect(pulseAdvanceSec({ onsetSec: 3 }, { onsetSec: 3.4 })).toBeCloseTo(0.4, 12);
+    expect(pulseAdvanceSec({ onsetSec: 3 }, { onsetSec: 3.4, stepSec: 0.25 })).toBeCloseTo(0.4, 12);
+    expect(pulseAdvanceSec({ onsetSec: 3, stepSec: 0.25 }, { onsetSec: 3.4, stepSec: Number.NaN })).toBeCloseTo(0.4, 12);
   });
 });
