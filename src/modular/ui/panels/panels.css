@@ -215,8 +215,22 @@
 .pnl--soundhack .pnl-group[data-tint="delay"] { background: rgba(217, 112, 42, 0.08); }
 .pnl--soundhack .pnl-group[data-tint="modulation"] { background: rgba(60, 116, 201, 0.08); }
 .pnl--soundhack .pnl-group[data-tint="filter"] { background: rgba(47, 143, 138, 0.09); }
+.pnl--soundhack .pnl-group[data-tint="grain"] { background: rgba(154, 91, 208, 0.08); }
+.pnl--soundhack .pnl-group[data-tint="pitch"] { background: rgba(224, 193, 46, 0.1); }
+/* A full-width slider as JUCE draws it here: a dark bar filled in the badge's
+ * colour, the name at its left and the value at its right, inside it. */
+.pnl--soundhack .pnl-slider--h { gap: 0; border-radius: 4px; overflow: hidden; background: #2a2b2e; }
+.pnl--soundhack .pnl-slider--h .pnl-slider__track { position: absolute; inset: 0; }
+.pnl--soundhack .pnl-slider--h .pnl-slider__fill { top: 0; bottom: 0; opacity: 0.9; }
+.pnl--soundhack .pnl-slider--h .pnl-slider__handle { display: none; }
+.pnl--soundhack .pnl-slider--h :is(.pnl-slider__label, .pnl-slider__value) { position: relative; z-index: 1; pointer-events: none; color: #f4f2ee; font: 12px "Helvetica Neue", Helvetica, Arial, sans-serif; text-transform: none; letter-spacing: 0; padding: 0 8px; }
+.pnl--soundhack .pnl-slider--h .pnl-slider__label { width: auto; flex: 1; }
+.pnl--soundhack .pnl-slider--h .pnl-slider__value { font-weight: 600; }
+/* ++bubbler's interval keys: white keys white, black keys dark, lit in the badge colour. */
+.pnl--soundhack .pnl-switch.pnl-switch--small { background: #2a2b2e; border-color: #1d1e20; }
+.pnl--soundhack .pnl-switch.pnl-switch--small.is-on { background: var(--pnl-badge, #d9702a); }
 .pnl--soundhack .pnl-group[data-tint] .pnl-group__label { display: none; }
-.pnl--soundhack .pnl-group:first-child .pnl-group__label { left: 6px; top: 6px; height: 34px; line-height: 34px; padding: 0 14px; border-radius: 17px; background: #d9702a; color: #fff; font-size: 20px; font-weight: 700; letter-spacing: 0; text-transform: none; }
+.pnl--soundhack .pnl-group:first-child .pnl-group__label { left: 6px; top: 6px; height: 34px; line-height: 34px; padding: 0 14px; border-radius: 17px; background: var(--pnl-badge, #d9702a); color: var(--pnl-badge-ink, #fff); font-size: 20px; font-weight: 700; letter-spacing: 0; text-transform: none; }
 .pnl--soundhack .pnl-knob { overflow: visible; }
 .pnl--soundhack .pnl-knob__dial { height: 100%; }
 .pnl--soundhack .pnl-knob__body { fill: #2a2b2e; }
@@ -235,3 +249,36 @@
 
 /* The node around a panel: no padding, so the panel is the module's width. */
 .mm-node.mm-node--panel .mm-node__face--panel { padding: 0; display: block; }
+
+/* ======================================================================
+ * Lexicon LXP Native — as PlugBG.png draws it: graphite chrome, dark
+ * panels, knobs whose arc lights #0092ff, a blue title bar and page row.
+ * ==================================================================== */
+.pnl--lexicon { background: #3a3a3b; color: #d9dde0; font-family: var(--pnl-condensed); --pnl-ink: #e8f4ff; --pnl-accent: #0092ff; --pnl-lamp: #32a8ff; }
+.pnl--lexicon .pnl-group[data-tint] .pnl-group__label { display: none; }
+.pnl-lxp-logo { display: flex; align-items: center; height: 100%; font-size: 24px; font-weight: 700; letter-spacing: 0.02em; color: #f2f4f5; }
+.pnl-lxp-title { display: flex; align-items: center; justify-content: flex-end; height: 100%; padding: 0 10px; box-sizing: border-box; background: #409ced; border-radius: 3px; color: #fff; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; }
+.pnl-lxp-rtv { display: flex; align-items: center; justify-content: center; height: 100%; background: #16171a; border: 2px solid #212a2e; border-radius: 5px; box-sizing: border-box; color: #4a555c; font-size: 22px; font-weight: 600; letter-spacing: 0.3em; }
+.pnl-lxp-meters { display: grid; grid-template-columns: 24px 1fr 1fr; gap: 0 6px; height: 100%; padding: 6px 8px; box-sizing: border-box; background: #1c2329; border-radius: 4px; }
+.pnl-lxp-meters__scale { display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 14px; font-size: 8px; color: #8d989f; text-align: right; }
+.pnl-lxp-meters__bar { display: flex; flex-direction: column; gap: 3px; }
+.pnl-lxp-meters__leds { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.pnl-lxp-meters__leds span { flex: 1; border-radius: 1px; background: #2a2f33; }
+.pnl-lxp-meters__name { text-align: center; font-size: 9px; font-weight: 600; letter-spacing: 0.1em; color: #8d989f; }
+.pnl--lexicon .pnl-knob { background: #212a2e; border: 1px solid #2c3338; border-radius: 4px; padding-top: 4px; }
+.pnl--lexicon .pnl-knob__value { order: -1; color: #f2f4f5; font: 600 12px var(--pnl-condensed); margin-bottom: 2px; }
+.pnl--lexicon .pnl-knob__dial { height: calc(100% - 40px); }
+.pnl--lexicon .pnl-knob__body { fill: #16171a; stroke: #2c3338; stroke-width: 1; }
+.pnl--lexicon .pnl-knob__track { stroke: #2f3a40; stroke-width: 2.4; }
+.pnl--lexicon .pnl-knob__pointer { display: none; }
+.pnl--lexicon .pnl-knob__label { color: #b8c2c8; font-size: 10px; letter-spacing: 0.06em; margin-top: 2px; }
+.pnl-pagetitle { display: flex; align-items: center; height: 100%; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; color: #8d989f; }
+.pnl-pages { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 5px; height: 100%; padding: 4px 6px; box-sizing: border-box; background: #3f9aeb; border-radius: 4px; }
+.pnl-pages button { display: flex; flex-direction: column; justify-content: flex-end; padding: 0; background: #2a3236; border: 1px solid #1d5f9e; border-radius: 3px; color: #c3ccd2; font: 600 9.5px var(--pnl-condensed); letter-spacing: 0; cursor: pointer; overflow: hidden; }
+.pnl-pages button span { padding: 0 3px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pnl-pages button::after { content: ""; height: 4px; background: #1c2329; }
+.pnl-pages button.is-on { background: #1c2329; color: #fff; }
+.pnl-pages button.is-on::after { background: #32a8ff; }
+.pnl--lexicon .pnl-switch { background: #2a3236; border-color: #4a555c; color: #d9dde0; font-size: 11px; }
+.pnl--lexicon .pnl-inert { border: 1px solid #4a555c; border-radius: 3px; background: #1c2329; color: #d9dde0; font-size: 11px; letter-spacing: 0.08em; opacity: 0.5; justify-content: flex-start; padding: 0 10px; }
+.pnl--lexicon .mm-mod-target.is-modulated .pnl-knob__dial { box-shadow: 0 0 0 2px var(--mod-color), 0 0 8px var(--mod-color); }

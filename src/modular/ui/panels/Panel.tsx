@@ -6,7 +6,7 @@
 // panel adds is position, grouping, a look, and displays computed from the
 // effect's own maths (displays.ts).
 
-import { useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import type { JsonValue, NodeInstance, ParameterDescriptor } from "../../model/graph";
 import { moduleRegistry } from "../../registry/registry";
 import { ModTarget } from "../ModTarget";
@@ -15,6 +15,7 @@ import { formatValue } from "../n4/format";
 import { peaksToPath } from "../../audio/waveform";
 import { groupOf, type InertControl, type PanelControl, type PanelDisplay, type PanelLayout } from "./layout";
 import { arcPath, dragValue, fromFraction, knobAngle, toFraction, travelFor, type Travel } from "./travel";
+import { readoutText, type Readout } from "./readout";
 import { compressorCurve, filterBankResponse, grainWindow, plateEnvelope, PLATE_HIGH_HZ, type FilterBank } from "./displays";
 
 type Setter = (id: string, value: JsonValue) => void;
@@ -33,8 +34,17 @@ const travelOf = (control: PanelControl, parameter: ParameterDescriptor): Travel
 export function Panel({ layout, node, setParameter }: { layout: PanelLayout; node: NodeInstance; setParameter: Setter }) {
   const module = moduleRegistry.get(node.moduleType);
   const parameters = new Map((module?.parameters ?? []).map((p) => [p.id, p]));
+  // Which page is showing is a view of the module, not its sound: it is not
+  // saved, and every panel opens on its first page.
+  const [page, setPage] = useState(layout.pages?.[0]?.id);
+  const shows = (on?: string) => on === undefined || on === page;
+  const style = {
+    width: layout.width, height: layout.height,
+    ...(layout.accent ? { "--pnl-badge": layout.accent, "--pnl-accent": layout.accent } : {}),
+    ...(layout.accentInk ? { "--pnl-badge-ink": layout.accentInk } : {}),
+  } as CSSProperties;
   return (
-    <div className={`pnl pnl--${layout.style}`} style={{ width: layout.width, height: layout.height }}
+    <div className={`pnl pnl--${layout.style}`} style={style}
       role="group" aria-label={`${module?.label ?? node.moduleType} panel`}>
       {layout.groups.map((group) => (
         <div key={group.id} className="pnl-group" data-tint={group.tint} style={box(group)}>
@@ -43,29 +53,30 @@ export function Panel({ layout, node, setParameter }: { layout: PanelLayout; nod
       ))}
       {layout.displays.map((display, index) => (
         <div key={`${display.kind}-${index}`} className={`pnl-display pnl-display--${display.kind}`} style={box(display)}>
-          <Display display={display} node={node} />
+          <Display display={display} node={node} pages={{ list: layout.pages ?? [], current: page, show: setPage }}
+            label={module?.label ?? node.moduleType} />
         </div>
       ))}
-      {layout.controls.map((control) => {
+      {layout.controls.filter((control) => shows(control.page)).map((control) => {
         const parameter = parameters.get(control.param);
         if (!parameter) return null;
-        return <Control key={control.param} control={control} parameter={parameter} node={node} setParameter={setParameter}
-          tint={groupOf(layout, control)?.tint} />;
+        return <Control key={`${control.param}-${control.page ?? ""}`} control={control} parameter={parameter} node={node} setParameter={setParameter}
+          tint={groupOf(layout, control)?.tint} readout={control.readout ?? layout.readout} />;
       })}
-      {(layout.inert ?? []).map((inert) => <Inert key={inert.label} inert={inert} />)}
+      {(layout.inert ?? []).filter((inert) => shows(inert.page)).map((inert) => <Inert key={inert.label} inert={inert} />)}
     </div>
   );
 }
 
 // ---- controls ----------------------------------------------------------------
 
-function Control({ control, parameter, node, setParameter, tint }: {
-  control: PanelControl; parameter: ParameterDescriptor; node: NodeInstance; setParameter: Setter; tint?: string;
+function Control({ control, parameter, node, setParameter, tint, readout }: {
+  control: PanelControl; parameter: ParameterDescriptor; node: NodeInstance; setParameter: Setter; tint?: string; readout?: Readout;
 }) {
   const value = node.parameters[control.param];
   const label = control.label ?? parameter.label;
   const onChange = (next: JsonValue) => setParameter(control.param, next);
-  const placed = { ...control, tint };
+  const placed = { ...control, tint, readout };
   switch (control.kind) {
     case "switch":
       return <Switch control={placed} parameter={parameter} value={value} label={label} onChange={onChange} />;
@@ -109,9 +120,15 @@ function useDrag(onMove: (dx: number, dy: number, fine: boolean, start: number) 
 }
 
 /** The value shown for a parameter: a choice's name, or the number in its unit. */
-function shown(parameter: ParameterDescriptor, value: JsonValue | undefined, zero?: string): string {
+function shown(parameter: ParameterDescriptor, value: JsonValue | undefined, zero?: string, readout?: Readout): string {
   if (parameter.kind === "enum") return String(value ?? parameter.defaultValue);
   if (zero !== undefined && num(value, num(parameter.defaultValue)) === 0) return zero;
+  if (readout) {
+    // A whole-number control (a step of exactly 1) prints no places. A
+    // logarithmic control's step can be 1 or more without it being whole.
+    const whole = parameter.step === 1 && !readout.scale && !readout.ratio;
+    return readoutText(num(value, num(parameter.defaultValue)), whole ? { ...readout, decimals: 0 } : readout);
+  }
   return formatValue(num(value, num(parameter.defaultValue)), { unit: parameter.unit, step: parameter.step });
 }
 
@@ -129,7 +146,7 @@ function Knob({ control, parameter, value, label, onChange, modulated = false }:
     set(dragValue(start, dy, { min, max, travel, step: choice ? 1 : parameter.step }, fine)));
   const pointer = { x: 20 + 11 * Math.sin((angle * Math.PI) / 180), y: 20 - 11 * Math.cos((angle * Math.PI) / 180) };
   const label_ = <span className="pnl-knob__label">{label}</span>;
-  const text = shown(parameter, value, control.zero);
+  const text = shown(parameter, value, control.zero, control.readout);
   return (
     <div {...tinted(control)} className={`pnl-control pnl-knob${control.size ? ` pnl-knob--${control.size}` : ""}`} style={box(control)}
       title={`${parameter.label}: ${text}`}>
@@ -200,7 +217,7 @@ function Slider({ control, parameter, value, label, onChange, modulated = false 
       <span className="pnl-slider__value">{vertical
         // A fader is narrow: its number alone, the unit beside its name.
         ? formatValue(current, { step: parameter.step })
-        : shown(parameter, value)}</span>
+        : shown(parameter, value, undefined, control.readout)}</span>
       {modulated && <svg className="pnl-slider__mod" viewBox="0 0 40 40" aria-hidden="true"><line className="n4-knob__mod" x1="20" y1="20" x2="20" y2="6" visibility="hidden" /></svg>}
       {modulated && <span className="n4-knob__live pnl-knob__live" aria-hidden="true" />}
     </div>
@@ -230,7 +247,7 @@ function Switch({ control, parameter, value, label, onChange }: ControlProps) {
   const on = parameter.kind === "enum" ? String(value) === options[1] : value === true;
   const text = control.states ? control.states[on ? 1 : 0] : label;
   return (
-    <button type="button" {...tinted(control)} className={`pnl-control pnl-switch${on ? " is-on" : ""}`} style={box(control)}
+    <button type="button" {...tinted(control)} className={`pnl-control pnl-switch${control.size ? ` pnl-switch--${control.size}` : ""}${on ? " is-on" : ""}`} style={box(control)}
       aria-pressed={on} aria-label={parameter.label}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
@@ -271,9 +288,17 @@ function Inert({ inert }: { inert: InertControl }) {
 
 // ---- displays ----------------------------------------------------------------
 
-function Display({ display, node }: { display: PanelDisplay; node: NodeInstance }) {
+type Pages = { list: readonly { id: string; label: string }[]; current?: string; show: (id: string) => void };
+
+function Display({ display, node, pages, label }: { display: PanelDisplay; node: NodeInstance; pages: Pages; label: string }) {
   const p = node.parameters;
   switch (display.kind) {
+    case "page-nav": return <PageNav pages={pages} />;
+    case "page-title": return <span className="pnl-pagetitle">{pages.list.find((page) => page.id === pages.current)?.label ?? ""}</span>;
+    case "lxp-logo": return <span className="pnl-lxp-logo">lexicon</span>;
+    case "lxp-title": return <span className="pnl-lxp-title">{`LXP NATIVE | ${label.replace(/^LXP\s*/i, "").toUpperCase()}`}</span>;
+    case "lxp-meters": return <LxpMeters />;
+    case "lxp-rtv": return <span className="pnl-lxp-rtv">{label.replace(/^LXP\s*/i, "").toUpperCase()}</span>;
     case "grain-screen": return <GrainScreen display={display} node={node} />;
     case "root-keys": return <RootKeys display={display} root={num(p.root, 60)} />;
     case "plate-tail": return <PlateTail display={display} node={node} />;
@@ -282,6 +307,33 @@ function Display({ display, node }: { display: PanelDisplay; node: NodeInstance 
     case "bank-response": return <BankResponse display={display} node={node} />;
     default: return null;
   }
+}
+
+function PageNav({ pages }: { pages: Pages }) {
+  return <div className="pnl-pages" role="tablist">
+    {pages.list.map((page) => (
+      <button type="button" key={page.id} role="tab" aria-selected={page.id === pages.current}
+        className={page.id === pages.current ? "is-on" : ""}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => { event.stopPropagation(); pages.show(page.id); }}>
+        <span>{page.label}</span>
+      </button>
+    ))}
+  </div>;
+}
+
+/** The IN and OUT LED bars, drawn as the original's. Dark: idMLab has no level meter for them to read yet. */
+function LxpMeters() {
+  const scale = ["0", "-3", "-6", "-12", "-18", "-24", "SIG"];
+  return <div className="pnl-lxp-meters">
+    <div className="pnl-lxp-meters__scale">{scale.map((mark) => <span key={mark}>{mark}</span>)}</div>
+    {["IN", "OUT"].map((side) => (
+      <div key={side} className="pnl-lxp-meters__bar">
+        <div className="pnl-lxp-meters__leds">{Array.from({ length: 12 }, (_, i) => <span key={i} />)}</div>
+        <span className="pnl-lxp-meters__name">{side}</span>
+      </div>
+    ))}
+  </div>;
 }
 
 function GrainScreen({ display, node }: { display: PanelDisplay; node: NodeInstance }) {
