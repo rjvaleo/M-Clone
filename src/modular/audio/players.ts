@@ -64,9 +64,9 @@ export interface NotePlayer {
    *
    * `stepSec` is the length of the note's step — its slot in the sequence,
    * before any gate shortened it — when the note came from a sequence. The
-   * instrument hears it at the start, as the scale sequencer's synth knows
-   * each step's length when it schedules the note. A note played live has
-   * none. Its note-off follows either way.
+   * instrument hears it at the start (the synth's pulse LFOs advance by it).
+   * A note played live has none. It never decides how long the note lasts:
+   * the note-off follows either way, and that is the note's end.
    */
   noteOn(note: number, velocity: number, atSec: number, detuneCents?: number, stepSec?: number): void;
   noteOff(note: number, atSec: number): void;

@@ -15,8 +15,8 @@
 //! already sounding is let go and rings out its release while the new one
 //! starts from silence.
 //!
-//! **Polyphony limits held notes.** A note let go — or a sequenced note,
-//! written with its release — rings to its end without counting, as the
+//! **Polyphony limits held notes.** A note is held until its note-off — there
+//! is no gate — and once let go it rings to its end without counting, as the
 //! browser build's do. When held notes reach the limit the oldest is stolen
 //! with a short fade; only when every slot is sounding is one cut outright,
 //! the oldest released one first.
@@ -132,21 +132,15 @@ impl VoiceBank {
         index
     }
 
-    /// A note played live: it holds until its note-off.
+    /// A note: it holds until its note-off, whatever sent it.
     pub fn note_on(&mut self, note: u8, velocity: f32, detune_cents: f32) {
-        self.note_on_gated(note, velocity, detune_cents, None);
-    }
-
-    /// A note, with — for a sequenced one — how long after its start it
-    /// releases.
-    pub fn note_on_gated(&mut self, note: u8, velocity: f32, detune_cents: f32, release_after: Option<f32>) {
         // The same key struck again lets the one sounding go first.
         self.note_off(note);
         let index = self.claim();
         let serial = self.next_serial;
         self.next_serial += 1;
         let settings = &self.settings;
-        self.slots[index].voice.start(note, velocity, detune_cents, settings, release_after, &mut self.waves);
+        self.slots[index].voice.start(note, velocity, detune_cents, settings, &mut self.waves);
         self.slots[index].started = serial;
     }
 
@@ -341,12 +335,13 @@ mod tests {
     }
 
     #[test]
-    fn a_sequenced_note_rings_without_counting_against_the_limit() {
+    fn a_released_note_rings_without_counting_against_the_limit() {
         let mut bank = new_bank(8);
         bank.set_capacity(1);
         bank.settings_mut().amp.release = 0.5;
         for note in [60, 62, 64] {
-            bank.note_on_gated(note, 1.0, 0.0, Some(0.01));
+            bank.note_on(note, 1.0, 0.0);
+            bank.note_off(note);
         }
         assert_eq!(bank.held_count(), 0);
         assert_eq!(bank.active_count(), 3);
@@ -354,10 +349,25 @@ mod tests {
         let mut full = new_bank(2);
         full.settings_mut().amp.release = 5.0;
         for note in [60, 62, 64] {
-            full.note_on_gated(note, 1.0, 0.0, Some(0.0));
+            full.note_on(note, 1.0, 0.0);
+            full.note_off(note);
         }
         assert_eq!(full.active_count(), 2);
         assert!(full.slots.iter().all(|s| s.voice.note() != Some(60)));
+    }
+
+    #[test]
+    fn a_note_holds_until_its_note_off() {
+        // No gate: however long it sounds, a note is held until released.
+        let mut bank = new_bank(4);
+        bank.settings_mut().amp.release = 0.01;
+        bank.note_on(60, 1.0, 0.0);
+        render(&mut bank, 1.0);
+        assert_eq!(bank.held_count(), 1);
+        bank.note_off(60);
+        assert_eq!(bank.held_count(), 0);
+        render(&mut bank, 0.1);
+        assert_eq!(bank.active_count(), 0);
     }
 
     #[test]

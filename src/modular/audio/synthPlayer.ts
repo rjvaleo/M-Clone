@@ -73,13 +73,11 @@ import {
   LFO_TARGETS,
   LFO_WAVES,
   MAX_DELAY_S,
-  ORIGINAL_GATE,
   TAPE_SPEEDS,
   TEMPO_GLIDE_DELAY_S,
   delaySeconds,
   envelopeEvents,
   filterSweep,
-  gateReleaseSec,
   keyFollowedCutoff,
   lfoTargetGain,
   modulatedPulseWidth,
@@ -142,8 +140,6 @@ export type SynthDelay = {
 export type SynthPatch = SynthSettings & {
   matrix: ModMatrix;
   classic: boolean;
-  /** How much of a sequenced note's step it holds: the original's 85 %. */
-  gate: number;
   /** The master after the delay. */
   volume: number;
   lfos: readonly [SynthLfo, SynthLfo, SynthLfo];
@@ -219,7 +215,6 @@ export function readSynthSettings(
     pan: numberOr(parameters.pan, base.pan),
     matrix: readMatrix.fromJson(structure.matrix),
     classic: switchOf(parameters.classic),
-    gate: numberOr(parameters.gate, ORIGINAL_GATE),
     volume: numberOr(parameters.volume, 1),
     lfos: [lfo(0), lfo(1), lfo(2)],
     delay: {
@@ -472,21 +467,20 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
   }
 
   /**
-   * A note. `stepSec` is its step as sequenced, when it has one: the note
-   * then releases at the gate — 85 % of the step, as the original's do — with
-   * its release written when it starts, and its note-off changes nothing.
+   * A note. It holds on its sustain until its note-off, whatever sent it: the
+   * synth has no gate, so a note's length is the sequencer's (or the key's).
+   * `stepSec` is its step as sequenced, when it has one; the pulse LFOs
+   * advance by it, step by step.
    */
   noteOn(note: number, velocity: number, atSec: number, detuneCents = 0, stepSec?: number): void {
     if (this.disposed) return;
     const pitch = note + detuneCents / 100;
-    const sequenced = stepSec !== undefined && Number.isFinite(stepSec) && stepSec > 0;
-    const releaseAtSec = sequenced ? gateReleaseSec(atSec, stepSec, this.patch.gate) : undefined;
     const settings = this.settingsFor(note, velocity, detuneCents, this.pulseSwing(atSec, stepSec));
     if (this.patch.classic) {
       this.bank.noteOn(settings, note, velocity, atSec, {
-        classic: true, destination: this.classicIn, pitch, releaseAtSec,
+        classic: true, destination: this.classicIn, pitch,
       });
-      this.triggerClassicFilter(settings, note, pitch, atSec, releaseAtSec);
+      this.triggerClassicFilter(settings, note, pitch, atSec);
     } else {
       this.bank.noteOn(settings, note, velocity, atSec, {
         filterFrequencyMod: this.lfoFilterBus,
@@ -494,16 +488,15 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
         cutoffBase: this.cutoffBase,
         knobHz: positive(this.patch.filter.cutoffHz, 2000),
         pitch,
-        releaseAtSec,
       });
     }
   }
 
   noteOff(note: number, atSec: number): void {
     this.bank.noteOff(note, atSec);
-    // Only the note that last struck the shared filter releases it: in the
-    // original each note cancels the release the one before it scheduled.
-    // Written over what is there, as the original's release is.
+    // Only the note that last struck the shared filter releases it: each note
+    // retriggers it, cancelling what the one before it wrote. Written over
+    // what is there rather than cancelling it.
     const hold = this.classicHold;
     if (hold?.note !== note) return;
     applyEnvelope(this.filterEnv.offset, releaseEvents(atSec, hold.sustainDelta, hold.baseDelta, hold.releaseSec));
@@ -622,11 +615,9 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
    * Retrigger the shared filter's envelope, as `playNote` does: cancel what
    * is scheduled from this note on, then the offset from the knob's cutoff
    * jumps to this note's key-followed base, sweeps to the peak and settles on
-   * the sustain — and a sequenced note writes its release at the gate too.
+   * the sustain, which holds until this note's note-off releases it.
    */
-  private triggerClassicFilter(
-    settings: SynthSettings, note: number, pitch: number, atSec: number, releaseAtSec: number | undefined,
-  ): void {
+  private triggerClassicFilter(settings: SynthSettings, note: number, pitch: number, atSec: number): void {
     const knob = positive(this.patch.filter.cutoffHz, 2000);
     const { filter } = settings;
     const base = keyFollowedCutoff(positive(filter.cutoffHz, 2000), pitch, filter.keyFollow);
@@ -635,11 +626,11 @@ export class SynthPlayer implements ManagedAudioNode, NotePlayer {
     offset.cancelScheduledValues(atSec);
     applyEnvelope(
       offset,
-      envelopeEvents(atSec, sweep.base - knob, sweep.peak - knob, sweep.sustain - knob, filter.adsr, releaseAtSec),
+      envelopeEvents(atSec, sweep.base - knob, sweep.peak - knob, sweep.sustain - knob, filter.adsr),
     );
-    this.classicHold = releaseAtSec === undefined
-      ? { note, sustainDelta: sweep.sustain - knob, baseDelta: sweep.base - knob, releaseSec: Math.max(0, filter.adsr.release) }
-      : null;
+    this.classicHold = {
+      note, sustainDelta: sweep.sustain - knob, baseDelta: sweep.base - knob, releaseSec: Math.max(0, filter.adsr.release),
+    };
   }
 
   /** Glide the delay to the time the tempo and note value now ask for. */

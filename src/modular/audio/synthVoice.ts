@@ -35,13 +35,12 @@
  * `linearRampToValueAtTime` directly. No `.value =` assignment appears here or
  * anywhere else — that is the rule the safety contract actually enforces.
  *
- * They are the scale sequencer's calls, made the way `playNote` makes them
- * (`envelopeEvents` in `synthLaws.ts`): a sequenced note knows its length, so
- * its release — the sustain set at the gate, a ramp down — is written with the
- * rest when it starts, and the browser's timeline puts the five in order. A
- * note played live writes the same release when its key comes up, without
- * cancelling what is already there, so from then on it runs as the original
- * would have.
+ * They are the scale sequencer's calls (`envelopeEvents` and `releaseEvents`
+ * in `synthLaws.ts`). A note starts with its attack, decay and sustain, and
+ * the sustain holds: the synth has no gate, so how long a note lasts is
+ * decided by whatever sent it. Its release — the sustain set, a ramp down —
+ * is written when its note-off arrives, from a sequencer or a key alike,
+ * without cancelling what is already there.
  *
  * ## The voice filter follows the knob
  *
@@ -140,8 +139,6 @@ export type VoiceRouting = {
   filterFrequencyMod?: AudioNodeLike;
   filterQMod?: AudioNodeLike;
   pitch?: number;
-  /** When a sequenced note releases — its gate. Absent for a note played live. */
-  releaseAtSec?: number;
   /**
    * The module's cutoff knob as a signal, summed into the voice filter's
    * frequency; the voice's own automation is then offsets from `knobHz`.
@@ -339,18 +336,13 @@ export class SynthVoice {
       this.ampGain.connect(destination);
     }
 
-    this.scheduleEnvelopes(atSec, velocity, routing.pitch ?? note, routing.releaseAtSec);
+    this.scheduleEnvelopes(atSec, velocity, routing.pitch ?? note);
 
     this.oscillators[0].onended = () => this.finish();
     for (const oscillator of this.oscillators) oscillator.start(atSec);
-    if (routing.releaseAtSec !== undefined) {
-      // Its release is already written; a key coming up changes nothing.
-      this.released = true;
-      this.stopAt(this.stopTime(routing.releaseAtSec));
-    }
   }
 
-  /** Whether the note has been let go — or was written with its release. */
+  /** Whether the note has been let go. */
   get isReleased(): boolean {
     return this.released;
   }
@@ -373,8 +365,8 @@ export class SynthVoice {
   }
 
   /** The original stops a note 50 ms after its amp release ends. */
-  private stopTime(releaseAtSec: number): number {
-    return releaseAtSec + Math.max(0, this.settings.amp.release) + NOTE_TAIL_SEC;
+  private stopTime(releasedAtSec: number): number {
+    return releasedAtSec + Math.max(0, this.settings.amp.release) + NOTE_TAIL_SEC;
   }
 
   /** Cut the note short to make room for another, without a click. */
@@ -404,12 +396,12 @@ export class SynthVoice {
 
   private sustainLevel = 0;
 
-  private scheduleEnvelopes(atSec: number, velocity: number, pitch: number, releaseAtSec: number | undefined): void {
+  private scheduleEnvelopes(atSec: number, velocity: number, pitch: number): void {
     const peak = clamp(this.settings.level, 0, 1) * velocityGain(velocity);
     this.sustainLevel = peak * clamp(this.settings.amp.sustain, 0, 1);
     applyEnvelope(
       this.ampGain.gain,
-      envelopeEvents(atSec, 0, peak, this.sustainLevel, this.settings.amp, releaseAtSec),
+      envelopeEvents(atSec, 0, peak, this.sustainLevel, this.settings.amp),
     );
 
     if (!this.filter) return;
@@ -425,7 +417,7 @@ export class SynthVoice {
     this.sustainOffsetHz = sweep.sustain - knob;
     applyEnvelope(
       this.filter.frequency,
-      envelopeEvents(atSec, this.filterFromHz, sweep.peak - knob, this.sustainOffsetHz, filter.adsr, releaseAtSec),
+      envelopeEvents(atSec, this.filterFromHz, sweep.peak - knob, this.sustainOffsetHz, filter.adsr),
     );
   }
 
@@ -452,7 +444,7 @@ export class SynthVoice {
 export class SynthVoiceBank {
   /** Notes still held: what the ceiling counts and a key-up releases. */
   private voices: SynthVoice[] = [];
-  /** Notes let go — or sequenced, written with their release — until they end. */
+  /** Notes let go, ringing out their release until they end. */
   private ringing: SynthVoice[] = [];
   /** Notes stolen or silenced, fading out; no longer counted. */
   private fading: SynthVoice[] = [];
@@ -494,11 +486,9 @@ export class SynthVoiceBank {
       this.context, routing.destination ?? this.destination, settings, note, velocity, atSec, routing,
     );
     voice.onended = () => this.forget(voice);
-    // A sequenced note is let go when it is written, as the original's are:
-    // it rings to its end without counting against the ceiling, which only
-    // ever limits notes still held.
-    if (voice.isReleased) this.ringing.push(voice);
-    else this.voices.push(voice);
+    // Held until its note-off, whatever sent it; only then does it ring out,
+    // no longer counted against the ceiling.
+    this.voices.push(voice);
   }
 
   noteOff(note: number, atSec: number): void {

@@ -245,8 +245,7 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     "delay-hicut": 61,
     tape: 62,
     tempo: 63,
-    gate: 64,
-    "lfo-touch": 65,
+    "lfo-touch": 64,
   },
   // Mirrors `BlackholeVerb` in rust/dsp-core/src/modules.rs. `line-count` is
   // absent on purpose: it is a structural parameter, so changing it rebuilds

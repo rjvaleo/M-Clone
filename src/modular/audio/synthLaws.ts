@@ -35,54 +35,35 @@ export const MAX_MODULATED_PW = 0.95;
 const clamp = (value: number, low: number, high: number): number =>
   Math.max(low, Math.min(high, value));
 
-/**
- * How much of its step a note holds before it releases: `noteDur = stepDur
- * · 0.85`. A sequenced note's step is its slot in the sequence, before any
- * gate of the sequencer's own shortened it; the note releases at 85 % of it,
- * whatever note-off follows.
- */
-export const ORIGINAL_GATE = 0.85;
-export const MIN_GATE = 0.05;
-export const MAX_GATE = 1;
-
-/** When a note on a step of `stepSec`, starting at `atSec`, releases. */
-export const gateReleaseSec = (atSec: number, stepSec: number, gate: number): number =>
-  atSec + stepSec * clamp(Number.isFinite(gate) ? gate : ORIGINAL_GATE, MIN_GATE, MAX_GATE);
-
-/** An oscillator stops this long after its release: `osc.stop(time + noteDur + r + 0.05)`. */
+/** An oscillator stops this long after its release ends: the original's `osc.stop(… + r + 0.05)`. */
 export const NOTE_TAIL_SEC = 0.05;
 
 /** One automation call, as `playNote` makes it. */
 export type EnvelopeEvent = { kind: "set" | "linear"; value: number; time: number };
 
 /**
- * An envelope as `playNote` schedules it, all at once: `from` at the note,
- * a ramp to `peak` over the attack and to `sustain` over the decay — and,
- * when the release time is known, the sustain set at it and a ramp back to
- * `from` over the release. The original writes these whatever their order in
- * time; a timeline sorts them, so a gate inside the attack holds `from` until
- * the gate, then jumps to the sustain and ramps on to the peak.
+ * An envelope as a note starts it: `from` at the note, a ramp to `peak` over
+ * the attack and to `sustain` over the decay, and the sustain holds. Nothing
+ * is written for the release here: the synth has no gate, so a note releases
+ * only at its note-off (`releaseEvents`), whatever sent it.
  */
 export function envelopeEvents(
   atSec: number,
   from: number,
   peak: number,
   sustain: number,
-  times: { attack: number; decay: number; release: number },
-  releaseAtSec?: number,
+  times: { attack: number; decay: number },
 ): EnvelopeEvent[] {
   const attack = Math.max(0, times.attack);
   const decay = Math.max(0, times.decay);
-  const events: EnvelopeEvent[] = [
+  return [
     { kind: "set", value: from, time: atSec },
     { kind: "linear", value: peak, time: atSec + attack },
     { kind: "linear", value: sustain, time: atSec + attack + decay },
   ];
-  if (releaseAtSec !== undefined) events.push(...releaseEvents(releaseAtSec, sustain, from, times.release));
-  return events;
 }
 
-/** The release the original writes at the gate: the sustain, then a ramp to `to`. */
+/** The release written at a note-off: the sustain, then a ramp to `to`. */
 export const releaseEvents = (atSec: number, sustain: number, to: number, releaseSec: number): EnvelopeEvent[] => [
   { kind: "set", value: sustain, time: atSec },
   { kind: "linear", value: to, time: atSec + Math.max(0, releaseSec) },

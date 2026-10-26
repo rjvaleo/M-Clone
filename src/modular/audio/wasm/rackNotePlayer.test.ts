@@ -46,7 +46,7 @@ describe("RackNotePlayer", () => {
     ]);
   });
 
-  it("carries a sequenced note's step, for the synth's gate", () => {
+  it("carries a sequenced note's step, for the synth's pulse LFOs", () => {
     const rack = sink();
     new RackNotePlayer("n1", rack).noteOn(60, 127, 12.5, 0, 0.25);
     expect(rack.schedule).toHaveBeenCalledWith("n1", 12.5, [

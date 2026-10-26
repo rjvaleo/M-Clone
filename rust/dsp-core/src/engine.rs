@@ -216,7 +216,8 @@ pub trait Module: Send {
     fn note_on(&mut self, _note: u8, _velocity: f32, _detune_cents: f32) {}
     /// A sequenced note, which knows its step — its slot in the sequence, in
     /// seconds — when it starts. An instrument that has no use for the step
-    /// plays it as any note; its note-off follows either way.
+    /// plays it as any note. The step never decides the note's length: its
+    /// note-off follows either way, and ends it.
     fn note_on_with_step(&mut self, note: u8, velocity: f32, detune_cents: f32, _step_sec: f32) {
         self.note_on(note, velocity, detune_cents);
     }

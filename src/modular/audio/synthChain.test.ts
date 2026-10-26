@@ -487,21 +487,27 @@ describe("Classic: one filter for every note", () => {
     expect((voiceFilter.frequency as FakeParam).moves()[0].value).toBe(0);
   });
 
-  it("writes a sequenced note's whole envelope, release included, after cancelling", () => {
+  it("holds a sequenced note's shared envelope until the last note's note-off", () => {
+    // No gate: a step is no release. The sweep is cancelled from the note on
+    // and written up to the sustain, and the sustain holds.
     const rig = classic();
     rig.player.noteOn(60, 127, 1, 0, 0.5);
-    expect(rig.filterEnv.offset.calls.slice(-6).map((call) => [call.method, call.time, call.value])).toEqual([
+    expect(rig.filterEnv.offset.calls.slice(-4).map((call) => [call.method, call.time, call.value])).toEqual([
       ["cancel", 1, 0],
       ["set", 1, 0],
       ["linear", 1.01, 15000],
       ["linear", 1.16, 4500],
-      ["set", 1 + 0.5 * 0.85, 4500],
-      ["linear", 1 + 0.5 * 0.85 + 0.3, 0],
     ]);
-    // Nothing is left for a key-up to release.
-    const before = rig.filterEnv.offset.calls.length;
-    rig.player.noteOff(60, 1.2);
-    expect(rig.filterEnv.offset.calls).toHaveLength(before);
+    rig.player.noteOn(64, 127, 1.25, 0, 0.5);
+    const held = rig.filterEnv.offset.calls.length;
+    // Past 85 % of its step and past the step, the older note's note-off
+    // leaves the shared envelope alone…
+    rig.player.noteOff(60, 1.9);
+    expect(rig.filterEnv.offset.calls).toHaveLength(held);
+    // …and the latest note's releases it, over the release time.
+    rig.player.noteOff(64, 2);
+    expect(rig.filterEnv.offset.moves().slice(-2).map((call) => [call.method, call.time, call.value]))
+      .toEqual([["set", 2, 4500], ["linear", 2.3, 0]]);
   });
 
   it("takes resonance on the shared filter, and leaves per-voice notes to their own", () => {
