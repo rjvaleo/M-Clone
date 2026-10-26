@@ -69,6 +69,9 @@ import { MLAB_FACES, MLabHostContext, N4_TITLES } from "./mlab";
 import { DrumSeqFace } from "./mlab/DrumSeqFace";
 import type { MLabHost } from "./mlab/common";
 import { N4Header } from "./n4/N4Header";
+import { Panel } from "./panels/Panel";
+import { panelFor } from "./panels/layouts";
+import "./panels/panels.css";
 import { N4Button, N4Knob, N4Spinner, N4Stepper } from "./n4/kit";
 import { formatValue } from "./n4/format";
 import { presetHandlers } from "./n4/PresetManager";
@@ -1069,7 +1072,9 @@ function NodeFace({
   // modules store their minimize and comment; the rest fold for the session.
   const stored = "collapsed" in node.parameters;
   const collapsed = stored ? node.parameters.collapsed === true : folded;
-  return <article className={`mm-node mm-node--n4 mm-node--${descriptor.family} mm-node--layout-${descriptor.layout}${selected ? " is-selected" : ""}${node.enabled ? "" : " is-bypassed"}`}
+  // A module with a panel layout is drawn as that panel, at its one width.
+  const panel = panelFor(node.moduleType);
+  return <article className={`mm-node mm-node--n4 mm-node--${descriptor.family} mm-node--layout-${descriptor.layout}${panel ? " mm-node--panel" : ""}${selected ? " is-selected" : ""}${node.enabled ? "" : " is-bypassed"}`}
     aria-label={`${node.label} module`}
     // Lets the stylesheet make an exception for one module without inventing a
     // layout class that means "the Note Editor".
@@ -1084,7 +1089,8 @@ function NodeFace({
     // the same 520 × 330 as a module with a full control panel. The face is the
     // size of what is on it, bounded by the layout's range in the stylesheet.
     style={{ left: node.position.x, top: node.position.y,
-      zIndex: stackIndex, "--mm-accent": accent } as React.CSSProperties}>
+      zIndex: stackIndex, "--mm-accent": accent,
+      ...(panel ? { "--mm-width": `${panel.width}px` } : {}) } as React.CSSProperties}>
     {<N4Header name={node.label} title={N4_TITLES[node.moduleType] ?? descriptor.label}
         comment={"comment" in node.parameters ? String(node.parameters.comment ?? "...") : undefined}
         collapsed={collapsed} enabled={node.enabled}
@@ -1126,7 +1132,10 @@ function NodeFace({
           <Jack direction="out" connected={connectedPorts.has(`${node.id}:${port.id}`)} />
         </button>)}
     </div>
-    {!collapsed && <div className="mm-node__face">
+    {!collapsed && panel && <div className="mm-node__face mm-node__face--panel">
+      <Panel layout={panel} node={node} setParameter={setParameter} />
+    </div>}
+    {!collapsed && !panel && <div className="mm-node__face">
       {descriptor.face.map((section) => <section className="mm-node-section" key={section.id}
         aria-label={section.label}>
         {/*
