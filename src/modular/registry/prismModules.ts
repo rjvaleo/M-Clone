@@ -31,6 +31,22 @@ import type { PrismEffect, PrismParam } from "./prismTypes";
 export const prismType = (id: string): string => `m.prism-${id}`;
 
 /**
+ * Names for the effects whose crate label is already one of idMLab's own
+ * modules: MultiGrainLive's rack gain, EQ and compressor share their names
+ * with the Web Audio Gain, EQ and Compressor. The menu and the registry need
+ * every label distinct, so these say whose they are, as the Hyperprism
+ * effects do.
+ */
+const LABELS_TAKEN_BY_IDMLAB: Readonly<Record<string, string>> = {
+  gain: "MultiGrainLive Gain",
+  eq: "MultiGrainLive EQ",
+  compressor: "MultiGrainLive Compressor",
+};
+
+/** The label an effect is listed under in idMLab. */
+export const prismLabel = (effect: PrismEffect): string => LABELS_TAKEN_BY_IDMLAB[effect.id] ?? effect.label;
+
+/**
  * The rack's fade handle in a prism module's index table. Not `level`: an
  * effect from the crate may have a control of that name (Hyper Stereo does).
  */
@@ -61,8 +77,12 @@ const control = (p: PrismParam): ParameterDescriptor => {
 };
 
 const descriptorFor = (effect: PrismEffect): ModuleDescriptor => {
+  // An inert control is the original's dead knob, kept by the crate only for
+  // the documents that store it: it is no control here, and the kernel keeps
+  // its default. Every other control keeps its crate index all the same.
+  const controls = effect.params.filter((p) => !p.inert);
   const grouped = new Set(effect.groups.flatMap((group) => group.keys));
-  const loose = effect.params.filter((p) => !grouped.has(p.key)).map((p) => param(p.key));
+  const loose = controls.filter((p) => !grouped.has(p.key)).map((p) => param(p.key));
   const sections: NodeFaceSection[] = [
     ...(effect.sound
       ? [section("sound", effect.sound.label, [custom("asset-slot", effect.sound.label, [PRISM_SOUND_PARAM])])]
@@ -73,7 +93,7 @@ const descriptorFor = (effect: PrismEffect): ModuleDescriptor => {
   ];
   return defineModule({
     type: prismType(effect.id),
-    label: effect.label,
+    label: prismLabel(effect),
     family: "audio",
     colorToken: "audio",
     ports: [
@@ -81,7 +101,7 @@ const descriptorFor = (effect: PrismEffect): ModuleDescriptor => {
       output("audio-out", "Audio", { kind: "audio", channels: 2 }),
     ],
     parameters: [
-      ...effect.params.map(control),
+      ...controls.map(control),
       ...(effect.sound
         ? [{ ...stringParam(PRISM_SOUND_PARAM, effect.sound.label), smoothing: "none" as const, morph: "step-end" as const }]
         : []),
@@ -100,14 +120,18 @@ export const PRISM_CODES: Readonly<Record<string, number>> = Object.fromEntries(
 
 /**
  * Where each control lands in the Rust module's parameters: the kernel's, in
- * the crate's order, then the rack's fade handle under `PRISM_FADE_KEY`.
+ * the crate's order, then the rack's fade handle under `PRISM_FADE_KEY`. An
+ * inert control has no entry, as it is no control here; its index is skipped,
+ * not reused.
  */
 export const PRISM_PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, number>>>> =
   Object.fromEntries(
     PRISM_CATALOG.map((effect) => [
       prismType(effect.id),
       {
-        ...Object.fromEntries(effect.params.map((p, index) => [p.key, index])),
+        ...Object.fromEntries(
+          effect.params.flatMap((p, index) => (p.inert ? [] : [[p.key, index] as const])),
+        ),
         [PRISM_FADE_KEY]: effect.params.length,
       },
     ]),

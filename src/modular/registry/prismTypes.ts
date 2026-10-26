@@ -15,6 +15,11 @@ export type PrismParam = {
   choices: readonly string[] | null;
   /** Acts only while another control is at this value. */
   when: { key: string; value: number } | null;
+  /**
+   * The original had this control and never read it. The crate keeps it so
+   * documents that store it still open; hosts leave it off the face.
+   */
+  inert: boolean;
 };
 
 export type PrismEffect = {

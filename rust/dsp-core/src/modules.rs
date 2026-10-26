@@ -2848,11 +2848,24 @@ pub struct PrismModule {
 impl PrismModule {
     pub fn new(code: u32, sample_rate: f32) -> Self {
         let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
-        let kernel = prism_fx::CATALOG
+        let mut kernel = prism_fx::CATALOG
             .iter()
             .find(|e| e.descriptor.code as u32 == code)
             .map(|e| (e.make)(rate));
-        let seen = kernel.as_ref().map(|k| k.descriptor().params.iter().map(|p| p.default).collect()).unwrap_or_default();
+        let seen: Vec<f32> =
+            kernel.as_ref().map(|k| k.descriptor().params.iter().map(|p| p.default).collect()).unwrap_or_default();
+        // The face starts every control at its descriptor's default. A few of
+        // MultiGrainLive's kernels start elsewhere, as the originals do (the
+        // flanger and vibrato at 0.55 Hz against a declared 0.3), and would
+        // sound unlike their face until a control first moved: those controls
+        // are told. Only those, as telling a kernel is not always a no-op.
+        if let Some(kernel) = kernel.as_mut() {
+            for (index, value) in seen.iter().enumerate() {
+                if kernel.param(index) != *value {
+                    kernel.set_param(index, *value);
+                }
+            }
+        }
         Self { code, kernel, seen, fade: Tracked::new(0.0), sound: None, loaded: None }
     }
 
@@ -4888,12 +4901,18 @@ mod tests {
 
     #[test]
     fn a_prism_module_sounds_exactly_as_its_kernel() {
-        // Every effect in the catalogue, against the kernel run on its own:
-        // the module adds nothing but the fade, which is open.
+        // Every effect in the catalogue, against the kernel run on its own at
+        // its descriptor's defaults: the module adds nothing but the fade,
+        // which is open.
         for entry in prism_fx::CATALOG {
             let d = entry.descriptor;
             let (mut engine, inputs, _fx, output) = prism_chain(d.code);
             let mut kernel = (entry.make)(RATE);
+            for (i, spec) in d.params.iter().enumerate() {
+                if kernel.param(i) != spec.default {
+                    kernel.set_param(i, spec.default);
+                }
+            }
             let (l, r) = (noise(4_800, 7), noise(4_800, 11));
             // Fade glide settled first, kernel run over the same frames.
             settle(&mut engine);
@@ -4921,6 +4940,20 @@ mod tests {
                     assert!((got[0] - want[0]).abs() < 1e-5 && (got[1] - want[1]).abs() < 1e-5,
                         "{} frame {n}: {got:?} against {want:?}", d.id);
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn a_prism_kernel_starts_at_its_faces_defaults() {
+        // MultiGrainLive's flanger starts its LFO at 0.55 Hz and declares 0.3:
+        // a fresh module runs at what its face shows, with no settling.
+        for entry in prism_fx::CATALOG {
+            let d = entry.descriptor;
+            let module = PrismModule::new(d.code as u32, RATE);
+            let kernel = module.kernel.as_ref().unwrap();
+            for (i, spec) in d.params.iter().enumerate() {
+                assert_eq!(kernel.param(i), spec.default, "{}.{}", d.id, spec.key);
             }
         }
     }
