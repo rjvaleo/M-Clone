@@ -110,7 +110,7 @@ function musical(mode: MusicalMode): Builder {
     return {
       panes: [responsePane([traceOf(x, (f) => musicalResponse(mode, p, f, rate), "a")], [{ tone: "b", x: v.frequency }])],
       top: `${hz(v.frequency)} · BW ${hz(v.bandwidth)} · Q ${fixed(v.frequency / Math.max(v.bandwidth, 0.1), 2)}${mode === "regalia" ? ` · ${dbText(v.gainDb)}` : ""}`,
-      bottom: `20 HZ – 20 KHZ · ±24 DB · MIX ${fixed(v.mix * 100, 0)}%`,
+      bottom: "",
     };
   };
 }
@@ -211,7 +211,7 @@ const PLOTS: Record<string, Builder> = {
     return {
       panes: [responsePane([traceOf(x, (f) => dampingResponse({ cutoffHz: v.cutoffHz, wet: v.wet, dry: v.dry }, f, rate), "a")], [{ tone: "b", x: v.cutoffHz }], dbAxis(-36, 12, 12))],
       top: `CUTOFF ${hz(v.cutoffHz)} · ONE POLE`,
-      bottom: `20 HZ – 20 KHZ · WET ${fixed(v.wet, 2)} DRY ${fixed(v.dry, 2)}`,
+      bottom: "",
     };
   },
 
@@ -235,7 +235,7 @@ const PLOTS: Record<string, Builder> = {
         dots: nodes.map((n) => ({ tone: "b" as const, x: n.freq, y: eqResponse(v, n.freq, rate), label: String(n.band + 1) })),
       }],
       top: `${nodes.length} OF 8 NODES ON`,
-      bottom: "20 HZ – 20 KHZ · ±24 DB",
+      bottom: "",
     };
   },
 
@@ -257,19 +257,19 @@ const PLOTS: Record<string, Builder> = {
   "gate-curve": (v) => ({
     panes: [transferPane(-90, (l) => gateSteady({ thresholdDb: v.thresholdDb, depth: v.depth }, l), [{ tone: "b", x: v.thresholdDb }])],
     top: `THRESHOLD ${dbText(v.thresholdDb)} · DEPTH ${fixed(v.depth * 100, 0)}%`,
-    bottom: `HELD · ATK ${secs(v.attackMs / 1000)} · REL ${secs(v.releaseMs / 1000)}`,
+    bottom: `STEADY · ATTACK ${secs(v.attackMs / 1000)} · REL ${secs(v.releaseMs / 1000)}`,
   }),
 
   "fit-curve": (v) => ({
     panes: [transferPane(-90, (l) => fitSteady({ amount: v.amount, floorDb: v.floorDb }, l), [{ tone: "b", x: v.floorDb }])],
     top: `AMOUNT ${fixed(v.amount * 100, 0)}% · FLOOR ${dbText(v.floorDb)}`,
-    bottom: `HELD · TO 0.9 FS · GRAIN ${secs(v.grainMs / 1000)}`,
+    bottom: `STEADY · TO 0.9 FS · GRAIN ${secs(v.grainMs / 1000)}`,
   }),
 
   "maximizer-curve": (v) => ({
     panes: [transferPane(-60, (l) => maximizerSteady({ amount: v.amount, ceilingDb: v.ceilingDb, autoLevel: v.autoLevel, autoComp: v.autoComp }, l), [{ tone: "b", y: v.ceilingDb }])],
     top: `${fixed(Math.pow(20, v.amount), 1)}:1 · KNEE ${fixed(9 * (1 - v.amount) + 1, 1)} · CEIL ${dbText(v.ceilingDb)}`,
-    bottom: `HELD · THRESHOLD ${v.autoComp >= 0.5 ? "FOLLOWS LEVEL" : dbText(-24 * v.amount)}`,
+    bottom: `STEADY · THRESHOLD ${v.autoComp >= 0.5 ? "FOLLOWS LEVEL" : dbText(-24 * v.amount)}`,
   }),
 
   "spectral-curve": (v) => ({
@@ -295,7 +295,7 @@ const PLOTS: Record<string, Builder> = {
     return {
       panes: [{ x: axis, y: axis, traces: [traceOf(axis, (x) => x, "c", { dash: true }, 2), traceOf(axis, (x) => decimatorTransfer(x, { bits, mix: v.mix }), "a", {}, 1200)] }],
       top: bits >= 24 ? "24 BITS · UNTOUCHED" : `${bits} BIT${bits === 1 ? "" : "S"} · ${2 ** bits} LEVELS`,
-      bottom: `HELD AT ${hz((rate * v.rate) / 100)}`,
+      bottom: `SAMPLE RATE ${hz((rate * v.rate) / 100)}`,
     };
   },
 
@@ -310,7 +310,7 @@ const PLOTS: Record<string, Builder> = {
     return {
       panes: [responsePane([traceOf(x, (f) => dcResponse(v.hz, f, rate), "a")], [{ tone: "b", x: v.hz }], dbAxis(-36, 6, 6), x)],
       top: `CORNER ${hz(v.hz)}`,
-      bottom: "1 HZ – 2 KHZ",
+      bottom: "",
     };
   },
 
@@ -319,7 +319,7 @@ const PLOTS: Record<string, Builder> = {
     return {
       panes: [{ x, y: evenAxis(0, 1, 1, () => ""), traces: [], stems: [{ tone: "a", x: v.db, y: 1 }], rules: [{ tone: "c", x: 0 }] }],
       top: `× ${fixed(Math.pow(10, v.db / 20), 3)}`,
-      bottom: dbText(v.db),
+      bottom: "",
     };
   },
 
@@ -378,7 +378,7 @@ const PLOTS: Record<string, Builder> = {
         { x, y: evenAxis(0, Math.ceil(most / 10) * 10 || 10, 10), title: "DELAY MS", traces: [traceOf(x, (t) => at(0)(t).delayMs, "a"), traceOf(x, (t) => at(1)(t).delayMs, "b", { dash: true })] },
         { x, y: evenAxis(0, 1, 0.5), title: "LEVEL", traces: [traceOf(x, (t) => at(0)(t).gain, "a"), traceOf(x, (t) => at(1)(t).gain, "b", { dash: true })] },
       ],
-      top: `TURN ${secs(turn)} · ${cents(up)}/${cents(down)} CT`,
+      top: `TURN ${secs(turn)} · ${cents(up)}/${cents(down)} CENTS`,
       bottom: "— LEFT  - - RIGHT",
     };
   },
@@ -459,7 +459,7 @@ const PLOTS: Record<string, Builder> = {
       ({ x, y: evenAxis(0, 1, 0.5), title, traces: [], stems: train.map((s) => ({ tone, x: s.t, y: s[side] })) });
     return {
       panes: [pane("left", "a", "LEFT"), pane("right", "b", "RIGHT")],
-      top: `TAPS ${secs(v.delay1Ms / 1000)} / ${secs(v.delay2Ms / 1000)} · FB ${fixed(v.feedback, 2)}`,
+      top: `TAPS ${secs(v.delay1Ms / 1000)} / ${secs(v.delay2Ms / 1000)} · FEEDBACK ${fixed(v.feedback, 2)}`,
       bottom: "IMPULSE RESPONSE, NO DRY",
     };
   },
@@ -470,11 +470,10 @@ const PLOTS: Record<string, Builder> = {
     const window = Math.round(v.window);
     const x = timeAxis(frames / rate);
     const shape = across(x, 300).map((t): [number, number] => [t, convolutionWindow(window, Math.min(Math.floor(t * rate), frames - 1), frames)]);
-    const name = ["HAMMING", "KAISER", "RAMP", "RECTANGLE", "SINC", "TRIANGLE", "VON HANN"][window];
     return {
       panes: [{ x, y: evenAxis(window === 4 ? -0.5 : 0, 1, 0.5), traces: [{ tone: "a", fill: true, points: shape }] }],
       top: sound ? `${sound.name.slice(0, 12).toUpperCase()} · ${secs(frames / rate)} OF ${secs(sound.durationSec)}` : `NO IMPULSE · ${secs(frames / rate)} ASKED`,
-      bottom: `${name}${v.brighten >= 0.5 ? " · +6 DB/OCT" : ""}${v.ringModulate >= 0.5 ? " · RING MOD" : ""}`,
+      bottom: [v.brighten >= 0.5 ? "+6 DB/OCT" : "", v.ringModulate >= 0.5 ? "RING MOD" : ""].filter(Boolean).join(" · "),
     };
   },
 };

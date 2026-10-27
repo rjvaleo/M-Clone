@@ -41,7 +41,7 @@ describe("A module's values as its kernel reads them", () => {
 });
 
 describe("Every display", () => {
-  it("draws for its module's defaults: axes the right way round, numbers or breaks, and its two lines", () => {
+  it("draws for its module's defaults: axes the right way round, numbers or breaks, and its heading", () => {
     for (const kind of PLOT_KINDS) {
       const drawn = plot(kind);
       expect(drawn, kind).toBeDefined();
@@ -111,7 +111,7 @@ describe("What the displays say", () => {
   it("counts the decimator's levels", () => {
     expect(plot("quantizer").top).toBe("24 BITS · UNTOUCHED");
     expect(plot("quantizer", { bits: 1 }).top).toBe("1 BIT · 2 LEVELS");
-    expect(plot("quantizer", { bits: 4, rate: 10 }).bottom).toBe("HELD AT 4.80 KHZ");
+    expect(plot("quantizer", { bits: 4, rate: 10 }).bottom).toBe("SAMPLE RATE 4.80 KHZ");
   });
 
   it("moves each stereo input to where the matrix puts it", () => {
@@ -132,7 +132,8 @@ describe("What the displays say", () => {
 
   it("says the gain as a factor", () => {
     expect(plot("gain-factor", { db: 6 }).top).toBe("× 1.995");
-    expect(plot("gain-factor").bottom).toBe("0.0 DB");
+    // The knob already says the level in dB.
+    expect(plot("gain-factor").bottom).toBe("");
   });
 
   it("follows the ring modulator's sweep, or says there is none", () => {
@@ -160,7 +161,7 @@ describe("What the displays say", () => {
   it("gives the swept delays' pitch", () => {
     expect(plot("mod-sweep").top).toMatch(/^PITCH \+\d/);
     expect(plot("doubler-sweep").bottom).toContain("2 CYCLES");
-    expect(plot("rotor").top).toMatch(/^TURN 833 MS · \+/);
+    expect(plot("rotor").top).toMatch(/^TURN 833 MS · \+[\d.]+\/−[\d.]+ CENTS$/);
   });
 
   it("gives the pitch shifters' ratio and sweep", () => {
@@ -197,7 +198,7 @@ describe("What the displays say", () => {
     expect(plot("impulse-window").panes[0].x.max).toBeCloseTo(0.1, 12);
     const sounded = plot("impulse-window", { brighten: 1, ringModulate: 1, window: 4 }, { sound: { name: "Room", durationSec: 2 } });
     expect(sounded.top).toBe("ROOM · 100 MS OF 2.00 S");
-    expect(sounded.bottom).toBe("SINC · +6 DB/OCT · RING MOD");
+    expect(sounded.bottom).toBe("+6 DB/OCT · RING MOD");
     expect(sounded.panes[0].y.min).toBe(-0.5);
   });
 });

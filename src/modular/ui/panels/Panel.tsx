@@ -598,8 +598,10 @@ function PlotView({ display, node }: { display: PanelDisplay; node: NodeInstance
 
 function PlotSvg({ plot, w, h }: { plot: Plot; w: number; h: number }) {
   // A short display, as the strips' are, gives its two lines less room.
+  // An empty bottom line is left out and its room given to the panes.
   const text = h < 120 ? 13 : 16;
-  const paneH = (h - 2 * text) / plot.panes.length;
+  const below = plot.bottom ? text : 2;
+  const paneH = (h - text - below) / plot.panes.length;
   return <>
     <span className="pnl-screen__top">{plot.top}</span>
     <svg className="pnl-plot" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
@@ -610,7 +612,7 @@ function PlotSvg({ plot, w, h }: { plot: Plot; w: number; h: number }) {
           box={pane.square ? { x: box.x + (box.w - side) / 2, y: box.y + (box.h - side) / 2, w: side, h: side } : box} />;
       })}
     </svg>
-    <span className="pnl-screen__bottom">{plot.bottom}</span>
+    {plot.bottom && <span className="pnl-screen__bottom">{plot.bottom}</span>}
   </>;
 }
 
