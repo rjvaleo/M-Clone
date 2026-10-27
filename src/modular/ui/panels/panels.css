@@ -357,7 +357,6 @@
 .pnl--strip .pnl-control[data-tint="eq5"] { --pnl-ink: #ff5f7e; --pnl-lamp: #ff5f7e; }
 .pnl--strip .pnl-control[data-tint="eq6"] { --pnl-ink: #f3c94a; --pnl-lamp: #f3c94a; }
 .pnl--strip .pnl-control:is([data-tint="out"], [data-tint="drive"], [data-tint="noise"], [data-tint="eq0"], [data-tint="eq7"]) { --pnl-lamp: #f1f1ee; }
-.pnl--strip .pnl-menu select, .pnl--strip .pnl-field input { height: 18px; box-sizing: border-box; border: 1px solid #3a3a3d; background: #0f0f10; color: #f1f1ee; font: 11px var(--pnl-condensed); padding: 0 3px; border-radius: 2px; min-width: 0; width: 100%; }
 .pnl--strip .pnl-field__label { color: #9a9a96; text-transform: uppercase; letter-spacing: 0.1em; font-size: 9px; }
 .pnl--strip .pnl-field input { font: 12px var(--pnl-screen-font); text-align: right; }
 .pnl--strip .pnl-inert { color: #9a9a96; }
@@ -391,7 +390,6 @@
 .pnl--strip .pnl-display--plotted .pnl-screen__top { top: 1px; }
 .pnl--strip .pnl-display--plotted .pnl-screen__bottom { bottom: 1px; }
 .pnl--night .pnl-knob--small .pnl-knob__value { font-size: 10px; }
-.pnl--night .pnl-menu select { height: 20px; box-sizing: border-box; border: 1px solid #2c3d49; background: #0b0f13; color: #eaf6fb; font: 11px var(--pnl-condensed); padding: 0 4px; border-radius: 3px; width: 100%; }
 .pnl--night .pnl-menu .pnl-field__label { color: #8ea3af; text-transform: uppercase; letter-spacing: 0.1em; font-size: 9px; }
 /* A pane's title keeps a halo of its screen's colour, so a trace under it never hides it. */
 .pnl-plot__title { paint-order: stroke; stroke: var(--pnl-plot-bg, #000); stroke-width: 3px; stroke-linejoin: round; }
@@ -399,3 +397,38 @@
 .pnl--strip { --pnl-plot-bg: #050506; }
 .pnl--graph { --pnl-plot-bg: #f8f6f0; }
 .pnl--cabinet { --pnl-plot-bg: #0b0a08; }
+
+/* ---- polish: pop-ups drawn as part of the panel, not the browser's ---- */
+.pnl--night .pnl-menu select, .pnl--strip .pnl-menu select, .pnl--graph .pnl-menu select {
+  appearance: none; -webkit-appearance: none; width: 100%; min-width: 0; box-sizing: border-box; height: 20px;
+  padding: 0 18px 0 6px; cursor: pointer; background-repeat: no-repeat; background-position: right 6px center; background-size: 8px 5px;
+}
+.pnl--night .pnl-menu select { border: 1px solid #2c3d49; border-radius: 3px; background-color: #0b0f13; color: #eaf6fb; font: 600 11px var(--pnl-condensed); letter-spacing: 0.04em;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%235fe3ff'/%3E%3C/svg%3E"); }
+.pnl--night .pnl-menu select:hover { border-color: #3d5463; }
+.pnl--strip .pnl-menu select { border: 1px solid #3a3a3d; border-radius: 2px; background-color: #0f0f10; color: #f1f1ee; font: 600 11px var(--pnl-condensed); letter-spacing: 0.04em;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23f1f1ee'/%3E%3C/svg%3E"); }
+.pnl--strip .pnl-menu select:hover { border-color: #6d6d69; }
+.pnl--graph .pnl-menu select { border: 1.5px solid #141414; border-radius: 0; background-color: #f8f6f0; color: #141414; font: 600 11px "IBM Plex Sans Condensed", var(--pnl-condensed);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23141414'/%3E%3C/svg%3E"); }
+.pnl--graph .pnl-menu .pnl-field__label { font-weight: 600; font-size: 10px; letter-spacing: 0.04em; }
+.pnl--night .pnl-menu select:focus-visible, .pnl--strip .pnl-menu select:focus-visible, .pnl--graph .pnl-menu select:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.pnl--night .pnl-menu option, .pnl--strip .pnl-menu option { background: #0b0f13; color: #eaf6fb; }
+.pnl--strip .pnl-field input { height: 18px; box-sizing: border-box; border: 1px solid #3a3a3d; background: #0f0f10; color: #f1f1ee; padding: 0 4px; border-radius: 2px; min-width: 0; width: 100%; font: 12px var(--pnl-screen-font); text-align: right; }
+
+/* ---- polish: the screens' grids recede, their traces carry the weight ---- */
+.pnl-display--plotted .pnl-plot__tick { letter-spacing: 0.02em; }
+.pnl-display--plotted .pnl-plot__title { letter-spacing: 0.08em; }
+.pnl--night .pnl-display--plotted .pnl-plot__grid { stroke: #121c24; }
+.pnl--night .pnl-plot__trace.pnl-tone-a { filter: drop-shadow(0 0 2px rgba(95, 227, 255, 0.35)); }
+.pnl--strip .pnl-display--plotted .pnl-plot__grid { stroke: #19191c; }
+.pnl--strip .pnl-plot__area { opacity: 0.1; }
+.pnl--strip .pnl-plot__trace.pnl-tone-a { stroke-width: 2.2; }
+.pnl--graph .pnl-display--plotted .pnl-plot__grid { stroke: #e2ded3; }
+.pnl--graph .pnl-plot__dot.pnl-tone-a { stroke: #f8f6f0; stroke-width: 1; }
+.pnl--cabinet .pnl-display--plotted .pnl-plot__grid { stroke: #2a2116; }
+.pnl--cabinet { --pnl-tone-c: #8a6a3c; }
+.pnl--cabinet .pnl-plot__trace.pnl-tone-a { filter: drop-shadow(0 0 2px rgba(243, 164, 58, 0.45)); }
+.pnl--night .pnl-plot__area { opacity: 0.1; }
+.pnl-plot__stem { stroke-linecap: round; }
+@media (prefers-reduced-motion: no-preference) { .pnl-menu select { transition: border-color 120ms; } }
