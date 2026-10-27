@@ -617,9 +617,10 @@ body {
 }
 .uconduct__tempo-readout b { font-size: 12px; }
 .uconduct__tempo-readout input {
-  box-sizing: border-box; width: var(--conductor-tempo-numerical); height: 24px; padding: 0 1px;
+  /* 19px: with the slider row above it, exactly the bottom strip's height. */
+  box-sizing: border-box; width: var(--conductor-tempo-numerical); height: 19px; padding: 0 1px;
   border: 0; border-left: 1px solid var(--m-line); border-right: 1px solid var(--m-line);
-  background: var(--panel); color: var(--ink); font: 800 15px/24px var(--mono);
+  background: var(--panel); color: var(--ink); font: 800 15px/19px var(--mono);
   text-align: center;
   appearance: textfield;
 }
@@ -2549,6 +2550,11 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
 .uconduct :is(button, input, select, output, label, b, strong, p, span) {
   font-size: 16.07px !important;
 }
+/* A 9px menu holds 7px text only with no vertical padding, and its sized
+   width holds the longest choice only with a slim side padding. */
+.app .synthchoice select { padding: 0 2px; line-height: 7px; }
+/* On the tinted sections a hairline well vanishes; an ink edge reads in both themes. */
+.app.m-skin .ustage .synthpanel .synthchoice select { border-color: color-mix(in srgb, var(--ink) 45%, transparent); }
 
 /* Secondary variable bodies are scaled to 0.5. */
 .uvarpop__scaled-body,
@@ -3466,7 +3472,7 @@ body, .app, .uwin, .uvarpop, .peditor, .cyced, .midiview, .uconduct,
   background: color-mix(in srgb, var(--voice-color) 10%, var(--ms-well));
 }
 .app.m-skin .synthpanel__section h3,
-.app.m-skin .synthpanel__section:nth-of-type(odd) h3 { color: var(--ink); opacity: 0.6; }
+.app.m-skin .synthpanel__section:nth-of-type(odd) h3 { color: var(--ink); opacity: 0.75; }
 
 /* Midi View: the generated stream in M's own palette, not a green terminal. */
 .app.m-skin .midiview {
