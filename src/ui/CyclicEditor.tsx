@@ -10,6 +10,7 @@ import { useMLayoutWidth } from "./MLayoutContext";
 import { focusWindowPointerDown } from "./windowfocus";
 import { voiceColorClass } from "./voicecolor";
 import { classicCyclicSideLayout } from "./cycliclayout";
+import { cyclicEditorNote } from "./cyclicselection";
 
 const KINDS: { id: CyclicVariable; name: string }[] = [
   { id: "rhythm", name: "Rhythm" },
@@ -137,7 +138,7 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
       <header className="uwin__title movable__handle" onPointerDown={onTitleDown}>
         <span className="uwin__name">Cyclic Editor</span>
         <span className="uwin__slash">/</span>
-        <span className="uwin__note">{view === "classic" ? "Classic" : "Modern"}</span>
+        <span className="uwin__note">{view === "classic" ? cyclicEditorNote({ kind, position }) : "Modern"}</span>
         <button className="uwin__close" onClick={onClose} aria-label="Close Cyclic Editor">×</button>
       </header>
       {view === "classic" ? <div className="cyced__body" style={{
@@ -160,12 +161,13 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
             <div key={id} className={`cyced__control cyced__control--${id}`
               + (id === kind ? " is-current" : "") }>
               <div className="cyced__pick">
-                <button className="cyced__kind" onClick={() => onSelect(id, position)}>
+                <button className="cyced__kind" aria-pressed={id === kind} onClick={() => onSelect(id, position)}>
                   <span>{name}</span>
                 </button>
                 <div className="cyced__positions">
                   {POSITION_LABELS.map((label, p) => (
                     <button key={label} aria-label={`${name} position ${label}`}
+                      aria-pressed={id === kind && p === position}
                       className={(activePositions[id] === p ? "is-on" : "")
                         + (id === kind && p === position ? " is-editing" : "")}
                       onClick={() => onSelect(id, p)} />
