@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arcPath, dragValue, fromFraction, knobAngle, toFraction, travelFor } from "./travel";
+import { arcPath, dragValue, fromFraction, knobAngle, padPoint, padValues, toFraction, travelFor } from "./travel";
 
 describe("A control's travel", () => {
   it("is straight on a linear control", () => {
@@ -66,5 +66,14 @@ describe("A control's travel", () => {
   it("has nowhere to go on an empty range, and drags unsnapped without a step", () => {
     expect(toFraction(5, 1, 1, "linear")).toBe(0);
     expect(dragValue(0, 75, { min: 0, max: 1, travel: "linear" })).toBeCloseTo(0.5, 12);
+  });
+
+  it("reads a point on Hyperprism's pad as both its values, linear, Y up", () => {
+    const x = { min: 0, max: 20000, step: 1 };
+    const y = { min: 0, max: 10, step: 0.01 };
+    // A quarter across from the left, a quarter down from the top.
+    expect(padValues(0.25, 0.25, x, y)).toEqual([5000, 7.5]);
+    expect(padValues(-1, 2, x, y)).toEqual([0, 0]);
+    expect(padPoint(5000, 7.5, x, y)).toEqual([0.25, 0.25]);
   });
 });

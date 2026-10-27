@@ -72,3 +72,28 @@ export function travelFor(parameter: { minimum?: number; maximum?: number; step?
   const step = parameter.step ?? 0;
   return min > 0 && max > min && step > 0 && Math.abs(step - min / 100) <= min * 1e-9 ? "log" : "linear";
 }
+
+type Axis = { min: number; max: number; step?: number };
+
+const snap = (value: number, axis: Axis) => {
+  const step = axis.step && axis.step > 0 ? axis.step : 0;
+  const snapped = step ? Math.round(value / step) * step : value;
+  return Number(Math.min(axis.max, Math.max(axis.min, snapped)).toPrecision(12));
+};
+
+/**
+ * Hyperprism's pad: a point, as fractions across from the left and down from
+ * the top, to the values of its two controls. Linear on both axes, as the
+ * original's was; X runs left to right and Y bottom to top, as the Prism tab's.
+ */
+export function padValues(across: number, down: number, x: Axis, y: Axis): [number, number] {
+  return [
+    snap(fromFraction(across, x.min, x.max, "linear"), x),
+    snap(fromFraction(1 - Math.min(1, Math.max(0, down)), y.min, y.max, "linear"), y),
+  ];
+}
+
+/** Where two values sit on the pad, as fractions across and down. */
+export function padPoint(xValue: number, yValue: number, x: Axis, y: Axis): [number, number] {
+  return [toFraction(xValue, x.min, x.max, "linear"), 1 - toFraction(yValue, y.min, y.max, "linear")];
+}

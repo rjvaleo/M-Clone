@@ -121,6 +121,50 @@ describe("Checking a panel against its module", () => {
   });
 });
 
+describe("A pad, which places two controls", () => {
+  const two = {
+    type: "test.pad",
+    parameters: [
+      { id: "x", label: "X", kind: "number", defaultValue: 0, minimum: 0, maximum: 1 },
+      { id: "y", label: "Y", kind: "number", defaultValue: 0, minimum: 0, maximum: 1 },
+      { id: "on", label: "On", kind: "boolean", defaultValue: false },
+    ],
+  } as unknown as ModuleDescriptor;
+  const padLayout = (): PanelLayout => ({
+    moduleType: "test.pad", style: "platinum", width: 100, height: 100,
+    groups: [{ id: "all", label: "", x: 0, y: 0, w: 100, h: 100 }],
+    controls: [
+      { param: "x", paramY: "y", kind: "pad", x: 0, y: 0, w: 80, h: 80 },
+      { param: "on", kind: "switch", x: 0, y: 82, w: 40, h: 16 },
+    ],
+    displays: [],
+  });
+
+  it("places its X and its Y", () => {
+    expect(validateLayout(padLayout(), two)).toEqual([]);
+  });
+
+  it("needs a Y that is a number on the module", () => {
+    const layout = padLayout();
+    layout.controls[0] = { ...layout.controls[0], paramY: "on" };
+    expect(validateLayout(layout, two)).toContain("on: a pad's Y must be a number");
+    layout.controls[0] = { ...layout.controls[0], paramY: "nope" };
+    expect(validateLayout(layout, two)).toContain("nope: not a parameter of test.pad");
+    layout.controls[0] = { ...layout.controls[0], paramY: undefined };
+    expect(validateLayout(layout, two)).toContain("x: a pad needs a Y");
+  });
+
+  it("lets a number be a text field", () => {
+    const layout = padLayout();
+    layout.controls = [
+      { param: "x", kind: "field", x: 0, y: 0, w: 40, h: 20 },
+      { param: "y", kind: "field", x: 50, y: 0, w: 40, h: 20 },
+      layout.controls[1],
+    ];
+    expect(validateLayout(layout, two)).toEqual([]);
+  });
+});
+
 describe("A panel with pages", () => {
   const paged = (): PanelLayout => ({
     ...good(),
@@ -190,24 +234,14 @@ describe("Every panel in the app", () => {
   });
 
   it("covers every panel built so far", () => {
-    expect(PANEL_LAYOUTS.map((layout) => layout.moduleType).sort()).toEqual([
-      "m.grain-engine",
-      "m.prism-compressor",
-      "m.prism-dattorro-filter-bank",
-      "m.prism-dattorro-plate",
-      "m.prism-lxp-chamber",
-      "m.prism-lxp-hall",
-      "m.prism-lxp-plate",
-      "m.prism-lxp-room",
-      "m.prism-sh-bubbler",
-      "m.prism-sh-chebyshev",
-      "m.prism-sh-compand",
-      "m.prism-sh-decimate",
-      "m.prism-sh-delay",
-      "m.prism-sh-flipper",
-      "m.prism-sh-matrix",
-      "m.prism-sh-phasor",
-      "m.prism-sh-pitchdelay",
-    ]);
+    const types = PANEL_LAYOUTS.map((layout) => layout.moduleType);
+    expect(new Set(types).size).toBe(types.length);
+    expect(types.filter((type) => type.startsWith("m.prism-hp-"))).toHaveLength(30);
+    expect(types.filter((type) => type.startsWith("m.prism-sh-"))).toHaveLength(9);
+    expect(types.filter((type) => type.startsWith("m.prism-lxp-"))).toHaveLength(4);
+    expect(types).toEqual(expect.arrayContaining([
+      "m.grain-engine", "m.prism-compressor", "m.prism-dattorro-filter-bank", "m.prism-dattorro-plate",
+    ]));
+    expect(types).toHaveLength(47);
   });
 });
