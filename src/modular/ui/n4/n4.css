@@ -808,8 +808,10 @@
 
 /* ===== The Synth: VOSM's envelope panels, tight ===== */
 .mm-node.mm-node--n4[data-module-type="m.synth"] { --mm-width: 300px; }
-/* The original M window, drawn at M's own fixed size. */
-.mm-node.mm-node--n4[data-module-type="m.m"] { --mm-width: 818px; }
+/* The original M window, drawn at one fixed width: M's whole arrangement
+   (the main screen, then the Pattern Editor column) with M's 3-point margin
+   either side, so nothing is cut off at the face's edge. */
+.mm-node.mm-node--n4[data-module-type="m.m"] { --mm-width: 1016px; }
 .mm-node.mm-node--n4[data-module-type="m.synth"] .mm-node-section:has(.n4-synth) { padding: 0; border: 0; background: none; box-shadow: none; }
 .mm-node.mm-node--n4[data-module-type="m.synth"] .mm-node-section:has(.n4-synth) .mm-node-section__content { padding: 0; }
 .n4-synth { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px; width: 100%; }
