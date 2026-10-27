@@ -84,6 +84,7 @@ import { LfoMapFace } from "./LfoFace";
 import { ModulationContext, type ModulationApi } from "./modulationContext";
 import { ModTarget } from "./ModTarget";
 import { ModulationAnimator } from "./modulationAnimator";
+import { MeterAnimator } from "./panels/meters";
 import {
   LFO_TYPE,
   lfoStates,
@@ -2140,6 +2141,12 @@ export function ModularApp() {
     }));
     animator.start();
     return () => animator.stop();
+  }, []);
+  // The panels' level meters, from the same reports.
+  useEffect(() => {
+    const meters = new MeterAnimator(() => viewportRef.current, () => ({ report: audioRef.current?.rackReport ?? null }));
+    meters.start();
+    return () => meters.stop();
   }, []);
   const startAudioRef = useRef(startAudio);
   startAudioRef.current = startAudio;

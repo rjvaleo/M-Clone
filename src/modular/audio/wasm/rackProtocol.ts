@@ -45,6 +45,11 @@ export interface RackReport {
    * where it is and carry it forward until the next one.
    */
   lfos?: Record<string, [phase: number, value: number]>;
+  /**
+   * Each metered module's loudest input and output sample since the last
+   * report, by node id, for its panel's meters.
+   */
+  levels?: Record<string, [input: number, output: number]>;
 }
 
 /**
