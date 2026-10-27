@@ -516,8 +516,6 @@ export function PatternEditor({ onClose, windowId = "pattern-editor", voice, onV
         <span className="uwin__note">{isMain ? "" : `Track ${selectedVoice + 1} · `}group {String.fromCharCode(97 + patternGroup)}{lanes ? " · drum lanes" : ""}</span>
         {lanes && <button className={"petool pelanes__all" + (allPads ? " petool--on" : "")}
           aria-pressed={allPads} title="Show all 16 pads" onClick={() => setAllPads((v) => !v)}>All pads</button>}
-        {onClose && <button className="uwin__close" onClick={onClose}
-          aria-label="Close Pattern Editor">×</button>}
         <div className="peditor__tools" role="group" aria-label="Step Editing Tools">
           {TOOLS.map(({ id, Icon, label }) => (
             <button
@@ -532,6 +530,8 @@ export function PatternEditor({ onClose, windowId = "pattern-editor", voice, onV
             </button>
           ))}
         </div>
+        {onClose && <button className="uwin__close" onClick={onClose}
+          aria-label="Close Pattern Editor">×</button>}
       </div>
 
       {/* Row 1 — octave up, note-scroll up, step ruler, Mode Selector header */}
