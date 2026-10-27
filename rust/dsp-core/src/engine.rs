@@ -243,6 +243,14 @@ pub trait Module: Send {
     }
 }
 
+/// The loudest input and output sample a metered module has seen since the
+/// host last took them: peaks, as a meter draws, so the sign is dropped.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Levels {
+    pub input: f32,
+    pub output: f32,
+}
+
 struct Slot {
     module: Box<dyn Module>,
     inputs: Vec<Frame>,
@@ -257,6 +265,9 @@ struct Slot {
     modulated: Vec<f32>,
     routes: Vec<ParamRoute>,
     bypassed: bool,
+    /// Kept only for a module the host meters: a comparison per port per
+    /// sample that most modules have nobody to show.
+    meter: Option<Levels>,
 }
 
 /// A module output driving another module's parameter: `value + source × scale`,
@@ -327,7 +338,7 @@ impl Engine {
         let previous = outputs.clone();
         let params: Vec<f32> = (0..module.param_count()).map(|i| module.param_default(i)).collect();
         let modulated = params.clone();
-        let slot = Slot { module, inputs, outputs, previous, params, modulated, routes: Vec::new(), bypassed: false };
+        let slot = Slot { module, inputs, outputs, previous, params, modulated, routes: Vec::new(), bypassed: false, meter: None };
 
         if let Some(index) = self.slots.iter().position(|s| s.is_none()) {
             self.slots[index] = Some(slot);
@@ -387,6 +398,28 @@ impl Engine {
     /// What the host last set for a parameter, routes aside.
     pub fn param_of(&self, id: ModuleId, index: usize) -> Option<f32> {
         self.slot(id).and_then(|s| s.params.get(index).copied())
+    }
+
+    /// Start or stop keeping a module's levels. False for a module that is not
+    /// there.
+    pub fn set_metered(&mut self, id: ModuleId, on: bool) -> bool {
+        match self.slot_mut(id) {
+            Some(slot) => {
+                slot.meter = if on { Some(slot.meter.unwrap_or_default()) } else { None };
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// A metered module's levels so far, or `None` for one that is not metered.
+    pub fn levels_of(&self, id: ModuleId) -> Option<Levels> {
+        self.slot(id).and_then(|s| s.meter)
+    }
+
+    /// A metered module's levels, starting the next interval from silence.
+    pub fn take_levels(&mut self, id: ModuleId) -> Option<Levels> {
+        self.slot_mut(id).and_then(|s| s.meter.as_mut().map(std::mem::take))
     }
 
     /// A module's own report on itself — an LFO's phase — or NaN.
@@ -499,6 +532,9 @@ impl Engine {
         self.frame = 0;
         for slot in self.slots.iter_mut().flatten() {
             slot.module.reset();
+            if let Some(levels) = slot.meter.as_mut() {
+                *levels = Levels::default();
+            }
             for f in slot.inputs.iter_mut() {
                 f.clear();
             }
@@ -605,6 +641,16 @@ impl Engine {
             let params = if slot.routes.is_empty() { &slot.params } else { &slot.modulated };
             let mut ports = Ports { inputs: &slot.inputs, outputs: &mut slot.outputs, params };
             slot.module.process(&ctx, &mut ports);
+            if let Some(levels) = slot.meter.as_mut() {
+                // `max` passes a NaN by, so a module that blows up reads as
+                // whatever it last did rather than poisoning the meter.
+                for frame in &slot.inputs {
+                    levels.input = levels.input.max(frame.sum().abs());
+                }
+                for frame in &slot.outputs {
+                    levels.output = levels.output.max(frame.sum().abs());
+                }
+            }
         }
 
         for slot in self.slots.iter_mut().flatten() {
@@ -703,6 +749,60 @@ mod tests {
             engine.process();
             assert_eq!(engine.output_of(acc, 0), expected as f32);
         }
+    }
+
+    #[test]
+    fn a_metered_module_keeps_its_loudest_input_and_output_until_they_are_taken() {
+        let mut engine = Engine::new(SR);
+        let source = engine.add(Box::new(Constant(-0.5)));
+        let gain = engine.add(Box::new(Gain));
+        engine.set_param(gain, 0, 1.5);
+        engine.connect(PortRef { module: source, port: 0 }, PortRef { module: gain, port: 0 });
+        // Off until asked for: a module nobody meters costs nothing.
+        assert_eq!(engine.take_levels(gain), None);
+        assert!(engine.set_metered(gain, true));
+        for _ in 0..4 {
+            engine.process();
+        }
+        // Peaks, so the sign does not matter: |−0.5| in, |−0.75| out.
+        assert_eq!(engine.levels_of(gain), Some(Levels { input: 0.5, output: 0.75 }));
+        assert_eq!(engine.take_levels(gain), Some(Levels { input: 0.5, output: 0.75 }));
+        // Taking them starts the next interval from silence.
+        assert_eq!(engine.levels_of(gain), Some(Levels::default()));
+        engine.set_param(gain, 0, 0.5);
+        engine.process();
+        assert_eq!(engine.take_levels(gain), Some(Levels { input: 0.5, output: 0.25 }));
+    }
+
+    #[test]
+    fn metering_stops_when_asked_and_knows_no_module_that_is_not_there() {
+        let mut engine = Engine::new(SR);
+        let gain = engine.add(Box::new(Gain));
+        assert!(engine.set_metered(gain, true));
+        assert!(engine.set_metered(gain, false));
+        engine.process();
+        assert_eq!(engine.levels_of(gain), None);
+        assert!(!engine.set_metered(99, true));
+        assert_eq!(engine.take_levels(99), None);
+    }
+
+    #[test]
+    fn a_bypassed_module_and_a_reset_leave_the_meter_at_silence() {
+        let mut engine = Engine::new(SR);
+        let source = engine.add(Box::new(Constant(1.0)));
+        let gain = engine.add(Box::new(Gain));
+        engine.set_param(gain, 0, 1.0);
+        engine.connect(PortRef { module: source, port: 0 }, PortRef { module: gain, port: 0 });
+        engine.set_metered(gain, true);
+        engine.set_bypassed(gain, true);
+        engine.process();
+        engine.process();
+        assert_eq!(engine.take_levels(gain), Some(Levels::default()));
+        engine.set_bypassed(gain, false);
+        engine.process();
+        assert_eq!(engine.levels_of(gain).map(|l| l.output), Some(1.0));
+        engine.reset();
+        assert_eq!(engine.levels_of(gain), Some(Levels::default()));
     }
 
     #[test]

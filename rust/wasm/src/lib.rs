@@ -162,6 +162,32 @@ pub extern "C" fn module_telemetry(module: u32) -> f32 {
     engine().map(|e| e.telemetry_of(module)).unwrap_or(f32::NAN)
 }
 
+/// Keep a module's input and output peaks for a meter (`on` 1), or stop (0).
+/// 1 if the module exists.
+#[no_mangle]
+pub extern "C" fn set_metered(module: u32, on: u32) -> u32 {
+    u32::from(engine().map(|e| e.set_metered(module, on != 0)).unwrap_or(false))
+}
+
+/// A metered module's loudest input (`side` 0) or output (1) since its levels
+/// were last cleared; NaN for a module that is not metered, or another side.
+#[no_mangle]
+pub extern "C" fn module_level(module: u32, side: u32) -> f32 {
+    match engine().and_then(|e| e.levels_of(module)) {
+        Some(levels) if side == 0 => levels.input,
+        Some(levels) if side == 1 => levels.output,
+        _ => f32::NAN,
+    }
+}
+
+/// Start a metered module's next interval from silence, once its levels are read.
+#[no_mangle]
+pub extern "C" fn clear_levels(module: u32) {
+    if let Some(engine) = engine() {
+        engine.take_levels(module);
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn set_param(module: u32, index: u32, value: f32) {
     // A non-finite parameter is dropped rather than clamped: it means the host

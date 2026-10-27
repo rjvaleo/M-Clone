@@ -313,3 +313,132 @@
 .pnl--platinum .pnl-switch__lamp { width: 11px; height: 11px; border-radius: 0; background: #fff; border: 1px solid #333; box-shadow: none; }
 .pnl--platinum .is-on > .pnl-switch__lamp { background: #111; box-shadow: inset 0 0 0 2px #fff; }
 .pnl--platinum .pnl-inert { border: 1px solid #555; border-radius: 3px; background: #eee; color: #111; font-size: 11px; justify-content: flex-start; padding: 0 6px; }
+
+/* ======================================================================
+ * The ported effects' plots (plots.ts), in each look's own inks. Tone a is
+ * the look's main line, b–e its others.
+ * ====================================================================== */
+
+.pnl-display--plotted .pnl-plot { position: absolute; left: 0; top: 0; }
+.pnl-plot__tick, .pnl-plot__title, .pnl-plot__label { font: 9px var(--pnl-screen-font); }
+.pnl-plot__trace, .pnl-plot__rule, .pnl-plot__stem { fill: none; stroke-linejoin: round; }
+.pnl-plot__trace { stroke-width: 2; }
+.pnl-plot__trace.is-dashed { stroke-dasharray: 5 4; stroke-width: 1.5; }
+.pnl-plot__rule { stroke-width: 1; stroke-dasharray: 2 3; }
+.pnl-plot__stem { stroke-width: 2; }
+.pnl-plot__area { stroke: none; opacity: 0.16; }
+.pnl-plot__dot.is-hollow { fill: none !important; stroke-width: 1.4; }
+.pnl-display--plotted .pnl-screen__top, .pnl-display--plotted .pnl-screen__bottom { font-size: 11px; }
+
+.pnl--night .pnl-display--plotted { background: #070a0d; border: 1px solid #22303a; border-radius: 4px; color: #5fe3ff; }
+.pnl--night .pnl-plot__title { fill: #4c6170; }
+.pnl--night { --pnl-tone-a: #5fe3ff; --pnl-tone-b: #ff6fd8; --pnl-tone-c: #f3c94a; --pnl-tone-d: #9df29a; --pnl-tone-e: #c9d6de; }
+.pnl--night .pnl-select button { background: #0b0f13; border-color: #2c3d49; color: #8ea3af; --pnl-lamp: #ff6fd8; }
+.pnl--night .pnl-select button.is-on { color: #eaf6fb; }
+.pnl--night .pnl-asset .mm-asset-slot { background: #0b0f13; border: 1px solid #2c3d49; color: #c9d6de; border-radius: 3px; }
+.pnl--night .pnl-inert { color: #8ea3af; }
+
+.pnl--strip .pnl-display--plotted { background: #050506; border: 1px solid #3a3a3d; color: #9a9a96; }
+.pnl--strip .pnl-plot__tick, .pnl--strip .pnl-plot__title { fill: #6d6d69; }
+.pnl--strip { --pnl-tone-a: #f1f1ee; --pnl-tone-b: #ff8a3d; --pnl-tone-c: #46d4e6; --pnl-tone-d: #b7e34a; --pnl-tone-e: #b48cff; }
+.pnl--strip .pnl-group[data-tint="drive"], .pnl--strip .pnl-group[data-tint="out"] { --pnl-tint: #f1f1ee; }
+.pnl--strip .pnl-group[data-tint="sv-low"], .pnl--strip .pnl-group[data-tint="eq1"] { --pnl-tint: #ff8a3d; }
+.pnl--strip .pnl-group[data-tint="sv-band"], .pnl--strip .pnl-group[data-tint="eq2"] { --pnl-tint: #46d4e6; }
+.pnl--strip .pnl-group[data-tint="sv-high"], .pnl--strip .pnl-group[data-tint="eq3"] { --pnl-tint: #b7e34a; }
+.pnl--strip .pnl-group[data-tint="sv-notch"], .pnl--strip .pnl-group[data-tint="eq4"] { --pnl-tint: #b48cff; }
+.pnl--strip .pnl-group[data-tint="eq0"], .pnl--strip .pnl-group[data-tint="eq7"] { --pnl-tint: #9a9a96; }
+.pnl--strip .pnl-group[data-tint="eq5"] { --pnl-tint: #ff5f7e; }
+.pnl--strip .pnl-group[data-tint="eq6"] { --pnl-tint: #f3c94a; }
+.pnl--strip .pnl-group[data-tint="noise"] { --pnl-tint: #d9d9d4; }
+.pnl--strip .pnl-control[data-tint="sv-low"], .pnl--strip .pnl-control[data-tint="eq1"] { --pnl-ink: #ff8a3d; --pnl-lamp: #ff8a3d; }
+.pnl--strip .pnl-control[data-tint="sv-band"], .pnl--strip .pnl-control[data-tint="eq2"] { --pnl-ink: #46d4e6; --pnl-lamp: #46d4e6; }
+.pnl--strip .pnl-control[data-tint="sv-high"], .pnl--strip .pnl-control[data-tint="eq3"] { --pnl-ink: #b7e34a; --pnl-lamp: #b7e34a; }
+.pnl--strip .pnl-control[data-tint="sv-notch"], .pnl--strip .pnl-control[data-tint="eq4"] { --pnl-ink: #b48cff; --pnl-lamp: #b48cff; }
+.pnl--strip .pnl-control[data-tint="eq5"] { --pnl-ink: #ff5f7e; --pnl-lamp: #ff5f7e; }
+.pnl--strip .pnl-control[data-tint="eq6"] { --pnl-ink: #f3c94a; --pnl-lamp: #f3c94a; }
+.pnl--strip .pnl-control:is([data-tint="out"], [data-tint="drive"], [data-tint="noise"], [data-tint="eq0"], [data-tint="eq7"]) { --pnl-lamp: #f1f1ee; }
+.pnl--strip .pnl-field__label { color: #9a9a96; text-transform: uppercase; letter-spacing: 0.1em; font-size: 9px; }
+.pnl--strip .pnl-field input { font: 12px var(--pnl-screen-font); text-align: right; }
+.pnl--strip .pnl-inert { color: #9a9a96; }
+
+.pnl--graph .pnl-display--plotted .pnl-screen__top, .pnl--graph .pnl-display--plotted .pnl-screen__bottom { color: #141414; }
+.pnl--graph .pnl-plot__tick, .pnl--graph .pnl-plot__title { fill: #6b675d; }
+.pnl--graph { --pnl-tone-a: #141414; --pnl-tone-b: #c4321c; --pnl-tone-c: #b3ad9e; --pnl-tone-d: #2f6f8f; --pnl-tone-e: #6b675d; }
+.pnl--graph .pnl-plot__trace.pnl-tone-a { stroke-width: 2.4; }
+.pnl--graph .pnl-select button { background: #f8f6f0; border-color: #141414; color: #6b675d; }
+.pnl--graph .pnl-select button.is-on { color: #141414; font-weight: 600; }
+.pnl--graph .pnl-knob__body { fill: #f8f6f0; stroke: #141414; stroke-width: 1.5; }
+.pnl--graph .pnl-knob__track { stroke: #d8d4c8; }
+.pnl--graph .pnl-knob__pointer { stroke: #141414; }
+.pnl--graph .pnl-knob__label { font-weight: 600; font-size: 10px; }
+.pnl--graph .pnl-asset .mm-asset-slot { background: #f8f6f0; border: 1.5px solid #141414; color: #141414; border-radius: 0; }
+
+.pnl--cabinet .pnl-display--plotted { background: #0b0a08; border: 2px solid #3a332a; border-radius: 4px; color: #f3a43a; }
+.pnl--cabinet .pnl-plot__tick, .pnl--cabinet .pnl-plot__title { fill: #8a6a3c; }
+.pnl--cabinet .pnl-plot__grid { stroke: #241d14; }
+.pnl--cabinet { --pnl-tone-a: #f3a43a; --pnl-tone-b: #ffd79a; --pnl-tone-c: #6e5432; --pnl-tone-d: #e9e1cc; --pnl-tone-e: #c47a2a; }
+
+.pnl-tone-a { stroke: var(--pnl-tone-a); fill: var(--pnl-tone-a); }
+.pnl-tone-b { stroke: var(--pnl-tone-b); fill: var(--pnl-tone-b); }
+.pnl-tone-c { stroke: var(--pnl-tone-c); fill: var(--pnl-tone-c); }
+.pnl-tone-d { stroke: var(--pnl-tone-d); fill: var(--pnl-tone-d); }
+.pnl-tone-e { stroke: var(--pnl-tone-e); fill: var(--pnl-tone-e); }
+.pnl-plot__trace.pnl-tone-a, .pnl-plot__trace.pnl-tone-b, .pnl-plot__trace.pnl-tone-c, .pnl-plot__trace.pnl-tone-d, .pnl-plot__trace.pnl-tone-e,
+.pnl-plot__rule, .pnl-plot__stem { fill: none; }
+.pnl-plot__label { stroke: none; }
+.pnl-display--plotted .pnl-screen__top, .pnl-display--plotted .pnl-screen__bottom { font-size: 10px; line-height: 11px; }
+.pnl--strip .pnl-display--plotted .pnl-screen__top { top: 1px; }
+.pnl--strip .pnl-display--plotted .pnl-screen__bottom { bottom: 1px; }
+.pnl--night .pnl-knob--small .pnl-knob__value { font-size: 10px; }
+.pnl--night .pnl-menu .pnl-field__label { color: #8ea3af; text-transform: uppercase; letter-spacing: 0.1em; font-size: 9px; }
+/* A pane's title keeps a halo of its screen's colour, so a trace under it never hides it. */
+.pnl-plot__title { paint-order: stroke; stroke: var(--pnl-plot-bg, #000); stroke-width: 3px; stroke-linejoin: round; }
+.pnl--night { --pnl-plot-bg: #070a0d; }
+.pnl--strip { --pnl-plot-bg: #050506; }
+.pnl--graph { --pnl-plot-bg: #f8f6f0; }
+.pnl--cabinet { --pnl-plot-bg: #0b0a08; }
+
+/* ---- polish: pop-ups drawn as part of the panel, not the browser's ---- */
+.pnl--night .pnl-menu select, .pnl--strip .pnl-menu select, .pnl--graph .pnl-menu select {
+  appearance: none; -webkit-appearance: none; width: 100%; min-width: 0; box-sizing: border-box; height: 20px;
+  padding: 0 18px 0 6px; cursor: pointer; background-repeat: no-repeat; background-position: right 6px center; background-size: 8px 5px;
+}
+.pnl--night .pnl-menu select { border: 1px solid #2c3d49; border-radius: 3px; background-color: #0b0f13; color: #eaf6fb; font: 600 11px var(--pnl-condensed); letter-spacing: 0.04em;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%235fe3ff'/%3E%3C/svg%3E"); }
+.pnl--night .pnl-menu select:hover { border-color: #3d5463; }
+.pnl--strip .pnl-menu select { border: 1px solid #3a3a3d; border-radius: 2px; background-color: #0f0f10; color: #f1f1ee; font: 600 11px var(--pnl-condensed); letter-spacing: 0.04em;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23f1f1ee'/%3E%3C/svg%3E"); }
+.pnl--strip .pnl-menu select:hover { border-color: #6d6d69; }
+.pnl--graph .pnl-menu select { border: 1.5px solid #141414; border-radius: 0; background-color: #f8f6f0; color: #141414; font: 600 11px "IBM Plex Sans Condensed", var(--pnl-condensed);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23141414'/%3E%3C/svg%3E"); }
+.pnl--graph .pnl-menu .pnl-field__label { font-weight: 600; font-size: 10px; letter-spacing: 0.04em; }
+.pnl--night .pnl-menu select:focus-visible, .pnl--strip .pnl-menu select:focus-visible, .pnl--graph .pnl-menu select:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.pnl--night .pnl-menu option, .pnl--strip .pnl-menu option { background: #0b0f13; color: #eaf6fb; }
+.pnl--strip .pnl-field input { height: 18px; box-sizing: border-box; border: 1px solid #3a3a3d; background: #0f0f10; color: #f1f1ee; padding: 0 4px; border-radius: 2px; min-width: 0; width: 100%; font: 12px var(--pnl-screen-font); text-align: right; }
+
+/* ---- polish: the screens' grids recede, their traces carry the weight ---- */
+.pnl-display--plotted .pnl-plot__tick { letter-spacing: 0.02em; }
+.pnl-display--plotted .pnl-plot__title { letter-spacing: 0.08em; }
+.pnl--night .pnl-display--plotted .pnl-plot__grid { stroke: #121c24; }
+.pnl--night .pnl-plot__trace.pnl-tone-a { filter: drop-shadow(0 0 2px rgba(95, 227, 255, 0.35)); }
+.pnl--strip .pnl-display--plotted .pnl-plot__grid { stroke: #19191c; }
+.pnl--strip .pnl-plot__area { opacity: 0.1; }
+.pnl--strip .pnl-plot__trace.pnl-tone-a { stroke-width: 2.2; }
+.pnl--graph .pnl-display--plotted .pnl-plot__grid { stroke: #e2ded3; }
+.pnl--graph .pnl-plot__dot.pnl-tone-a { stroke: #f8f6f0; stroke-width: 1; }
+.pnl--cabinet .pnl-display--plotted .pnl-plot__grid { stroke: #2a2116; }
+.pnl--cabinet { --pnl-tone-c: #8a6a3c; }
+.pnl--cabinet .pnl-plot__trace.pnl-tone-a { filter: drop-shadow(0 0 2px rgba(243, 164, 58, 0.45)); }
+.pnl--night .pnl-plot__area { opacity: 0.1; }
+.pnl-plot__stem { stroke-linecap: round; }
+@media (prefers-reduced-motion: no-preference) { .pnl-menu select { transition: border-color 120ms; } }
+
+/* ---- the level meters (meters.ts): IN and OUT, peak, −60 to 0 dBFS ---- */
+.pnl-meter { position: absolute; right: 4px; width: 9px; display: flex; gap: 1px; pointer-events: auto; }
+.pnl-meter__bar { position: relative; flex: 1; background: var(--pnl-meter-track, rgba(255, 255, 255, 0.06)); border-radius: 1px; overflow: hidden; }
+.pnl-meter__bar::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--pnl-level, 0) * 100%); background: var(--pnl-tone-a); }
+.pnl-meter__bar[data-level-side="in"]::after { opacity: 0.55; }
+.pnl-meter__bar[data-live="off"]::after { height: 0; }
+.pnl-meter__bar[data-clip="on"] { box-shadow: inset 0 2px 0 var(--pnl-meter-clip, #ff4d4d); }
+.pnl--graph { --pnl-meter-track: rgba(20, 20, 20, 0.08); --pnl-meter-clip: #c4321c; }
+.pnl-plot__live { fill: var(--pnl-tone-b); stroke: var(--pnl-plot-bg, #000); stroke-width: 1.5; }
