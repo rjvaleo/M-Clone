@@ -313,3 +313,83 @@
 .pnl--platinum .pnl-switch__lamp { width: 11px; height: 11px; border-radius: 0; background: #fff; border: 1px solid #333; box-shadow: none; }
 .pnl--platinum .is-on > .pnl-switch__lamp { background: #111; box-shadow: inset 0 0 0 2px #fff; }
 .pnl--platinum .pnl-inert { border: 1px solid #555; border-radius: 3px; background: #eee; color: #111; font-size: 11px; justify-content: flex-start; padding: 0 6px; }
+
+/* ======================================================================
+ * The ported effects' plots (plots.ts), in each look's own inks. Tone a is
+ * the look's main line, b–e its others.
+ * ====================================================================== */
+
+.pnl-display--plotted .pnl-plot { position: absolute; left: 0; top: 0; }
+.pnl-plot__tick, .pnl-plot__title, .pnl-plot__label { font: 9px var(--pnl-screen-font); }
+.pnl-plot__trace, .pnl-plot__rule, .pnl-plot__stem { fill: none; stroke-linejoin: round; }
+.pnl-plot__trace { stroke-width: 2; }
+.pnl-plot__trace.is-dashed { stroke-dasharray: 5 4; stroke-width: 1.5; }
+.pnl-plot__rule { stroke-width: 1; stroke-dasharray: 2 3; }
+.pnl-plot__stem { stroke-width: 2; }
+.pnl-plot__area { stroke: none; opacity: 0.16; }
+.pnl-plot__dot.is-hollow { fill: none !important; stroke-width: 1.4; }
+.pnl-display--plotted .pnl-screen__top, .pnl-display--plotted .pnl-screen__bottom { font-size: 11px; }
+
+.pnl--night .pnl-display--plotted { background: #070a0d; border: 1px solid #22303a; border-radius: 4px; color: #5fe3ff; }
+.pnl--night .pnl-plot__title { fill: #4c6170; }
+.pnl--night { --pnl-tone-a: #5fe3ff; --pnl-tone-b: #ff6fd8; --pnl-tone-c: #f3c94a; --pnl-tone-d: #9df29a; --pnl-tone-e: #c9d6de; }
+.pnl--night .pnl-select button { background: #0b0f13; border-color: #2c3d49; color: #8ea3af; --pnl-lamp: #ff6fd8; }
+.pnl--night .pnl-select button.is-on { color: #eaf6fb; }
+.pnl--night .pnl-asset .mm-asset-slot { background: #0b0f13; border: 1px solid #2c3d49; color: #c9d6de; border-radius: 3px; }
+.pnl--night .pnl-inert { color: #8ea3af; }
+
+.pnl--strip .pnl-display--plotted { background: #050506; border: 1px solid #3a3a3d; color: #9a9a96; }
+.pnl--strip .pnl-plot__tick, .pnl--strip .pnl-plot__title { fill: #6d6d69; }
+.pnl--strip { --pnl-tone-a: #f1f1ee; --pnl-tone-b: #ff8a3d; --pnl-tone-c: #46d4e6; --pnl-tone-d: #b7e34a; --pnl-tone-e: #b48cff; }
+.pnl--strip .pnl-group[data-tint="drive"], .pnl--strip .pnl-group[data-tint="out"] { --pnl-tint: #f1f1ee; }
+.pnl--strip .pnl-group[data-tint="sv-low"], .pnl--strip .pnl-group[data-tint="eq1"] { --pnl-tint: #ff8a3d; }
+.pnl--strip .pnl-group[data-tint="sv-band"], .pnl--strip .pnl-group[data-tint="eq2"] { --pnl-tint: #46d4e6; }
+.pnl--strip .pnl-group[data-tint="sv-high"], .pnl--strip .pnl-group[data-tint="eq3"] { --pnl-tint: #b7e34a; }
+.pnl--strip .pnl-group[data-tint="sv-notch"], .pnl--strip .pnl-group[data-tint="eq4"] { --pnl-tint: #b48cff; }
+.pnl--strip .pnl-group[data-tint="eq0"], .pnl--strip .pnl-group[data-tint="eq7"] { --pnl-tint: #9a9a96; }
+.pnl--strip .pnl-group[data-tint="eq5"] { --pnl-tint: #ff5f7e; }
+.pnl--strip .pnl-group[data-tint="eq6"] { --pnl-tint: #f3c94a; }
+.pnl--strip .pnl-group[data-tint="noise"] { --pnl-tint: #d9d9d4; }
+.pnl--strip .pnl-control[data-tint="sv-low"], .pnl--strip .pnl-control[data-tint="eq1"] { --pnl-ink: #ff8a3d; --pnl-lamp: #ff8a3d; }
+.pnl--strip .pnl-control[data-tint="sv-band"], .pnl--strip .pnl-control[data-tint="eq2"] { --pnl-ink: #46d4e6; --pnl-lamp: #46d4e6; }
+.pnl--strip .pnl-control[data-tint="sv-high"], .pnl--strip .pnl-control[data-tint="eq3"] { --pnl-ink: #b7e34a; --pnl-lamp: #b7e34a; }
+.pnl--strip .pnl-control[data-tint="sv-notch"], .pnl--strip .pnl-control[data-tint="eq4"] { --pnl-ink: #b48cff; --pnl-lamp: #b48cff; }
+.pnl--strip .pnl-control[data-tint="eq5"] { --pnl-ink: #ff5f7e; --pnl-lamp: #ff5f7e; }
+.pnl--strip .pnl-control[data-tint="eq6"] { --pnl-ink: #f3c94a; --pnl-lamp: #f3c94a; }
+.pnl--strip .pnl-control:is([data-tint="out"], [data-tint="drive"], [data-tint="noise"], [data-tint="eq0"], [data-tint="eq7"]) { --pnl-lamp: #f1f1ee; }
+.pnl--strip .pnl-menu select, .pnl--strip .pnl-field input { height: 18px; box-sizing: border-box; border: 1px solid #3a3a3d; background: #0f0f10; color: #f1f1ee; font: 11px var(--pnl-condensed); padding: 0 3px; border-radius: 2px; min-width: 0; width: 100%; }
+.pnl--strip .pnl-field__label { color: #9a9a96; text-transform: uppercase; letter-spacing: 0.1em; font-size: 9px; }
+.pnl--strip .pnl-field input { font: 12px var(--pnl-screen-font); text-align: right; }
+.pnl--strip .pnl-inert { color: #9a9a96; }
+
+.pnl--graph .pnl-display--plotted .pnl-screen__top, .pnl--graph .pnl-display--plotted .pnl-screen__bottom { color: #141414; }
+.pnl--graph .pnl-plot__tick, .pnl--graph .pnl-plot__title { fill: #6b675d; }
+.pnl--graph { --pnl-tone-a: #141414; --pnl-tone-b: #c4321c; --pnl-tone-c: #b3ad9e; --pnl-tone-d: #2f6f8f; --pnl-tone-e: #6b675d; }
+.pnl--graph .pnl-plot__trace.pnl-tone-a { stroke-width: 2.4; }
+.pnl--graph .pnl-select button { background: #f8f6f0; border-color: #141414; color: #6b675d; }
+.pnl--graph .pnl-select button.is-on { color: #141414; font-weight: 600; }
+.pnl--graph .pnl-knob__body { fill: #f8f6f0; stroke: #141414; stroke-width: 1.5; }
+.pnl--graph .pnl-knob__track { stroke: #d8d4c8; }
+.pnl--graph .pnl-knob__pointer { stroke: #141414; }
+.pnl--graph .pnl-knob__label { font-weight: 600; font-size: 10px; }
+.pnl--graph .pnl-asset .mm-asset-slot { background: #f8f6f0; border: 1.5px solid #141414; color: #141414; border-radius: 0; }
+
+.pnl--cabinet .pnl-display--plotted { background: #0b0a08; border: 2px solid #3a332a; border-radius: 4px; color: #f3a43a; }
+.pnl--cabinet .pnl-plot__tick, .pnl--cabinet .pnl-plot__title { fill: #8a6a3c; }
+.pnl--cabinet .pnl-plot__grid { stroke: #241d14; }
+.pnl--cabinet { --pnl-tone-a: #f3a43a; --pnl-tone-b: #ffd79a; --pnl-tone-c: #6e5432; --pnl-tone-d: #e9e1cc; --pnl-tone-e: #c47a2a; }
+
+.pnl-tone-a { stroke: var(--pnl-tone-a); fill: var(--pnl-tone-a); }
+.pnl-tone-b { stroke: var(--pnl-tone-b); fill: var(--pnl-tone-b); }
+.pnl-tone-c { stroke: var(--pnl-tone-c); fill: var(--pnl-tone-c); }
+.pnl-tone-d { stroke: var(--pnl-tone-d); fill: var(--pnl-tone-d); }
+.pnl-tone-e { stroke: var(--pnl-tone-e); fill: var(--pnl-tone-e); }
+.pnl-plot__trace.pnl-tone-a, .pnl-plot__trace.pnl-tone-b, .pnl-plot__trace.pnl-tone-c, .pnl-plot__trace.pnl-tone-d, .pnl-plot__trace.pnl-tone-e,
+.pnl-plot__rule, .pnl-plot__stem { fill: none; }
+.pnl-plot__label { stroke: none; }
+.pnl-display--plotted .pnl-screen__top, .pnl-display--plotted .pnl-screen__bottom { font-size: 10px; line-height: 11px; }
+.pnl--strip .pnl-display--plotted .pnl-screen__top { top: 1px; }
+.pnl--strip .pnl-display--plotted .pnl-screen__bottom { bottom: 1px; }
+.pnl--night .pnl-knob--small .pnl-knob__value { font-size: 10px; }
+.pnl--night .pnl-menu select { height: 20px; box-sizing: border-box; border: 1px solid #2c3d49; background: #0b0f13; color: #eaf6fb; font: 11px var(--pnl-condensed); padding: 0 4px; border-radius: 3px; width: 100%; }
+.pnl--night .pnl-menu .pnl-field__label { color: #8ea3af; text-transform: uppercase; letter-spacing: 0.1em; font-size: 9px; }
