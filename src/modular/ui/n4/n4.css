@@ -870,7 +870,8 @@
   & .n4-header__title, & .n4-header__comment { display: none; }
   & .n4-header__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   & .mm-node-section__content { font-size: 9px; color: var(--n4-text); }
-  & .mm-node-section input:not([type="range"]):not([type="checkbox"]), & .mm-node-section select {
+  /* Not inside M's face: M's windows dress their own numericals and menus. */
+  & .mm-node-section :is(input:not([type="range"]):not([type="checkbox"]), select):not(.mm-m-face *) {
     min-height: 0; height: 15px; padding: 0 4px; font: 9px var(--n4-mono); color: var(--n4-text);
     background: var(--n4-well); border: 1px solid var(--n4-deep); border-radius: 3px;
   }
