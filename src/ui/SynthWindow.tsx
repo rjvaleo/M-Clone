@@ -155,13 +155,13 @@ export function SynthWindow() {
       </nav>
       <section className="synthpanel__section synthpanel__lfo">
         <h3>LFO</h3>
-        <div className="synthpanel__knobs synthpanel__knobs--2">
+        <div className="synthpanel__knobs synthpanel__knobs--3">
           <Knob label="Rate" setting="lfoRateHz" min={0.05} max={20} step={0.05} unit="Hz" />
           <Knob label="Dep" ariaLabel="LFO depth" setting="lfoDepth" min={0} max={1} step={0.01} />
+          <Knob label="Glide" setting="glideSec" min={0} max={1} step={0.005} unit="s" />
         </div>
         <Choice label="Wave" ariaLabel="LFO waveform" setting="lfoWaveform" options={SYNTH_WAVEFORMS} />
         <Choice label="To" setting="lfoDestination" options={SYNTH_LFO_DESTINATIONS} />
-        <Knob label="Glide" setting="glideSec" min={0} max={1} step={0.005} unit="s" />
       </section>
 
       <section className="synthpanel__section synthpanel__osc">
