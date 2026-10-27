@@ -59,10 +59,10 @@ body {
   z-index: 20000;
   flex: none;
   height: 22px;
-  padding: 1px 10px;
+  padding: 1px 6px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
@@ -83,11 +83,14 @@ body {
 /* The document name sits in the menu bar, where the original put the name of
    the Conducting Window. The bullet marks unsaved changes. */
 .app__doc {
+  min-width: 0;
   margin: 0 0 0 auto;
   padding-right: 8px;
+  overflow: hidden;
   font-size: 11px;
   opacity: 0.75;
   font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -298,7 +301,7 @@ body {
   transform-origin: top left;
 }
 .theme-picker { display: flex; align-items: center; gap: 4px; font-size: 10px; }
-.theme-picker select { font: 10px var(--font); height: 18px; padding: 0 2px; }
+.theme-picker select { font: 10px var(--font); width: 64px; height: 18px; padding: 0 2px; }
 .channel-palette { display: flex; gap: 2px; align-items: center; }
 .channel-palette input[type="color"] {
   width: 22px; height: 22px; padding: 1px; border: 1px solid currentColor;
@@ -2545,16 +2548,16 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
 .uwin__body .synthpanel :is(button, select, label, b, strong, span) {
   font-size: var(--type-compact) !important;
 }
-
-/* Conducting's reference body is horizontally scaled to 0.4978. */
-.uconduct :is(button, input, select, output, label, b, strong, p, span) {
-  font-size: 16.07px !important;
-}
 /* A 9px menu holds 7px text only with no vertical padding, and its sized
    width holds the longest choice only with a slim side padding. */
 .app .synthchoice select { padding: 0 2px; line-height: 7px; }
 /* On the tinted sections a hairline well vanishes; an ink edge reads in both themes. */
 .app.m-skin .ustage .synthpanel .synthchoice select { border-color: color-mix(in srgb, var(--ink) 45%, transparent); }
+
+/* Conducting's reference body is horizontally scaled to 0.4978. */
+.uconduct :is(button, input, select, output, label, b, strong, p, span) {
+  font-size: 16.07px !important;
+}
 
 /* Secondary variable bodies are scaled to 0.5. */
 .uvarpop__scaled-body,
