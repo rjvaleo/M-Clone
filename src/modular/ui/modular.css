@@ -780,10 +780,16 @@ button { cursor: pointer; }
 
 
 /* The theme and kit pickers, borrowed by the classic M view. Its menu bar is
-   22px tall and monochrome, so they sit tighter here than in the patch bar. */
+   22px tall and monochrome, so they sit tighter here than in the patch bar:
+   every control 18px tall and of one fixed width, so a long theme or kit name
+   is cut short rather than pushing the bar past M's edge. */
 .mm-classic-theming { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .mm-classic-theming .mm-kit-picker { display: flex; align-items: center; gap: 4px; font-size: 10px; }
-.mm-classic-theming select { font: 10px var(--font); height: 18px; }
+.mm-classic-theming select { width: 92px; height: 18px; padding: 0 2px; font: 10px var(--font); }
+.mm-classic-theming .mm-theme > button {
+  width: 76px; height: 18px; min-height: 0; padding: 0 4px; gap: 4px; font-size: 10px;
+}
+.mm-classic-theming .mm-theme-swatch i { width: 5px; height: 10px; }
 
 
 /*
