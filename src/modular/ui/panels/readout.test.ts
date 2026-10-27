@@ -29,4 +29,19 @@ describe("A readout the original's way", () => {
   it("never prints minus zero", () => {
     expect(readoutText(-0.0001, { decimals: 2 })).toBe("0.00");
   });
+
+  it("prints to so many significant figures with its unit, for the small dials of the ported panels", () => {
+    const three = { figures: 3 };
+    expect(readoutText(0.123, three, "")).toBe("0.12");
+    expect(readoutText(1.5, three, "oct")).toBe("1.50oct");
+    expect(readoutText(12, three, "ms")).toBe("12.0ms");
+    expect(readoutText(250, three, "ms")).toBe("250ms");
+    expect(readoutText(-6, three, "dB")).toBe("-6.00dB");
+    expect(readoutText(0, three, "dB")).toBe("0.00dB");
+    // Hertz from 1000 in k, and milliseconds from 1000 in seconds.
+    expect(readoutText(4000, three, "Hz")).toBe("4.00kHz");
+    expect(readoutText(20000, three, "Hz")).toBe("20.0kHz");
+    expect(readoutText(1500, three, "ms")).toBe("1.50s");
+    expect(readoutText(1500, three)).toBe("1500");
+  });
 });

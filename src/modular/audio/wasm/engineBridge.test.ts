@@ -85,6 +85,21 @@ class FakeEngine implements EngineExports {
   module_output(): number {
     return this.moduleOutput;
   }
+  /** The modules being metered, and what every one of them reads. */
+  readonly metered = new Set<number>();
+  level: [number, number] = [0, 0];
+  set_metered(module: number, on: number): number {
+    this.calls.push(`meter:${module}=${on}`);
+    if (on) this.metered.add(module);
+    else this.metered.delete(module);
+    return this.modules.has(module) ? 1 : 0;
+  }
+  module_level(module: number, side: number): number {
+    return this.metered.has(module) ? this.level[side] : Number.NaN;
+  }
+  clear_levels(module: number): void {
+    this.calls.push(`clearlevels:${module}`);
+  }
   set_param(module: number, index: number, value: number): void {
     this.calls.push(`param:${module}.${index}=${value}`);
     this.params.set(`${module}.${index}`, value);
@@ -1296,6 +1311,31 @@ describe("LFOs and their routes", () => {
     expect(rack.moduleIdOf("l")).toBe(l);
     // The engine dropped it with the module; there is nothing left to unroute.
     expect(engine.of("unroute")).toEqual([]);
+  });
+
+  it("meters every prism effect from the moment it is built, and no other module", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("t", "m.prism-tremolo"), node("g", "m.audio-gain")]));
+    expect(engine.of("meter")).toEqual([`meter:${rack.moduleIdOf("t")}=1`]);
+  });
+
+  it("reports each metered effect's input and output peaks, then starts the next interval", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("t", "m.prism-tremolo"), node("g", "m.audio-gain")]));
+    engine.level = [0.5, 0.25];
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.levels).toEqual({ t: [0.5, 0.25] });
+    expect(engine.of("clearlevels")).toEqual([`clearlevels:${rack.moduleIdOf("t")}`]);
+  });
+
+  it("sends no levels when nothing is metered", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("g", "m.audio-gain")]));
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.levels).toBeUndefined();
   });
 
   it("reports each LFO's phase and value", () => {
