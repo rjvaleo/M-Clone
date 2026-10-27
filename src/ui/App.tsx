@@ -423,8 +423,8 @@ export function App({ onExitToPatch, extraControls, colorScheme }: {
             ))}
           </div>
           <label className="theme-picker">
-            <span className="visually-hidden">Channels</span>
-            <select aria-label="Channel color preset" value={channelPreset}
+            <span>Colors</span>
+            <select aria-label="Voice colors" value={channelPreset}
               onChange={(event) =>
                 setChannelPreset(event.target.value as ChannelThemePresetId | "custom")}>
               {Object.values(CHANNEL_THEME_PRESETS).map((preset) => (
