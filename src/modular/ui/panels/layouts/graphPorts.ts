@@ -7,7 +7,7 @@
 // reduction, makeup and ceiling, and one band of Spectral Dynamics.
 
 import type { PanelControl, PanelLayout } from "../layout";
-import { fill, knob, mute, toggle, type Cell } from "./grid";
+import { fill, mute, toggle, type Cell } from "./grid";
 
 const INSET = { top: 19, pad: 5, gap: 3 };
 
@@ -37,8 +37,8 @@ function spectralDynamics(): PanelLayout {
   const { groups, controls } = fill([
     {
       id: "process", label: "Process", x: 240, y: 0, w: 180, h: 150,
-      rows: [[{ param: "mode", label: "Type", kind: "select", span: 2 }], [knob("bands", "Bands"), mute()]],
-      heights: [40, 83],
+      rows: [[{ param: "mode", label: "Type", kind: "select" }], [{ param: "bands", label: "Bands", kind: "select", menu: true }], [mute()]],
+      heights: [40, 46, 34],
     },
     {
       id: "bands", label: "Bands", x: 420, y: 0, w: 180, h: 150,
@@ -53,7 +53,7 @@ function spectralDynamics(): PanelLayout {
       id: "threshold", label: "Threshold", x: 420, y: 150, w: 180, h: 150,
       rows: [
         [slider("thresholdDb", "Level")],
-        [{ param: "affect", label: "Affect", kind: "switch", states: ["Below", "Above"] }, toggle("relativeToPeak", "Re peak")],
+        [{ param: "affect", label: "Affect", kind: "select" }, toggle("relativeToPeak", "Re peak")],
         [toggle("useSound", "Use sound")],
         [{ param: "asset-id", label: "Threshold sound", kind: "asset" }],
       ],

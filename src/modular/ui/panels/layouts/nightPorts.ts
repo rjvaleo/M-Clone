@@ -76,7 +76,7 @@ const modDelay = (id: string) => night(id, "mod-sweep", [
 
 export const NIGHT_PANELS: readonly PanelLayout[] = [
   reverb("schroeder-reverb", "schroeder-tail", [[knob("decay", "Decay"), knob("size", "Size")], [toggle("freeze", "Freeze", { span: 2 })]], [110, 34]),
-  reverb("moorer-reverb", "moorer-tail", [[knob("decay", "Decay"), knob("damping", "Air")], [knob("size", "Size"), toggle("freeze", "Freeze")]], [72, 72]),
+  reverb("moorer-reverb", "moorer-tail", [[small("decay", "Decay"), small("damping", "Absorption"), small("size", "Size")], [toggle("freeze", "Freeze", { span: 3 })]], [110, 34]),
 
   modDelay("white-chorus"),
   modDelay("flanger"),
@@ -134,7 +134,7 @@ export const NIGHT_PANELS: readonly PanelLayout[] = [
     {
       id: "lfo", label: "LFO", tint: "mod", h: 280,
       rows: [[big("rateHz", "Rate", { span: 2 })], [{ param: "shape", label: "Shape", kind: "select", span: 2 }]],
-      heights: [200, 54],
+      heights: [214, 40],
     },
   ], [{
     id: "amount", label: "Amount", tint: "out", h: 280,
@@ -144,25 +144,25 @@ export const NIGHT_PANELS: readonly PanelLayout[] = [
 
   night("convolution", "impulse-window", [
     {
-      id: "impulse", label: "Impulse", tint: "input", h: 170,
-      rows: [[{ param: "asset-id", label: "Impulse", kind: "asset", span: 2 }], [knob("lengthMs", "Length"), knob("gainDb", "Gain")]],
-      heights: [28, 116],
+      id: "impulse", label: "Impulse", tint: "input", h: 140,
+      rows: [[{ param: "asset-id", label: "Impulse", kind: "asset" }], [knob("lengthMs", "Length used")]],
+      heights: [28, 86],
     },
     {
-      id: "shape", label: "Shape", tint: "tank", h: 110,
+      id: "shape", label: "Shape", tint: "tank", h: 140,
       rows: [[{ param: "window", label: "Window", kind: "select", menu: true }], [toggle("brighten", "Brighten")]],
-      heights: [44, 40],
+      heights: [62, 52],
     },
-  ], [{
-    id: "process", label: "Process", tint: "out", h: 280,
-    rows: [[toggle("ringModulate", "Ring mod", { span: 2 })], [big("mix", "Mix", { span: 2 })], [mute(2)]],
-    heights: [34, 186, 32],
-  }]),
+  ], [
+    { id: "process", label: "Process", tint: "mod", h: 140, rows: [[toggle("ringModulate", "Ring mod")], [knob("mix", "Mix")]], heights: [32, 82] },
+    // SoundHack's 0, 24 and 42 dB on top of the result: the output's level.
+    { id: "out", label: "Output", tint: "out", h: 140, rows: [[knob("gainDb", "Gain")], [mute()]], heights: [82, 32] },
+  ]),
 
   night("phaser", "phaser-response", [
     {
       id: "notches", label: "Notches", tint: "input", h: 280,
-      rows: [[knob("notches", "Notches"), knob("centreHz", "Centre")], [knob("spread", "Spread"), knob("resonance", "Width")], [knob("depth", "Depth", { span: 2 })]],
+      rows: [[knob("notches", "Notches"), knob("centreHz", "Centre")], [knob("spread", "Spread"), knob("resonance", "Notch width")], [knob("depth", "Depth", { span: 2 })]],
     },
   ], [
     { id: "sweep", label: "Sweep", tint: "mod", h: 140, rows: [[small("rateHz", "Rate"), small("sweep", "Sweep"), small("stereo", "Stereo")]] },
