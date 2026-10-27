@@ -393,3 +393,9 @@
 .pnl--night .pnl-knob--small .pnl-knob__value { font-size: 10px; }
 .pnl--night .pnl-menu select { height: 20px; box-sizing: border-box; border: 1px solid #2c3d49; background: #0b0f13; color: #eaf6fb; font: 11px var(--pnl-condensed); padding: 0 4px; border-radius: 3px; width: 100%; }
 .pnl--night .pnl-menu .pnl-field__label { color: #8ea3af; text-transform: uppercase; letter-spacing: 0.1em; font-size: 9px; }
+/* A pane's title keeps a halo of its screen's colour, so a trace under it never hides it. */
+.pnl-plot__title { paint-order: stroke; stroke: var(--pnl-plot-bg, #000); stroke-width: 3px; stroke-linejoin: round; }
+.pnl--night { --pnl-plot-bg: #070a0d; }
+.pnl--strip { --pnl-plot-bg: #050506; }
+.pnl--graph { --pnl-plot-bg: #f8f6f0; }
+.pnl--cabinet { --pnl-plot-bg: #0b0a08; }

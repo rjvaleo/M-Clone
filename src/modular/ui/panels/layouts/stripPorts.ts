@@ -43,7 +43,7 @@ function musical(id: string, display: string, gainActs: boolean): PanelLayout {
     : knob("gainDb", "Gain", { inert: "acts only in the Regalia-Mitra mode; prism-fx keeps it inert here, as MultiGrainLive's did nothing" });
   return strip(id, display, [
     { id: "filter", label: "Filter", tint: gainActs ? "regalia" : id === "dattorro-notch" ? "notch" : "resonator", w: 240,
-      rows: [[big("frequency", "Freq"), knob("bandwidth", "Width"), gain]] },
+      rows: [[big("frequency", "Freq"), knob("bandwidth", "Bandwidth"), gain]] },
     out([[knob("mix", "Dry/wet")], [mute()]], 120, [92, 34]),
   ]);
 }
