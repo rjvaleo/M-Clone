@@ -10,9 +10,9 @@ import type { Travel } from "./travel";
 import type { Readout } from "./readout";
 
 /** The looks a panel can wear: four new ones and the originals' own. */
-export type PanelStyle = "cabinet" | "night" | "graph" | "strip" | "soundhack" | "lexicon";
+export type PanelStyle = "cabinet" | "night" | "graph" | "strip" | "soundhack" | "lexicon" | "platinum";
 
-export type ControlKind = "knob" | "hslider" | "vslider" | "switch" | "select" | "asset" | "readout";
+export type ControlKind = "knob" | "hslider" | "vslider" | "switch" | "select" | "asset" | "readout" | "field" | "pad";
 
 type Box = { x: number; y: number; w: number; h: number };
 
@@ -38,6 +38,10 @@ export type PanelControl = Box & {
   alias?: boolean;
   /** How its number reads, where the original printed it its own way. */
   readout?: Readout;
+  /** A pad's second control, up its left edge; `param` runs along the top. */
+  paramY?: string;
+  /** A choice drawn as a pop-up menu rather than a row of buttons. */
+  menu?: boolean;
 };
 
 export type PanelGroup = Box & { id: string; label: string; tint?: string };
@@ -93,7 +97,7 @@ function allowed(parameter: ParameterDescriptor): { kinds: ControlKind[]; needs:
     case "string":
       return { kinds: ["asset"], needs: "a sample needs an asset slot" };
     default:
-      return { kinds: ["knob", "hslider", "vslider", "readout"], needs: "a number needs a knob, slider or readout" };
+      return { kinds: ["knob", "hslider", "vslider", "readout", "field", "pad"], needs: "a number needs a knob, slider, field or readout" };
   }
 }
 
@@ -134,6 +138,16 @@ export function validateLayout(layout: PanelLayout, module: ModuleDescriptor): s
     }
     const { kinds, needs } = allowed(parameter);
     if (!kinds.includes(control.kind)) errors.push(`${control.param}: ${needs}, not a ${control.kind}`);
+    if (control.kind === "pad") {
+      const y = control.paramY === undefined ? undefined : parameters.get(control.paramY);
+      if (control.paramY === undefined) errors.push(`${control.param}: a pad needs a Y`);
+      else if (!y) errors.push(`${control.paramY}: not a parameter of ${module.type}`);
+      else if (y.kind !== "number") errors.push(`${control.paramY}: a pad's Y must be a number`);
+      else if (!control.alias) {
+        if (seen.has(control.paramY)) errors.push(`${control.paramY}: placed twice`);
+        seen.add(control.paramY);
+      }
+    }
   }
   for (const parameter of module.parameters) {
     if (!NOT_ON_PANELS.has(parameter.id) && !seen.has(parameter.id)) errors.push(`${parameter.id}: not on the panel`);

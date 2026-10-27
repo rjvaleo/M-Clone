@@ -282,3 +282,34 @@
 .pnl--lexicon .pnl-switch { background: #2a3236; border-color: #4a555c; color: #d9dde0; font-size: 11px; }
 .pnl--lexicon .pnl-inert { border: 1px solid #4a555c; border-radius: 3px; background: #1c2329; color: #d9dde0; font-size: 11px; letter-spacing: 0.08em; opacity: 0.5; justify-content: flex-start; padding: 0 10px; }
 .pnl--lexicon .mm-mod-target.is-modulated .pnl-knob__dial { box-shadow: 0 0 0 2px var(--mod-color), 0 0 8px var(--mod-color); }
+
+/* ======================================================================
+ * Platinum — Hyperprism's controller window as Mac OS drew it: grey
+ * chrome, black outlines, white edit boxes, the deep blue window.
+ * ==================================================================== */
+.pnl--platinum { background: #dedede; color: #111; font-family: Geneva, "Lucida Grande", Verdana, sans-serif; font-size: 11px; --pnl-ink: #111; }
+.pnl--platinum .pnl-group[data-tint] .pnl-group__label { display: none; }
+.pnl--platinum .pnl-group + .pnl-group { border-left: 1px solid #a8a8a8; box-shadow: inset 1px 0 0 #f4f4f4; }
+.pnl-pad { background: #1f35b4; border: 2px solid #111; cursor: crosshair; touch-action: none; overflow: visible;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 26px 26px; }
+.pnl-pad__line { position: absolute; background: rgba(255, 255, 255, 0.35); pointer-events: none; }
+.pnl-pad__line--v { top: 0; bottom: 0; width: 1px; }
+.pnl-pad__line--h { left: 0; right: 0; height: 1px; }
+.pnl-pad__dot { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: #fff; border: 1.5px solid #111; pointer-events: none; }
+.mm-mod-target.is-modulated .pnl-pad { box-shadow: 0 0 0 2px var(--mod-color); }
+.pnl-hp-axis { display: flex; align-items: center; justify-content: space-between; gap: 4px; height: 100%; font-weight: 700; }
+.pnl-hp-axis__limit { font-weight: 400; min-width: 34px; padding: 1px 3px; background: #fff; border: 1px solid #555; box-shadow: inset 1px 1px 0 #bbb; font-size: 10px; text-align: center; }
+.pnl-hp-axis__name { flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pnl-hp-axis--y { flex-direction: column; }
+.pnl-hp-axis--y .pnl-hp-axis__limit { min-width: 0; width: 100%; box-sizing: border-box; padding: 1px 0; font-size: 9px; }
+.pnl-hp-axis--y .pnl-hp-axis__name { writing-mode: vertical-rl; transform: rotate(180deg); }
+.pnl-hp-values { display: flex; align-items: center; height: 100%; font-size: 10px; color: #333; }
+.pnl-field, .pnl-menu { display: flex; flex-direction: column; gap: 2px; }
+.pnl-field__label { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pnl--platinum .pnl-field input, .pnl--platinum .pnl-menu select { height: 20px; box-sizing: border-box; border: 1px solid #555; box-shadow: inset 1px 1px 0 #bbb; background: #fff; color: #111; font: 11px Geneva, "Lucida Grande", Verdana, sans-serif; padding: 0 4px; text-align: right; border-radius: 0; }
+.pnl--platinum .pnl-menu select { text-align: left; box-shadow: 1px 1px 0 #555; }
+.pnl--platinum .pnl-switch { justify-content: flex-start; gap: 6px; background: none; border: 0; color: #111; font-size: 11px; letter-spacing: 0; padding: 0 2px; }
+.pnl--platinum .pnl-switch__lamp { width: 11px; height: 11px; border-radius: 0; background: #fff; border: 1px solid #333; box-shadow: none; }
+.pnl--platinum .is-on > .pnl-switch__lamp { background: #111; box-shadow: inset 0 0 0 2px #fff; }
+.pnl--platinum .pnl-inert { border: 1px solid #555; border-radius: 3px; background: #eee; color: #111; font-size: 11px; justify-content: flex-start; padding: 0 6px; }

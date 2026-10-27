@@ -14,7 +14,7 @@ import { AssetSlot, noteName, useSoundPool } from "../PercussionSlots";
 import { formatValue } from "../n4/format";
 import { peaksToPath } from "../../audio/waveform";
 import { groupOf, type InertControl, type PanelControl, type PanelDisplay, type PanelLayout } from "./layout";
-import { arcPath, dragValue, fromFraction, knobAngle, toFraction, travelFor, type Travel } from "./travel";
+import { arcPath, dragValue, fromFraction, knobAngle, padPoint, padValues, toFraction, travelFor, type Travel } from "./travel";
 import { readoutText, type Readout } from "./readout";
 import { compressorCurve, filterBankResponse, grainWindow, plateEnvelope, PLATE_HIGH_HZ, type FilterBank } from "./displays";
 
@@ -81,7 +81,13 @@ function Control({ control, parameter, node, setParameter, tint, readout }: {
     case "switch":
       return <Switch control={placed} parameter={parameter} value={value} label={label} onChange={onChange} />;
     case "select":
-      return <Select control={placed} parameter={parameter} value={value} label={label} onChange={onChange} />;
+      return control.menu
+        ? <Menu control={placed} parameter={parameter} value={value} label={label} onChange={onChange} />
+        : <Select control={placed} parameter={parameter} value={value} label={label} onChange={onChange} />;
+    case "field":
+      return <Field control={placed} parameter={parameter} value={value} label={label} onChange={onChange} />;
+    case "pad":
+      return <Pad control={placed} node={node} setParameter={setParameter} />;
     case "asset":
       return <div className="pnl-control pnl-asset" style={box(control)}>
         <AssetSlot node={node} parameterId={control.param} setParameter={setParameter} />
@@ -277,6 +283,88 @@ function Select({ control, parameter, value, label, onChange }: ControlProps) {
   );
 }
 
+/** A pop-up menu, as a classic Mac window draws a choice. */
+function Menu({ control, parameter, value, label, onChange }: ControlProps) {
+  const options = parameter.options ?? [];
+  return (
+    <label className="pnl-control pnl-menu" style={box(control)} onPointerDown={(event) => event.stopPropagation()}>
+      <span className="pnl-field__label">{label}</span>
+      <select value={String(value ?? parameter.defaultValue)} onChange={(event) => onChange(event.currentTarget.value)}>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </label>
+  );
+}
+
+/**
+ * A number typed into a box, as Hyperprism's additional settings were: it
+ * takes effect on Return or when the box is left, held to the control's range.
+ */
+function Field({ control, parameter, value, label, onChange }: ControlProps) {
+  const current = num(value, num(parameter.defaultValue));
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const typed = Number(draft);
+    setDraft(null);
+    if (!Number.isFinite(typed)) return;
+    const min = parameter.minimum ?? -Infinity;
+    const max = parameter.maximum ?? Infinity;
+    const step = parameter.step ?? 0;
+    const snapped = step > 0 ? Math.round(typed / step) * step : typed;
+    onChange(Number(Math.min(max, Math.max(min, snapped)).toPrecision(12)));
+  };
+  return (
+    <label className="pnl-control pnl-field" style={box(control)} onPointerDown={(event) => event.stopPropagation()}>
+      <span className="pnl-field__label">{label}</span>
+      <input inputMode="decimal" value={draft ?? formatValue(current, { step: parameter.step })}
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        onBlur={commit}
+        onKeyDown={(event) => { if (event.key === "Enter") (event.currentTarget as HTMLInputElement).blur(); if (event.key === "Escape") setDraft(null); }} />
+    </label>
+  );
+}
+
+/**
+ * Hyperprism's blue window: drag anywhere to set both controls at once, the
+ * first across the top, the second up the left. Double-click centres it.
+ */
+function Pad({ control, node, setParameter }: { control: PanelControl & { tint?: string }; node: NodeInstance; setParameter: Setter }) {
+  const module = moduleRegistry.get(node.moduleType);
+  const xp = module?.parameters.find((p) => p.id === control.param);
+  const yp = module?.parameters.find((p) => p.id === control.paramY);
+  const area = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  if (!xp || !yp) return null;
+  const axis = (p: ParameterDescriptor) => ({ min: p.minimum ?? 0, max: p.maximum ?? 1, step: p.step });
+  const xv = num(node.parameters[xp.id], num(xp.defaultValue));
+  const yv = num(node.parameters[yp.id], num(yp.defaultValue));
+  const [across, down] = padPoint(xv, yv, axis(xp), axis(yp));
+  const set = (clientX: number, clientY: number) => {
+    const rect = area.current?.getBoundingClientRect();
+    if (!rect) return;
+    const [x, y] = padValues((clientX - rect.left) / rect.width, (clientY - rect.top) / rect.height, axis(xp), axis(yp));
+    setParameter(xp.id, x);
+    setParameter(yp.id, y);
+  };
+  return (
+    <div {...tinted(control)} className="pnl-control pnl-pad" style={box(control)} ref={area}
+      role="group" aria-label={`${xp.label} across, ${yp.label} up`}
+      onPointerDown={(event) => { event.stopPropagation(); dragging.current = true; event.currentTarget.setPointerCapture(event.pointerId); set(event.clientX, event.clientY); }}
+      onPointerMove={(event) => { if (dragging.current) set(event.clientX, event.clientY); }}
+      onPointerUp={() => { dragging.current = false; }}
+      onDoubleClick={() => {
+        const [x, y] = padValues(0.5, 0.5, axis(xp), axis(yp));
+        setParameter(xp.id, x);
+        setParameter(yp.id, y);
+      }}>
+      <span className="pnl-pad__line pnl-pad__line--v" style={{ left: `${across * 100}%` }} />
+      <span className="pnl-pad__line pnl-pad__line--h" style={{ top: `${down * 100}%` }} />
+      <span className="pnl-pad__dot" style={{ left: `${across * 100}%`, top: `${down * 100}%` }} />
+    </div>
+  );
+}
+
 function Inert({ inert }: { inert: InertControl }) {
   return (
     <div className={`pnl-control pnl-inert pnl-inert--${inert.kind}`} style={box(inert)} title={`${inert.label}: ${inert.why}`}
@@ -298,6 +386,9 @@ function Display({ display, node, pages, label }: { display: PanelDisplay; node:
     case "lxp-logo": return <span className="pnl-lxp-logo">lexicon</span>;
     case "lxp-title": return <span className="pnl-lxp-title">{`LXP NATIVE | ${label.replace(/^LXP\s*/i, "").toUpperCase()}`}</span>;
     case "lxp-meters": return <LxpMeters />;
+    case "hp-x-axis": return <HpAxis node={node} index={0} />;
+    case "hp-y-axis": return <HpAxis node={node} index={1} />;
+    case "hp-values": return <HpValues node={node} />;
     case "lxp-rtv": return <span className="pnl-lxp-rtv">{label.replace(/^LXP\s*/i, "").toUpperCase()}</span>;
     case "grain-screen": return <GrainScreen display={display} node={node} />;
     case "root-keys": return <RootKeys display={display} root={num(p.root, 60)} />;
@@ -320,6 +411,27 @@ function PageNav({ pages }: { pages: Pages }) {
       </button>
     ))}
   </div>;
+}
+
+/** A pad edge's caption: its control's name, with its low and high limits at the ends. */
+function HpAxis({ node, index }: { node: NodeInstance; index: number }) {
+  const p = moduleRegistry.get(node.moduleType)?.parameters[index];
+  if (!p) return null;
+  const caption = p.unit ? `${p.label} (${p.unit})` : p.label;
+  // A whole limit prints whole, so −100 fits the narrow box on the left edge.
+  const limit = (v: number | undefined) => (Number.isInteger(v ?? 0) ? String(v ?? 0) : formatValue(v ?? 0, { step: p.step }));
+  return <div className={`pnl-hp-axis pnl-hp-axis--${index === 0 ? "x" : "y"}`}>
+    <span className="pnl-hp-axis__limit">{index === 0 ? limit(p.minimum) : limit(p.maximum)}</span>
+    <span className="pnl-hp-axis__name">{caption}</span>
+    <span className="pnl-hp-axis__limit">{index === 0 ? limit(p.maximum) : limit(p.minimum)}</span>
+  </div>;
+}
+
+/** The pad's two values, under it. */
+function HpValues({ node }: { node: NodeInstance }) {
+  const ps = moduleRegistry.get(node.moduleType)?.parameters ?? [];
+  const text = ps.slice(0, 2).map((p, i) => `${i === 0 ? "X" : "Y"} ${shown(p, node.parameters[p.id])}`).join("   ");
+  return <span className="pnl-hp-values">{text}</span>;
 }
 
 /** The IN and OUT LED bars, drawn as the original's. Dark: idMLab has no level meter for them to read yet. */
