@@ -25,8 +25,11 @@ export type Stem = { tone: Tone; x: number; y: number };
 export type Dot = { tone: Tone; x: number; y: number; hollow?: boolean; label?: string };
 /** A marker across the pane: upright at x, or level at y. */
 export type Rule = { tone: Tone; x?: number; y?: number };
-/** `square` draws both axes to one scale, as a goniometer must be. */
-export type Pane = { x: Axis; y: Axis; traces: Trace[]; stems?: Stem[]; dots?: Dot[]; rules?: Rule[]; title?: string; square?: boolean };
+/**
+ * `square` draws both axes to one scale, as a goniometer must be. `live` puts
+ * the module's measured level in (across) and out (up) on the pane, as a dot.
+ */
+export type Pane = { x: Axis; y: Axis; traces: Trace[]; stems?: Stem[]; dots?: Dot[]; rules?: Rule[]; title?: string; square?: boolean; live?: boolean };
 export type Plot = { panes: Pane[]; top: string; bottom: string };
 
 export type PlotContext = { rate: number; sound?: { name: string; durationSec: number } };
@@ -255,19 +258,19 @@ const PLOTS: Record<string, Builder> = {
   },
 
   "gate-curve": (v) => ({
-    panes: [transferPane(-90, (l) => gateSteady({ thresholdDb: v.thresholdDb, depth: v.depth }, l), [{ tone: "b", x: v.thresholdDb }])],
+    panes: [{ ...transferPane(-90, (l) => gateSteady({ thresholdDb: v.thresholdDb, depth: v.depth }, l), [{ tone: "b", x: v.thresholdDb }]), live: true }],
     top: `THRESHOLD ${dbText(v.thresholdDb)} · DEPTH ${fixed(v.depth * 100, 0)}%`,
     bottom: `STEADY · ATTACK ${secs(v.attackMs / 1000)} · REL ${secs(v.releaseMs / 1000)}`,
   }),
 
   "fit-curve": (v) => ({
-    panes: [transferPane(-90, (l) => fitSteady({ amount: v.amount, floorDb: v.floorDb }, l), [{ tone: "b", x: v.floorDb }])],
+    panes: [{ ...transferPane(-90, (l) => fitSteady({ amount: v.amount, floorDb: v.floorDb }, l), [{ tone: "b", x: v.floorDb }]), live: true }],
     top: `AMOUNT ${fixed(v.amount * 100, 0)}% · FLOOR ${dbText(v.floorDb)}`,
     bottom: `STEADY · TO 0.9 FS · GRAIN ${secs(v.grainMs / 1000)}`,
   }),
 
   "maximizer-curve": (v) => ({
-    panes: [transferPane(-60, (l) => maximizerSteady({ amount: v.amount, ceilingDb: v.ceilingDb, autoLevel: v.autoLevel, autoComp: v.autoComp }, l), [{ tone: "b", y: v.ceilingDb }])],
+    panes: [{ ...transferPane(-60, (l) => maximizerSteady({ amount: v.amount, ceilingDb: v.ceilingDb, autoLevel: v.autoLevel, autoComp: v.autoComp }, l), [{ tone: "b", y: v.ceilingDb }]), live: true }],
     top: `${fixed(Math.pow(20, v.amount), 1)}:1 · KNEE ${fixed(9 * (1 - v.amount) + 1, 1)} · CEIL ${dbText(v.ceilingDb)}`,
     bottom: `STEADY · THRESHOLD ${v.autoComp >= 0.5 ? "FOLLOWS LEVEL" : dbText(-24 * v.amount)}`,
   }),

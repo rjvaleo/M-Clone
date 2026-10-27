@@ -432,3 +432,13 @@
 .pnl--night .pnl-plot__area { opacity: 0.1; }
 .pnl-plot__stem { stroke-linecap: round; }
 @media (prefers-reduced-motion: no-preference) { .pnl-menu select { transition: border-color 120ms; } }
+
+/* ---- the level meters (meters.ts): IN and OUT, peak, −60 to 0 dBFS ---- */
+.pnl-meter { position: absolute; right: 4px; width: 9px; display: flex; gap: 1px; pointer-events: auto; }
+.pnl-meter__bar { position: relative; flex: 1; background: var(--pnl-meter-track, rgba(255, 255, 255, 0.06)); border-radius: 1px; overflow: hidden; }
+.pnl-meter__bar::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--pnl-level, 0) * 100%); background: var(--pnl-tone-a); }
+.pnl-meter__bar[data-level-side="in"]::after { opacity: 0.55; }
+.pnl-meter__bar[data-live="off"]::after { height: 0; }
+.pnl-meter__bar[data-clip="on"] { box-shadow: inset 0 2px 0 var(--pnl-meter-clip, #ff4d4d); }
+.pnl--graph { --pnl-meter-track: rgba(20, 20, 20, 0.08); --pnl-meter-clip: #c4321c; }
+.pnl-plot__live { fill: var(--pnl-tone-b); stroke: var(--pnl-plot-bg, #000); stroke-width: 1.5; }

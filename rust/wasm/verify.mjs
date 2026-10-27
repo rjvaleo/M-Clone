@@ -114,6 +114,22 @@ check("mute silences", settle(1.0) === 0);
 api.set_param(gain, GAIN_PARAM.MUTE, 0);
 check("unmute restores", near(settle(1.0), 1.0));
 
+// ---- metering ----------------------------------------------------------------
+for (const name of ["set_metered", "module_level", "clear_levels"]) check(`exports ${name}`, name in api);
+check("an unmetered module has no level", Number.isNaN(api.module_level(gain, 1)));
+check("metering a module", api.set_metered(gain, 1) === 1);
+check("metering a module that is not there is refused", api.set_metered(9999, 1) === 0);
+// Settled first, so the earlier signal has left the gain's ramp, then read.
+settle(0.5);
+api.clear_levels(gain);
+settle(0.5, 2);
+check("a metered module keeps its input peak", near(api.module_level(gain, 0), 0.5), `${api.module_level(gain, 0)}`);
+check("and its output peak", near(api.module_level(gain, 1), 0.5), `${api.module_level(gain, 1)}`);
+api.clear_levels(gain);
+check("clearing starts the next interval from silence", api.module_level(gain, 0) === 0 && api.module_level(gain, 1) === 0);
+check("a side that is not there has no level", Number.isNaN(api.module_level(gain, 2)));
+api.set_metered(gain, 0);
+
 // A NaN from the host must not poison the graph for ever.
 inBuf.fill(Number.NaN);
 api.process_quantum();

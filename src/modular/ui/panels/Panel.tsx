@@ -593,10 +593,18 @@ function PlotView({ display, node }: { display: PanelDisplay; node: NodeInstance
   const plot = plotFor(display.kind, kernelValues(module?.parameters ?? [], node.parameters),
     { rate: DISPLAY_RATE, sound: asset ? { name: asset.name, durationSec: asset.durationSec } : undefined });
   if (!plot) return null;
-  return <PlotSvg plot={plot} w={display.w} h={display.h} />;
+  return <PlotSvg plot={plot} w={display.w} h={display.h} nodeId={node.id} />;
 }
 
-function PlotSvg({ plot, w, h }: { plot: Plot; w: number; h: number }) {
+/** Room at a display's right edge for its IN and OUT bars. */
+const METER_W = 13;
+
+/**
+ * Every ported effect is metered by the engine (engineBridge `isMetered`), so
+ * every plot carries the module's IN and OUT bars down its right edge; the
+ * meter animator (meters.ts) fills them from the rack's reports.
+ */
+function PlotSvg({ plot, w, h, nodeId }: { plot: Plot; w: number; h: number; nodeId: string }) {
   // A short display, as the strips' are, gives its two lines less room.
   // An empty bottom line is left out and its room given to the panes.
   const text = h < 120 ? 13 : 16;
@@ -606,12 +614,16 @@ function PlotSvg({ plot, w, h }: { plot: Plot; w: number; h: number }) {
     <span className="pnl-screen__top">{plot.top}</span>
     <svg className="pnl-plot" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
       {plot.panes.map((pane, i) => {
-        const box = { x: 30, y: text + i * paneH + 2, w: w - 38, h: paneH - 15 };
+        const box = { x: 30, y: text + i * paneH + 2, w: w - 38 - METER_W, h: paneH - 15 };
         const side = Math.min(box.w, box.h);
-        return <PaneSvg key={i} pane={pane}
+        return <PaneSvg key={i} pane={pane} nodeId={nodeId}
           box={pane.square ? { x: box.x + (box.w - side) / 2, y: box.y + (box.h - side) / 2, w: side, h: side } : box} />;
       })}
     </svg>
+    <div className="pnl-meter" style={{ top: text + 2, bottom: below + 13 }} title="Level in and out, peak, −60 to 0 dBFS">
+      <span className="pnl-meter__bar" data-level-node={nodeId} data-level-side="in" data-live="off" />
+      <span className="pnl-meter__bar" data-level-node={nodeId} data-level-side="out" data-live="off" />
+    </div>
     {plot.bottom && <span className="pnl-screen__bottom">{plot.bottom}</span>}
   </>;
 }
@@ -639,7 +651,7 @@ function pathOf(points: [number, number][], at: (p: [number, number]) => [number
   return d;
 }
 
-function PaneSvg({ pane, box }: { pane: Pane; box: { x: number; y: number; w: number; h: number } }) {
+function PaneSvg({ pane, box, nodeId }: { pane: Pane; box: { x: number; y: number; w: number; h: number }; nodeId: string }) {
   const px = (v: number) => box.x + place(pane.x, v) * box.w;
   const py = (v: number) => box.y + box.h - place(pane.y, v) * box.h;
   const at = ([x, y]: [number, number]): [number, number] => [px(x), py(y)];
@@ -665,5 +677,9 @@ function PaneSvg({ pane, box }: { pane: Pane; box: { x: number; y: number; w: nu
       <circle className={`pnl-plot__dot pnl-tone-${d.tone}${d.hollow ? " is-hollow" : ""}`} cx={px(d.x)} cy={py(d.y)} r={d.hollow ? 3 : 3.5} />
       {d.label && <text className={`pnl-plot__label pnl-tone-${d.tone}`} x={px(d.x) + 5} y={py(d.y) - 5}>{d.label}</text>}
     </g>)}
+    {/* The measured level in and out, placed by the meter animator. */}
+    {pane.live && <circle className="pnl-plot__live" r="5" visibility="hidden" data-level-dot="" data-level-node={nodeId}
+      data-x0={box.x} data-xw={box.w} data-xmin={pane.x.min} data-xmax={pane.x.max}
+      data-y0={box.y} data-yh={box.h} data-ymin={pane.y.min} data-ymax={pane.y.max} />}
   </g>;
 }
