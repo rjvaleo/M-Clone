@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { coverage, groupOf, validateLayout, type PanelLayout } from "./layout";
 import { PANEL_LAYOUTS, panelFor } from "./layouts";
+import { PLOT_KINDS } from "./plots";
 import { moduleRegistry } from "../../registry/registry";
 import type { ModuleDescriptor } from "../../model/graph";
 
@@ -242,6 +243,31 @@ describe("Every panel in the app", () => {
     expect(types).toEqual(expect.arrayContaining([
       "m.grain-engine", "m.prism-compressor", "m.prism-dattorro-filter-bank", "m.prism-dattorro-plate",
     ]));
-    expect(types).toHaveLength(47);
+    expect(types).toHaveLength(87);
+  });
+
+  it("draws the last forty effects in the four new looks, each where it belongs", () => {
+    const looks: Record<PanelLayout["style"], string[]> = {
+      night: ["schroeder-reverb", "moorer-reverb", "white-chorus", "flanger", "vibrato", "leslie", "harmonizer", "detune",
+        "doubler", "doppler", "phaser", "allpass-diffuser", "echo", "multi-delay", "tremolo", "convolution"],
+      strip: ["eq", "dattorro-notch", "dattorro-resonator", "regalia", "chamberlin", "damping-filter", "pn-noise", "pn-noise-eq", "single-bit-pn"],
+      graph: ["gate", "maximizer", "spectral-dynamics", "fit"],
+      cabinet: ["invert", "swap", "width", "dc", "ring", "rappify", "boomerang", "gain", "utility", "decimator", "stereo-matrix"],
+      soundhack: [], lexicon: [], platinum: [],
+    };
+    for (const [style, ids] of Object.entries(looks)) {
+      for (const id of ids) expect(panelFor(`m.prism-${id}`)?.style, id).toBe(style);
+    }
+    // Every prism effect now has a panel.
+    const missing = [...moduleRegistry.values()].filter((m) => m.type.startsWith("m.prism-") && !panelFor(m.type)).map((m) => m.type);
+    expect(missing).toEqual([]);
+  });
+
+  it("draws every display a panel names", () => {
+    const known = new Set([...PLOT_KINDS, "cheek", "grain-screen", "root-keys", "plate-tail", "transfer", "levels", "bank-response",
+      "page-nav", "page-title", "lxp-logo", "lxp-title", "lxp-meters", "lxp-rtv", "hp-x-axis", "hp-y-axis", "hp-values"]);
+    for (const layout of PANEL_LAYOUTS) {
+      for (const display of layout.displays) expect(known.has(display.kind), `${layout.moduleType}: ${display.kind}`).toBe(true);
+    }
   });
 });

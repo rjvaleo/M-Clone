@@ -10,9 +10,26 @@ export type Readout = {
   scale?: number;
   /** A compressor slope as a ratio. */
   ratio?: boolean;
+  /**
+   * So many significant figures (two places at most), with the unit after:
+   * hertz from 1000 in k, milliseconds from 1000 in seconds. For dials too
+   * small for idMLab's own formatting.
+   */
+  figures?: number;
 };
 
-export function readoutText(value: number, readout: Readout): string {
+/** The places that keep `figures` significant figures of `v`, two at most. */
+const placesFor = (v: number, figures: number) =>
+  Math.min(Math.max(figures - 1 - Math.floor(Math.log10(Math.max(Math.abs(v), 1e-9))), 0), 2);
+
+export function readoutText(value: number, readout: Readout, unit = ""): string {
+  if (readout.figures !== undefined) {
+    const [v, u] = unit === "Hz" && Math.abs(value) >= 1000 ? [value / 1000, "kHz"]
+      : unit === "ms" && Math.abs(value) >= 1000 ? [value / 1000, "s"] : [value, unit];
+    const places = Math.abs(v) >= 1000 ? 0 : placesFor(v, readout.figures);
+    const text = v.toFixed(places);
+    return `${Number(text) === 0 ? (0).toFixed(places) : text}${u}`;
+  }
   if (readout.ratio) {
     const slope = Math.max(value, 1e-6);
     return slope <= 1 ? `${(1 / slope).toFixed(1)}:1` : `1:${slope.toFixed(1)}`;
