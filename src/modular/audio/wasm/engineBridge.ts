@@ -677,6 +677,13 @@ export const enginePorts = (from: PortSpan, to: PortSpan): [number, number][] =>
   return [[from.base, to.base], [from.base + 1, to.base]];
 };
 
+/**
+ * The modules the engine meters: every prism effect, whose panels draw their
+ * levels. Others are not, as a meter costs the audio thread a comparison per
+ * port per sample.
+ */
+export const isMetered = (moduleType: string): boolean => moduleType.startsWith("m.prism-");
+
 /** The `.wasm` exports, exactly as `rust/wasm/src/lib.rs` declares them. */
 export interface EngineExports {
   init(sampleRate: number): void;
@@ -690,6 +697,11 @@ export interface EngineExports {
   disconnect_param(fromModule: number, fromPort: number, toModule: number, param: number): number;
   module_output(module: number, port: number): number;
   module_telemetry(module: number): number;
+  /** Keep a module's input and output peaks for a meter; see `Engine::set_metered`. */
+  set_metered(module: number, on: number): number;
+  /** A metered module's peak in (side 0) or out (1) since its levels were cleared; NaN otherwise. */
+  module_level(module: number, side: number): number;
+  clear_levels(module: number): void;
   set_param(module: number, index: number, value: number): void;
   note_on(module: number, note: number, velocity: number, detuneCents: number): void;
   /** A note that knows its step as sequenced; see `Module::note_on_with_step`. */
@@ -1064,6 +1076,13 @@ export class WasmRack {
       lfos[nodeId] = [this.engine.module_telemetry(built.moduleId), this.engine.module_output(built.moduleId, 0)];
     }
     if (Object.keys(lfos).length > 0) report.lfos = lfos;
+    const levels: Record<string, [number, number]> = {};
+    for (const [nodeId, built] of this.built) {
+      if (!isMetered(built.moduleType)) continue;
+      levels[nodeId] = [this.engine.module_level(built.moduleId, 0), this.engine.module_level(built.moduleId, 1)];
+      this.engine.clear_levels(built.moduleId);
+    }
+    if (Object.keys(levels).length > 0) report.levels = levels;
     this.peak = 0;
     this.quantaSinceReport = 0;
     return report;
@@ -1156,6 +1175,7 @@ export class WasmRack {
 
         const fade = FADE_HANDLE[spec.moduleType];
         if (fade !== undefined) this.engine.set_param(moduleId, fade, 1);
+        if (isMetered(spec.moduleType)) this.engine.set_metered(moduleId, 1);
       }
 
       this.applyParameters(spec, built);

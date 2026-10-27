@@ -95,6 +95,12 @@ describe("What the displays say", () => {
     expect(gate.panes[0].rules).toEqual([{ tone: "b", x: -40 }]);
   });
 
+  it("marks the curves a measured level can be shown on: a whole signal's level in and out", () => {
+    for (const kind of ["gate-curve", "fit-curve", "maximizer-curve"]) expect(plot(kind).panes[0].live, kind).toBe(true);
+    // One band's level is not the module's: no live point there.
+    expect(plot("spectral-curve").panes[0].live).toBeUndefined();
+  });
+
   it("says where the Maximizer's threshold sits", () => {
     expect(plot("maximizer-curve").bottom).toContain("FOLLOWS LEVEL");
     expect(plot("maximizer-curve", { autoComp: 0 }).bottom).toContain("−12.0 DB");
