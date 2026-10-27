@@ -17,6 +17,7 @@ import { groupOf, type InertControl, type PanelControl, type PanelDisplay, type 
 import { arcPath, dragValue, fromFraction, knobAngle, padPoint, padValues, toFraction, travelFor, type Travel } from "./travel";
 import { readoutText, type Readout } from "./readout";
 import { compressorCurve, filterBankResponse, grainWindow, plateEnvelope, PLATE_HIGH_HZ, type FilterBank } from "./displays";
+import { DISPLAY_RATE, PLOT_KINDS, kernelValues, place, plotFor, type Pane, type Plot } from "./plots";
 
 type Setter = (id: string, value: JsonValue) => void;
 
@@ -52,7 +53,7 @@ export function Panel({ layout, node, setParameter }: { layout: PanelLayout; nod
         </div>
       ))}
       {layout.displays.map((display, index) => (
-        <div key={`${display.kind}-${index}`} className={`pnl-display pnl-display--${display.kind}`} style={box(display)}>
+        <div key={`${display.kind}-${index}`} className={`pnl-display pnl-display--${display.kind}${PLOT_KINDS.includes(display.kind) ? " pnl-display--plotted" : ""}`} style={box(display)}>
           <Display display={display} node={node} pages={{ list: layout.pages ?? [], current: page, show: setPage }}
             label={module?.label ?? node.moduleType} />
         </div>
@@ -133,7 +134,8 @@ function shown(parameter: ParameterDescriptor, value: JsonValue | undefined, zer
     // A whole-number control (a step of exactly 1) prints no places. A
     // logarithmic control's step can be 1 or more without it being whole.
     const whole = parameter.step === 1 && !readout.scale && !readout.ratio;
-    return readoutText(num(value, num(parameter.defaultValue)), whole ? { ...readout, decimals: 0 } : readout);
+    return readoutText(num(value, num(parameter.defaultValue)), whole ? { ...readout, decimals: 0, figures: undefined } : readout,
+      readout.figures !== undefined ? parameter.unit : undefined);
   }
   return formatValue(num(value, num(parameter.defaultValue)), { unit: parameter.unit, step: parameter.step });
 }
@@ -369,7 +371,7 @@ function Inert({ inert }: { inert: InertControl }) {
   return (
     <div className={`pnl-control pnl-inert pnl-inert--${inert.kind}`} style={box(inert)} title={`${inert.label}: ${inert.why}`}
       aria-disabled="true">
-      {inert.kind === "switch" ? <span className="pnl-switch__text">{inert.label}</span> : null}
+      {inert.kind === "switch" || inert.w >= 40 ? <span className="pnl-switch__text">{inert.label}</span> : null}
     </div>
   );
 }
@@ -396,7 +398,7 @@ function Display({ display, node, pages, label }: { display: PanelDisplay; node:
     case "transfer": return <Transfer display={display} node={node} />;
     case "levels": return <Levels display={display} node={node} />;
     case "bank-response": return <BankResponse display={display} node={node} />;
-    default: return null;
+    default: return PLOT_KINDS.includes(display.kind) ? <PlotView display={display} node={node} /> : null;
   }
 }
 
@@ -578,4 +580,88 @@ function BankResponse({ display, node }: { display: PanelDisplay; node: NodeInst
     <text className="pnl-plot__text" x="6" y="14">+24 dB</text>
     <text className="pnl-plot__text" x={w - 6} y={h - 6} textAnchor="end">20 Hz – 20 kHz</text>
   </svg>;
+}
+
+// ---- the ported effects' plots -------------------------------------------------
+
+/** A plot from plots.ts, drawn: its panes stacked, its two lines of text above and below. */
+function PlotView({ display, node }: { display: PanelDisplay; node: NodeInstance }) {
+  const { assets } = useSoundPool();
+  const module = moduleRegistry.get(node.moduleType);
+  const id = typeof node.parameters["asset-id"] === "string" ? (node.parameters["asset-id"] as string) : "";
+  const asset = assets.find((entry) => entry.id === id);
+  const plot = plotFor(display.kind, kernelValues(module?.parameters ?? [], node.parameters),
+    { rate: DISPLAY_RATE, sound: asset ? { name: asset.name, durationSec: asset.durationSec } : undefined });
+  if (!plot) return null;
+  return <PlotSvg plot={plot} w={display.w} h={display.h} />;
+}
+
+function PlotSvg({ plot, w, h }: { plot: Plot; w: number; h: number }) {
+  // A short display, as the strips' are, gives its two lines less room.
+  const text = h < 120 ? 13 : 16;
+  const paneH = (h - 2 * text) / plot.panes.length;
+  return <>
+    <span className="pnl-screen__top">{plot.top}</span>
+    <svg className="pnl-plot" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      {plot.panes.map((pane, i) => {
+        const box = { x: 30, y: text + i * paneH + 2, w: w - 38, h: paneH - 15 };
+        const side = Math.min(box.w, box.h);
+        return <PaneSvg key={i} pane={pane}
+          box={pane.square ? { x: box.x + (box.w - side) / 2, y: box.y + (box.h - side) / 2, w: side, h: side } : box} />;
+      })}
+    </svg>
+    <span className="pnl-screen__bottom">{plot.bottom}</span>
+  </>;
+}
+
+/** The ticks whose labels have room: each at least `room` px past the last one kept. */
+function spaced<T extends { label: string }>(ticks: T[], at: (t: T) => number, room: (t: T) => number): T[] {
+  let last = -Infinity;
+  return ticks.filter((t) => {
+    if (t.label === "" || Math.abs(at(t) - last) < room(t)) return false;
+    last = at(t);
+    return true;
+  });
+}
+
+/** A path through points, broken where a y is not a number. */
+function pathOf(points: [number, number][], at: (p: [number, number]) => [number, number]): string {
+  let d = "";
+  let pen = false;
+  for (const p of points) {
+    if (Number.isNaN(p[1])) { pen = false; continue; }
+    const [x, y] = at(p);
+    d += `${pen ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
+    pen = true;
+  }
+  return d;
+}
+
+function PaneSvg({ pane, box }: { pane: Pane; box: { x: number; y: number; w: number; h: number } }) {
+  const px = (v: number) => box.x + place(pane.x, v) * box.w;
+  const py = (v: number) => box.y + box.h - place(pane.y, v) * box.h;
+  const at = ([x, y]: [number, number]): [number, number] => [px(x), py(y)];
+  const base = pane.y.min < 0 && pane.y.max > 0 ? 0 : pane.y.min;
+  return <g>
+    {pane.x.ticks.map((t) => <path key={`x${t.at}`} className="pnl-plot__grid" d={`M${px(t.at).toFixed(1)} ${box.y}V${box.y + box.h}`} />)}
+    {pane.y.ticks.map((t) => <path key={`y${t.at}`} className="pnl-plot__grid" d={`M${box.x} ${py(t.at).toFixed(1)}H${box.x + box.w}`} />)}
+    {spaced(pane.x.ticks, (t) => px(t.at), (t) => t.label.length * 5.5 + 4).map((t) =>
+      <text key={`xl${t.at}`} className="pnl-plot__tick" x={px(t.at)} y={box.y + box.h + 10} textAnchor="middle">{t.label}</text>)}
+    {spaced(pane.y.ticks, (t) => -py(t.at), () => 10).map((t) =>
+      <text key={`yl${t.at}`} className="pnl-plot__tick" x={box.x - 4} y={py(t.at) + 3} textAnchor="end">{t.label}</text>)}
+    {pane.title && <text className="pnl-plot__title" x={box.x + 4} y={box.y + 10}>{pane.title}</text>}
+    {(pane.rules ?? []).map((r, i) => <path key={`r${i}`} className={`pnl-plot__rule pnl-tone-${r.tone}`}
+      d={r.x !== undefined ? `M${px(r.x).toFixed(1)} ${box.y}V${box.y + box.h}` : `M${box.x} ${py(r.y ?? 0).toFixed(1)}H${box.x + box.w}`} />)}
+    {pane.traces.map((t, i) => <g key={`t${i}`}>
+      {t.fill && <path className={`pnl-plot__area pnl-tone-${t.tone}`}
+        d={`${pathOf(t.points, at)}L${px(t.points[t.points.length - 1][0]).toFixed(1)} ${py(base).toFixed(1)}L${px(t.points[0][0]).toFixed(1)} ${py(base).toFixed(1)}Z`} />}
+      <path className={`pnl-plot__trace pnl-tone-${t.tone}${t.dash ? " is-dashed" : ""}`} d={pathOf(t.points, at)} />
+    </g>)}
+    {(pane.stems ?? []).map((s, i) => <path key={`s${i}`} className={`pnl-plot__stem pnl-tone-${s.tone}`}
+      d={`M${px(s.x).toFixed(1)} ${py(base).toFixed(1)}V${py(s.y).toFixed(1)}`} />)}
+    {(pane.dots ?? []).map((d, i) => <g key={`d${i}`}>
+      <circle className={`pnl-plot__dot pnl-tone-${d.tone}${d.hollow ? " is-hollow" : ""}`} cx={px(d.x)} cy={py(d.y)} r={d.hollow ? 3 : 3.5} />
+      {d.label && <text className={`pnl-plot__label pnl-tone-${d.tone}`} x={px(d.x) + 5} y={py(d.y) - 5}>{d.label}</text>}
+    </g>)}
+  </g>;
 }
