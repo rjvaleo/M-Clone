@@ -696,7 +696,7 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
         {/* Row 2 */}
         <div className="urow">
           <Win id="variables" defX={4} defY={130}
-            title="Variables" note="click name to edit · click cell to activate"
+            title="Variables" note="click a cell to activate · double-click to edit"
             menuItems={variablesMenu}
             className="u-variables" size="variables">
             {/* Pattern Group leads the window, then the five transform

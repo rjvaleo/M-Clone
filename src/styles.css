@@ -59,10 +59,10 @@ body {
   z-index: 20000;
   flex: none;
   height: 22px;
-  padding: 1px 10px;
+  padding: 1px 6px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
@@ -83,11 +83,14 @@ body {
 /* The document name sits in the menu bar, where the original put the name of
    the Conducting Window. The bullet marks unsaved changes. */
 .app__doc {
+  min-width: 0;
   margin: 0 0 0 auto;
   padding-right: 8px;
+  overflow: hidden;
   font-size: 11px;
   opacity: 0.75;
   font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -298,7 +301,7 @@ body {
   transform-origin: top left;
 }
 .theme-picker { display: flex; align-items: center; gap: 4px; font-size: 10px; }
-.theme-picker select { font: 10px var(--font); height: 18px; padding: 0 2px; }
+.theme-picker select { font: 10px var(--font); width: 64px; height: 18px; padding: 0 2px; }
 .channel-palette { display: flex; gap: 2px; align-items: center; }
 .channel-palette input[type="color"] {
   width: 22px; height: 22px; padding: 1px; border: 1px solid currentColor;
@@ -617,9 +620,10 @@ body {
 }
 .uconduct__tempo-readout b { font-size: 12px; }
 .uconduct__tempo-readout input {
-  box-sizing: border-box; width: var(--conductor-tempo-numerical); height: 24px; padding: 0 1px;
+  /* 19px: with the slider row above it, exactly the bottom strip's height. */
+  box-sizing: border-box; width: var(--conductor-tempo-numerical); height: 19px; padding: 0 1px;
   border: 0; border-left: 1px solid var(--m-line); border-right: 1px solid var(--m-line);
-  background: var(--panel); color: var(--ink); font: 800 15px/24px var(--mono);
+  background: var(--panel); color: var(--ink); font: 800 15px/19px var(--mono);
   text-align: center;
   appearance: textfield;
 }
@@ -718,7 +722,7 @@ body {
 .usnapwin__shows { display: flex; flex-direction: column; }
 .usnap, .usnapwin__show {
   width: var(--snap-cell);
-  height: var(--snap-cell);
+  height: var(--snap-cell-h, var(--snap-cell));
   padding: 0;
   border: none;
   border-right: 1px solid var(--m-line);
@@ -762,6 +766,13 @@ body {
 .usnapwin__show--active { animation: snapshot-blink 0.7s steps(2, end) infinite; }
 .usnapwin__show--full { background: var(--m-strong) !important; }
 @keyframes snapshot-blink { 50% { filter: invert(1); } }
+/* With reduced motion the blinking controls hold the blink's "on" state:
+   still marked as running, without flashing. */
+@media (prefers-reduced-motion: reduce) {
+  .usnapwin__holddo[aria-pressed="true"],
+  .usnapwin__slidebtn[aria-pressed="true"],
+  .usnapwin__show--active { animation: none; filter: invert(1); }
+}
 .usnapwin__globe {
   padding: 4px;
   border: none;
@@ -1262,6 +1273,8 @@ body {
   width: max-content;
 }
 .peditor__tools { margin-left: auto; display: flex; }
+/* The close box follows the tools to the right edge, as in every other window. */
+.peditor__tools + .uwin__close { margin-left: 2px; }
 .petool {
   width: 24px; height: 20px; padding: 0; cursor: pointer;
   border: 1px solid var(--m-line); border-right: none; border-top: none; border-bottom: none;
@@ -1546,7 +1559,8 @@ body {
   display: grid; grid-template-columns: 20px 12px 190px 12px;
   grid-template-rows: 48px 13px; align-items: center; height: 76px;
 }
-.cyced__voice > b { grid-row: 1; font-size: 14px; color: var(--voice-color); }
+/* Centred in its column, clear of the voice's colour stripe down the left edge. */
+.cyced__voice > b { grid-row: 1; justify-self: center; font-size: 14px; color: var(--voice-color); }
 .cyced__levels {
   grid-row: 1; font-size: 8px; line-height: 9.5px; text-align: center;
   color: var(--voice-color);
@@ -2099,10 +2113,14 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
 .uconduct { zoom: 0.5; }
 
 .u-flexsnap > .uwin__body { padding: 0; }
-.usnapwin { --snap-cell: 18px; }
 .u-flexsnap { width: 62px; overflow: hidden; }
-.usnapwin { --snap-cell: 16px; }
-.usnapwin__holddo { height: 28px; padding: 2px; }
+/* Snapshot fills M's 57 x 315 body exactly: three 18-point columns (the two
+   Snapshot columns and the Slideshow column) and thirteen 17-point rows, with
+   Hold/Do taking up whatever height is left. */
+.usnapwin { --snap-cell: 18px; --snap-cell-h: 17px; width: 100%; height: 100%; }
+.usnapwin__holddo { flex: 1 0 28px; padding: 2px; }
+/* The Conducting Arrow takes one column, like the Quantization box beside it. */
+.usnapwin__row .uarrow { width: var(--snap-cell); height: var(--snap-cell); }
 .usnapwin__holddo svg { max-width: 18px; max-height: 18px; }
 .usnapwin__arrow, .usnapwin__quant, .usnapwin__slidebtn { font-size: 10px; }
 .usnapwin__row svg, .usnapwin__shows svg { max-width: 12px; max-height: 12px; }
@@ -2116,29 +2134,39 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
 .u-variables { width: 220px; height: 156px; }
 .u-variables .uwin__note { display: none; }
 .u-variables > .uwin__body { padding: 2px; }
-.u-variables .uvars { gap: 2px; }
-.u-variables .uvars__row { gap: 1px; height: 21px; }
+/* The six rows share M's 158-point body between them, rather than stopping
+   short and leaving a blank strip at the foot. */
+.u-variables .uvars { gap: 2px; height: 100%; }
+.u-variables .uvars__row { gap: 1px; flex: 1 1 0; min-height: 0; }
 .u-variables .uvars__label { width: 43px; font-size: 8px; }
 .u-variables .uarrow { width: 16px; border-width: 1px; }
-.u-variables .umini { height: 21px; padding: 1px; }
+.u-variables .umini { height: auto; padding: 1px; }
 .u-variables .uvars__cells { border-width: 1px; }
 .u-variables .umini--group { font-size: 9px; }
 
 .u-cyclic-vars { width: 229px; height: 156px; }
 .u-cyclic-vars > .uwin__body { padding: 2px; }
-.u-cyclic-vars .ucyclics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+/* Three equal columns inside M's 226-point body (plain 1fr let the widest
+   content push Rhythm off the edge), each Position row taking an equal share
+   of the height. */
+.u-cyclic-vars .ucyclics {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; height: 100%;
+}
+.u-cyclic-vars .ucyc { display: flex; flex-direction: column; min-width: 0; }
+.u-cyclic-vars .ucyc__head { flex: none; }
 .u-cyclic-vars .ucyc__name { font-size: 8px; margin-bottom: 1px; }
-.u-cyclic-vars .ucycpos { height: 20px; padding: 1px; font-size: 8px; }
+.u-cyclic-vars .ucycpos { flex: 1 1 0; min-height: 0; height: auto; padding: 1px; font-size: 8px; }
 .u-cyclic-vars .ucycpos i { height: 2px; margin-bottom: 1px; }
 
 .u-midi { width: 454px; min-height: 45px; }
 .u-midi > .uwin__body { padding: 1px; }
-.u-midi .uvars--inline { margin: 0; }
-.u-midi .uvars__row { height: 25px; gap: 1px; }
+/* The Orchestration row fills M's 44-point body. */
+.u-midi .uvars--inline { margin: 0; height: 100%; }
+.u-midi .uvars__row { flex: 1 1 0; min-height: 0; gap: 1px; }
 .u-midi .uvars__label { width: 42px; font-size: 8px; }
 .u-midi .uarrow { width: 16px; border-width: 1px; }
 .u-midi .uvars__cells { border-width: 1px; }
-.u-midi .umini { height: 25px; padding: 1px; }
+.u-midi .umini { height: auto; padding: 1px; }
 .u-midi-assignment { width: 560px; height: auto; }
 .u-midi-assignment > .uwin__body { padding: 1px; }
 .umidi__assignment-head {
@@ -2280,7 +2308,9 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
 .pwin__input-icon { grid-row: 1 / 3; display: grid; place-items: center; font-size: 16px; }
 .pwin__labels, .pwin__row {
   position: absolute; left: 0; right: 0;
-  display: grid; grid-template-columns: 20px 17px 16px 15px 15px 48px 23px 43px 31px;
+  /* Nine columns in M's 216-point body, to the pixel: wider than that and the
+     Phase column runs off the window's edge. */
+  display: grid; grid-template-columns: 20px 16px 15px 14px 14px 44px 22px 41px 30px;
 }
 .pwin__labels { top: 20px; height: 19px; border-bottom: 1px solid var(--m-line); background: var(--cell); }
 .pwin__labels > b {
@@ -2289,6 +2319,7 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
 }
 .pwin__labels > b:nth-child(1), .pwin__labels > b:nth-child(2),
 .pwin__labels > b:nth-child(6) { place-items: end start; padding: 0 0 3px 2px; }
+.pwin__labels > b:nth-child(2) { padding-left: 1px; }
 .pwin__speaker-head svg { width: 12px; height: 12px; fill: currentColor; }
 .pwin__echo-head { display: flex !important; gap: 1px; align-items: center; }
 .pwin__echo-head > i { font-style: normal; font-size: 8px; }
@@ -2513,6 +2544,15 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
 .uwin__body :is(button, input, select, output, th, td, label, b, strong, p) {
   font-size: var(--type-body) !important;
 }
+/* The Synth's knob labels and menus are dense readouts: the compact tier. */
+.uwin__body .synthpanel :is(button, select, label, b, strong, span) {
+  font-size: var(--type-compact) !important;
+}
+/* A 9px menu holds 7px text only with no vertical padding, and its sized
+   width holds the longest choice only with a slim side padding. */
+.app .synthchoice select { padding: 0 2px; line-height: 7px; }
+/* On the tinted sections a hairline well vanishes; an ink edge reads in both themes. */
+.app.m-skin .ustage .synthpanel .synthchoice select { border-color: color-mix(in srgb, var(--ink) 45%, transparent); }
 
 /* Conducting's reference body is horizontally scaled to 0.4978. */
 .uconduct :is(button, input, select, output, label, b, strong, p, span) {
@@ -2749,15 +2789,6 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
    brings its controls up to comfortable physical size. */
 .u-synth-win { width: 366px; }
 .u-synth-win > .uwin__body { padding: 0; }
-.u-synth-win > .uwin__title,
-.u-synth-win > .uwin__title .uwin__name {
-  font-size: 8.5px !important;
-  text-transform: uppercase;
-}
-.u-synth-win > .uwin__title .uwin__note {
-  font-size: 6.8px !important;
-  text-transform: uppercase;
-}
 .synthpanel {
   display: flex;
   height: 81px;
@@ -2807,8 +2838,11 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
 }
 .synthstreams button.is-on { background: var(--voice-color); color: var(--m-on-strong); }
 .synthpanel__section h3 { color: var(--voice-color); }
-.synthpanel__lfo { flex: 0 0 46px; }
-.synthpanel__osc { flex: 0 0 92px; }
+/* Widths share out M's 459-point column so every section fits its 81-point
+   height: the LFO is wide enough for Glide beside Rate and Depth, and Output,
+   which holds only two knobs and Power, gives up what it doesn't use. */
+.synthpanel__lfo { flex: 0 0 66px; }
+.synthpanel__osc { flex: 0 0 100px; }
 .synthpanel__mixer { flex: 0 0 46px; }
 .synthpanel__filter { flex: 0 0 50px; }
 .synthpanel__envelopes { flex: 0 0 78px; }
@@ -2820,6 +2854,7 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
   row-gap: 1px;
 }
 .synthpanel__knobs--2 { grid-template-columns: repeat(2, 19px); column-gap: 2px; }
+.synthpanel__knobs--3 { grid-template-columns: repeat(3, 19px); column-gap: 2px; }
 .synthpanel__mixer .synthpanel__knobs { padding-bottom: 4px; }
 .synthknob {
   position: relative;
@@ -2918,7 +2953,7 @@ body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
   border-bottom: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
 }
 .synthosc em { padding-top: 7px; font-size: 6.8px; font-style: normal; font-weight: 800; }
-.synthosc .synthchoice:not(.synthchoice--octave) { display: block; padding-top: 3px; }
+.synthosc .synthchoice:not(.synthchoice--octave) { display: block; padding-top: 0; }
 .synthosc .synthchoice:not(.synthchoice--octave) span { display: block; text-align: center; }
 .synthosc .synthchoice:not(.synthchoice--octave) select { margin-top: 1px; }
 .synthpanel__osc > .synthchoice { grid-template-columns: 36px 1fr; }
@@ -3368,7 +3403,8 @@ body, .app, .uwin, .uvarpop, .peditor, .cyced, .midiview, .uconduct,
   color: var(--ink);
 }
 .app.m-skin .uwin__name { font-weight: 600; letter-spacing: 0.01em; }
-.app.m-skin .uwin__note { font-weight: 400; opacity: 0.55; }
+/* Dimmed, but still 4.5:1 against the title bar at 8px (it was 3.7:1). */
+.app.m-skin .uwin__note { font-weight: 400; opacity: 0.75; }
 .app.m-skin :is(.uwin__close, .uvarpop__close) {
   border: 0; border-radius: 50%; background: transparent;
   color: var(--ink); opacity: 0.45; box-shadow: none;
@@ -3439,7 +3475,7 @@ body, .app, .uwin, .uvarpop, .peditor, .cyced, .midiview, .uconduct,
   background: color-mix(in srgb, var(--voice-color) 10%, var(--ms-well));
 }
 .app.m-skin .synthpanel__section h3,
-.app.m-skin .synthpanel__section:nth-of-type(odd) h3 { color: var(--ink); opacity: 0.6; }
+.app.m-skin .synthpanel__section:nth-of-type(odd) h3 { color: var(--ink); opacity: 0.75; }
 
 /* Midi View: the generated stream in M's own palette, not a green terminal. */
 .app.m-skin .midiview {

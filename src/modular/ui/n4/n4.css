@@ -808,8 +808,10 @@
 
 /* ===== The Synth: VOSM's envelope panels, tight ===== */
 .mm-node.mm-node--n4[data-module-type="m.synth"] { --mm-width: 300px; }
-/* The original M window, drawn at M's own fixed size. */
-.mm-node.mm-node--n4[data-module-type="m.m"] { --mm-width: 818px; }
+/* The original M window, drawn at one fixed width: M's whole arrangement
+   (the main screen, then the Pattern Editor column) with M's 3-point margin
+   either side, so nothing is cut off at the face's edge. */
+.mm-node.mm-node--n4[data-module-type="m.m"] { --mm-width: 1016px; }
 .mm-node.mm-node--n4[data-module-type="m.synth"] .mm-node-section:has(.n4-synth) { padding: 0; border: 0; background: none; box-shadow: none; }
 .mm-node.mm-node--n4[data-module-type="m.synth"] .mm-node-section:has(.n4-synth) .mm-node-section__content { padding: 0; }
 .n4-synth { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px; width: 100%; }
@@ -870,7 +872,8 @@
   & .n4-header__title, & .n4-header__comment { display: none; }
   & .n4-header__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   & .mm-node-section__content { font-size: 9px; color: var(--n4-text); }
-  & .mm-node-section input:not([type="range"]):not([type="checkbox"]), & .mm-node-section select {
+  /* Not inside M's face: M's windows dress their own numericals and menus. */
+  & .mm-node-section :is(input:not([type="range"]):not([type="checkbox"]), select):not(.mm-m-face *) {
     min-height: 0; height: 15px; padding: 0 4px; font: 9px var(--n4-mono); color: var(--n4-text);
     background: var(--n4-well); border: 1px solid var(--n4-deep); border-radius: 3px;
   }
