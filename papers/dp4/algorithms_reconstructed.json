@@ -1,0 +1,249 @@
+{
+  "_meta": {
+    "what": "The 9 algorithms absent from DP4_manual.pdf, reconstructed from the manual's own back-of-book index (md/p182-p199).",
+    "why_separate": "algorithms.json is a clean extraction from surviving PDF pages. This file is inference. Do not merge them; join on name at read time.",
+    "method": "The index cites TOC pagination, not the PDF's re-flowed folios. Each missing algorithm has a known 2-page TOC span, so index entries citing those pages name what was printed there.",
+    "validation": "Run against pp.53-54 (EQ-DDL-withLFO, present in the PDF) the method returned that algorithm's parameter list exactly. For EQ-Compressor it returned p52 = params 09-16 exactly as they appear on surviving PDF page 43.",
+    "not_recoverable": ["value ranges", "defaults", "parameter descriptions", "signal routing diagrams", "waveshaper table contents"],
+    "confidence_key": {
+      "certain": "universal across all 40 parsed algorithms",
+      "high": "named by the index on that page AND position fixed by a structural twin in the surviving manual",
+      "likely": "named by the index; position inferred from family pattern",
+      "named_only": "the index places this label on the page, but ordering is not determined"
+    },
+    "generated": "2026-08-07",
+    "see": "../notes/missing-algorithms-reconstruction.md"
+  },
+
+  "algorithms": [
+    {
+      "name": "EQ-Compressor",
+      "abbr": "cmp",
+      "toc_pages": [51, 52],
+      "status": "params 01-08 reconstructed; 09-24 extracted from surviving PDF page 43",
+      "param_order": "determined",
+      "params": [
+        {"n": 1,  "label": "Mix",                        "confidence": "certain"},
+        {"n": 2,  "label": "Volume",                     "confidence": "certain"},
+        {"n": 3,  "label": "Comp Ratio",                 "confidence": "high"},
+        {"n": 4,  "label": "Comp Threshold",             "confidence": "high"},
+        {"n": 5,  "label": "Gain Change",                "confidence": "high"},
+        {"n": 6,  "label": "Comp Attack",                "confidence": "high"},
+        {"n": 7,  "label": "Comp Release",               "confidence": "high"},
+        {"n": 8,  "label": "Compressor Gain",            "confidence": "likely", "note": "sixth dynamics slot; index has 'Compressor/Gain 51'. De-esser and Ducker/Gate carry Output Gain in the same slot."},
+        {"n": 9,  "label": "Comp Noise Gate Off Below",  "confidence": "extracted", "range": "-96 to +00 dB"},
+        {"n": 10, "label": "Comp Noise Gate On Above",   "confidence": "extracted", "range": "-96 to +00 dB"},
+        {"n": 11, "label": "Gate Release Time",          "confidence": "extracted", "range": "1ms to 10.0s"},
+        {"n": 12, "label": "Bass Fc",                    "confidence": "extracted", "range": "0 to 1000 Hz"},
+        {"n": 13, "label": "Bass EQ Gain",               "confidence": "extracted", "range": "-48 to +24 dB"},
+        {"n": 14, "label": "Treble Fc",                  "confidence": "extracted", "range": "01KHz to 16KHz"},
+        {"n": 15, "label": "Treble EQ Gain",             "confidence": "extracted", "range": "-48 to +24 dB"},
+        {"n": 16, "label": "EQ Input Level Trim",        "confidence": "extracted", "range": "-24 to +00 dB"},
+        {"n": 17, "label": "Mod1 Source",                "confidence": "extracted"},
+        {"n": 18, "label": "Mod1 Destination",           "confidence": "extracted"},
+        {"n": 19, "label": "Mod1 Param Range Min",       "confidence": "extracted"},
+        {"n": 20, "label": "Mod1 Param Range Max",       "confidence": "extracted"},
+        {"n": 21, "label": "Mod2 Source",                "confidence": "extracted"},
+        {"n": 22, "label": "Mod2 Destination",           "confidence": "extracted"},
+        {"n": 23, "label": "Mod2 Param Range Min",       "confidence": "extracted"},
+        {"n": 24, "label": "Mod2 Param Range Max",       "confidence": "extracted"}
+      ]
+    },
+
+    {
+      "name": "De-esser",
+      "abbr": "ess",
+      "toc_pages": [39, 40],
+      "status": "names recovered; ordering inferred from the EQ-Compressor / Inverse Expander family pattern",
+      "param_order": "inferred",
+      "params": [
+        {"n": 1,  "label": "Mix",                          "confidence": "certain"},
+        {"n": 2,  "label": "Volume",                       "confidence": "certain"},
+        {"n": 3,  "label": "Ratio",                        "confidence": "likely"},
+        {"n": 4,  "label": "Threshold",                    "confidence": "likely"},
+        {"n": 5,  "label": "Gain Change",                  "confidence": "likely"},
+        {"n": 6,  "label": "Attack",                       "confidence": "likely"},
+        {"n": 7,  "label": "Release",                      "confidence": "likely"},
+        {"n": 8,  "label": "Output Gain",                  "confidence": "likely"},
+        {"n": null, "label": "Noise Gate Off Below",       "confidence": "named_only"},
+        {"n": null, "label": "Noise Gate On Above",        "confidence": "named_only"},
+        {"n": null, "label": "Sidechain EQ HighPass Fc",   "confidence": "named_only"},
+        {"n": null, "label": "Sidechain EQ Input Trim",    "confidence": "named_only"},
+        {"n": null, "label": "Bass Gain (loShv)",          "confidence": "named_only"},
+        {"n": null, "label": "Mid1 Fc",                    "confidence": "named_only"},
+        {"n": null, "label": "Mid1 Gain",                  "confidence": "named_only"},
+        {"n": null, "label": "Mid1 Q",                     "confidence": "named_only"},
+        {"n": null, "label": "Mid2 Fc",                    "confidence": "named_only"},
+        {"n": null, "label": "Mid2 Gain",                  "confidence": "named_only"},
+        {"n": null, "label": "Mid2 Q",                     "confidence": "named_only"},
+        {"n": null, "label": "Treble Gain (HiShv)",        "confidence": "named_only"}
+      ],
+      "note": "Full parametric sidechain, not a fixed de-ess band. Same six-parameter dynamics core as EQ-Compressor."
+    },
+
+    {
+      "name": "Ducker / Gate",
+      "abbr": "gat",
+      "toc_pages": [45, 46],
+      "status": "names recovered; ordering inferred from family pattern",
+      "param_order": "inferred",
+      "params": [
+        {"n": 1,  "label": "Mix",                        "confidence": "certain"},
+        {"n": 2,  "label": "Volume",                     "confidence": "certain"},
+        {"n": 3,  "label": "Ratio",                      "confidence": "likely"},
+        {"n": 4,  "label": "Threshold",                  "confidence": "likely"},
+        {"n": 5,  "label": "Gain Change",                "confidence": "likely"},
+        {"n": 6,  "label": "Attack",                     "confidence": "likely"},
+        {"n": 7,  "label": "Release",                    "confidence": "likely"},
+        {"n": 8,  "label": "Output Gain",                "confidence": "likely"},
+        {"n": null, "label": "Ducker Output Mix",        "confidence": "named_only"},
+        {"n": null, "label": "Noise Gate Off Below",     "confidence": "named_only"},
+        {"n": null, "label": "Noise Gate On Above",      "confidence": "named_only"},
+        {"n": null, "label": "Side Chain EQ Input Trim", "confidence": "named_only"},
+        {"n": null, "label": "Bandwidth",                "confidence": "named_only"},
+        {"n": null, "label": "Bass Gain (loShv)",        "confidence": "named_only"},
+        {"n": null, "label": "Mid1 Fc",                  "confidence": "named_only"},
+        {"n": null, "label": "Mid1 Gain",                "confidence": "named_only"},
+        {"n": null, "label": "Mid1 Q",                   "confidence": "named_only"},
+        {"n": null, "label": "Mid2 Fc",                  "confidence": "named_only"},
+        {"n": null, "label": "Mid2 Gain",                "confidence": "named_only"},
+        {"n": null, "label": "Mid2 Q",                   "confidence": "named_only"},
+        {"n": null, "label": "Treble Gain (HiShv)",      "confidence": "named_only"}
+      ],
+      "note": "Index prose cites voice-over, rap, staccato effect, internal mixer, side chain."
+    },
+
+    {
+      "name": "DigitalTubeAmp",
+      "abbr": "amp",
+      "toc_pages": [41, 42],
+      "status": "names recovered; ordering partly inferable from Guitar Amp 1/2/4",
+      "param_order": "unknown",
+      "params": [
+        {"n": 1, "label": "Mix",    "confidence": "certain"},
+        {"n": 2, "label": "Volume", "confidence": "certain"},
+        {"n": null, "label": "Preamp Gain",              "confidence": "named_only"},
+        {"n": null, "label": "Drive Gain",               "confidence": "named_only"},
+        {"n": null, "label": "Tube Bias",                "confidence": "named_only"},
+        {"n": null, "label": "Output Level",             "confidence": "named_only"},
+        {"n": null, "label": "Level Detect Attack",      "confidence": "named_only"},
+        {"n": null, "label": "Level Detect Release",     "confidence": "named_only"},
+        {"n": null, "label": "Waveshaper First Table",   "confidence": "named_only"},
+        {"n": null, "label": "Waveshaper Last Table",    "confidence": "named_only"},
+        {"n": null, "label": "Waveshaper Onset Level",   "confidence": "named_only"},
+        {"n": null, "label": "Waveshaper Table Slope",   "confidence": "named_only"},
+        {"n": null, "label": "Pre-EQ HighPass Cutoff",   "confidence": "named_only"},
+        {"n": null, "label": "Pre-EQ1 Fc",   "confidence": "named_only"},
+        {"n": null, "label": "Pre-EQ1 Gain", "confidence": "named_only"},
+        {"n": null, "label": "Pre-EQ1 Q",    "confidence": "named_only"},
+        {"n": null, "label": "Pre-EQ2 Fc",   "confidence": "named_only"},
+        {"n": null, "label": "Pre-EQ2 Gain", "confidence": "named_only"},
+        {"n": null, "label": "Pre-EQ2 Q",    "confidence": "named_only"},
+        {"n": null, "label": "Pre-EQ3 Fc",   "confidence": "named_only"},
+        {"n": null, "label": "Pre-EQ3 Gain", "confidence": "named_only"},
+        {"n": null, "label": "Pre-EQ3 Q",    "confidence": "named_only"}
+      ],
+      "topology": "RMS level detector (Level Detect Attack/Release) traverses a bank of waveshaping tables from First Table to Last Table, gated by Onset Level and governed by Table Slope; Tube Bias offsets the input, Drive Gain sets how hard it is pushed. Three-band parametric pre-EQ ahead of it.",
+      "note": "Index prose: waveshaping table, even to odd harmonics, intermodulation distortion, RMS measurement, glowing tube, real amplifier."
+    },
+
+    {
+      "name": "DynamicTubeAmp",
+      "abbr": "amp",
+      "toc_pages": [47, 48],
+      "status": "index shows the same parameter set as DigitalTubeAmp",
+      "param_order": "unknown",
+      "same_params_as": "DigitalTubeAmp",
+      "note": "The two differ in behaviour, not in parameter list, as far as the index reveals. Which of the two is level-responsive is not determinable from the index alone."
+    },
+
+    {
+      "name": "3.3 sec Delay 2U",
+      "abbr": "ddl",
+      "toc_pages": [35, 36],
+      "status": "names recovered",
+      "param_order": "unknown",
+      "params": [
+        {"n": 1, "label": "Mix",    "confidence": "certain"},
+        {"n": 2, "label": "Volume", "confidence": "certain"},
+        {"n": null, "label": "Delay Time",    "confidence": "named_only"},
+        {"n": null, "label": "Pan",           "confidence": "named_only"},
+        {"n": null, "label": "Regen",         "confidence": "named_only"},
+        {"n": null, "label": "Regen Damping", "confidence": "named_only"},
+        {"n": null, "label": "Mode",          "confidence": "named_only"},
+        {"n": null, "label": "DelaySet",      "confidence": "named_only"}
+      ],
+      "modes": ["Continuous", "Loop", "Loop/Muted", "Loop/Record", "Loop/Replay"],
+      "note": "p36 documents the Instant Replay feature, not parameters. The index also records the name '3.6 sec DDL 2U' — a different figure from the algorithm's own title; worth resolving against a complete scan."
+    },
+
+    {
+      "name": "Dual Delay",
+      "abbr": "ddl",
+      "toc_pages": [43, 44],
+      "status": "names recovered",
+      "param_order": "unknown",
+      "params": [
+        {"n": 1, "label": "Mix",    "confidence": "certain"},
+        {"n": 2, "label": "Volume", "confidence": "certain"},
+        {"n": null, "label": "Left Input Delay Time",         "confidence": "named_only"},
+        {"n": null, "label": "Left Input Delay Time (fine)",  "confidence": "named_only"},
+        {"n": null, "label": "Left Input Delay Pan",          "confidence": "named_only"},
+        {"n": null, "label": "Left Input Delay Regen",        "confidence": "named_only"},
+        {"n": null, "label": "Right Input Delay Time",        "confidence": "named_only"},
+        {"n": null, "label": "Right Input Delay Time (fine)", "confidence": "named_only"},
+        {"n": null, "label": "Right Input Delay Pan",         "confidence": "named_only"},
+        {"n": null, "label": "Right Input Delay Regen",       "confidence": "named_only"},
+        {"n": null, "label": "Cross Regen",                   "confidence": "named_only"},
+        {"n": null, "label": "Regen Damping",                 "confidence": "named_only"}
+      ],
+      "note": "Coarse + fine delay time per side. EQ-DDL-withLFO's description calls itself 'similar to Dual Delay', so that algorithm is the closest surviving reference."
+    },
+
+    {
+      "name": "8 Voice Chorus",
+      "abbr": "cho",
+      "toc_pages": [37, 38],
+      "status": "names recovered",
+      "param_order": "unknown",
+      "params": [
+        {"n": 1, "label": "Mix",    "confidence": "certain"},
+        {"n": 2, "label": "Volume", "confidence": "certain"},
+        {"n": null, "label": "LFO Rate",      "confidence": "named_only"},
+        {"n": null, "label": "LFO Width",     "confidence": "named_only"},
+        {"n": null, "label": "Stereo Spread", "confidence": "named_only"},
+        {"n": null, "label": "Regen",         "confidence": "named_only"},
+        {"n": null, "label": "Delay Regen",   "confidence": "named_only"},
+        {"n": null, "label": "Left",          "confidence": "named_only"},
+        {"n": null, "label": "Right",         "confidence": "named_only"}
+      ],
+      "note": "Index prose: symphonic chorused sound, synthesized stereo field. Effect Design Part 2 gives the topology."
+    },
+
+    {
+      "name": "EQ-Chorus-DDL",
+      "abbr": "cho",
+      "toc_pages": [49, 50],
+      "status": "names recovered",
+      "param_order": "unknown",
+      "params": [
+        {"n": 1, "label": "Mix",    "confidence": "certain"},
+        {"n": 2, "label": "Volume", "confidence": "certain"},
+        {"n": null, "label": "LFO Rate",            "confidence": "named_only"},
+        {"n": null, "label": "LFO Width",           "confidence": "named_only"},
+        {"n": null, "label": "Center",              "confidence": "named_only"},
+        {"n": null, "label": "Left Delay Time",     "confidence": "named_only"},
+        {"n": null, "label": "Right Delay Time",    "confidence": "named_only"},
+        {"n": null, "label": "Delay Regen",         "confidence": "named_only"},
+        {"n": null, "label": "Echo",                "confidence": "named_only"},
+        {"n": null, "label": "Echo Level",          "confidence": "named_only"},
+        {"n": null, "label": "Left Echo Time",      "confidence": "named_only"},
+        {"n": null, "label": "Right Echo Time",     "confidence": "named_only"},
+        {"n": null, "label": "Bass EQ Gain",        "confidence": "named_only"},
+        {"n": null, "label": "Treble EQ Gain",      "confidence": "named_only"},
+        {"n": null, "label": "EQ Input Level Trim", "confidence": "named_only"}
+      ],
+      "note": "Index prose: industry standard chorus effect, poor man's reverb. Shares the standard EQ tail (Bass/Treble Gain + Input Level Trim) with every other EQ-prefixed algorithm."
+    }
+  ]
+}

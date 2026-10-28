@@ -14,37 +14,37 @@ const RATIOS = [1, 2, 4, 8, 16] as const;
 
 function TransportGlyph({ kind }: { kind: ConductorControl | "robot" }) {
   if (kind === "start") {
-    return <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+    return <svg viewBox="0 0 32 32" aria-hidden="true">
       <path d="M8 4 25 16 8 28Z" />
     </svg>;
   }
   if (kind === "stop") {
-    return <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+    return <svg viewBox="0 0 32 32" aria-hidden="true">
       <path d="M11 4h10l7 7v10l-7 7H11l-7-7V11Z" />
     </svg>;
   }
   if (kind === "pause") {
-    return <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+    return <svg viewBox="0 0 32 32" aria-hidden="true">
       <path d="M8 5h6v22H8zm11 0h6v22h-6z" />
     </svg>;
   }
   if (kind === "movie") {
     return (
-      <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
         <path d="M3 5h26v22H3zM6 8v5h4V8zm8 0v5h4V8zm8 0v5h4V8zM6 19v5h4v-5zm8 0v5h4v-5zm8 0v5h4v-5zM5 15v2h22v-2z" fillRule="evenodd" />
       </svg>
     );
   }
   if (kind === "sequence") {
     return (
-      <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
         <path fill="none" stroke="currentColor" strokeWidth="2" d="M6 2h15l6 6v22H6Z M21 2v7h6" />
         <path d="M13 14h8v2h3v8h-3v3h-8v-3h-3v-8h3zm3 3v7h3v-7z" fillRule="evenodd" />
       </svg>
     );
   }
   return (
-    <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+    <svg viewBox="0 0 32 32" aria-hidden="true">
       <path d="M21 3h6v3h-2v3h-3v3h-4V9h2V6h1z" />
       <path fill="none" stroke="currentColor" strokeWidth="2"
         d="M4 27h23M7 24l5-8 5 2 3-8 3 1-2 10 5 3M9 21l7 6M13 17l-4-5" />

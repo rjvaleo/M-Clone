@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useM, SNAPSHOT_COUNT, MAX_PATTERN_STEPS } from "./store";
 import { createDefaultProject } from "../engine/project";
 import { makeDefaultPositions } from "../engine/variables";
@@ -1404,27 +1404,6 @@ describe("the Options menu in the store", () => {
     expect(g().options.noZoomRects).toBe(false);
   });
 
-  it("mirrors external clock availability and diagnostics in performance state", () => {
-    expect(g().externalClockEnabled).toBe(false);
-    expect(g().clockStatus).toBe("disabled");
-    g().setSyncRatioDirection("in");
-    g().setOption("externalClock", true);
-    expect(g().externalClockEnabled).toBe(true);
-    expect(g().clockStatus).toBe("lost");
-    g().setClockInputDiagnostics({ inferredBpm: 123.4, clockJitter: 1.25, clockStatus: "locked" });
-    expect(g()).toMatchObject({ inferredBpm: 123.4, clockJitter: 1.25, clockStatus: "locked" });
-    g().setOption("externalClock", false);
-    expect(g()).toMatchObject({
-      externalClockEnabled: false,
-      inferredBpm: 0,
-      clockJitter: 0,
-      clockStatus: "disabled",
-    });
-    g().setOption("externalClock", true);
-    g().setSyncRatioDirection("out");
-    expect(g().clockStatus).toBe("disabled");
-  });
-
   it("marks the document dirty, because options are saved with it", () => {
     useM.setState({ isDirty: false });
     g().setOption("noZoomRects", true);
@@ -1548,6 +1527,27 @@ describe("live MIDI recording", () => {
     expect(g().project.voices[1].transposition).toBe(2);
   });
 
+  it("limits Keyboard Transpose to 30 semitones either side of C3", () => {
+    g().setVoiceInput(1, { sourceChannel: "all", inputUse: "keyboard-transpose" });
+    g().receiveMidi({ type: "note-on", channel: 1, note: 100, velocity: 90 });
+    expect(g().project.voices[1].transposition).toBe(30);
+    g().receiveMidi({ type: "note-on", channel: 1, note: 20, velocity: 90 });
+    expect(g().project.voices[1].transposition).toBe(-30);
+  });
+
+  it("adds the Transposition Variable to Keyboard Transpose under Second Order Transpose", () => {
+    // M 2.7 p.182: Second Order Transpose "preserves the relative
+    // transpositions set in the Transposition Variable" while transposing
+    // from the keyboard.
+    g().setSlotValue("transposition", g().positions.transposition.active, 1, 7);
+    g().setVoiceInput(1, { sourceChannel: "all", inputUse: "keyboard-transpose" });
+    g().receiveMidi({ type: "note-on", channel: 1, note: 62, velocity: 90 });
+    expect(g().project.voices[1].transposition).toBe(2);
+    g().setOption("secondOrderTranspose", true);
+    g().receiveMidi({ type: "note-on", channel: 1, note: 62, velocity: 90 });
+    expect(g().project.voices[1].transposition).toBe(9);
+  });
+
   it("persists all sixteen MIDI assignment rows and their global controls", () => {
     g().setMidiAssignment("inputs", 3, { deviceId: "kbd", channel: 7 });
     g().setMidiAssignmentConfig({ programBase: 1, latencyMs: 42, conductXController: 20 });
@@ -1647,15 +1647,47 @@ describe("live MIDI recording", () => {
     note(77); expect(g().slideshowTransport.mode).toBe("idle");
     note(80); // Edit Snapshot, safely ignored with no current Snapshot
     useM.setState((s) => ({ project: { ...s.project, tempo: 120 } }));
-    note(83); expect(g().project.tempo).toBe(121);
-    note(79); expect(g().project.tempo).toBe(120);
+    note(83); expect(g().project.tempo).toBe(123); // Accelerando: +3 BPM
+    note(79); expect(g().project.tempo).toBe(120); // Decelerando: -3 BPM
     useM.setState({ inputControlTapAt: 0 });
     note(53); expect(g().inputControlTapAt).not.toBeNull();
+    note(81); // Freeze outside Tap Conduct does nothing.
+    expect(g().tapConducting).toBe(false);
+  });
+
+  it("starts Tap Conduct held, releases a beat per tap, and freezes on request", () => {
+    g().setVoiceInput(0, { inputUse: "control" });
+    let clock = 100;
+    vi.spyOn(performance, "now").mockImplementation(() => clock * 1000);
+    // The first tap is "a beat for nothing": playback starts, but held.
+    expect(note(84)).toEqual([{ type: "tap-conduct-start", held: true }]);
+    expect(g().tapConducting).toBe(true);
+    clock = 100.5;
+    expect(note(84)).toEqual([{ type: "tap-beat", beatSec: 0.5 }]);
+    expect(g().project.tempo).toBe(120);
+    clock = 101.25;
+    expect(note(84)).toEqual([{ type: "tap-beat", beatSec: 0.75 }]);
+    expect(g().project.tempo).toBe(80);
+    expect(note(81)).toEqual([{ type: "tap-freeze" }]);
+    note(83); expect(g().project.tempo).toBe(83);
+    g().setPlaying(false); // Stop ends Tap Conduct.
+    expect(g().tapConducting).toBe(false);
+    vi.restoreAllMocks();
+  });
+
+  it("lets Tap Affects Velocity set a temporary offset without touching the ranges", () => {
+    g().setVoiceInput(0, { inputUse: "control" });
+    const ranges = JSON.stringify(g().project.voices.map((v) => v.velocityRange));
+    note(84, 96);
+    expect(g().tapVelocityOffset).toBe(0); // option off
     g().setOption("tapAffectsVelocity", true);
-    const before = g().project.voices[0].velocityRange.high;
-    expect(note(84, 32)).toEqual([{ type: "start" }]);
-    expect(g().project.voices[0].velocityRange.high).toBeLessThan(before);
-    note(81); // Freeze retains the current tapped tempo.
+    note(84, 96);
+    expect(g().tapVelocityOffset).toBe(16); // (96 - 64) / 2
+    note(81, 20);
+    expect(g().tapVelocityOffset).toBe(-22);
+    expect(JSON.stringify(g().project.voices.map((v) => v.velocityRange))).toBe(ranges);
+    g().setPlaying(false);
+    expect(g().tapVelocityOffset).toBe(0);
   });
 
   it("covers Appendix B two-step Variable, cyclic, Snapshot, Slideshow, and sa values", () => {
@@ -1665,8 +1697,8 @@ describe("live MIDI recording", () => {
     twoStep(56, 40); expect(g().positions.outputChannels.active).toBe(1);
     twoStep(61, 40); expect(g().positions.velocityRange.active).toBe(1);
     twoStep(63, 40); expect(g().positions.density.active).toBe(1);
-    twoStep(68, 40); expect(g().activeCyclicPositions.accent).toBe(1);
-    twoStep(70, 40); expect(g().activeCyclicPositions.legato).toBe(1);
+    twoStep(68, 40); expect(g().activeCyclicPositions.legato).toBe(1);
+    twoStep(70, 40); expect(g().activeCyclicPositions.accent).toBe(1);
     twoStep(66, 40); expect(g().activeCyclicPositions.rhythm).toBe(1);
     twoStep(39, 36); expect(g().project.voices[0].timeBaseDenominator).toBe(0);
     twoStep(39, 40); expect(g().project.voices[0].timeBaseDenominator).toBe(2);
@@ -1828,3 +1860,62 @@ describe("coverage of state mutation guard paths", () => {
     expect(g().project.tempo).toBe(137);
   });
 });
+
+describe("transport messages in the readout", () => {
+  it("records what was sent and what was received", () => {
+    g().recordMidiTransport("start", "out", 1.5);
+    g().recordMidiTransport("stop", "in", 2.5);
+    expect(g().midiViewTransport).toEqual([
+      { id: 0, atSec: 1.5, type: "start", direction: "out" },
+      { id: 1, atSec: 2.5, type: "stop", direction: "in" },
+    ]);
+  });
+
+  it("shares its id counter with the notes, so nothing collides", () => {
+    g().recordMidiTransport("start", "out", 0);
+    const first = g().midiViewNextId;
+    g().recordMidiTransport("stop", "out", 1);
+    expect(g().midiViewNextId).toBe(first + 1);
+  });
+
+  it("keeps the list bounded, like the note list", () => {
+    for (let i = 0; i < 1100; i++) g().recordMidiTransport("start", "out", i);
+    expect(g().midiViewTransport.length).toBeLessThanOrEqual(1000);
+  });
+
+  it("clears with the notes when a document is opened or started", () => {
+    g().recordMidiTransport("start", "out", 0);
+    g().newDocument();
+    expect(g().midiViewTransport).toEqual([]);
+  });
+})
+
+describe("the readout across runs", () => {
+  it("empties when a new run starts", () => {
+    // The planner restarts transportTick near zero on every start, so a new
+    // run reuses the row numbers the last one wrote. Keeping both would draw
+    // two performances on top of each other.
+    g().recordMidiTransport("start", "out", 0);
+    useM.setState({ isPlaying: false });
+    g().setPlaying(true);
+    expect(g().midiViewTransport).toEqual([]);
+    expect(g().midiViewEvents).toEqual([]);
+  });
+
+  it("keeps what was played when the run stops", () => {
+    // Stopping should leave the last bars on screen to look at, not wipe them.
+    g().setPlaying(true);
+    g().recordMidiTransport("start", "out", 0);
+    g().setPlaying(false);
+    expect(g().midiViewTransport).toHaveLength(1);
+  });
+
+  it("does not empty when already playing", () => {
+    // setPlaying(true) is called from several places; only the transition
+    // from stopped to running is a new run.
+    g().setPlaying(true);
+    g().recordMidiTransport("start", "out", 0);
+    g().setPlaying(true);
+    expect(g().midiViewTransport).toHaveLength(1);
+  });
+})

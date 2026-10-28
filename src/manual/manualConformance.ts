@@ -201,7 +201,7 @@ export const MANUAL_CAPABILITIES: readonly ManualCapability[] = [
   item("22", "183-184", "option.no-zoom", "Disable legacy window zoom animations", "not-applicable", "Browser windows open immediately and never draw the obsolete QuickDraw zoom rectangles."),
   item("22", "184", "option.sustain-rests", "Insert Pattern rests from sustain-pedal presses", "pass", "A routed sustain-pedal press records a rest and advances/wraps the MIDI Edit Counter."),
   item("22", "184", "option.midi-conduct", "Enable controller-driven Baton motion", "pass", "The option gates assigned horizontal/vertical CC messages into the shared conducting path."),
-  item("22", "184", "option.second-order", "Preserve relative Variable transpositions under Keyboard Transpose", "pass", "Keyboard Transpose is live and the planner's tested Second Order path stacks per-Voice transpositions cumulatively."),
+  item("22", "184", "option.second-order", "Preserve relative Variable transpositions under Keyboard Transpose", "pass", "Keyboard Transpose adds the active Transposition Variable value for the Voice when Second Order Transpose is on; tested in the store."),
   item("22", "184-185", "option.no-cyclic-blink", "Disable Cyclic reset blinking", "pass", "Runtime cursor-wrap telemetry retriggers the per-Voice Cyclic reset pulse; No Cyclic Blinking suppresses that pulse."),
   item("22", "185", "option.sync-sequence", "Choose whether Sync restarts an imported Sequence", "not-applicable", "Sync-Restarts-Sequence has no target because imported Sequence playback is intentionally excluded."),
   item("22", "185", "option.editor-sound", "Allow Pattern Editor audition during playback", "pass", "Pattern Editor reads the persisted option before every audition path."),

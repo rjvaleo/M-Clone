@@ -9,6 +9,7 @@ import { Rng } from "./rng";
 import type { ProjectState } from "./types";
 import type { OutputSink } from "./outputs/types";
 import { SynthSink } from "./outputs/synth";
+import { CanvasSink, type CanvasOutput } from "./outputs/canvas";
 import { MidiPortRegistry, MidiSink, type MidiChannelMode } from "./outputs/webmidi";
 import { NoteLifecycle, type OutputDestination } from "./events";
 import {
@@ -30,30 +31,15 @@ import {
   normalizeSynthSettings,
   type SynthSettings,
 } from "./synth";
-import { cyclicResetVoices } from "./cyclicreset";
 import { clockPulseInterval, metronomeInterval } from "./clockoutput";
 import {
-  ClockInput,
-  type ClockRealtimeMessage,
-  type ClockStatus,
+  clockContinue, clockSongPosition, clockStart, clockStop, clockTick,
+  createClockFollower, followerTempo, isClockStale, type ClockFollower,
 } from "./clockinput";
+import type { DecodedMidiMessage } from "./midiinput";
 
 const LOOKAHEAD_SEC = 0.12;
 const TICK_MS = 25;
-
-type PerformanceSettings = {
-  useMetronome: boolean;
-  sendClock: boolean;
-  syncRatio: number;
-  syncRatioDirection: "out" | "in";
-  externalClockEnabled: boolean;
-};
-
-type ClockUiDiagnostics = {
-  inferredBpm: number;
-  clockJitter: number;
-  clockStatus: ClockStatus;
-};
 
 export class MRuntime {
   private getState: () => ProjectState;
@@ -81,15 +67,20 @@ export class MRuntime {
   private onCyclicReset: ((voices: readonly number[]) => void) | null;
   private onPlannedSteps: ((steps: readonly import("./planner").PlannedStep[]) => void) | null;
   private onMidiMessage: ((event: MIDIMessageEvent) => void) | null;
-  private getPerformanceSettings: () => PerformanceSettings;
-  private onClockDiagnostics: ((diagnostics: ClockUiDiagnostics) => void) | null;
-  private onClockTransport: ((transport: "start" | "stop" | "continue") => void) | null;
-  private performanceClockMs: () => number;
+  private onTransportSent: ((type: "start" | "stop") => void) | null;
+  private getPerformanceSettings: () => {
+    useMetronome: boolean; sendClock: boolean; externalClock: boolean;
+    syncRatio: number; syncRatioDirection: "out" | "in";
+  };
+  private follower: ClockFollower = createClockFollower();
   private nextClockAt = 0;
   private nextMetronomeAt = 0;
-  private clockInput = new ClockInput();
-  private externalTempoOverride: number | null = null;
-  private lastClockDiagnosticsKey = "";
+  /** Tap Conduct: playback may run up to `deadline`; null while frozen. */
+  private tapGate: { deadline: number | null } | null = null;
+  private hostAudio: (() => { context: AudioContext; output: AudioNode } | null) | null;
+  private midiAccess: (() => Promise<MIDIAccess>) | null;
+  private canvasOutput: CanvasOutput | null;
+  private canvas: CanvasSink | null;
 
   constructor(
     getState: () => ProjectState,
@@ -99,11 +90,23 @@ export class MRuntime {
       clock?: ClockDriver;
       onCyclicReset?: (voices: readonly number[]) => void;
       onMidiMessage?: (event: MIDIMessageEvent) => void;
+      /** Told whenever a transport message is actually put on the wire. */
+      onTransportSent?: (type: "start" | "stop") => void;
       onPlannedSteps?: (steps: readonly import("./planner").PlannedStep[]) => void;
-      getPerformanceSettings?: () => PerformanceSettings;
-      onClockDiagnostics?: (diagnostics: ClockUiDiagnostics) => void;
-      onClockTransport?: (transport: "start" | "stop" | "continue") => void;
-      performanceClockMs?: () => number;
+      getPerformanceSettings?: () => {
+        useMetronome: boolean; sendClock: boolean; externalClock: boolean;
+    syncRatio: number; syncRatioDirection: "out" | "in";
+      };
+      /**
+       * A host engine's audio (idMLab's): its context, and the node M's sound
+       * goes into. Asked for once, when M first needs audio. Without it M
+       * makes its own context and plays straight to the speakers.
+       */
+      audio?: () => { context: AudioContext; output: AudioNode } | null;
+      /** A host's MIDI access, so M shares its ports instead of asking the browser again. */
+      midiAccess?: () => Promise<MIDIAccess>;
+      /** A host's sound modules, which M's tracks can be cabled to. */
+      canvas?: CanvasOutput;
     } = {},
   ) {
     this.getState = getState;
@@ -112,16 +115,15 @@ export class MRuntime {
     this.clock = options.clock ?? null;
     this.onCyclicReset = options.onCyclicReset ?? null;
     this.onMidiMessage = options.onMidiMessage ?? null;
+    this.onTransportSent = options.onTransportSent ?? null;
     this.onPlannedSteps = options.onPlannedSteps ?? null;
-    this.onClockDiagnostics = options.onClockDiagnostics ?? null;
-    this.onClockTransport = options.onClockTransport ?? null;
-    this.performanceClockMs = options.performanceClockMs ?? (() => performance.now());
+    this.hostAudio = options.audio ?? null;
+    this.midiAccess = options.midiAccess ?? null;
+    this.canvasOutput = options.canvas ?? null;
+    this.canvas = options.canvas ? new CanvasSink(options.canvas) : null;
     this.getPerformanceSettings = options.getPerformanceSettings ?? (() => ({
-      useMetronome: false,
-      sendClock: false,
-      syncRatio: 4,
-      syncRatioDirection: "out",
-      externalClockEnabled: false,
+      useMetronome: false, sendClock: false, externalClock: false,
+      syncRatio: 4, syncRatioDirection: "out",
     }));
   }
 
@@ -132,10 +134,11 @@ export class MRuntime {
   /** Create audio graph lazily (must follow a user gesture). */
   private ensure(): AudioContext {
     if (!this.ctx) {
-      const ctx = new AudioContext();
+      const host = this.hostAudio?.();
+      const ctx = host?.context ?? new AudioContext();
       const master = ctx.createGain();
       master.gain.value = 1;
-      master.connect(ctx.destination);
+      master.connect(host?.output ?? ctx.destination);
       this.ctx = ctx;
       this.master = master;
       this.synth = new SynthSink(ctx, master);
@@ -149,6 +152,7 @@ export class MRuntime {
     const list: OutputSink[] = [];
     if (this.synthEnabled && this.synth) list.push(this.synth);
     if (this.midi && this.midi.hasOutput()) list.push(this.midi);
+    if (this.canvas) list.push(this.canvas);
     return list;
   }
 
@@ -199,7 +203,9 @@ export class MRuntime {
 
   midiPorts(): MidiPortRegistry {
     this.ensure();
-    if (!this.midiRegistry) this.midiRegistry = new MidiPortRegistry(this.midi!, this.onMidiMessage);
+    if (!this.midiRegistry) {
+      this.midiRegistry = new MidiPortRegistry(this.midi!, this.onMidiMessage, this.midiAccess ?? undefined);
+    }
     return this.midiRegistry;
   }
 
@@ -228,6 +234,11 @@ export class MRuntime {
     this.synth?.setSettings(this.synthSettings);
   }
 
+  /** False for a voice cabled to a canvas module: its sound has moved there. */
+  synthPlaysVoice(voice: number): boolean {
+    return !this.canvasOutput?.routedVoices().has(voice);
+  }
+
   setMasterVolume(v: number): void {
     if (this.master) this.master.gain.value = v;
   }
@@ -244,24 +255,6 @@ export class MRuntime {
 
   schedulingDiagnostics(): SchedulingDiagnostics {
     return this.scheduling.snapshot();
-  }
-
-  async onClockInput(message: ClockRealtimeMessage, performanceMs: number): Promise<void> {
-    const settings = this.clockInputSettings();
-    const update = this.clockInput.handle(message, performanceMs, settings);
-    if (update.inferredTempo !== undefined) this.externalTempoOverride = update.inferredTempo;
-    if (update.lostClock) this.externalTempoOverride = null;
-    this.publishClockDiagnostics(update.diagnostics);
-    if (update.transport === "start") {
-      await this.start();
-      this.onClockTransport?.("start");
-    } else if (update.transport === "continue") {
-      await this.resume();
-      this.onClockTransport?.("continue");
-    } else if (update.transport === "stop") {
-      this.stop();
-      this.onClockTransport?.("stop");
-    }
   }
 
   /**
@@ -301,7 +294,7 @@ export class MRuntime {
     if (this.timer !== null) return;
     const ctx = this.ensure();
     if (ctx.state === "suspended") await ctx.resume();
-    const state = this.effectiveState();
+    const state = this.getState();
     this.resetRandom(state.seed, state.voices.length);
     this.lifecycle.reset();
     this.cursors = makeCursors(state, this.nowSec() + 0.06);
@@ -311,8 +304,10 @@ export class MRuntime {
     this.pausedAt = null;
     this.nextClockAt = this.cursors[0]?.nextTimeSec ?? this.nowSec();
     this.nextMetronomeAt = this.nextClockAt;
-    const settings = this.getPerformanceSettings();
-    if (settings.sendClock && settings.syncRatioDirection === "out") this.midi?.sendRealtime(0xfa);
+    if (this.getPerformanceSettings().sendClock) {
+      this.midi?.sendRealtime(0xfa);
+      this.onTransportSent?.("start");
+    }
     if (this.timer === null) {
       this.expectedWakeSec = this.nowSec() + TICK_MS / 1000;
       this.timer = this.scheduler.repeat(() => this.tick(), TICK_MS);
@@ -328,6 +323,7 @@ export class MRuntime {
     this.synth?.panic();
     this.midi?.cancelScheduled();
     this.midi?.panic();
+    this.canvas?.panic();
     this.lifecycle.reset();
   }
 
@@ -358,7 +354,7 @@ export class MRuntime {
     this.synth?.cancelScheduled();
     this.midi?.cancelScheduled();
     this.midi?.panic();
-    const state = this.effectiveState();
+    const state = this.getState();
     this.resetRandom(state.seed, state.voices.length);
     this.lifecycle.reset();
     this.cursors = makeCursors(state, this.nowSec() + 0.06);
@@ -367,7 +363,41 @@ export class MRuntime {
     this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? this.ctx.currentTime);
   }
 
+  /**
+   * Enter Tap Conduct. `held` starts it waiting for the second tap ("a beat
+   * for nothing"); otherwise the music keeps going until taps take over.
+   */
+  beginTapConduct(held: boolean): void {
+    this.tapGate = { deadline: held ? Number.NEGATIVE_INFINITY : null };
+  }
+
+  /**
+   * A tap: let one more beat play. If the music was already waiting for this
+   * tap, it continues from where it stopped rather than catching up.
+   */
+  tapConductBeat(beatSec: number): void {
+    if (!this.tapGate) return;
+    const now = this.nowSec();
+    const deadline = this.tapGate.deadline;
+    if (deadline !== null && now > deadline && this.cursors.length > 0) {
+      const earliest = Math.min(...this.cursors.map((cursor) => cursor.nextTimeSec));
+      const shift = Math.max(0, now + 0.02 - earliest);
+      this.cursors = this.cursors.map((cursor) => ({
+        ...cursor,
+        nextTimeSec: cursor.nextTimeSec + shift,
+        originSec: cursor.originSec + shift,
+      }));
+    }
+    this.tapGate = { deadline: now + beatSec };
+  }
+
+  /** Freeze: keep playing at the tapped tempo without waiting for taps. */
+  freezeTapConduct(): void {
+    if (this.tapGate) this.tapGate = { deadline: null };
+  }
+
   stop(): void {
+    this.tapGate = null;
     if (this.timer !== null) {
       this.scheduler.cancel(this.timer);
       this.timer = null;
@@ -377,15 +407,17 @@ export class MRuntime {
     this.synth?.cancelScheduled();
     this.midi?.cancelScheduled();
     this.midi?.panic();
+    this.canvas?.panic();
     this.lifecycle.reset();
     this.pausedAt = null;
-    const settings = this.getPerformanceSettings();
-    if (settings.sendClock && settings.syncRatioDirection === "out") this.midi?.sendRealtime(0xfc);
+    if (this.getPerformanceSettings().sendClock) {
+      this.midi?.sendRealtime(0xfc);
+      this.onTransportSent?.("stop");
+    }
   }
 
   private tick(): void {
     if (!this.ctx) return;
-    this.refreshClockInputState();
     const now = this.nowSec();
     if (this.ctx.state !== "running") {
       if (!this.suspended) {
@@ -404,14 +436,6 @@ export class MRuntime {
       this.suspended = false;
       this.expectedWakeSec = now;
     }
-    const timeoutUpdate = this.clockInput.observeTimeout(
-      this.performanceClockMs(),
-      this.clockInputSettings(),
-    );
-    if (timeoutUpdate) {
-      this.externalTempoOverride = null;
-      this.publishClockDiagnostics(timeoutUpdate.diagnostics);
-    }
     const decision = this.scheduling.observeWake(
       now,
       this.expectedWakeSec,
@@ -419,20 +443,28 @@ export class MRuntime {
     );
     this.expectedWakeSec = now + TICK_MS / 1000;
     if (decision.recover) this.recoverFromStall(now);
-    const state = this.effectiveState();
+    let state = this.getState();
     const timing = timingFingerprints(state);
     this.cursors = rebaseChangedTimelines(this.cursors, this.timing, timing);
     this.timing = timing;
-    const windowEnd = now + decision.lookaheadSec;
-    this.scheduleClockOutputs(state.tempo, windowEnd);
+    // Tap Conduct: nothing may be planned past the beat the last tap released,
+    // and once that beat has run out the music waits for the next tap.
+    const tapDeadline = this.tapGate?.deadline ?? null;
+    if (tapDeadline !== null && now >= tapDeadline) {
+      this.submitEvents(now + decision.lookaheadSec);
+      return;
+    }
+    const windowEnd = tapDeadline === null
+      ? now + decision.lookaheadSec
+      : Math.min(now + decision.lookaheadSec, tapDeadline);
+    // One tempo for the whole tick: the planner and the clock output must not
+    // disagree about how fast the music is going.
+    const tempo = this.effectiveTempo(state.tempo, now);
+    if (tempo !== state.tempo) state = { ...state, tempo };
+    this.scheduleClockOutputs(tempo, windowEnd);
     this.enqueuePrograms(state, this.cursors[0]?.nextTimeSec ?? now);
-    const previousCyclic = this.cursors.map((cursor) => cursor.cyclicPos);
-    const { notes, cursors, steps } = planWindow(state, this.cursors, this.rngs, now, windowEnd);
-    const resets = cyclicResetVoices(
-      previousCyclic,
-      cursors.map((cursor) => cursor.cyclicPos),
-      state.cyclicLengths.rhythm,
-    );
+    const { notes, cursors, steps, cyclicResets: resets } =
+      planWindow(state, this.cursors, this.rngs, now, windowEnd);
     this.cursors = cursors;
     this.lifecycle.ingest(notes, this.destinations());
     this.submitEvents(windowEnd);
@@ -442,16 +474,74 @@ export class MRuntime {
     if (resets.length > 0) this.onCyclicReset?.(resets);
   }
 
+  /**
+   * Take a decoded system message from a MIDI input port.
+   *
+   * Always tracked, whatever the sync direction: the follower is cheap to keep
+   * current, and a source that was already running should be locked on the
+   * moment External Clock is switched on rather than a beat later.
+   *
+   * Returns what the host should do to the transport, or null for nothing.
+   * The runtime does not touch the transport itself because starting it is
+   * asynchronous and owned by the caller; this reports the intent and the
+   * caller runs it through the same path a Start from any other source takes.
+   */
+  ingestClockMessage(
+    message: DecodedMidiMessage,
+    atSec: number,
+  ): "start" | "continue" | "stop" | null {
+    if (message.type === "clock") {
+      this.follower = clockTick(this.follower, atSec);
+      return null;
+    }
+    if (message.type === "song-position") {
+      this.follower = clockSongPosition(this.follower, message.sixteenths);
+      return null;
+    }
+    if (message.type === "start") this.follower = clockStart(this.follower);
+    else if (message.type === "continue") this.follower = clockContinue(this.follower);
+    else if (message.type === "stop") this.follower = clockStop(this.follower);
+    else return null;
+
+    // Deliberately not gated on tick freshness. Start arrives before the first
+    // pulse, so judging it by the tick history would reject the very message
+    // that begins the run.
+    const settings = this.getPerformanceSettings();
+    if (settings.syncRatioDirection !== "in" || !settings.externalClock) return null;
+    return message.type;
+  }
+
+  /** The tempo the follower is reading, for display and for tests. */
+  followedTempo(): number | null {
+    return followerTempo(this.follower, this.getPerformanceSettings().syncRatio);
+  }
+
+  /** True when an external source is actually driving, rather than merely selected. */
+  private isFollowingClock(nowSec: number): boolean {
+    const settings = this.getPerformanceSettings();
+    return settings.syncRatioDirection === "in"
+      && settings.externalClock
+      && !isClockStale(this.follower, nowSec, settings.syncRatio);
+  }
+
+  /**
+   * The tempo to plan against.
+   *
+   * The document's own tempo unless a source is driving, and back to it the
+   * moment that source goes quiet — a clock that stops must not leave the
+   * transport frozen at a tempo nobody is sending.
+   */
+  private effectiveTempo(documentTempo: number, nowSec: number): number {
+    if (!this.isFollowingClock(nowSec)) return documentTempo;
+    return followerTempo(this.follower, this.getPerformanceSettings().syncRatio)
+      ?? documentTempo;
+  }
+
   private scheduleClockOutputs(tempo: number, windowEnd: number): void {
     const settings = this.getPerformanceSettings();
-    if (settings.syncRatioDirection !== "out") return;
-    if (settings.sendClock) {
-      const interval = clockPulseInterval(tempo, settings.syncRatio);
-      while (this.nextClockAt < windowEnd) {
-        if (this.nextClockAt >= this.nowSec()) this.midi?.sendRealtime(0xf8, this.nextClockAt);
-        this.nextClockAt += interval;
-      }
-    } else this.nextClockAt = windowEnd;
+    // The metronome is a local click and has nothing to do with which way
+    // clock flows, so it is handled before the direction gate. It used to sit
+    // below it, which meant choosing sync-in silently switched it off.
     if (settings.useMetronome) {
       const interval = metronomeInterval(tempo, settings.syncRatio);
       while (this.nextMetronomeAt < windowEnd) {
@@ -459,6 +549,20 @@ export class MRuntime {
         this.nextMetronomeAt += interval;
       }
     } else this.nextMetronomeAt = windowEnd;
+
+    if (settings.syncRatioDirection !== "out") {
+      // Not the master: nothing to send, and the send cursor must not be left
+      // in the past or it would burst on switching back.
+      this.nextClockAt = windowEnd;
+      return;
+    }
+    if (settings.sendClock) {
+      const interval = clockPulseInterval(tempo, settings.syncRatio);
+      while (this.nextClockAt < windowEnd) {
+        if (this.nextClockAt >= this.nowSec()) this.midi?.sendRealtime(0xf8, this.nextClockAt);
+        this.nextClockAt += interval;
+      }
+    } else this.nextClockAt = windowEnd;
   }
 
   private submitEvents(windowEnd: number): void {
@@ -468,7 +572,12 @@ export class MRuntime {
     const filtered = dropLateAttacks(events, now, 0.02);
     this.scheduling.recordDroppedEvents(filtered.dropped);
     this.scheduling.observeBatch(filtered.events, now);
-    for (const sink of this.sinks()) sink.scheduleBatch(filtered.events);
+    const routed = this.canvasOutput?.routedVoices();
+    for (const sink of this.sinks()) {
+      sink.scheduleBatch(sink === this.synth && routed?.size
+        ? filtered.events.filter((event) => !routed.has(event.voice))
+        : filtered.events);
+    }
   }
 
   private recoverFromStall(now: number): void {
@@ -486,31 +595,5 @@ export class MRuntime {
       };
     });
     this.programs = "";
-  }
-
-  private clockInputSettings() {
-    const settings = this.getPerformanceSettings();
-    return {
-      enabled: settings.externalClockEnabled && settings.syncRatioDirection === "in",
-      syncRatio: settings.syncRatio,
-    };
-  }
-
-  private effectiveState(): ProjectState {
-    const state = this.getState();
-    return this.externalTempoOverride === null ? state : { ...state, tempo: this.externalTempoOverride };
-  }
-
-  private refreshClockInputState(): void {
-    if (this.clockInputSettings().enabled) return;
-    this.externalTempoOverride = null;
-    this.publishClockDiagnostics(this.clockInput.disable().diagnostics);
-  }
-
-  private publishClockDiagnostics(diagnostics: ClockUiDiagnostics): void {
-    const key = `${diagnostics.clockStatus}|${diagnostics.inferredBpm.toFixed(4)}|${diagnostics.clockJitter.toFixed(4)}`;
-    if (key === this.lastClockDiagnosticsKey) return;
-    this.lastClockDiagnosticsKey = key;
-    this.onClockDiagnostics?.(diagnostics);
   }
 }

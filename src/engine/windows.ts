@@ -5,7 +5,7 @@ export const APP_WINDOWS = [
   { id: "conducting", label: "Conducting", permanent: true },
   { id: "variables", label: "Variables", permanent: true },
   { id: "cyclic-variables", label: "Cyclic Variables", permanent: true },
-  { id: "midi", label: "Midi", permanent: true },
+  { id: "midi", label: "Midi", permanent: false },
   { id: "snapshot", label: "Snapshot", permanent: true },
   { id: "pattern-editor", label: "Pattern Editor", permanent: false },
   { id: "cyclic-editor", label: "Cyclic Editor", permanent: false },
@@ -21,6 +21,17 @@ export const APP_WINDOWS = [
 ] as const;
 
 export type AppWindowId = (typeof APP_WINDOWS)[number]["id"];
+
+/** Windows the M node opens on demand rather than at the start. */
+const STARTS_CLOSED: readonly AppWindowId[] = ["midi-view", "midi-assignment", "transposition", "timeDistort"];
+
+/**
+ * The M node shows every window at once, which the original's small screen
+ * could not; only the ones mostly left closed start that way.
+ */
+export function initialAppWindows(): Set<string> {
+  return new Set(APP_WINDOWS.map((window) => window.id).filter((id) => !STARTS_CLOSED.includes(id)));
+}
 
 export function openAppWindow(current: ReadonlySet<string>, id: AppWindowId): Set<string> {
   return new Set([...current, id]);

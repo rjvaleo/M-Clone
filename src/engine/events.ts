@@ -1,6 +1,6 @@
 import type { PlannedNote } from "./planner";
 
-export type OutputDestination = "synth" | "midi";
+export type OutputDestination = "synth" | "midi" | "canvas";
 
 type EventBase = {
   atSec: number;

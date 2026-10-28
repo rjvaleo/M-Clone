@@ -25,7 +25,7 @@ const CODES: Record<number, InputControlCode> = {
   37: "snapshot", 39: "time-base-1", 42: "time-base-2", 44: "time-base-3",
   46: "time-base-4", 49: "pattern-group", 51: "ordering", 54: "sound-choice",
   56: "orchestration", 58: "transposition", 61: "velocity-range", 63: "density",
-  66: "duration", 68: "accent", 70: "legato", 73: "snapshot",
+  66: "duration", 68: "legato", 70: "accent", 73: "snapshot",
   75: "play-slideshow", 78: "record-slideshow",
 };
 

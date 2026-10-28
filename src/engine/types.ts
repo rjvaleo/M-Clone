@@ -121,7 +121,7 @@ export type ProjectState = {
   scaleSnap: boolean; // key-quantization guardrail
   seed: number; // RNG seed for reproducible performances
   diatonicTranspose?: boolean; // interpret transposition as scale steps
-  secondOrderTranspose?: boolean; // stack voice transpositions cumulatively
+  secondOrderTranspose?: boolean; // Keyboard Transpose keeps the Transposition Variable's offset
   chordTones?: boolean; // snap final pitches to the tonic triad
   midiAssignments: MidiAssignments;
   echoMapChannels: number[];
@@ -132,6 +132,12 @@ export type ProjectState = {
     legato: number[];
     rhythm: number[];
   };
+  /**
+   * Tap Affects Velocity: (key velocity - 64) / 2 from the last Tap Conduct,
+   * Freeze, Accelerando or Decelerando key, added to every sounding note.
+   * A live performance input supplied by the host, never saved in documents.
+   */
+  velocityOffset?: number;
 };
 
 /** Per-voice traversal bookkeeping used while playing. */

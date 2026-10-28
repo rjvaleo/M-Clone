@@ -135,6 +135,23 @@ export function distortClockSeconds(
   return (cycle + clockToReal(map, phase)) * span;
 }
 
+/** Transport ticks per quarter note, as the canvas runtime counts them. */
+const TICKS_PER_QUARTER = 960;
+
+/**
+ * The same warp on transport ticks rather than seconds, for the canvas, whose
+ * runtime schedules in ticks. Tempo drops out: a cycle is a fixed number of
+ * ticks. `amount` blends from straight time (0) to the full map (1).
+ */
+export function distortClockTicks(map: TimeMap, clockTick: number, amount = 1): number {
+  if (map.length <= 0 || map.denominator <= 0 || isNeutralTimeMap(map) || clockTick < 0) return clockTick;
+  const span = map.length * TICKS_PER_QUARTER * (4 / map.denominator);
+  const cycle = Math.floor(clockTick / span);
+  const phase = (clockTick - cycle * span) / span;
+  const warped = (cycle + clockToReal(map, phase)) * span;
+  return clockTick + (warped - clockTick) * Math.max(0, Math.min(1, amount));
+}
+
 /* ===== Editing ===== */
 
 /** Add a breakpoint, keeping the map ordered and monotonic. */
