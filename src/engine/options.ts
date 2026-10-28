@@ -45,7 +45,15 @@ export const OPTION_LABELS: Record<OptionId, string> = {
   echoInBackground: "Echo In Background",
 };
 
-const NEEDS_MIDI_INPUT: ReadonlySet<OptionId> = new Set<OptionId>();
+/**
+ * Options that cannot do anything yet because they act on MIDI *input*, which
+ * this build does not have. They are shown, and shown disabled, rather than
+ * hidden or silently inert.
+ */
+const NEEDS_MIDI_INPUT: ReadonlySet<OptionId> = new Set<OptionId>([
+  // Empty. External Clock lived here until the clock follower existed; every
+  // option now reaches something real.
+]);
 
 export function isOptionAvailable(id: OptionId): boolean {
   return !NEEDS_MIDI_INPUT.has(id);

@@ -1,13 +1,16 @@
 import { useRef, useState } from "react";
+import { CLASSIC_WINDOW_SIZES } from "./classicWindows";
 import { POSITION_LABELS } from "../engine/variables";
 import type { CyclicVariable } from "../engine/types";
 import { useM } from "../state/store";
 import { cyclicLengthFromStepIndex, normalizeCyclicStep } from "../engine/cyclic";
 import { useWindowContextMenu } from "./windowlauncher";
 import { useDraggable } from "./useDraggable";
+import { useMLayoutWidth } from "./MLayoutContext";
 import { focusWindowPointerDown } from "./windowfocus";
 import { voiceColorClass } from "./voicecolor";
 import { classicCyclicSideLayout } from "./cycliclayout";
+import { cyclicEditorNote } from "./cyclicselection";
 
 const KINDS: { id: CyclicVariable; name: string }[] = [
   { id: "rhythm", name: "Rhythm" },
@@ -37,6 +40,7 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
   const { ref, pos, z, onPointerDown: onTitleDown, bringToFront } = useDraggable(
     "cyclic-editor", { x: 96, y: 54 }, { autoPlace: true },
   );
+  const fit = useMLayoutWidth("cyclic-editor");
   const [modernPositions, setModernPositions] = useState<Record<CyclicVariable, number>>({
     rhythm: activePositions.rhythm,
     legato: activePositions.legato,
@@ -124,17 +128,27 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
 
   return (
     <section ref={ref} className={`cyced uwin cyced--${view} movable`} aria-label="Cyclic Editor"
-      style={{ left: pos.x, top: pos.y, zIndex: z }}
+      style={{
+        left: pos.x, top: pos.y, zIndex: z,
+        ...(view === "classic" ? { width: "max-content", height: "auto" } : {}),
+      }}
       onPointerDownCapture={(event) => focusWindowPointerDown(event, bringToFront)}
       onContextMenu={context.onContextMenu}>
       {context.menu}
       <header className="uwin__title movable__handle" onPointerDown={onTitleDown}>
         <span className="uwin__name">Cyclic Editor</span>
         <span className="uwin__slash">/</span>
-        <span className="uwin__note">{view === "classic" ? "Classic" : "Modern"}</span>
+        <span className="uwin__note">{view === "classic" ? cyclicEditorNote({ kind, position }) : "Modern"}</span>
         <button className="uwin__close" onClick={onClose} aria-label="Close Cyclic Editor">×</button>
       </header>
-      {view === "classic" ? <div className="cyced__body">
+      {view === "classic" ? <div className="cyced__body" style={{
+        // The original window's size at 1x, laid out at 1.6x and zoomed by 0.625;
+        // in the M node, zoomed a little more to fill its column.
+        width: CLASSIC_WINDOW_SIZES.cyclicEditor.width / 0.625,
+        height: CLASSIC_WINDOW_SIZES.cyclicEditor.height / 0.625,
+        overflow: "hidden",
+        ...(fit ? { zoom: (fit - 2) / (CLASSIC_WINDOW_SIZES.cyclicEditor.width / 0.625) } : {}),
+      }}>
         {voiceGrids(kind, position)}
         <aside className="cyced__side" style={classicCyclicSideLayout()}>
           <div className="cyced__descriptor">
@@ -147,12 +161,13 @@ export function CyclicEditor({ kind, position, onSelect, onClose }: {
             <div key={id} className={`cyced__control cyced__control--${id}`
               + (id === kind ? " is-current" : "") }>
               <div className="cyced__pick">
-                <button className="cyced__kind" onClick={() => onSelect(id, position)}>
+                <button className="cyced__kind" aria-pressed={id === kind} onClick={() => onSelect(id, position)}>
                   <span>{name}</span>
                 </button>
                 <div className="cyced__positions">
                   {POSITION_LABELS.map((label, p) => (
                     <button key={label} aria-label={`${name} position ${label}`}
+                      aria-pressed={id === kind && p === position}
                       className={(activePositions[id] === p ? "is-on" : "")
                         + (id === kind && p === position ? " is-editing" : "")}
                       onClick={() => onSelect(id, p)} />

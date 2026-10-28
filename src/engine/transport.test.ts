@@ -20,7 +20,7 @@ describe("transport timeline continuity", () => {
       nextTimeSec: 12 + voice / 10,
       originSec: 10,
       clockSec: 2 + voice,
-      cyclicPos: voice + 2,
+      cyclicPos: { accent: voice + 2, legato: voice + 2, rhythm: voice + 2 },
     }));
 
     const result = rebaseChangedTimelines(
@@ -31,7 +31,7 @@ describe("transport timeline continuity", () => {
 
     expect(result.map((cursor) => cursor.originSec)).toEqual([12, 12.1, 12.2, 12.3]);
     expect(result.map((cursor) => cursor.clockSec)).toEqual([0, 0, 0, 0]);
-    expect(result.map((cursor) => cursor.cyclicPos)).toEqual([2, 3, 4, 5]);
+    expect(result.map((cursor) => cursor.cyclicPos.rhythm)).toEqual([2, 3, 4, 5]);
   });
 
   it("rebases only the voice whose time map changed", () => {

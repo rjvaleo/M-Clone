@@ -116,6 +116,11 @@ export const VARIABLES_MENU_ITEMS: MenuItemSpec[] = [
  */
 export const WINDOWS_MENU_ITEMS: MenuItemSpec[] = [
   { id: "closeEditWindows", label: "Close Edit Windows" },
+  // Additions for the M node, where every window can be open at once and a
+  // track can have its own note window.
+  { id: "openAllWindows", label: "Open All Windows" },
+  { id: "newNoteWindow", label: "New Note Window" },
+  { id: "tidyWindows", label: "Tidy Windows", hint: "Put every moved window back in the arrangement" },
 ];
 
 export function menuItemIds(items: readonly MenuItemSpec[]): string[] {

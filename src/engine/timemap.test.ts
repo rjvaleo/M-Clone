@@ -12,6 +12,7 @@ import {
   clockToReal,
   cloneTimeMap,
   distortClockSeconds,
+  distortClockTicks,
   isNeutralTimeMap,
   moveBreakpoint,
   neutralTimeMap,
@@ -373,5 +374,28 @@ describe("degenerate maps", () => {
     const m = normalizeTimeMap(map([{ x: 0.8, y: 0.3 }, { x: 0.2, y: 0.9 }]));
     expect(m.points[0].x).toBeLessThanOrEqual(m.points[1].x);
     expect(m.points[0].y).toBeLessThanOrEqual(m.points[1].y);
+  });
+});
+
+describe("Time Distortion on the transport's ticks", () => {
+  const map = { points: [{ x: 0.5, y: 0.25 }], length: 4, denominator: 4 };
+
+  it("lands where the seconds version does, at any tempo", () => {
+    for (const tempo of [60, 120, 151]) {
+      for (const tick of [0, 240, 960, 1700, 3840, 5000]) {
+        const seconds = distortClockSeconds(map, tempo, (tick / 960) * (60 / tempo));
+        expect(distortClockTicks(map, tick)).toBeCloseTo((seconds / (60 / tempo)) * 960, 6);
+      }
+    }
+  });
+
+  it("repeats every cycle and leaves a neutral map alone", () => {
+    expect(distortClockTicks(map, 3840 + 1920)).toBeCloseTo(3840 + distortClockTicks(map, 1920), 9);
+    expect(distortClockTicks(neutralTimeMap(), 1234)).toBe(1234);
+  });
+
+  it("scales the warp by an amount, from straight (0) to full (1)", () => {
+    expect(distortClockTicks(map, 1920, 0)).toBe(1920);
+    expect(distortClockTicks(map, 1920, 0.5)).toBeCloseTo((1920 + distortClockTicks(map, 1920)) / 2, 9);
   });
 });

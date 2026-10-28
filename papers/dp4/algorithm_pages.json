@@ -1,0 +1,162 @@
+[
+ {
+  "name": "EQ - DDL - WITH LFO",
+  "pdf_page": 44
+ },
+ {
+  "name": "EQ - FLANGER - DDL",
+  "pdf_page": 46
+ },
+ {
+  "name": "FLANGER",
+  "pdf_page": 46
+ },
+ {
+  "name": "EQ - PANNER - DDL",
+  "pdf_page": 48
+ },
+ {
+  "name": "EQ-TREMOLO-DDL",
+  "pdf_page": 50
+ },
+ {
+  "name": "EQ - VIBRATO - DDL",
+  "pdf_page": 52
+ },
+ {
+  "name": "EXPANDER",
+  "pdf_page": 54
+ },
+ {
+  "name": "FAST PITCH SHIFT",
+  "pdf_page": 56
+ },
+ {
+  "name": "GATED REVERB",
+  "pdf_page": 58
+ },
+ {
+  "name": "GUITAR AMP 1, GUITAR AMP 2",
+  "pdf_page": 61
+ },
+ {
+  "name": "GUITAR AMP 3",
+  "pdf_page": 63
+ },
+ {
+  "name": "GUITAR AMP 4",
+  "pdf_page": 65
+ },
+ {
+  "name": "GUITAR TUNER 2U",
+  "pdf_page": 67
+ },
+ {
+  "name": "HALL REVERB",
+  "pdf_page": 68
+ },
+ {
+  "name": "INVERSE EXPANDER",
+  "pdf_page": 71
+ },
+ {
+  "name": "KEYED EXPANDER",
+  "pdf_page": 73
+ },
+ {
+  "name": "LARGE PLATE",
+  "pdf_page": 75
+ },
+ {
+  "name": "LARGE ROOM REV",
+  "pdf_page": 77
+ },
+ {
+  "name": "MULTI TAP DELAY",
+  "pdf_page": 80
+ },
+ {
+  "name": "NO EFFECT (BYPASS EFFECT)",
+  "pdf_page": 80
+ },
+ {
+  "name": "NON LIN REVERB 1, 2, 3",
+  "pdf_page": 82
+ },
+ {
+  "name": "PARAMETRIC EQ",
+  "pdf_page": 85
+ },
+ {
+  "name": "PHASER-DDL",
+  "pdf_page": 86
+ },
+ {
+  "name": "PITCH SHIFT 2U",
+  "pdf_page": 88
+ },
+ {
+  "name": "PITCHSHIFT - DDL",
+  "pdf_page": 90
+ },
+ {
+  "name": "PITCH SHIFTER",
+  "pdf_page": 92
+ },
+ {
+  "name": "REVERSE REVERB 1",
+  "pdf_page": 94
+ },
+ {
+  "name": "REVERSE REVERB 2",
+  "pdf_page": 96
+ },
+ {
+  "name": "ROTATING SPEAKER",
+  "pdf_page": 98
+ },
+ {
+  "name": "RUMBLE FILTER",
+  "pdf_page": 100
+ },
+ {
+  "name": "SINE/NOISE GEN",
+  "pdf_page": 101
+ },
+ {
+  "name": "SMALL PLATE",
+  "pdf_page": 102
+ },
+ {
+  "name": "SMALL ROOM REV",
+  "pdf_page": 104
+ },
+ {
+  "name": "SPEAKER CABINET",
+  "pdf_page": 107
+ },
+ {
+  "name": "TEMPO DELAY",
+  "pdf_page": 108
+ },
+ {
+  "name": "VAN DER POL FILTER",
+  "pdf_page": 112
+ },
+ {
+  "name": "VCF - DISTORT 1",
+  "pdf_page": 113
+ },
+ {
+  "name": "VCF - DISTORT 2",
+  "pdf_page": 115
+ },
+ {
+  "name": "VOCAL REMOVER",
+  "pdf_page": 117
+ },
+ {
+  "name": "VOCODER",
+  "pdf_page": 119
+ }
+]

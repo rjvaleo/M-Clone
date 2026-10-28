@@ -1,10 +1,6 @@
-// The Pattern Editor's 1-bit iconography, drawn as SVG on a 16x16 pixel grid.
-//
-// These replace the Unicode stand-ins the first pass used. The originals were
-// hand-drawn Mac bitmaps, so everything here sits on integer coordinates and
-// renders with `crispEdges` — no anti-aliased half-pixels, no font fallback
-// roulette. All shapes paint in `currentColor`, which is what lets a selected
-// tool invert cleanly (white glyph on a black button).
+// The interface's iconography, drawn as smooth, anti-aliased SVG on a 16x16
+// grid, so it stays sharp at 1x and 2x alike. All shapes paint in
+// `currentColor`, which is what lets a selected tool invert cleanly.
 
 type IconProps = { size?: number; className?: string };
 
@@ -15,7 +11,6 @@ function Glyph({ size = 16, className, children }: IconProps & { children: React
       width={size}
       height={size}
       viewBox="0 0 16 16"
-      shapeRendering="crispEdges"
       fill="currentColor"
       aria-hidden="true"
       focusable="false"
@@ -287,22 +282,21 @@ export function IconOctave({ dir }: { dir: "up" | "down" }) {
 export function IconCamera({ size = 30 }: { size?: number }) {
   return (
     <svg width={size * 1.6} height={size} viewBox="0 0 48 30"
-      shapeRendering="crispEdges" fill="currentColor"
+      fill="currentColor"
       aria-hidden="true" focusable="false">
       {/* Flash on its stalk. */}
       <circle cx={20} cy={5} r={3.5} fill="none" stroke="currentColor" strokeWidth={1.5} />
       <path d="M20 9 L20 12" stroke="currentColor" strokeWidth={1.5} />
       <path d="M13 12 L27 12 L29 15 L11 15 Z" />
-      {/* Body, dithered the way the original's was. */}
+      {/* Body, in a half tone. */}
       <rect x={2} y={15} width={34} height={13} fill="none"
         stroke="currentColor" strokeWidth={1.5} />
       <rect x={4} y={17} width={30} height={9}
         fill="url(#m-dither-camera)" />
       <circle cx={19} cy={21.5} r={4.5} />
       <defs>
-        <pattern id="m-dither-camera" width={2} height={2} patternUnits="userSpaceOnUse">
-          <rect width={1} height={1} fill="currentColor" />
-          <rect x={1} y={1} width={1} height={1} fill="currentColor" />
+        <pattern id="m-dither-camera" width={1} height={1} patternUnits="userSpaceOnUse">
+          <rect width={1} height={1} fill="currentColor" fillOpacity={0.4} />
         </pattern>
       </defs>
     </svg>
@@ -313,7 +307,7 @@ export function IconCamera({ size = 30 }: { size?: number }) {
 export function IconSlides({ size = 26 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 26 26"
-      shapeRendering="crispEdges" fill="none" stroke="currentColor"
+      fill="none" stroke="currentColor"
       aria-hidden="true" focusable="false">
       <rect x={1.5} y={1.5} width={17} height={17} strokeWidth={1.5} />
       <rect x={4.5} y={4.5} width={17} height={17} strokeWidth={1.5} fill="var(--pe-paper, #fff)" />
@@ -327,7 +321,7 @@ export function IconSlides({ size = 26 }: { size?: number }) {
 export function IconRestore({ size = 26 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 26 26"
-      shapeRendering="crispEdges" fill="none" stroke="currentColor"
+      fill="none" stroke="currentColor"
       aria-hidden="true" focusable="false">
       <rect x={1.5} y={5.5} width={14} height={14} strokeWidth={1.5} />
       <rect x={8.5} y={2.5} width={15} height={15} strokeWidth={1.5} fill="var(--pe-paper, #fff)" />
@@ -343,7 +337,7 @@ export function IconRestore({ size = 26 }: { size?: number }) {
 export function IconEditSnapshot({ size = 26 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 26 26"
-      shapeRendering="crispEdges" fill="none" stroke="currentColor"
+      fill="none" stroke="currentColor"
       aria-hidden="true" focusable="false">
       <rect x={2} y={4} width={19} height={14} strokeWidth={1.5} />
       <path d="M6 24 L9 18 M19 24 L16 18" strokeWidth={1.5} />
@@ -364,9 +358,8 @@ export function IconGlobe({ size = 30 }: { size?: number }) {
       <ellipse cx={15} cy={15} rx={5.5} ry={13} strokeWidth={1.2} />
       <path d="M2 15 L28 15 M4.5 8 L25.5 8 M4.5 22 L25.5 22" strokeWidth={1.2} />
       <defs>
-        <pattern id="m-dither-globe" width={2} height={2} patternUnits="userSpaceOnUse">
-          <rect width={1} height={1} fill="currentColor" />
-          <rect x={1} y={1} width={1} height={1} fill="currentColor" />
+        <pattern id="m-dither-globe" width={1} height={1} patternUnits="userSpaceOnUse">
+          <rect width={1} height={1} fill="currentColor" fillOpacity={0.4} />
         </pattern>
       </defs>
     </svg>

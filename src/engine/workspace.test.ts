@@ -14,16 +14,18 @@ describe("workspace scaling", () => {
     expect([MIN_WORKSPACE_WIDTH, MIN_WORKSPACE_HEIGHT]).toEqual([640, 480]);
   });
 
-  it("normalizes arbitrary values to supported 10% increments", () => {
-    expect(clampWorkspaceZoom(113)).toBe(110);
-    expect(clampWorkspaceZoom(116)).toBe(120);
-    expect(clampWorkspaceZoom(-20)).toBe(50);
+  it("offers exactly two views, 1x and 2x, so every line lands on a whole pixel", () => {
+    expect(clampWorkspaceZoom(100)).toBe(100);
+    expect(clampWorkspaceZoom(200)).toBe(200);
+    expect(clampWorkspaceZoom(113)).toBe(100);
+    expect(clampWorkspaceZoom(160)).toBe(200);
+    expect(clampWorkspaceZoom(-20)).toBe(100);
     expect(clampWorkspaceZoom(900)).toBe(200);
   });
 
   it("converts physical pointer movement back to logical desktop movement", () => {
-    expect(logicalDragDelta(30, 150)).toBe(20);
-    expect(logicalDragDelta(-10, 50)).toBe(-20);
+    expect(logicalDragDelta(30, 200)).toBe(15);
+    expect(logicalDragDelta(-10, 100)).toBe(-10);
   });
 });
 
@@ -46,15 +48,10 @@ describe("fluid workspace layout", () => {
     expect(layout.scale).toBe(2);
   });
 
-  it("zooming out reveals more desktop than the viewport is wide", () => {
-    const layout = workspaceLayout(1600, 900, 50);
-    expect(layout.logical).toEqual({ width: 3200, height: 1800 });
-  });
-
   it("still fills the viewport exactly at every zoom the floor does not bind", () => {
     // 200% is excluded deliberately: 900 / 2 is 450, below the 480 floor, so
     // the desktop is meant to overflow there. That case is covered below.
-    for (const zoom of [50, 80, 100, 130, 180]) {
+    for (const zoom of [100]) {
       const layout = workspaceLayout(1600, 900, zoom);
       expect(layout.physical.width).toBeCloseTo(1600, 5);
       expect(layout.physical.height).toBeCloseTo(900, 5);
@@ -76,7 +73,7 @@ describe("fluid workspace layout", () => {
   });
 
   it("normalizes its zoom argument the same way the zoom control does", () => {
-    expect(workspaceLayout(1600, 900, 113).scale).toBe(1.1);
+    expect(workspaceLayout(1600, 900, 113).scale).toBe(1);
     expect(workspaceLayout(1600, 900, 900).scale).toBe(2);
   });
 

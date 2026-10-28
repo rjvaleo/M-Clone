@@ -24,6 +24,14 @@ describe("Appendix B Input Control map", () => {
     expect(inputControlCode(75)).toBe("play-slideshow");
   });
 
+  it("orders the Cyclic Variable codes Rhythm, Legato, Accent as M's map does", () => {
+    // M 2.8's built-in control map assigns F#3 (66), G#3 (68) and A#3 (70) to
+    // the Rhythm, Legato and Accent Variables in that order.
+    expect(inputControlCode(66)).toBe("duration");
+    expect(inputControlCode(68)).toBe("legato");
+    expect(inputControlCode(70)).toBe("accent");
+  });
+
   it("covers every printed code key and one-step key plus out-of-range input", () => {
     const codes = [37,39,42,44,46,49,51,54,56,58,61,63,66,68,70,73,75,78];
     expect(codes.every((pitch) => inputControlCode(pitch) !== null)).toBe(true);

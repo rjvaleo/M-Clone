@@ -148,12 +148,19 @@ export class MidiPortRegistry {
   private onMessage: ((event: MIDIMessageEvent) => void) | null;
   private onStateChange = () => this.reconcile();
 
-  constructor(sink: MidiSink, onMessage: ((event: MIDIMessageEvent) => void) | null = null) {
+  private request: AccessRequest;
+
+  constructor(
+    sink: MidiSink,
+    onMessage: ((event: MIDIMessageEvent) => void) | null = null,
+    request: AccessRequest = requestMidiAccess,
+  ) {
     this.sink = sink;
     this.onMessage = onMessage;
+    this.request = request;
   }
 
-  async enable(request: AccessRequest = requestMidiAccess): Promise<MIDIOutput[]> {
+  async enable(request: AccessRequest = this.request): Promise<MIDIOutput[]> {
     if (!this.access) {
       this.access = await request();
       this.access.addEventListener("statechange", this.onStateChange);

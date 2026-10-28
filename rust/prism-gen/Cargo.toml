@@ -1,0 +1,9 @@
+[package]
+name = "prism-gen"
+version = "0.1.0"
+edition = "2021"
+description = "Writes idMLab's TypeScript view of the prism-fx catalogue."
+publish = false
+
+[dependencies]
+prism-fx = { path = "../../../prism-fx/crates/prism-fx" }

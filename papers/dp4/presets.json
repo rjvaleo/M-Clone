@@ -1,0 +1,5367 @@
+[
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "00",
+  "name": "Vocal Plate 1",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "01",
+  "name": "Synth Plate",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "02",
+  "name": "Vocal Plate 2",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "03",
+  "name": "Zobie Plate",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "04",
+  "name": "Slam Plate",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "05",
+  "name": "Multi Plate",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "06",
+  "name": "Short Plate",
+  "chain_raw": "Small Plate",
+  "units": [
+   "Small Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "07",
+  "name": "Ballad Reverb",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "08",
+  "name": "Bright Hall",
+  "chain_raw": "Hall Reverb",
+  "units": [
+   "Hall Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "09",
+  "name": "Vocal Hall",
+  "chain_raw": "Hall Reverb",
+  "units": [
+   "Hall Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "10",
+  "name": "Concert Hall 1",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "11",
+  "name": "Concert Hall 2",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "12",
+  "name": "Summer Hall",
+  "chain_raw": "Hall Reverb",
+  "units": [
+   "Hall Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "13",
+  "name": "Famous Hall",
+  "chain_raw": "Hall Reverb",
+  "units": [
+   "Hall Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "14",
+  "name": "Small Hall",
+  "chain_raw": "Hall Reverb",
+  "units": [
+   "Hall Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "15",
+  "name": "Room 224",
+  "chain_raw": "Large Room Rev",
+  "units": [
+   "Large Room Rev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "16",
+  "name": "Medium Room",
+  "chain_raw": "Small Room Rev",
+  "units": [
+   "Small Room Rev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "17",
+  "name": "Dark Room",
+  "chain_raw": "Small Room Rev",
+  "units": [
+   "Small Room Rev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "18",
+  "name": "Early Reflections",
+  "chain_raw": "NonLin Reverb1",
+  "units": [
+   "NonLin Reverb1"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "19",
+  "name": "Smooth Non Lin",
+  "chain_raw": "NonLin Reverb1",
+  "units": [
+   "NonLin Reverb1"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "20",
+  "name": "Gated Verb",
+  "chain_raw": "Gated Reverb",
+  "units": [
+   "Gated Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "21",
+  "name": "Dark Drum Room",
+  "chain_raw": "Small Room Rev",
+  "units": [
+   "Small Room Rev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "22",
+  "name": "Digital Drm Room",
+  "chain_raw": "Large Room Rev",
+  "units": [
+   "Large Room Rev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "23",
+  "name": "Boom Room",
+  "chain_raw": "NonLin Reverb2",
+  "units": [
+   "NonLin Reverb2"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "24",
+  "name": "Kickdrum Nonlin",
+  "chain_raw": "NonLin Reverb3",
+  "units": [
+   "NonLin Reverb3"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "25",
+  "name": "70's Drum Booth",
+  "chain_raw": "Small Room Rev",
+  "units": [
+   "Small Room Rev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "26",
+  "name": "Tiled Room",
+  "chain_raw": "Small Room Rev",
+  "units": [
+   "Small Room Rev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "27",
+  "name": "Gymnasium",
+  "chain_raw": "Hall Reverb",
+  "units": [
+   "Hall Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "28",
+  "name": "Backstage",
+  "chain_raw": "Small Room Rev",
+  "units": [
+   "Small Room Rev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "29",
+  "name": "String Verb",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "30",
+  "name": "French Horn Verb",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "31",
+  "name": "Country Keys",
+  "chain_raw": "Phaser - DDL",
+  "units": [
+   "Phaser - DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "32",
+  "name": "Lush Keys",
+  "chain_raw": "EQ-Chorus-DDL",
+  "units": [
+   "EQ-Chorus-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "33",
+  "name": "Echo Clav",
+  "chain_raw": "Dual Delay",
+  "units": [
+   "Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "34",
+  "name": "Medium Flange",
+  "chain_raw": "Flanger",
+  "units": [
+   "Flanger"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "35",
+  "name": "Tight Flange",
+  "chain_raw": "Flanger",
+  "units": [
+   "Flanger"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "36",
+  "name": "Wet Chorus",
+  "chain_raw": "8 Voice Chorus",
+  "units": [
+   "8 Voice Chorus"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "37",
+  "name": "Key Funk Flange",
+  "chain_raw": "EQ-Flanger-DDL",
+  "units": [
+   "EQ-Flanger-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "38",
+  "name": "Key Funk Phaze",
+  "chain_raw": "Phaser - DDL",
+  "units": [
+   "Phaser - DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "39",
+  "name": "Dist. RotarySpkr",
+  "chain_raw": "Rotating Spkr",
+  "units": [
+   "Rotating Spkr"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "40",
+  "name": "Fusion Bass",
+  "chain_raw": "8 Voice Chorus",
+  "units": [
+   "8 Voice Chorus"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "41",
+  "name": "Clean Guitar Amp",
+  "chain_raw": "Guitar Amp 2",
+  "units": [
+   "Guitar Amp 2"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "42",
+  "name": "Snare Compressor",
+  "chain_raw": "EQ-Compressor",
+  "units": [
+   "EQ-Compressor"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "43",
+  "name": "Vocal Spice",
+  "chain_raw": "MultiTap Delay",
+  "units": [
+   "MultiTap Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "44",
+  "name": "Slap Vocal",
+  "chain_raw": "Dual Delay",
+  "units": [
+   "Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "45",
+  "name": "Vocal Spreader",
+  "chain_raw": "FastPitchShift",
+  "units": [
+   "FastPitchShift"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "46",
+  "name": "'66 Car Radio",
+  "chain_raw": "Tunable Spkr 1",
+  "units": [
+   "Tunable Spkr 1"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "47",
+  "name": "Analog Flanger",
+  "chain_raw": "EQ-Vibrato-DDL",
+  "units": [
+   "EQ-Vibrato-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "48",
+  "name": "Wild Panner",
+  "chain_raw": "EQ-Panner-DDL",
+  "units": [
+   "EQ-Panner-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit RAM Presets",
+  "slot": "49",
+  "name": "Tape Stop Effect",
+  "chain_raw": "PitchShift-DDL",
+  "units": [
+   "PitchShift-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "50",
+  "name": "Small Room Rev",
+  "chain_raw": "Small Room Rev",
+  "units": [
+   "Small Room Rev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "51",
+  "name": "Large Room Rev",
+  "chain_raw": "Large Room Rev",
+  "units": [
+   "Large Room Rev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "52",
+  "name": "Hall Reverb",
+  "chain_raw": "Hall Reverb",
+  "units": [
+   "Hall Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "53",
+  "name": "Small Plate Rev",
+  "chain_raw": "Small Plate",
+  "units": [
+   "Small Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "54",
+  "name": "Large Plate Rev",
+  "chain_raw": "Large Plate",
+  "units": [
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "55",
+  "name": "Reverse Reverb",
+  "chain_raw": "Reverse Reverb",
+  "units": [
+   "Reverse Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "56",
+  "name": "RetrigReverseRev",
+  "chain_raw": "ReverseReverb2",
+  "units": [
+   "ReverseReverb2"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "57",
+  "name": "Gated Reverb",
+  "chain_raw": "Gated Reverb",
+  "units": [
+   "Gated Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "58",
+  "name": "Non Lin Reverb 1",
+  "chain_raw": "NonLin Reverb1",
+  "units": [
+   "NonLin Reverb1"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "59",
+  "name": "Non Lin Reverb 2",
+  "chain_raw": "NonLin Reverb2",
+  "units": [
+   "NonLin Reverb2"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "60",
+  "name": "Non Lin Reverb 3",
+  "chain_raw": "NonLin Reverb3",
+  "units": [
+   "NonLin Reverb3"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "61",
+  "name": "Multi Tap Delay",
+  "chain_raw": "MultiTap Delay",
+  "units": [
+   "MultiTap Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "62",
+  "name": "Dual Delay",
+  "chain_raw": "Dual Delay",
+  "units": [
+   "Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "63",
+  "name": "Tempo Delay",
+  "chain_raw": "Tempo Delay",
+  "units": [
+   "Tempo Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "64",
+  "name": "EQ-DDL-with LFO",
+  "chain_raw": "EQ-DDL-withLFO",
+  "units": [
+   "EQ-DDL-withLFO"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "65",
+  "name": "VCF-Distortion 1",
+  "chain_raw": "VCF-Distort 1",
+  "units": [
+   "VCF-Distort 1"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "66",
+  "name": "VCF-Distortion 2",
+  "chain_raw": "VCF-Distort 2",
+  "units": [
+   "VCF-Distort 2"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "67",
+  "name": "Guitar Amp 1",
+  "chain_raw": "Guitar Amp 1",
+  "units": [
+   "Guitar Amp 1"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "68",
+  "name": "Guitar Amp 2",
+  "chain_raw": "Guitar Amp 2",
+  "units": [
+   "Guitar Amp 2"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "69",
+  "name": "Guitar Amp 3",
+  "chain_raw": "Guitar Amp 3",
+  "units": [
+   "Guitar Amp 3"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "70",
+  "name": "Guitar Amp 4",
+  "chain_raw": "Guitar Amp 4",
+  "units": [
+   "Guitar Amp 4"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "71",
+  "name": "Digital Tube Amp",
+  "chain_raw": "DigitalTubeAmp",
+  "units": [
+   "DigitalTubeAmp"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "72",
+  "name": "Dynamic Tube Amp",
+  "chain_raw": "DynamicTubeAmp",
+  "units": [
+   "DynamicTubeAmp"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "73",
+  "name": "Speaker Cabinet",
+  "chain_raw": "SpeakerCabinet",
+  "units": [
+   "SpeakerCabinet"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "74",
+  "name": "TunableSpeaker 1",
+  "chain_raw": "Tunable Spkr 1",
+  "units": [
+   "Tunable Spkr 1"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "75",
+  "name": "TunableSpeaker 2",
+  "chain_raw": "Tunable Spkr 2",
+  "units": [
+   "Tunable Spkr 2"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "76",
+  "name": "Rotating Speaker",
+  "chain_raw": "Rotating Spkr",
+  "units": [
+   "Rotating Spkr"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "77",
+  "name": "EQ-Chorus-DDL",
+  "chain_raw": "EQ-Chorus-DDL",
+  "units": [
+   "EQ-Chorus-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "78",
+  "name": "EQ-Vibrato-DDL",
+  "chain_raw": "EQ-Vibrato-DDL",
+  "units": [
+   "EQ-Vibrato-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "79",
+  "name": "EQ-Panner-DDL",
+  "chain_raw": "EQ-Panner-DDL",
+  "units": [
+   "EQ-Panner-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "80",
+  "name": "EQ-Flanger-DDL",
+  "chain_raw": "EQ-Flanger-DDL",
+  "units": [
+   "EQ-Flanger-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "81",
+  "name": "EQ-Tremolo-DDL",
+  "chain_raw": "EQ-Tremolo-DDL",
+  "units": [
+   "EQ-Tremolo-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "82",
+  "name": "Phaser-DDL",
+  "chain_raw": "Phaser - DDL",
+  "units": [
+   "Phaser - DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "83",
+  "name": "8 Voice Chorus",
+  "chain_raw": "8 Voice Chorus",
+  "units": [
+   "8 Voice Chorus"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "84",
+  "name": "Flanger",
+  "chain_raw": "Flanger",
+  "units": [
+   "Flanger"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "85",
+  "name": "Pitch Shifter",
+  "chain_raw": "PitchShifter",
+  "units": [
+   "PitchShifter"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "86",
+  "name": "Pitch Shift-DDL",
+  "chain_raw": "PitchShift-DDL",
+  "units": [
+   "PitchShift-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "87",
+  "name": "Fast Pitch Shift",
+  "chain_raw": "FastPitchShift",
+  "units": [
+   "FastPitchShift"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "88",
+  "name": "EQ-Compressor",
+  "chain_raw": "EQ-Compressor",
+  "units": [
+   "EQ-Compressor"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "89",
+  "name": "Expander",
+  "chain_raw": "Expander",
+  "units": [
+   "Expander"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "90",
+  "name": "Inverse Expander",
+  "chain_raw": "InversExpander",
+  "units": [
+   "InversExpander"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "91",
+  "name": "De-esser",
+  "chain_raw": "De-esser",
+  "units": [
+   "De-esser"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "92",
+  "name": "Rumble Filter",
+  "chain_raw": "Rumble Filter",
+  "units": [
+   "Rumble Filter"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "93",
+  "name": "Parametric EQ",
+  "chain_raw": "Parametric EQ",
+  "units": [
+   "Parametric EQ"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "94",
+  "name": "VanderPol Filter",
+  "chain_raw": "VandrPolFilter",
+  "units": [
+   "VandrPolFilter"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "95",
+  "name": "Signal Generator",
+  "chain_raw": "Sine/Noise Gen",
+  "units": [
+   "Sine/Noise Gen"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "96",
+  "name": "FS Tap-Tempo DDL",
+  "chain_raw": "Tempo Delay",
+  "units": [
+   "Tempo Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "97",
+  "name": "Noise Gate",
+  "chain_raw": "EQ-Compressor",
+  "units": [
+   "EQ-Compressor"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "98",
+  "name": "Vocal Compressor",
+  "chain_raw": "EQ-Compressor",
+  "units": [
+   "EQ-Compressor"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "1-Unit ROM Presets",
+  "slot": "99",
+  "name": "No Effect/Silent",
+  "chain_raw": "No Effect",
+  "units": [
+   "No Effect"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "00",
+  "name": "Trumpet Plate",
+  "chain_raw": "Large Plate~8 Voice Chorus",
+  "units": [
+   "Large Plate",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "01",
+  "name": "Oldtime Plate",
+  "chain_raw": "Rotating Spkr~Large Plate",
+  "units": [
+   "Rotating Spkr",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "02",
+  "name": "Tube Plate",
+  "chain_raw": "SpeakerCabinet~Large Plate",
+  "units": [
+   "SpeakerCabinet",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "03",
+  "name": "Gated Plate",
+  "chain_raw": "Small Plate~Expander",
+  "units": [
+   "Small Plate",
+   "Expander"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "04",
+  "name": "Compressed Plate",
+  "chain_raw": "Small Plate~EQ-Compressor",
+  "units": [
+   "Small Plate",
+   "EQ-Compressor"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "05",
+  "name": "Horn Verb",
+  "chain_raw": "Small Plate~Large Plate",
+  "units": [
+   "Small Plate",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "06",
+  "name": "Twisting Hall",
+  "chain_raw": "Hall Reverb~Flanger",
+  "units": [
+   "Hall Reverb",
+   "Flanger"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "07",
+  "name": "Phased Hall",
+  "chain_raw": "Hall Reverb~Phaser - DDL",
+  "units": [
+   "Hall Reverb",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "08",
+  "name": "Gated Room 1",
+  "chain_raw": "Small Room Rev+EQ-Compressor",
+  "units": [
+   "Small Room Rev",
+   "EQ-Compressor"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "09",
+  "name": "Spring Reverb",
+  "chain_raw": "Rotating Spkr~Large Plate",
+  "units": [
+   "Rotating Spkr",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "10",
+  "name": "Bloom Canyon",
+  "chain_raw": "NonLin Reverb3~Large Plate",
+  "units": [
+   "NonLin Reverb3",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "11",
+  "name": "Dark Verb",
+  "chain_raw": "Tunable Spkr 1\u2044Large Plate",
+  "units": [
+   "Tunable Spkr 1",
+   "Large Plate"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "12",
+  "name": "Airplane Hangar",
+  "chain_raw": "NonLin Reverb1~Large Plate",
+  "units": [
+   "NonLin Reverb1",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "13",
+  "name": "Snare Intro",
+  "chain_raw": "Large Plate~EQ-Compressor",
+  "units": [
+   "Large Plate",
+   "EQ-Compressor"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "14",
+  "name": "Drum Verb",
+  "chain_raw": "NonLin Reverb1+Large Plate",
+  "units": [
+   "NonLin Reverb1",
+   "Large Plate"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "15",
+  "name": "Drums X",
+  "chain_raw": "NonLin Reverb1\u2044Large Room Rev",
+  "units": [
+   "NonLin Reverb1",
+   "Large Room Rev"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "16",
+  "name": "Drums Y",
+  "chain_raw": "Large Room Rev~Large Plate",
+  "units": [
+   "Large Room Rev",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "17",
+  "name": "Drums Z",
+  "chain_raw": "Small Room Rev~Large Plate",
+  "units": [
+   "Small Room Rev",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "18",
+  "name": "Kick Non Lin",
+  "chain_raw": "NonLin Reverb1~PitchShift-DDL",
+  "units": [
+   "NonLin Reverb1",
+   "PitchShift-DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "19",
+  "name": "Mega Non Lin",
+  "chain_raw": "NonLin Reverb1+NonLin Reverb1",
+  "units": [
+   "NonLin Reverb1",
+   "NonLin Reverb1"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "20",
+  "name": "Wet Non Lin",
+  "chain_raw": "NonLin Reverb1~Gated Reverb",
+  "units": [
+   "NonLin Reverb1",
+   "Gated Reverb"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "21",
+  "name": "Best Small Space",
+  "chain_raw": "Small Room Rev+Small Room Rev",
+  "units": [
+   "Small Room Rev",
+   "Small Room Rev"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "22",
+  "name": "Echoing Verbs",
+  "chain_raw": "NonLin Reverb1+NonLin Reverb1",
+  "units": [
+   "NonLin Reverb1",
+   "NonLin Reverb1"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "23",
+  "name": "Flanged Reverb 1",
+  "chain_raw": "Large Plate~Flanger",
+  "units": [
+   "Large Plate",
+   "Flanger"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "24",
+  "name": "Flanged Reverb 2",
+  "chain_raw": "Large Plate~Flanger",
+  "units": [
+   "Large Plate",
+   "Flanger"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "25",
+  "name": "Feedback Verb",
+  "chain_raw": "Large Plate\u2044Hall Reverb",
+  "units": [
+   "Large Plate",
+   "Hall Reverb"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "26",
+  "name": "Sample&Phaz Verb",
+  "chain_raw": "Large Plate~Phaser - DDL",
+  "units": [
+   "Large Plate",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "27",
+  "name": "Panning Delays",
+  "chain_raw": "Tempo Delay~EQ-Panner-DDL",
+  "units": [
+   "Tempo Delay",
+   "EQ-Panner-DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "28",
+  "name": "MultiTap&Flange",
+  "chain_raw": "MultiTap Delay~Flanger",
+  "units": [
+   "MultiTap Delay",
+   "Flanger"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "29",
+  "name": "Ascending Delays",
+  "chain_raw": "PitchShift-DDL\u2044Phaser - DDL",
+  "units": [
+   "PitchShift-DDL",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "30",
+  "name": "Harmoni-Echo",
+  "chain_raw": "PitchShifter\u2044MultiTap Delay",
+  "units": [
+   "PitchShifter",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "31",
+  "name": "Major Triad Echo",
+  "chain_raw": "PitchShifter\u2044MultiTap Delay",
+  "units": [
+   "PitchShifter",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "32",
+  "name": "Pan-Tapstic",
+  "chain_raw": "8 Voice Chorus~EQ-Panner-DDL",
+  "units": [
+   "8 Voice Chorus",
+   "EQ-Panner-DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "33",
+  "name": "Special Taps",
+  "chain_raw": "Small Room Rev~MultiTap Delay",
+  "units": [
+   "Small Room Rev",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "34",
+  "name": "Country Guitar",
+  "chain_raw": "EQ-Tremolo-DDL~Large Plate",
+  "units": [
+   "EQ-Tremolo-DDL",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "35",
+  "name": "Super Mute-ron",
+  "chain_raw": "VCF-Distort 1~Guitar Amp 3",
+  "units": [
+   "VCF-Distort 1",
+   "Guitar Amp 3"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "36",
+  "name": "Vocal EQ & Comp",
+  "chain_raw": "Parametric EQ~EQ-Compressor",
+  "units": [
+   "Parametric EQ",
+   "EQ-Compressor"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "37",
+  "name": "Vocal Magic",
+  "chain_raw": "PitchShift-DDL~Large Plate",
+  "units": [
+   "PitchShift-DDL",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "38",
+  "name": "Darth",
+  "chain_raw": "PitchShifter~Flanger",
+  "units": [
+   "PitchShifter",
+   "Flanger"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "39",
+  "name": "4 Voice Detune",
+  "chain_raw": "PitchShifter+PitchShift-DDL",
+  "units": [
+   "PitchShifter",
+   "PitchShift-DDL"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "40",
+  "name": "Serial Florus",
+  "chain_raw": "EQ-Flanger-DDL~8 Voice Chorus",
+  "units": [
+   "EQ-Flanger-DDL",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "41",
+  "name": "Detune & Spread",
+  "chain_raw": "8 Voice Chorus~Dual Delay",
+  "units": [
+   "8 Voice Chorus",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "42",
+  "name": "Vibrates & Pans",
+  "chain_raw": "EQ-Vibrato-DDL~EQ-Panner-DDL",
+  "units": [
+   "EQ-Vibrato-DDL",
+   "EQ-Panner-DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "43",
+  "name": "Coordinates",
+  "chain_raw": "NonLin Reverb2~EQ-Flanger-DDL",
+  "units": [
+   "NonLin Reverb2",
+   "EQ-Flanger-DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "44",
+  "name": "Swirling Notch",
+  "chain_raw": "Phaser - DDL~PitchShifter",
+  "units": [
+   "Phaser - DDL",
+   "PitchShifter"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "45",
+  "name": "Regenerate",
+  "chain_raw": "PitchShift-DDL\u2044Phaser - DDL",
+  "units": [
+   "PitchShift-DDL",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "46",
+  "name": "Get Rappified",
+  "chain_raw": "Tunable Spkr 1\u2044Tunable Spkr 1",
+  "units": [
+   "Tunable Spkr 1",
+   "Tunable Spkr 1"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "47",
+  "name": "Feedback Phaser",
+  "chain_raw": "Phaser - DDL\u2044PitchShifter",
+  "units": [
+   "Phaser - DDL",
+   "PitchShifter"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "48",
+  "name": "Big Non Lin 1",
+  "chain_raw": "NonLin Reverb3~PitchShifter",
+  "units": [
+   "NonLin Reverb3",
+   "PitchShifter"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit RAM Presets",
+  "slot": "49",
+  "name": "Big Non Lin 2",
+  "chain_raw": "NonLin Reverb1+NonLin Reverb1",
+  "units": [
+   "NonLin Reverb1",
+   "NonLin Reverb1"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "50",
+  "name": "3.6 sec Delay 2U",
+  "chain_raw": "3.6 sec DDL 2U*N/A",
+  "units": [
+   "3.6 sec DDL 2U*N/A"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "51",
+  "name": "Pitch Shift 2U",
+  "chain_raw": "PitchShift 2U*N/A",
+  "units": [
+   "PitchShift 2U*N/A"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "52",
+  "name": "Guitar Tuner 2U",
+  "chain_raw": "GuitarTuner 2U*N/A",
+  "units": [
+   "GuitarTuner 2U*N/A"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "53",
+  "name": "Luscious Plate",
+  "chain_raw": "Large Plate~8 Voice Chorus",
+  "units": [
+   "Large Plate",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "54",
+  "name": "Versatile Hall",
+  "chain_raw": "Hall Reverb+Small Plate",
+  "units": [
+   "Hall Reverb",
+   "Small Plate"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "55",
+  "name": "Warm Room",
+  "chain_raw": "Large Room Rev+Large Room Rev",
+  "units": [
+   "Large Room Rev",
+   "Large Room Rev"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "56",
+  "name": "Small Space Amb",
+  "chain_raw": "Small Room Rev+Small Room Rev",
+  "units": [
+   "Small Room Rev",
+   "Small Room Rev"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "57",
+  "name": "Gated Room 2",
+  "chain_raw": "Large Room Rev~EQ-Compressor",
+  "units": [
+   "Large Room Rev",
+   "EQ-Compressor"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "58",
+  "name": "Smooth Bloom",
+  "chain_raw": "NonLin Reverb1~Large Plate",
+  "units": [
+   "NonLin Reverb1",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "59",
+  "name": "Jet Reverb",
+  "chain_raw": "Hall Reverb\u2044Flanger",
+  "units": [
+   "Hall Reverb",
+   "Flanger"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "60",
+  "name": "30th St. Station",
+  "chain_raw": "Parametric EQ~Hall Reverb",
+  "units": [
+   "Parametric EQ",
+   "Hall Reverb"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "61",
+  "name": "Early & Plate",
+  "chain_raw": "NonLin Reverb1+Large Plate",
+  "units": [
+   "NonLin Reverb1",
+   "Large Plate"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "62",
+  "name": "Parking Garage",
+  "chain_raw": "Large Plate+Large Room Rev",
+  "units": [
+   "Large Plate",
+   "Large Room Rev"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "63",
+  "name": "Classic 80s Verb",
+  "chain_raw": "Large Plate~8 Voice Chorus",
+  "units": [
+   "Large Plate",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "64",
+  "name": "Bend Up Reverb",
+  "chain_raw": "PitchShifter\u2044Large Room Rev",
+  "units": [
+   "PitchShifter",
+   "Large Room Rev"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "65",
+  "name": "Bend Down Reverb",
+  "chain_raw": "PitchShifter\u2044Large Room Rev",
+  "units": [
+   "PitchShifter",
+   "Large Room Rev"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "66",
+  "name": "Laser Flange",
+  "chain_raw": "Flanger~EQ-Flanger-DDL",
+  "units": [
+   "Flanger",
+   "EQ-Flanger-DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "67",
+  "name": "Blazing Phaser",
+  "chain_raw": "Phaser - DDL~Phaser - DDL",
+  "units": [
+   "Phaser - DDL",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "68",
+  "name": "Compresd&Chorusd",
+  "chain_raw": "EQ-Compressor~8 Voice Chorus",
+  "units": [
+   "EQ-Compressor",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "69",
+  "name": "Chorus & Room",
+  "chain_raw": "EQ-Chorus-DDL~Large Room Rev",
+  "units": [
+   "EQ-Chorus-DDL",
+   "Large Room Rev"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "70",
+  "name": "Chorus & Plate",
+  "chain_raw": "EQ-Chorus-DDL~Large Plate",
+  "units": [
+   "EQ-Chorus-DDL",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "71",
+  "name": "Phaser & Room",
+  "chain_raw": "Phaser - DDL~Large Room Rev",
+  "units": [
+   "Phaser - DDL",
+   "Large Room Rev"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "72",
+  "name": "Phaser & Plate",
+  "chain_raw": "Large Plate~Phaser - DDL",
+  "units": [
+   "Large Plate",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "73",
+  "name": "Flanger & Room",
+  "chain_raw": "EQ-Flanger-DDL~Large Room Rev",
+  "units": [
+   "EQ-Flanger-DDL",
+   "Large Room Rev"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "74",
+  "name": "Flanger & Plate",
+  "chain_raw": "Large Plate~EQ-Flanger-DDL",
+  "units": [
+   "Large Plate",
+   "EQ-Flanger-DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "75",
+  "name": "Delay & Reverb 1",
+  "chain_raw": "MultiTap Delay~Large Plate",
+  "units": [
+   "MultiTap Delay",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "76",
+  "name": "Delay & Reverb 2",
+  "chain_raw": "EQ-DDL-withLFO~Large Plate",
+  "units": [
+   "EQ-DDL-withLFO",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "77",
+  "name": "TempoDly & Plate",
+  "chain_raw": "Tempo Delay~Large Plate",
+  "units": [
+   "Tempo Delay",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "78",
+  "name": "TempoDly & Hall",
+  "chain_raw": "Tempo Delay~Hall Reverb",
+  "units": [
+   "Tempo Delay",
+   "Hall Reverb"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "79",
+  "name": "RotSpkr & Plate",
+  "chain_raw": "Rotating Spkr~Large Plate",
+  "units": [
+   "Rotating Spkr",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "80",
+  "name": "RotSpkr & Hall",
+  "chain_raw": "Rotating Spkr~Hall Reverb",
+  "units": [
+   "Rotating Spkr",
+   "Hall Reverb"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "81",
+  "name": "Chorus-DDL-Pan",
+  "chain_raw": "EQ-Chorus-DDL~EQ-Panner-DDL",
+  "units": [
+   "EQ-Chorus-DDL",
+   "EQ-Panner-DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "82",
+  "name": "Sparkles & Verbs",
+  "chain_raw": "EQ-Chorus-DDL~Small Plate",
+  "units": [
+   "EQ-Chorus-DDL",
+   "Small Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "83",
+  "name": "Backing Vox-Lush",
+  "chain_raw": "Dual Delay~8 Voice Chorus",
+  "units": [
+   "Dual Delay",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "84",
+  "name": "Backing Vox-Rock",
+  "chain_raw": "PitchShifter+NonLin Reverb1",
+  "units": [
+   "PitchShifter",
+   "NonLin Reverb1"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "85",
+  "name": "Ducker & EQ",
+  "chain_raw": "Ducker / Gate~Parametric EQ",
+  "units": [
+   "Ducker / Gate",
+   "Parametric EQ"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "86",
+  "name": "KeyedExpander&EQ",
+  "chain_raw": "Keyed Expander~Parametric EQ",
+  "units": [
+   "Keyed Expander",
+   "Parametric EQ"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "87",
+  "name": "Exciter & DDL",
+  "chain_raw": "VandrPolFilter~EQ-DDL-withLFO",
+  "units": [
+   "VandrPolFilter",
+   "EQ-DDL-withLFO"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "88",
+  "name": "Compress&De-ess",
+  "chain_raw": "EQ-Compressor~De-esser",
+  "units": [
+   "EQ-Compressor",
+   "De-esser"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "89",
+  "name": "Wolf EQ & Gate",
+  "chain_raw": "Parametric EQ~Gated Reverb",
+  "units": [
+   "Parametric EQ",
+   "Gated Reverb"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "90",
+  "name": "Live Vocal Chain",
+  "chain_raw": "EQ-Compressor~PitchShift-DDL",
+  "units": [
+   "EQ-Compressor",
+   "PitchShift-DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "91",
+  "name": "Drum Squasher",
+  "chain_raw": "Large Plate~EQ-Compressor",
+  "units": [
+   "Large Plate",
+   "EQ-Compressor"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "92",
+  "name": "Digable Guitar",
+  "chain_raw": "DigitalTubeAmp~Tunable Spkr 2",
+  "units": [
+   "DigitalTubeAmp",
+   "Tunable Spkr 2"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "93",
+  "name": "Screamin' Amp",
+  "chain_raw": "Guitar Amp 3~TunableSpkr 1",
+  "units": [
+   "Guitar Amp 3",
+   "TunableSpkr 1"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "94",
+  "name": "Touch Wa Guitar",
+  "chain_raw": "VCF-Distort 1~Dual Delay",
+  "units": [
+   "VCF-Distort 1",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "95",
+  "name": "Amp Thru RotSpkr",
+  "chain_raw": "Guitar Amp 3~Rotating Spkr",
+  "units": [
+   "Guitar Amp 3",
+   "Rotating Spkr"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "96",
+  "name": "FtSwitchLoop DDL",
+  "chain_raw": "3.6 sec DDL 2U*N/A",
+  "units": [
+   "3.6 sec DDL 2U*N/A"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "97",
+  "name": "Owed to Acadia",
+  "chain_raw": "Large Plate~EQ-Panner-DDL",
+  "units": [
+   "Large Plate",
+   "EQ-Panner-DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "98",
+  "name": "Rhythmic Panner",
+  "chain_raw": "Tempo Delay~EQ-Panner-DDL",
+  "units": [
+   "Tempo Delay",
+   "EQ-Panner-DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "2-Unit ROM Presets",
+  "slot": "99",
+  "name": "Science Lab",
+  "chain_raw": "Sine/Noise Gen~Phaser - DDL",
+  "units": [
+   "Sine/Noise Gen",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "00",
+  "name": "Crystal Cave",
+  "chain_raw": "EQ-Compressor~Flanger+PitchShift-DDL\u2044NonLin Reverb1",
+  "units": [
+   "EQ-Compressor",
+   "Flanger",
+   "PitchShift-DDL",
+   "NonLin Reverb1"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "feedback"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "01",
+  "name": "Canyon Echo",
+  "chain_raw": "Small Plate~Small Plate~PitchShifter~Dual Delay",
+  "units": [
+   "Small Plate",
+   "Small Plate",
+   "PitchShifter",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "02",
+  "name": "Underwater Verb",
+  "chain_raw": "Small Plate~NonLin Reverb1~Hall Rev~EQ-Vibrato-DDL",
+  "units": [
+   "Small Plate",
+   "NonLin Reverb1",
+   "Hall Rev",
+   "EQ-Vibrato-DDL"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "03",
+  "name": "PhaseFlange Verb",
+  "chain_raw": "Large Plate~Flanger~EQ-Panner-DDL~Phaser - DDL",
+  "units": [
+   "Large Plate",
+   "Flanger",
+   "EQ-Panner-DDL",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "04",
+  "name": "MassiveVerb 1",
+  "chain_raw": "Large Plate+Hall Reverb+Large Plate+Hall Reverb",
+  "units": [
+   "Large Plate",
+   "Hall Reverb",
+   "Large Plate",
+   "Hall Reverb"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "05",
+  "name": "MassiveVerb 2",
+  "chain_raw": "Small Plate+Small Plate+Hall Reverb~Small Room Rev",
+  "units": [
+   "Small Plate",
+   "Small Plate",
+   "Hall Reverb",
+   "Small Room Rev"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "06",
+  "name": "Rhythm Verb",
+  "chain_raw": "Small Plate+NonLin Reverb1+MultiTap Delay~Large Plate",
+  "units": [
+   "Small Plate",
+   "NonLin Reverb1",
+   "MultiTap Delay",
+   "Large Plate"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "07",
+  "name": "Hugh Bright Verb",
+  "chain_raw": "Hall Reverb+Hall Reverb+Hall Reverb+Large Plate",
+  "units": [
+   "Hall Reverb",
+   "Hall Reverb",
+   "Hall Reverb",
+   "Large Plate"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "08",
+  "name": "Hugh Warm Verb",
+  "chain_raw": "Parametric EQ~Hall Reverb+Parametric EQ~Large Plate",
+  "units": [
+   "Parametric EQ",
+   "Hall Reverb",
+   "Parametric EQ",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "09",
+  "name": "Resonant Reverb",
+  "chain_raw": "EQ-Compressor~Parametric EQ~Hall Reverb~Flanger",
+  "units": [
+   "EQ-Compressor",
+   "Parametric EQ",
+   "Hall Reverb",
+   "Flanger"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "10",
+  "name": "Studio Vocal 1",
+  "chain_raw": "EQ-Compressor~PitchShift-DDL~Dual Delay~Large Plate",
+  "units": [
+   "EQ-Compressor",
+   "PitchShift-DDL",
+   "Dual Delay",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "11",
+  "name": "Studio Vocal 2",
+  "chain_raw": "EQ-Compressor~PitchShift-DDL~Dual Delay~Large Plate",
+  "units": [
+   "EQ-Compressor",
+   "PitchShift-DDL",
+   "Dual Delay",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "12",
+  "name": "Crisp VocalChain",
+  "chain_raw": "Parametric EQ~EQ-Compresr~Pitch Shifter~VandrPolFilter",
+  "units": [
+   "Parametric EQ",
+   "EQ-Compresr",
+   "Pitch Shifter",
+   "VandrPolFilter"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "13",
+  "name": "Up Front Vocal",
+  "chain_raw": "EQ-Compresr~PitchShifter~NonLin Rev1+Tempo Delay",
+  "units": [
+   "EQ-Compresr",
+   "PitchShifter",
+   "NonLin Rev1",
+   "Tempo Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "14",
+  "name": "BrightVocalChain",
+  "chain_raw": "EQ-Compressor~PitchShifter~Large Plate+MultiTap Delay",
+  "units": [
+   "EQ-Compressor",
+   "PitchShifter",
+   "Large Plate",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "15",
+  "name": "Warm Vocal Chain",
+  "chain_raw": "EQ-Compressor~PitchShifter~Large Plate+MultiTap Delay",
+  "units": [
+   "EQ-Compressor",
+   "PitchShifter",
+   "Large Plate",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "16",
+  "name": "Super Spreader",
+  "chain_raw": "PitchShift 2U*N/A+PitchShift 2U*N/A",
+  "units": [
+   "PitchShift 2U*N/A",
+   "PitchShift 2U*N/A"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "17",
+  "name": "Time Machine",
+  "chain_raw": "EQ-Compressor~Dual Delay~8 Voice Chorus~Large Plate",
+  "units": [
+   "EQ-Compressor",
+   "Dual Delay",
+   "8 Voice Chorus",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "18",
+  "name": "Phased Vocals 1",
+  "chain_raw": "EQ-Compressor~Phaser - DDL~Large Plate+Tempo Delay",
+  "units": [
+   "EQ-Compressor",
+   "Phaser - DDL",
+   "Large Plate",
+   "Tempo Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "19",
+  "name": "Jazz Vocal 1",
+  "chain_raw": "EQ-Compressor~PitchShift-DDL~Large Plate~Dual Delay",
+  "units": [
+   "EQ-Compressor",
+   "PitchShift-DDL",
+   "Large Plate",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "20",
+  "name": "Rockin' Lead Gtr",
+  "chain_raw": "GuitarAmp3~TunableSpkr1~FastPitchShift~MultiTap Delay",
+  "units": [
+   "GuitarAmp3",
+   "TunableSpkr1",
+   "FastPitchShift",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "21",
+  "name": "Room Mic Gtr Amp",
+  "chain_raw": "Guitar Amp 3~TunableSpkr 1~PitchShifter+Large Plate",
+  "units": [
+   "Guitar Amp 3",
+   "TunableSpkr 1",
+   "PitchShifter",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "22",
+  "name": "UltraWide Guitar",
+  "chain_raw": "Guitar Amp 3~Tunable Spkr 1~MultiTap Delay~Hall Rev",
+  "units": [
+   "Guitar Amp 3",
+   "Tunable Spkr 1",
+   "MultiTap Delay",
+   "Hall Rev"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "23",
+  "name": "TuffButNice Gtr",
+  "chain_raw": "GuitarAmp3~TunableSpkr 1~VandrPolFilter~Dual Delay",
+  "units": [
+   "GuitarAmp3",
+   "TunableSpkr 1",
+   "VandrPolFilter",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "24",
+  "name": "Vintage Tube Amp",
+  "chain_raw": "EQ-Vibrato-DDL~GuitarAmp 2~SpeakerCabinet~LrgPlate",
+  "units": [
+   "EQ-Vibrato-DDL",
+   "GuitarAmp 2",
+   "SpeakerCabinet",
+   "LrgPlate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "25",
+  "name": "Rockabilly Gtr 1",
+  "chain_raw": "Guitar Amp 3~Tunable Spkr 1~Dual Delay~EQ-Chor-DDL",
+  "units": [
+   "Guitar Amp 3",
+   "Tunable Spkr 1",
+   "Dual Delay",
+   "EQ-Chor-DDL"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "26",
+  "name": "Fast Tremolo Amp",
+  "chain_raw": "EQ-Compressr~Guitar Amp1~EQ-Tremolo-DDL~DualDelay",
+  "units": [
+   "EQ-Compressr",
+   "Guitar Amp1",
+   "EQ-Tremolo-DDL",
+   "DualDelay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "27",
+  "name": "Metal Rhythm Gtr",
+  "chain_raw": "Guitar Amp 1~PitchShift-DDL~Small Plate~Dual Delay",
+  "units": [
+   "Guitar Amp 1",
+   "PitchShift-DDL",
+   "Small Plate",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "28",
+  "name": "Wah Lead Guitar",
+  "chain_raw": "VCF-Distort 1~Guitar Amp1~SpkrCabinet+LrgRoomRev",
+  "units": [
+   "VCF-Distort 1",
+   "Guitar Amp1",
+   "SpkrCabinet",
+   "LrgRoomRev"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "29",
+  "name": "SuperFunk Guitar",
+  "chain_raw": "VCF-Distort 1~Dual Delay~Tunable Spkr 1~PitchShifter",
+  "units": [
+   "VCF-Distort 1",
+   "Dual Delay",
+   "Tunable Spkr 1",
+   "PitchShifter"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "30",
+  "name": "Big Acoustic Gtr",
+  "chain_raw": "EQ-Compresr~EQ-Chor-DDL+RotatingSpkr~LrgRoomRev",
+  "units": [
+   "EQ-Compresr",
+   "EQ-Chor-DDL",
+   "RotatingSpkr",
+   "LrgRoomRev"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "31",
+  "name": "NY Studio Gtr",
+  "chain_raw": "EQ-Compressor~Flanger~Hall Reverb+Dual Delay",
+  "units": [
+   "EQ-Compressor",
+   "Flanger",
+   "Hall Reverb",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "32",
+  "name": "LA Studio Gtr",
+  "chain_raw": "EQ-Compressor~8 Voice Chorus~PitchShifter~Dual Delay",
+  "units": [
+   "EQ-Compressor",
+   "8 Voice Chorus",
+   "PitchShifter",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "33",
+  "name": "Studio Tremolo",
+  "chain_raw": "EQ-Compresr~EQ-Tremolo-DDL~SmlRoomRev+DualDelay",
+  "units": [
+   "EQ-Compresr",
+   "EQ-Tremolo-DDL",
+   "SmlRoomRev",
+   "DualDelay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "34",
+  "name": "Rock Bass & Lead",
+  "chain_raw": "Guitar Amp 3~Tunable Spkr 1~PitchShifter~Param EQ",
+  "units": [
+   "Guitar Amp 3",
+   "Tunable Spkr 1",
+   "PitchShifter",
+   "Param EQ"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "35",
+  "name": "Mellow Jazz Gtr",
+  "chain_raw": "EQ-Compressor~PitchShift-DDL~Large Plate~Dual Delay",
+  "units": [
+   "EQ-Compressor",
+   "PitchShift-DDL",
+   "Large Plate",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "36",
+  "name": "Rhythm-DDL Gtr",
+  "chain_raw": "EQ-Compressr~EQ-Chor-DDL~PitchShifter+MultiTapDelay",
+  "units": [
+   "EQ-Compressr",
+   "EQ-Chor-DDL",
+   "PitchShifter",
+   "MultiTapDelay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "37",
+  "name": "Comp-DDL Guitar",
+  "chain_raw": "EQ-Compressor~8 Voice Chorus~Dual Delay~Large Plate",
+  "units": [
+   "EQ-Compressor",
+   "8 Voice Chorus",
+   "Dual Delay",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "38",
+  "name": "Weird Phase Gtr",
+  "chain_raw": "EQ-Compressor~Phaser - DDL~Dual Delay~Large Plate",
+  "units": [
+   "EQ-Compressor",
+   "Phaser - DDL",
+   "Dual Delay",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "39",
+  "name": "Rockabilly Gtr 2",
+  "chain_raw": "EQ-Compresr~GuitarAmp1~EQ-DDL-wLFO~SmlRoomRev",
+  "units": [
+   "EQ-Compresr",
+   "GuitarAmp1",
+   "EQ-DDL-wLFO",
+   "SmlRoomRev"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "40",
+  "name": "Slammin' Bass",
+  "chain_raw": "EQ-Compressr~EQ-Compressr~8Vc Chorus~VandrPolFilter",
+  "units": [
+   "EQ-Compressr",
+   "EQ-Compressr",
+   "8Vc Chorus",
+   "VandrPolFilter"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "41",
+  "name": "Super Chorus",
+  "chain_raw": "Param EQ~8 Voice Chorus+Large Plate~8 Voice Chorus",
+  "units": [
+   "Param EQ",
+   "8 Voice Chorus",
+   "Large Plate",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "42",
+  "name": "Super Phase-DDL",
+  "chain_raw": "Parametric EQ~Phaser - DDL+Large Plate~8 Voice Chorus",
+  "units": [
+   "Parametric EQ",
+   "Phaser - DDL",
+   "Large Plate",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "43",
+  "name": "Parallelograms",
+  "chain_raw": "PitchShifter~MultiTap Delay~Phaser - DDL+EQ-Panner-DDL",
+  "units": [
+   "PitchShifter",
+   "MultiTap Delay",
+   "Phaser - DDL",
+   "EQ-Panner-DDL"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "44",
+  "name": "16-Band EQ",
+  "chain_raw": "Param EQ~Param EQ+Param EQ~Param EQ",
+  "units": [
+   "Param EQ",
+   "Param EQ",
+   "Param EQ",
+   "Param EQ"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "45",
+  "name": "Modulation Mania",
+  "chain_raw": "8 Voice Chorus~Flanger~Phaser - DDL~EQ-Chorus-DDL",
+  "units": [
+   "8 Voice Chorus",
+   "Flanger",
+   "Phaser - DDL",
+   "EQ-Chorus-DDL"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "46",
+  "name": "32 Voice Chorus",
+  "chain_raw": "8 VoiceChorus+8 Vc Chorus+8 Vc Chorus+8 Vc Chorus",
+  "units": [
+   "8 VoiceChorus",
+   "8 Vc Chorus",
+   "8 Vc Chorus",
+   "8 Vc Chorus"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "47",
+  "name": "Chorus-Phaser",
+  "chain_raw": "8 Voice Chorus~Phaser - DDL+PitchShifter\u2044Phaser - DDL",
+  "units": [
+   "8 Voice Chorus",
+   "Phaser - DDL",
+   "PitchShifter",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "feedback"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "48",
+  "name": "Twilight Tone",
+  "chain_raw": "PitchShift-DDL\u2044Phaser - DDL~Gated Rev~Phaser - DDL",
+  "units": [
+   "PitchShift-DDL",
+   "Phaser - DDL",
+   "Gated Rev",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "feedback",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit RAM Presets",
+  "slot": "49",
+  "name": "CV-Wet Thunder!",
+  "chain_raw": "Sine/NoiseGen~Phaser- DDL~EQ-DDL-withLFO~LrgPlate",
+  "units": [
+   "Sine/NoiseGen",
+   "Phaser- DDL",
+   "EQ-DDL-withLFO",
+   "LrgPlate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "50",
+  "name": "String Section",
+  "chain_raw": "Parametric EQ~Hall Reverb~MultiTap Delay~8 Vce Chorus",
+  "units": [
+   "Parametric EQ",
+   "Hall Reverb",
+   "MultiTap Delay",
+   "8 Vce Chorus"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "51",
+  "name": "Quartet Chamber",
+  "chain_raw": "Parametric EQ~Large Room Rev~Dual Delay+PitchShifter",
+  "units": [
+   "Parametric EQ",
+   "Large Room Rev",
+   "Dual Delay",
+   "PitchShifter"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "52",
+  "name": "MassiveVerb 3",
+  "chain_raw": "Hall Reverb+Lrg Plate+Lrg Room Rev+Sml Room Rev",
+  "units": [
+   "Hall Reverb",
+   "Lrg Plate",
+   "Lrg Room Rev",
+   "Sml Room Rev"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "53",
+  "name": "MassiveVerb 4",
+  "chain_raw": "Large Plate+Hall Reverb+Small Plate+NonLin Reverb1",
+  "units": [
+   "Large Plate",
+   "Hall Reverb",
+   "Small Plate",
+   "NonLin Reverb1"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "54",
+  "name": "Mega-Kick Verb",
+  "chain_raw": "EQ-Compressor~ParamEQ~NonLinRev1~EQ-Compressor",
+  "units": [
+   "EQ-Compressor",
+   "ParamEQ",
+   "NonLinRev1",
+   "EQ-Compressor"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "55",
+  "name": "Mega-Snare Verb",
+  "chain_raw": "EQ-Compressor~ParamEQ~LargePlate~EQ-Compressor",
+  "units": [
+   "EQ-Compressor",
+   "ParamEQ",
+   "LargePlate",
+   "EQ-Compressor"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "56",
+  "name": "Mega-Toms Verb",
+  "chain_raw": "EQ-Compressor~ParamEQ~NonLinRev1~SmallRoomRev",
+  "units": [
+   "EQ-Compressor",
+   "ParamEQ",
+   "NonLinRev1",
+   "SmallRoomRev"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "57",
+  "name": "Backwards Verb",
+  "chain_raw": "EQ-Compressor~NonLin Rev1+Sml Plate+MultiTap Delay",
+  "units": [
+   "EQ-Compressor",
+   "NonLin Rev1",
+   "Sml Plate",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "58",
+  "name": "Wet Vocal Chain",
+  "chain_raw": "EQ-Compressor~PitchShifter~Large Plate+MultiTap Delay",
+  "units": [
+   "EQ-Compressor",
+   "PitchShifter",
+   "Large Plate",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "59",
+  "name": "TightVocalChain",
+  "chain_raw": "EQ-Compressor~Tempo Delay~PitchShifter~Large Plate",
+  "units": [
+   "EQ-Compressor",
+   "Tempo Delay",
+   "PitchShifter",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "60",
+  "name": "De-esVocalChain",
+  "chain_raw": "EQ-Compressor~De-esser~MultiTap Delay~Large Plate",
+  "units": [
+   "EQ-Compressor",
+   "De-esser",
+   "MultiTap Delay",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "61",
+  "name": "Wide Vocal Chain",
+  "chain_raw": "EQ-Compress~PitchShift-DDL~MultiTapDelay~LargePlate",
+  "units": [
+   "EQ-Compress",
+   "PitchShift-DDL",
+   "MultiTapDelay",
+   "LargePlate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "62",
+  "name": "Jazz Vocal Chain",
+  "chain_raw": "EQ-Compress~PitchShift-DDL~LargePlate~MultiTapDelay",
+  "units": [
+   "EQ-Compress",
+   "PitchShift-DDL",
+   "LargePlate",
+   "MultiTapDelay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "63",
+  "name": "'57 Vocal Smooth",
+  "chain_raw": "Param EQ~EQ-Compressor~LargePlate+PitchShift-DDL",
+  "units": [
+   "Param EQ",
+   "EQ-Compressor",
+   "LargePlate",
+   "PitchShift-DDL"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "64",
+  "name": "'57 Vocal Rap",
+  "chain_raw": "Parametric EQ~EQ-Compressor~Large Plate+PitchShifter",
+  "units": [
+   "Parametric EQ",
+   "EQ-Compressor",
+   "Large Plate",
+   "PitchShifter"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "65",
+  "name": "Excited Vocals",
+  "chain_raw": "ParamEQ~EQ-Compressr~Small Plate+VandrPolFilter",
+  "units": [
+   "ParamEQ",
+   "EQ-Compressr",
+   "Small Plate",
+   "VandrPolFilter"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "66",
+  "name": "Pop Vocal Chain",
+  "chain_raw": "Parametric EQ~EQ-Compressor~PitchShifter~Dual Delay",
+  "units": [
+   "Parametric EQ",
+   "EQ-Compressor",
+   "PitchShifter",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "67",
+  "name": "Phased Vocals",
+  "chain_raw": "EQ-Compressor~Phaser-DDL~NonLin Rev1+Tempo Delay",
+  "units": [
+   "EQ-Compressor",
+   "Phaser-DDL",
+   "NonLin Rev1",
+   "Tempo Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "68",
+  "name": "MetalMaster Gtr",
+  "chain_raw": "Guitar Amp 3~Tunable Spkr 1~PitchShifter~Large Plate",
+  "units": [
+   "Guitar Amp 3",
+   "Tunable Spkr 1",
+   "PitchShifter",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "69",
+  "name": "MonsterLead Gtr",
+  "chain_raw": "Guitar Amp 3~Tunable Spkr 1~PitchShifter~MultiTap Delay",
+  "units": [
+   "Guitar Amp 3",
+   "Tunable Spkr 1",
+   "PitchShifter",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "70",
+  "name": "CloseMic Gtr Amp",
+  "chain_raw": "Guitar Amp 3~Tunable Spkr 1~PitchShifter~MultiTap Delay",
+  "units": [
+   "Guitar Amp 3",
+   "Tunable Spkr 1",
+   "PitchShifter",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "71",
+  "name": "Arena Rock Gtr",
+  "chain_raw": "Guitar Amp 3~Tunable Spkr 1~PitchShifter~Large Plate",
+  "units": [
+   "Guitar Amp 3",
+   "Tunable Spkr 1",
+   "PitchShifter",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "72",
+  "name": "Blues Lead Gtr",
+  "chain_raw": "Guitar Amp 1~Tunable Spkr 1~Dual Delay~Small Room Rev",
+  "units": [
+   "Guitar Amp 1",
+   "Tunable Spkr 1",
+   "Dual Delay",
+   "Small Room Rev"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "73",
+  "name": "Practice Amp",
+  "chain_raw": "EQ-Tremolo-DDL~VCF-Distort 1~SpkrCabnt~SmlRoomRev",
+  "units": [
+   "EQ-Tremolo-DDL",
+   "VCF-Distort 1",
+   "SpkrCabnt",
+   "SmlRoomRev"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "74",
+  "name": "Rhythm Guitar",
+  "chain_raw": "EQ-Compressor~Guitar Amp 2~MultiTap Delay~Hall Reverb",
+  "units": [
+   "EQ-Compressor",
+   "Guitar Amp 2",
+   "MultiTap Delay",
+   "Hall Reverb"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "75",
+  "name": "Jimi's Wawa",
+  "chain_raw": "VCF-Distort 1~TunableSpkr 1~Dual Delay~EQ-Chor-DDL",
+  "units": [
+   "VCF-Distort 1",
+   "TunableSpkr 1",
+   "Dual Delay",
+   "EQ-Chor-DDL"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "76",
+  "name": "Ballad Lead Gtr",
+  "chain_raw": "EQ-Compressor~Guitar Amp 1~Dual Delay~Hall Reverb",
+  "units": [
+   "EQ-Compressor",
+   "Guitar Amp 1",
+   "Dual Delay",
+   "Hall Reverb"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "77",
+  "name": "Jazzy Rhythm Gtr",
+  "chain_raw": "Parametric EQ~EQ-Compressor~PitchShifter~Small Plate",
+  "units": [
+   "Parametric EQ",
+   "EQ-Compressor",
+   "PitchShifter",
+   "Small Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "78",
+  "name": "Crystal Guitar",
+  "chain_raw": "Param EQ~EQ-Compressor~8VoiceChorus~LargePlate",
+  "units": [
+   "Param EQ",
+   "EQ-Compressor",
+   "8VoiceChorus",
+   "LargePlate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "79",
+  "name": "Super Clean Gtr",
+  "chain_raw": "EQ-Compressor~8 Vc Chorus~PitchShifter+MultiTap Delay",
+  "units": [
+   "EQ-Compressor",
+   "8 Vc Chorus",
+   "PitchShifter",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "80",
+  "name": "Studio Chords",
+  "chain_raw": "EQ-Compressor~8 Voice Chorus~Hall Reverb+Dual Delay",
+  "units": [
+   "EQ-Compressor",
+   "8 Voice Chorus",
+   "Hall Reverb",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "81",
+  "name": "Studio Tube Amp",
+  "chain_raw": "DigitalTubeAmp~TunableSpkr2~DualDelay~SmllRoomRev",
+  "units": [
+   "DigitalTubeAmp",
+   "TunableSpkr2",
+   "DualDelay",
+   "SmllRoomRev"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "82",
+  "name": "Super Bass",
+  "chain_raw": "EQ-Compressor~ParamEQ~8VoiceChorus~VandrPolFilter",
+  "units": [
+   "EQ-Compressor",
+   "ParamEQ",
+   "8VoiceChorus",
+   "VandrPolFilter"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "83",
+  "name": "Brass FX Chain",
+  "chain_raw": "ParamEQ~EQ-Compressor~NonLin Reverb1~Small Plate",
+  "units": [
+   "ParamEQ",
+   "EQ-Compressor",
+   "NonLin Reverb1",
+   "Small Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "84",
+  "name": "Piano FX Chain",
+  "chain_raw": "Param EQ~Large Room Rev+Hall Reverb~8 Voice Chorus",
+  "units": [
+   "Param EQ",
+   "Large Room Rev",
+   "Hall Reverb",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "85",
+  "name": "Winds FX Chain",
+  "chain_raw": "Param EQ~Large Room Rev+Hall Reverb~8 Voice Chorus",
+  "units": [
+   "Param EQ",
+   "Large Room Rev",
+   "Hall Reverb",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "86",
+  "name": "Clean EP Chain",
+  "chain_raw": "Param EQ~8 Voice Chorus+Hall Reverb~8 Voice Chorus",
+  "units": [
+   "Param EQ",
+   "8 Voice Chorus",
+   "Hall Reverb",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "87",
+  "name": "BurningSax Chain",
+  "chain_raw": "Hall Reverb~InversExpander~PitchShifter~MultiTap Delay",
+  "units": [
+   "Hall Reverb",
+   "InversExpander",
+   "PitchShifter",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "88",
+  "name": "Vibes FX Chain",
+  "chain_raw": "Param EQ~EQ-Tremolo-DDL+Hall Reverb~8 Voice Chorus",
+  "units": [
+   "Param EQ",
+   "EQ-Tremolo-DDL",
+   "Hall Reverb",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "89",
+  "name": "Choir FX Chain",
+  "chain_raw": "Parametric EQ~8 Voice Chorus~Dual Delay+Hall Reverb",
+  "units": [
+   "Parametric EQ",
+   "8 Voice Chorus",
+   "Dual Delay",
+   "Hall Reverb"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "90",
+  "name": "Crystal Tines",
+  "chain_raw": "Parametric EQ~8 Voice Chorus~MultiTapDelay+Hall Rev",
+  "units": [
+   "Parametric EQ",
+   "8 Voice Chorus",
+   "MultiTapDelay",
+   "Hall Rev"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "91",
+  "name": "Dirty Organ",
+  "chain_raw": "Param EQ~EQ-Compressor~Rotating Spkr~Small Plate",
+  "units": [
+   "Param EQ",
+   "EQ-Compressor",
+   "Rotating Spkr",
+   "Small Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "92",
+  "name": "Sunday Organ",
+  "chain_raw": "Param EQ~EQ-Compress~Rotating Spkr~Lrg Room Reverb",
+  "units": [
+   "Param EQ",
+   "EQ-Compress",
+   "Rotating Spkr",
+   "Lrg Room Reverb"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "93",
+  "name": "Nasty Harmony",
+  "chain_raw": "PtchShft-DDL+PtchShft-DDL+PtchShft-DDL+PtchShft-DDL",
+  "units": [
+   "PtchShft-DDL",
+   "PtchShft-DDL",
+   "PtchShft-DDL",
+   "PtchShft-DDL"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "94",
+  "name": "Sweet Harmony",
+  "chain_raw": "PtchShft-DDL+PtchShft-DDL+PtchShft-DDL+PtchShft-DDL",
+  "units": [
+   "PtchShft-DDL",
+   "PtchShft-DDL",
+   "PtchShft-DDL",
+   "PtchShft-DDL"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "95",
+  "name": "Mega Flanger",
+  "chain_raw": "Flanger~EQ-Flanger-DDL+EQ-Flanger-DDL+Flanger",
+  "units": [
+   "Flanger",
+   "EQ-Flanger-DDL",
+   "EQ-Flanger-DDL",
+   "Flanger"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "96",
+  "name": "Mega Phaser",
+  "chain_raw": "Rotating Spkr~Phaser - DDL+Phaser - DDL+Phaser - DDL",
+  "units": [
+   "Rotating Spkr",
+   "Phaser - DDL",
+   "Phaser - DDL",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "97",
+  "name": "Mega Chorus",
+  "chain_raw": "8 Voice Chorus~8 Vc Chorus+8 Vc Chorus+8 Vc Chorus",
+  "units": [
+   "8 Voice Chorus",
+   "8 Vc Chorus",
+   "8 Vc Chorus",
+   "8 Vc Chorus"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "98",
+  "name": "Dense Mist",
+  "chain_raw": "Large Plate~Phaser - DDL+8 Voice Chorus\u2044Large Plate",
+  "units": [
+   "Large Plate",
+   "Phaser - DDL",
+   "8 Voice Chorus",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "feedback"
+  ]
+ },
+ {
+  "bank": "4-Unit ROM Presets",
+  "slot": "99",
+  "name": "Guitar Tuner 4U",
+  "chain_raw": "GuitarTuner 2U*N/A~No Effect~No Effect",
+  "units": [
+   "GuitarTuner 2U*N/A",
+   "No Effect",
+   "No Effect"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "00",
+  "name": "MonoInVocalSetup",
+  "chain_raw": "EQ-Compressor~PitchShifter~Large Plate+MultiTap Delay",
+  "units": [
+   "EQ-Compressor",
+   "PitchShifter",
+   "Large Plate",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "01",
+  "name": "StereoVocalSetup",
+  "chain_raw": "EQ-Compressor~PitchShift-DDL~Dual Delay~Large Plate",
+  "units": [
+   "EQ-Compressor",
+   "PitchShift-DDL",
+   "Dual Delay",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "02",
+  "name": "Rock Gtr Setup",
+  "chain_raw": "GuitarAmp1~TunableSpkr1~DualDelay~Small Room Rev",
+  "units": [
+   "GuitarAmp1",
+   "TunableSpkr1",
+   "DualDelay",
+   "Small Room Rev"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "03",
+  "name": "Stereo In Keybds",
+  "chain_raw": "Param EQ~8 Voice Chorus+LargePlate~8 Voice Chorus",
+  "units": [
+   "Param EQ",
+   "8 Voice Chorus",
+   "LargePlate",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial",
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "04",
+  "name": "PitchSwept Chain",
+  "chain_raw": "PitchShifter\u2044Hall Reverb~EQ-Vibrato-DDL~Phaser - DDL",
+  "units": [
+   "PitchShifter",
+   "Hall Reverb",
+   "EQ-Vibrato-DDL",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "feedback",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "05",
+  "name": "Lead Vox  BG Vox",
+  "chain_raw": "PitchShift-DDL~Large Plate PitchShifter+NonLin Reverb1",
+  "units": [
+   "PitchShift-DDL",
+   "Large Plate PitchShifter",
+   "NonLin Reverb1"
+  ],
+  "routing": [
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "06",
+  "name": "Drums    Vocals",
+  "chain_raw": "NonLin Rev1+NonLin Rev1 EQ-Compressor~FastPitchShift",
+  "units": [
+   "NonLin Rev1",
+   "NonLin Rev1 EQ-Compressor",
+   "FastPitchShift"
+  ],
+  "routing": [
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "07",
+  "name": "Kik&Snr   Toms",
+  "chain_raw": "NonLin Rev1\u2044PitchShift-DDL  NonLinRev1~Phaser-DDL",
+  "units": [
+   "NonLin Rev1",
+   "PitchShift-DDL",
+   "NonLinRev1",
+   "Phaser-DDL"
+  ],
+  "routing": [
+   "feedback",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "08",
+  "name": "Drums      Keys",
+  "chain_raw": "Sml Room Rev+Sml Room Rev  Lrg Plate~8 Voice Chorus",
+  "units": [
+   "Sml Room Rev",
+   "Sml Room Rev",
+   "Lrg Plate",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "09",
+  "name": "Horns    Vocals",
+  "chain_raw": "Small Plate~Large Plate   8VoiceChorus~EQ-Panner-DDL",
+  "units": [
+   "Small Plate",
+   "Large Plate",
+   "8VoiceChorus",
+   "EQ-Panner-DDL"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "10",
+  "name": "Keybds  Vocals",
+  "chain_raw": "EQ-Chorus-DDL~Large Plate MultiTap Delay~Large Plate",
+  "units": [
+   "EQ-Chorus-DDL",
+   "Large Plate MultiTap Delay",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "11",
+  "name": "Strings  Brass",
+  "chain_raw": "Large Plate~8 Voice Chorus Small Plate~Large Plate",
+  "units": [
+   "Large Plate",
+   "8 Voice Chorus Small Plate",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "12",
+  "name": "Guitar   Bass",
+  "chain_raw": "Guitar Amp 2~Rotating Spkr Phaser - DDL~Phaser - DDL",
+  "units": [
+   "Guitar Amp 2",
+   "Rotating Spkr Phaser - DDL",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "13",
+  "name": "Drums     Bass",
+  "chain_raw": "NonLin Reverb1+Large Plate Phaser - DDL~PitchShifter",
+  "units": [
+   "NonLin Reverb1",
+   "Large Plate Phaser - DDL",
+   "PitchShifter"
+  ],
+  "routing": [
+   "parallel",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "14",
+  "name": "Bloom      Room",
+  "chain_raw": "NonLin Reverb3~LargePlate   Lrg RoomRev+Lrg RoomRev",
+  "units": [
+   "NonLin Reverb3",
+   "LargePlate",
+   "Lrg RoomRev",
+   "Lrg RoomRev"
+  ],
+  "routing": [
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "15",
+  "name": "Kik Snr  Toms",
+  "chain_raw": "Small Plate Small Plate NonLin Reverb1+Large Plate",
+  "units": [
+   "Small Plate Small Plate NonLin Reverb1",
+   "Large Plate"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "16",
+  "name": "Kik Snr  Cymbals",
+  "chain_raw": "NonLin Reverb1 Large Plate Small Plate~Phaser - DDL",
+  "units": [
+   "NonLin Reverb1 Large Plate Small Plate",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "17",
+  "name": "Kik Snr   Vocals",
+  "chain_raw": "Small Plate Small Plate PitchShift-DDL~Large Plate",
+  "units": [
+   "Small Plate Small Plate PitchShift-DDL",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "18",
+  "name": "Drms Bs  Keybds",
+  "chain_raw": "SmlRoomRev  8VoiceChorus  EQ-Chorus-DDL~LrgPlate",
+  "units": [
+   "SmlRoomRev",
+   "8VoiceChorus",
+   "EQ-Chorus-DDL",
+   "LrgPlate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "19",
+  "name": "Bas Voc  Keybds",
+  "chain_raw": "8 Voice Chorus MultiTap Delay Phaser - DDL~Large Plate",
+  "units": [
+   "8 Voice Chorus MultiTap Delay Phaser - DDL",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "20",
+  "name": "Bas Kys  Guitar",
+  "chain_raw": "EQ-Flangr-DDL  EQ-Chor-DDL EQ-Tremolo-DDL~Lrg Plate",
+  "units": [
+   "EQ-Flangr-DDL",
+   "EQ-Chor-DDL EQ-Tremolo-DDL",
+   "Lrg Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "21",
+  "name": "Rm1 Rm2  Hall",
+  "chain_raw": "Small Room Rev Small Room Rev Hall Reverb+Small Plate",
+  "units": [
+   "Small Room Rev Small Room Rev Hall Reverb",
+   "Small Plate"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "22",
+  "name": "DDL Plt VoxVerb",
+  "chain_raw": "MultiTap Delay Large Plate Large Plate\u2044Dual Delay",
+  "units": [
+   "MultiTap Delay Large Plate Large Plate",
+   "Dual Delay"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "23",
+  "name": "Cho Taps LushVox",
+  "chain_raw": "8 Voice Chorus Dual Delay Large Plate~8 Voice Chorus",
+  "units": [
+   "8 Voice Chorus Dual Delay Large Plate",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "24",
+  "name": "Pan Phs Harmoniz",
+  "chain_raw": "EQ-Panner-DDL Phaser-DDL Pitch Shift 2U*N/A",
+  "units": [
+   "EQ-Panner-DDL Phaser-DDL Pitch Shift 2U*N/A"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "25",
+  "name": "LeadGtr  Vocals",
+  "chain_raw": "Guitar Amp 1~Small Plate Large Plate~PitchShifter",
+  "units": [
+   "Guitar Amp 1",
+   "Small Plate Large Plate",
+   "PitchShifter"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "26",
+  "name": "CleanGtr Vocals",
+  "chain_raw": "Parametric EQ~8 Voice Chorus Large Plate~PitchShifter",
+  "units": [
+   "Parametric EQ",
+   "8 Voice Chorus Large Plate",
+   "PitchShifter"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "27",
+  "name": "E.Piano  VocalFX",
+  "chain_raw": "Large Plate~Phaser - DDL Large Plate+PitchShifter",
+  "units": [
+   "Large Plate",
+   "Phaser - DDL Large Plate",
+   "PitchShifter"
+  ],
+  "routing": [
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "28",
+  "name": "Fretles  SoftPad",
+  "chain_raw": "Large Plate~8 Voice Chorus Large Plate~8 Voice Chorus",
+  "units": [
+   "Large Plate",
+   "8 Voice Chorus Large Plate",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "29",
+  "name": "HornRev  Vocals",
+  "chain_raw": "Small Plate~Large Plate Large Plate+PitchShifter",
+  "units": [
+   "Small Plate",
+   "Large Plate Large Plate",
+   "PitchShifter"
+  ],
+  "routing": [
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "30",
+  "name": "Inverse  NonLin",
+  "chain_raw": "NonLin Rev2~Large Plate   NonLin Rev1+NonLin Rev1",
+  "units": [
+   "NonLin Rev2",
+   "Large Plate",
+   "NonLin Rev1",
+   "NonLin Rev1"
+  ],
+  "routing": [
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "31",
+  "name": "Ducker Harmoniz",
+  "chain_raw": "Ducker / Gate~Parametric EQ Pitch Shift 2U*N/A",
+  "units": [
+   "Ducker / Gate",
+   "Parametric EQ Pitch Shift 2U*N/A"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "32",
+  "name": "De-essed DDL&Rev",
+  "chain_raw": "De-esser~Large Plate De-esser~Dual Delay",
+  "units": [
+   "De-esser",
+   "Large Plate De-esser",
+   "Dual Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "33",
+  "name": "Kik Snr  RevDDL",
+  "chain_raw": "Small Plate Gated Reverb Large Plate+MultiTap Delay",
+  "units": [
+   "Small Plate Gated Reverb Large Plate",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "34",
+  "name": "Kik Snr  Percus",
+  "chain_raw": "Small Room Rev Large Plate Small Plate~8 Voice Chorus",
+  "units": [
+   "Small Room Rev Large Plate Small Plate",
+   "8 Voice Chorus"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "35",
+  "name": "Brs Bels VocalFX",
+  "chain_raw": "Large Plate EQ-Chorus-DDL PitchShift-DDL~Large Plate",
+  "units": [
+   "Large Plate EQ-Chorus-DDL PitchShift-DDL",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "36",
+  "name": "DDL Plt  Guitar",
+  "chain_raw": "MultiTap Delay Large Plate  VCF-Distort 1~Guitar Amp 3",
+  "units": [
+   "MultiTap Delay Large Plate",
+   "VCF-Distort 1",
+   "Guitar Amp 3"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "37",
+  "name": "Flg Slap Phaser",
+  "chain_raw": "EQ-Flanger-DDL Dual Delay Phaser - DDL~Phaser - DDL",
+  "units": [
+   "EQ-Flanger-DDL Dual Delay Phaser - DDL",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "38",
+  "name": "Phase Hrmo Vrb",
+  "chain_raw": "Phaser-DDL PitchShifter SmallRoomRev+SmallRoomRev",
+  "units": [
+   "Phaser-DDL PitchShifter SmallRoomRev",
+   "SmallRoomRev"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "39",
+  "name": "Comp EQ  VocalFX",
+  "chain_raw": "EQ-Compressor Parametric EQ PitchShifter+PitchShifter",
+  "units": [
+   "EQ-Compressor Parametric EQ PitchShifter",
+   "PitchShifter"
+  ],
+  "routing": [
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "40",
+  "name": "DDL Plt  Flanger",
+  "chain_raw": "MultiTapDelay  LrgPlate  MultiTapDelay\u2044EQ-Flanger-DDL",
+  "units": [
+   "MultiTapDelay",
+   "LrgPlate",
+   "MultiTapDelay",
+   "EQ-Flanger-DDL"
+  ],
+  "routing": [
+   "feedback"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "41",
+  "name": "Box Room LongDDL",
+  "chain_raw": "Small Room Rev Small Room Rev 3.3 sec DDL 2U*N/A",
+  "units": [
+   "Small Room Rev Small Room Rev 3.3 sec DDL 2U*N/A"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "42",
+  "name": "Albumizer EQs",
+  "chain_raw": "VandrPolFilter VandrPolFilter VandrPolFilter VandrPolFilter",
+  "units": [
+   "VandrPolFilter VandrPolFilter VandrPolFilter VandrPolFilter"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "43",
+  "name": "4 Mono Reverbs",
+  "chain_raw": "Small Room Rev Large Room Rev Small Plate Hall Reverb",
+  "units": [
+   "Small Room Rev Large Room Rev Small Plate Hall Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "44",
+  "name": "The Jitters",
+  "chain_raw": "Reverse Rev+FastPitchShift+Phaser-DDL\u2044NonLin Reverb2",
+  "units": [
+   "Reverse Rev",
+   "FastPitchShift",
+   "Phaser-DDL",
+   "NonLin Reverb2"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "feedback"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "45",
+  "name": "The Pad Maker",
+  "chain_raw": "EQ-DDLwLFO\u2044MultiTapDelay~EQ-VibratoDDL+RotatSpkr",
+  "units": [
+   "EQ-DDLwLFO",
+   "MultiTapDelay",
+   "EQ-VibratoDDL",
+   "RotatSpkr"
+  ],
+  "routing": [
+   "feedback",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "46",
+  "name": "Arpeggios",
+  "chain_raw": "PitchShift-DDL~PitchShift-DDL~PitchShift 2U*N/A",
+  "units": [
+   "PitchShift-DDL",
+   "PitchShift-DDL",
+   "PitchShift 2U*N/A"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "47",
+  "name": "Final Frontier",
+  "chain_raw": "PitchShifter\u2044Hall Reverb~EQ-Tremolo-DDL~Phaser - DDL",
+  "units": [
+   "PitchShifter",
+   "Hall Reverb",
+   "EQ-Tremolo-DDL",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "feedback",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "48",
+  "name": "Outness",
+  "chain_raw": "PitchShifter\u2044Hall Reverb~EQ-Vibrato-DDL~Phaser - DDL",
+  "units": [
+   "PitchShifter",
+   "Hall Reverb",
+   "EQ-Vibrato-DDL",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "feedback",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config RAM Presets",
+  "slot": "49",
+  "name": "Lunar Self-Gen",
+  "chain_raw": "PitchShifter\u2044Large Room Rev Sine/Noise Gen~Phaser - DDL",
+  "units": [
+   "PitchShifter",
+   "Large Room Rev Sine/Noise Gen",
+   "Phaser - DDL"
+  ],
+  "routing": [
+   "feedback",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "50",
+  "name": "Select 4U Psets",
+  "chain_raw": "EQ-Compressor~PitchShifter~Large Plate+MultiTap Delay",
+  "units": [
+   "EQ-Compressor",
+   "PitchShifter",
+   "Large Plate",
+   "MultiTap Delay"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "51",
+  "name": "Select 2U Psets",
+  "chain_raw": "EQ-DDL-withLFO~Large Plate    No Effect+No Effect",
+  "units": [
+   "EQ-DDL-withLFO",
+   "Large Plate",
+   "No Effect",
+   "No Effect"
+  ],
+  "routing": [
+   "serial",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "52",
+  "name": "Select 1U Psets",
+  "chain_raw": "Small Room Rev   No Effect    No Effect    No Effect",
+  "units": [
+   "Small Room Rev",
+   "No Effect",
+   "No Effect",
+   "No Effect"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "53",
+  "name": "1 Src: Mono In",
+  "chain_raw": "No Effect~No Effect~No Effect~No Effect",
+  "units": [
+   "No Effect",
+   "No Effect",
+   "No Effect",
+   "No Effect"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "54",
+  "name": "1 Src: Stereo In",
+  "chain_raw": "No Effect~No Effect~No Effect~No Effect",
+  "units": [
+   "No Effect",
+   "No Effect",
+   "No Effect",
+   "No Effect"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "55",
+  "name": "2 Src: Stereo In",
+  "chain_raw": "No Effect~No Effect    No Effect~No Effect",
+  "units": [
+   "No Effect",
+   "No Effect",
+   "No Effect",
+   "No Effect"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "56",
+  "name": "2 Src: Mono In",
+  "chain_raw": "No Effect~No Effect    No Effect~No Effect",
+  "units": [
+   "No Effect",
+   "No Effect",
+   "No Effect",
+   "No Effect"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "57",
+  "name": "3 Src:Stereo Out",
+  "chain_raw": "No Effect   No Effect   No Effect~No Effect",
+  "units": [
+   "No Effect",
+   "No Effect",
+   "No Effect",
+   "No Effect"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "58",
+  "name": "3 Src:M+M+S Out",
+  "chain_raw": "No Effect   No Effect   No Effect~No Effect",
+  "units": [
+   "No Effect",
+   "No Effect",
+   "No Effect",
+   "No Effect"
+  ],
+  "routing": [
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "59",
+  "name": "4 Src:Stereo Out",
+  "chain_raw": "No Effect   No Effect   No Effect   No Effect",
+  "units": [
+   "No Effect",
+   "No Effect",
+   "No Effect",
+   "No Effect"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "60",
+  "name": "4 Src:4 Mono Out",
+  "chain_raw": "No Effect   No Effect   No Effect   No Effect",
+  "units": [
+   "No Effect",
+   "No Effect",
+   "No Effect",
+   "No Effect"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "61",
+  "name": "Vocoder Preset",
+  "chain_raw": "Vocoder Low+Vocoder Mid1+Vocoder Mid2+Vocoder High",
+  "units": [
+   "Vocoder Low",
+   "Vocoder Mid1",
+   "Vocoder Mid2",
+   "Vocoder High"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "62",
+  "name": "Vocoder Preset 2",
+  "chain_raw": "Vocoder Low+Vocoder Mid1+Vocoder Mid2+Vocoder High",
+  "units": [
+   "Vocoder Low",
+   "Vocoder Mid1",
+   "Vocoder Mid2",
+   "Vocoder High"
+  ],
+  "routing": [
+   "parallel",
+   "parallel",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "63",
+  "name": "All Purp Mixdown",
+  "chain_raw": "Large Plate  PitchShifter  NonLin Reverb1  Dual Delay",
+  "units": [
+   "Large Plate",
+   "PitchShifter",
+   "NonLin Reverb1",
+   "Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "64",
+  "name": "Rock Mixdown",
+  "chain_raw": "Small Plate  NonLin Reverb1  Large Plate  Dual Delay",
+  "units": [
+   "Small Plate",
+   "NonLin Reverb1",
+   "Large Plate",
+   "Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "65",
+  "name": "Modern Mixdown",
+  "chain_raw": "Large Plate  Gated Reverb  PitchShifter  Dual Delay",
+  "units": [
+   "Large Plate",
+   "Gated Reverb",
+   "PitchShifter",
+   "Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "66",
+  "name": "Dance Mixdown",
+  "chain_raw": "Small Plate  NonLin Reverb1  PitchShifter  Dual Delay",
+  "units": [
+   "Small Plate",
+   "NonLin Reverb1",
+   "PitchShifter",
+   "Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "67",
+  "name": "Rockabily Mixdwn",
+  "chain_raw": "Small Plate  Small Plate  Large Plate  Dual Delay",
+  "units": [
+   "Small Plate",
+   "Small Plate",
+   "Large Plate",
+   "Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "68",
+  "name": "R & B Mixdown",
+  "chain_raw": "8 Voice Chorus  PitchShifter  Large Plate  Dual Delay",
+  "units": [
+   "8 Voice Chorus",
+   "PitchShifter",
+   "Large Plate",
+   "Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "69",
+  "name": "BigBallad Mixdwn",
+  "chain_raw": "Large Plate  Gated Reverb  PitchShifter  Dual Delay",
+  "units": [
+   "Large Plate",
+   "Gated Reverb",
+   "PitchShifter",
+   "Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "70",
+  "name": "Jingle Mixdown",
+  "chain_raw": "Large Plate  Large Plate  Large Plate  MultiTap Delay",
+  "units": [
+   "Large Plate",
+   "Large Plate",
+   "Large Plate",
+   "MultiTap Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "71",
+  "name": "Jazz Mixdown",
+  "chain_raw": "Large Plate  Hall Reverb  Large Room Rev  Dual Delay",
+  "units": [
+   "Large Plate",
+   "Hall Reverb",
+   "Large Room Rev",
+   "Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "72",
+  "name": "4 Vocal Effects",
+  "chain_raw": "Sml RoomRev MultiTap Delay Dual Delay EQ-Compressor",
+  "units": [
+   "Sml RoomRev MultiTap Delay Dual Delay EQ-Compressor"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "73",
+  "name": "4 Vocal Compres",
+  "chain_raw": "EQ-Compresr  EQ-Compresr  EQ-Compresr  EQ-Compresr",
+  "units": [
+   "EQ-Compresr",
+   "EQ-Compresr",
+   "EQ-Compresr",
+   "EQ-Compresr"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "74",
+  "name": "2 EQs 2 Limiters",
+  "chain_raw": "Parametric EQ Parametric EQ  EQ-Compresr  EQ-Compresr",
+  "units": [
+   "Parametric EQ Parametric EQ",
+   "EQ-Compresr",
+   "EQ-Compresr"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "75",
+  "name": "4 In-line FX",
+  "chain_raw": "Tempo Delay Phaser-DDL Large Plate EQ-Flanger-DDL",
+  "units": [
+   "Tempo Delay Phaser-DDL Large Plate EQ-Flanger-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "76",
+  "name": "4 Regenerators",
+  "chain_raw": "8 Voice Chorus Flanger Phaser - DDL PitchShift-DDL",
+  "units": [
+   "8 Voice Chorus Flanger Phaser - DDL PitchShift-DDL"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "77",
+  "name": "4 Fast Gates",
+  "chain_raw": "EQ-Compresr  EQ-Compresr  EQ-Compresr  EQ-Compresr",
+  "units": [
+   "EQ-Compresr",
+   "EQ-Compresr",
+   "EQ-Compresr",
+   "EQ-Compresr"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "78",
+  "name": "4 Loudness EQ's",
+  "chain_raw": "Parametric EQ Parametric EQ Parametric EQ Parametric EQ",
+  "units": [
+   "Parametric EQ Parametric EQ Parametric EQ Parametric EQ"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "79",
+  "name": "4 Mono DDLs",
+  "chain_raw": "Tempo Delay MultiTap Delay Tempo Delay Dual Delay",
+  "units": [
+   "Tempo Delay MultiTap Delay Tempo Delay Dual Delay"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "80",
+  "name": "Large Halls",
+  "chain_raw": "Large Plate Large Plate Large Plate Large Plate",
+  "units": [
+   "Large Plate Large Plate Large Plate Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "81",
+  "name": "Oil Drums",
+  "chain_raw": "Lrg RoomRev Lrg RoomRev Lrg RoomRev Lrg RoomRev",
+  "units": [
+   "Lrg RoomRev Lrg RoomRev Lrg RoomRev Lrg RoomRev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "82",
+  "name": "Small Ambiences",
+  "chain_raw": "SmlRoomRev  SmlRoomRev  SmlRoomRev SmlRoomRev",
+  "units": [
+   "SmlRoomRev",
+   "SmlRoomRev",
+   "SmlRoomRev SmlRoomRev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "83",
+  "name": "Medium Amb 1",
+  "chain_raw": "Hall Reverb Hall Reverb Hall Reverb Hall Reverb",
+  "units": [
+   "Hall Reverb Hall Reverb Hall Reverb Hall Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "84",
+  "name": "Gated Verbs D/B",
+  "chain_raw": "Gated Reverb Gated Reverb Gated Reverb Gated Reverb",
+  "units": [
+   "Gated Reverb Gated Reverb Gated Reverb Gated Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "85",
+  "name": "Non Lin  Colors",
+  "chain_raw": "NonLin Rev 3 NonLin Rev 3 NonLin Rev 3 NonLin Rev 3",
+  "units": [
+   "NonLin Rev 3 NonLin Rev 3 NonLin Rev 3 NonLin Rev 3"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "86",
+  "name": "My College Dorm",
+  "chain_raw": "Small Plate Small Plate Small Plate Small Plate",
+  "units": [
+   "Small Plate Small Plate Small Plate Small Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "87",
+  "name": "Rectangle Halls",
+  "chain_raw": "Lrg RoomRev  Lrg RoomRev  Lrg RoomRev  Lrg RoomRev",
+  "units": [
+   "Lrg RoomRev",
+   "Lrg RoomRev",
+   "Lrg RoomRev",
+   "Lrg RoomRev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "88",
+  "name": "Wood Rooms",
+  "chain_raw": "Small Plate Small Plate Small Plate Small Plate",
+  "units": [
+   "Small Plate Small Plate Small Plate Small Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "89",
+  "name": "Elec Drum Rooms",
+  "chain_raw": "NonLin Rev 1 NonLin Rev 1 NonLin Rev 1 NonLin Rev 1",
+  "units": [
+   "NonLin Rev 1 NonLin Rev 1 NonLin Rev 1 NonLin Rev 1"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "90",
+  "name": "Concrete Rooms",
+  "chain_raw": "NonLin Rev 2 NonLin Rev 2 NonLin Rev 2 NonLin Rev 2",
+  "units": [
+   "NonLin Rev 2 NonLin Rev 2 NonLin Rev 2 NonLin Rev 2"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "91",
+  "name": "Medium Amb 2",
+  "chain_raw": "Large Plate    Large Plate    Large Plate    Large Plate",
+  "units": [
+   "Large Plate",
+   "Large Plate",
+   "Large Plate",
+   "Large Plate"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "92",
+  "name": "Travel Ambiences",
+  "chain_raw": "Hall Reverb    Hall Reverb    Hall Reverb    Hall Reverb",
+  "units": [
+   "Hall Reverb",
+   "Hall Reverb",
+   "Hall Reverb",
+   "Hall Reverb"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "93",
+  "name": "Tiled Ambiences",
+  "chain_raw": "Sml R oomR ev  Sml R oomR ev  Sml R oomR ev  Sml R oomR ev",
+  "units": [
+   "Sml R oomR ev",
+   "Sml R oomR ev",
+   "Sml R oomR ev",
+   "Sml R oomR ev"
+  ],
+  "routing": []
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "94",
+  "name": "Big Amp in Room",
+  "chain_raw": "DigitalTubeAmp~TunablSpkr2~EQ-Comprssr~SmllRmRev",
+  "units": [
+   "DigitalTubeAmp",
+   "TunablSpkr2",
+   "EQ-Comprssr",
+   "SmllRmRev"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "95",
+  "name": "Domino\u2019s Strat",
+  "chain_raw": "DigitalTubeAmp~Tunable Spkr2~Param EQ~Large Plate",
+  "units": [
+   "DigitalTubeAmp",
+   "Tunable Spkr2",
+   "Param EQ",
+   "Large Plate"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "96",
+  "name": "Pedal-Wah Guitar",
+  "chain_raw": "VCF-Distort 1~Guitar Amp 4~EQ-Comprssr~SmllRoomRev",
+  "units": [
+   "VCF-Distort 1",
+   "Guitar Amp 4",
+   "EQ-Comprssr",
+   "SmllRoomRev"
+  ],
+  "routing": [
+   "serial",
+   "serial",
+   "serial"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "97",
+  "name": "2 Big Ster.Verbs",
+  "chain_raw": "EQ-Vibrato-DDL\u2044Large PLate  Hall Reverb\u20448 Vce Chorus",
+  "units": [
+   "EQ-Vibrato-DDL",
+   "Large PLate",
+   "Hall Reverb",
+   "8 Vce Chorus"
+  ],
+  "routing": [
+   "feedback",
+   "feedback"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "98",
+  "name": "EchoPlx FlngVerb",
+  "chain_raw": "VCF-Distort1\u2044EQ-DDL-w/LFO  LrgRoomRev+LrgRoomRev",
+  "units": [
+   "VCF-Distort1",
+   "EQ-DDL-w/LFO",
+   "LrgRoomRev",
+   "LrgRoomRev"
+  ],
+  "routing": [
+   "feedback",
+   "parallel"
+  ]
+ },
+ {
+  "bank": "Config ROM Presets",
+  "slot": "99",
+  "name": "Vocal Remover",
+  "chain_raw": "EQ-Compressor~Large Plate  Vocal Remover~No Effect",
+  "units": [
+   "EQ-Compressor",
+   "Large Plate",
+   "Vocal Remover",
+   "No Effect"
+  ],
+  "routing": [
+   "serial",
+   "serial"
+  ]
+ }
+]

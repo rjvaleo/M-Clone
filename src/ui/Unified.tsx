@@ -3,6 +3,7 @@
 // same store the Studio view uses, so no functionality is lost.
 
 import { useEffect, useState } from "react";
+import { classicWindowSize, variableEditorWindow, type ClassicWindowId } from "./classicWindows";
 import { useM } from "../state/store";
 import { getRuntime } from "./runtime";
 import { PatternEditor } from "./PatternEditor";
@@ -11,6 +12,7 @@ import { TimeDistortEditor } from "./TimeDistortEditor";
 import { SnapshotWindow } from "./SnapshotWindow";
 import { TransposeEditor } from "./TransposeEditor";
 import { useDraggable } from "./useDraggable";
+import { useMLayoutWidth } from "./MLayoutContext";
 import { NOTE_NAMES, type ScaleName } from "../engine/music";
 import type { CyclicVariable, NoteOrderMix, VelocityRange } from "../engine/types";
 import {
@@ -31,6 +33,7 @@ import { CyclicEditor } from "./CyclicEditor";
 import { voiceColorClass } from "./voicecolor";
 import { noteOrderHandlePosition } from "./variablefield";
 import { ensureCyclicSelection, type CyclicSelection } from "./cyclicselection";
+import { closeNoteWindow, openNoteWindow, setNoteWindowVoice, type NoteWindow } from "./noteWindows";
 import { normalizeCyclicStep } from "../engine/cyclic";
 import { MidiView } from "./MidiView";
 import { SynthWindow } from "./SynthWindow";
@@ -39,7 +42,7 @@ import { patternGroupSelectionSyncs } from "./patterngroupgesture";
 import { focusWindowPointerDown } from "./windowfocus";
 import { runSnapshotGesture } from "./snapshotgesture";
 import { variablePositionGesture } from "./variablepositiongesture";
-import { APP_WINDOWS, closeAppWindow, openAppWindow, type AppWindowId } from "../engine/windows";
+import { APP_WINDOWS, closeAppWindow, initialAppWindows, openAppWindow, type AppWindowId } from "../engine/windows";
 import {
   cycleChordMode,
   cycleInputUse,
@@ -120,7 +123,7 @@ const CYCLIC: { id: CyclicVariable; name: string }[] = [
   { id: "rhythm", name: "Rhythm" },
 ];
 
-function Win({ id, defX, defY, title, note, menuItems, children, className, onClose }: {
+function Win({ id, defX, defY, title, note, menuItems, children, className, onClose, size }: {
   id: string;
   defX: number;
   defY: number;
@@ -129,15 +132,24 @@ function Win({ id, defX, defY, title, note, menuItems, children, className, onCl
   menuItems?: MenuItem[];
   className?: string;
   onClose?: () => void;
+  /** Pins the body to the original window's content size. */
+  size?: ClassicWindowId;
   children: React.ReactNode;
 }) {
+  const fit = useMLayoutWidth(id);
+  const body = size ? classicWindowSize(size) : null;
+  if (body && fit) body.width = fit - 2;
   const { ref, pos, z, onPointerDown, bringToFront } = useDraggable(
     id, { x: defX, y: defY }, { autoPlace: Boolean(onClose) },
   );
   const context = useWindowContextMenu(menuItems ?? []);
   return (
     <section ref={ref} className={"uwin movable " + (className ?? "")}
-      style={{ left: pos.x, top: pos.y, zIndex: z }}
+      style={{
+        left: pos.x, top: pos.y, zIndex: z,
+        ...(body ? { width: "max-content", height: "auto" } : {}),
+        ...(fit ? { width: fit } : {}),
+      }}
       onPointerDownCapture={(event) => focusWindowPointerDown(event, bringToFront)}
       onContextMenu={menuItems?.length ? context.onContextMenu : undefined}>
       {context.menu}
@@ -148,7 +160,10 @@ function Win({ id, defX, defY, title, note, menuItems, children, className, onCl
         {onClose && <button className="uwin__close" onClick={onClose}
           aria-label={`Close ${title}`}>×</button>}
       </div>
-      <div className="uwin__body">{children}</div>
+      <div className="uwin__body"
+        style={body ? { width: body.width, height: body.height, overflow: "hidden" } : undefined}>
+        {children}
+      </div>
     </section>
   );
 }
@@ -156,25 +171,28 @@ function Win({ id, defX, defY, title, note, menuItems, children, className, onCl
 function VariableWindowHost({ id, index, children }: {
   id: PositionVarId;
   index: number;
-  children: (titleDrag: (event: React.PointerEvent) => void) => React.ReactNode;
+  children: (titleDrag: (event: React.PointerEvent) => void, width: number | null) => React.ReactNode;
 }) {
+  const fit = useMLayoutWidth(`variable-editor-${id}`);
   const { ref, pos, z, onPointerDown, bringToFront } = useDraggable(
     `variable-editor-${id}`, { x: 34 + index * 22, y: 72 + index * 20 },
     { autoPlace: true },
   );
   return <div ref={ref} className="movable uvarpop-host" style={{ left: pos.x, top: pos.y, zIndex: z }}
     onPointerDownCapture={(event) => focusWindowPointerDown(event, bringToFront)}>
-    {children(onPointerDown)}</div>;
+    {children(onPointerDown, fit)}</div>;
 }
 
 export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) => void }) {
-  const [cyclicEditor, setCyclicEditor] = useState<CyclicSelection | null>(null);
+  // In the M node the windows start open: the original hid them only because
+  // a 640 × 480 screen could not show them all.
+  const [cyclicEditor, setCyclicEditor] = useState<CyclicSelection | null>(
+    () => ensureCyclicSelection(null, useM.getState().activeCyclicPositions.accent));
   const [continuousEditor, setContinuousEditor] = useState<ContinuousKind | null>(null);
   const [editingPositions, setEditingPositions] = useState<Partial<Record<PositionVarId, number>>>({});
-  const [openWindows, setOpenWindows] = useState<Set<string>>(() => new Set([
-    ...APP_WINDOWS.filter((window) => window.permanent).map((window) => window.id),
-    "pattern-editor", "midi-view", "synth",
-  ]));
+  // Note windows beyond the first Pattern Editor, each on its own track.
+  const [noteWindows, setNoteWindows] = useState<NoteWindow[]>([]);
+  const [openWindows, setOpenWindows] = useState<Set<string>>(initialAppWindows);
   const project = useM((s) => s.project);
   const documentName = useM((s) => s.documentName);
   const selectedPatternIndices = useM((s) => s.selectedPatternIndices);
@@ -277,13 +295,22 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
           current,
         ));
     const openMidiAssignment = () => showWindow("midi-assignment");
+    const openAllWindows = () => APP_WINDOWS.forEach((window) => showWindow(window.id));
+    const newNoteWindow = () => setNoteWindows((list) => openNoteWindow(list, useM.getState().selectedVoice));
+    const closeExtraNoteWindows = () => setNoteWindows([]);
     window.addEventListener("mclone:open-window", openRequestedWindow);
     window.addEventListener("mclone:close-edit-windows", closeEditWindows);
+    window.addEventListener("mclone:close-edit-windows", closeExtraNoteWindows);
     window.addEventListener("mclone:open-midi-assignment", openMidiAssignment);
+    window.addEventListener("mclone:open-all-windows", openAllWindows);
+    window.addEventListener("mclone:new-note-window", newNoteWindow);
     return () => {
       window.removeEventListener("mclone:open-window", openRequestedWindow);
       window.removeEventListener("mclone:close-edit-windows", closeEditWindows);
+      window.removeEventListener("mclone:close-edit-windows", closeExtraNoteWindows);
       window.removeEventListener("mclone:open-midi-assignment", openMidiAssignment);
+      window.removeEventListener("mclone:open-all-windows", openAllWindows);
+      window.removeEventListener("mclone:new-note-window", newNoteWindow);
     };
   });
   const showVariableEditor = (id: PositionVarId) => showWindow(id);
@@ -546,9 +573,12 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
         }}
       >
         {canvasMenu.menu}
+        {/* The original's arrangement: its columns, with rows stacked on this
+            build's window heights (each body at its original size plus a 16px
+            title bar and 1px border), 4px apart. */}
         {/* Row 1 */}
         <div className="urow">
-          <Win id="patterns" defX={4} defY={4} title={`Patterns ${POSITION_LABELS[group]}`} className="u-patterns"
+          <Win id="patterns" defX={4} defY={4} title={`Patterns ${POSITION_LABELS[group]}`} className="u-patterns" size="patterns"
             menuItems={patternGroupMenu}>
             <div className="pwin__channel-head" aria-label="M Input Channels 1 through 16">
               <span className="pwin__input-icon" aria-hidden="true">⌁</span>
@@ -652,23 +682,23 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
             </div>
           </Win>
 
-          <Win id="untitled" defX={232} defY={4} title={transportDocumentTitle(documentName)}
-            className="u-conductor-win"
+          <Win id="untitled" defX={227} defY={4} title={transportDocumentTitle(documentName)}
+            className="u-conductor-win" size="conducting"
             menuItems={conductingMenu}>
             <ConductorWindow />
           </Win>
 
-          <Win id="snapshot" defX={468} defY={4} title="Snapshot" className="u-flexsnap">
+          <Win id="snapshot" defX={460} defY={4} title="Snapshot" className="u-flexsnap" size="snapshot">
             <SnapshotWindow />
           </Win>
         </div>
 
         {/* Row 2 */}
         <div className="urow">
-          <Win id="variables" defX={4} defY={120}
-            title="Variables" note="click name to edit · click cell to activate"
+          <Win id="variables" defX={4} defY={130}
+            title="Variables" note="click a cell to activate · double-click to edit"
             menuItems={variablesMenu}
-            className="u-variables">
+            className="u-variables" size="variables">
             {/* Pattern Group leads the window, then the five transform
                 Variables. Click a Position to make it active; double-click to
                 open its edit window. */}
@@ -744,8 +774,8 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
             </div>
           </Win>
 
-          <Win id="cyclic" defX={232} defY={120}
-            title="Cyclic Variables" note="five levels" className="u-cyclic-vars">
+          <Win id="cyclic" defX={227} defY={130}
+            title="Cyclic Variables" note="five levels" className="u-cyclic-vars" size="cyclicVariables">
             <div className="ucyclics">
               {CYCLIC.map(({ id, name }) => (
                 <div key={id} className="ucyc">
@@ -789,9 +819,9 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
         </div>
 
         {/* Row 3 — Midi */}
-        <Win id="midi" defX={4} defY={280} title="Midi" note="output"
-          className="u-midi"
-          menuItems={midiMenu}>
+        {openWindows.has("midi") && <Win id="midi" defX={4} defY={310} title="Midi" note="output"
+          className="u-midi" size="midi"
+          menuItems={midiMenu} onClose={() => hideWindow("midi")}>
           {/* Orchestration lives here rather than in the Variables Window —
               chapter 16 lists the Variables Window's six rows, and routing
               belongs with the other MIDI output controls. */}
@@ -818,10 +848,10 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
             </div>
           </div>
 
-        </Win>
+        </Win>}
 
         {openWindows.has("midi-assignment") && <Win id="midi-assignment" defX={80} defY={180}
-          title="Midi Assignment" note="input / output routing" className="u-midi-assignment"
+          title="Midi Assignment" note="input / output routing" className="u-midi-assignment" size="midiAssignment"
           onClose={() => hideWindow("midi-assignment")}>
           <div className="umidi__assignment-head">
             <button type="button" onClick={() => void enableMidi()}>Enable / Refresh MIDI</button>
@@ -898,6 +928,11 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
         {/* Pattern Editor — M-style editor window with a resizable grid */}
         {openWindows.has("pattern-editor") &&
           <PatternEditor onClose={() => hideWindow("pattern-editor")} />}
+        {noteWindows.map((note) => (
+          <PatternEditor key={note.id} windowId={note.id} voice={note.voice}
+            onVoiceChange={(voice) => setNoteWindows((list) => setNoteWindowVoice(list, note.id, voice))}
+            onClose={() => setNoteWindows((list) => closeNoteWindow(list, note.id))} />
+        ))}
       </div>
       {openWindows.has("cyclic-editor") && cyclicEditor &&
         <CyclicEditor kind={cyclicEditor.kind} position={cyclicEditor.position}
@@ -909,10 +944,12 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
         .filter((id) => openWindows.has(id)).map((editingVar, editorIndex) => {
         const editPosition = editPositionFor(editingVar);
         return (
-        <VariableWindowHost id={editingVar} index={editorIndex} key={editingVar}>{(titleDrag) => (
+        <VariableWindowHost id={editingVar} index={editorIndex} key={editingVar}>{(titleDrag, fit) => (
           <section
             className={"uvarpop" + (editingVar === "timeDistort" || editingVar === "transposition"
               ? " uvarpop--tight" : "")}
+            // In the M node every editor in a column shares that column's width.
+            style={fit ? { width: fit, height: "auto" } : undefined}
             role="region" aria-label={`${VAR_ROWS.find((r) => r.id === editingVar)?.name ?? "Orchestration"} Editor`}>
             <div className="uwin__title movable__handle" onPointerDown={titleDrag}>
               <span className="uwin__name">
@@ -959,7 +996,16 @@ export function Unified({ openVoiceColor }: { openVoiceColor?: (voice: number) =
               </button>
             </div>
 
-            <div className="uvarpop__scaled-body">
+            {/* Laid out at twice the original window's size and zoomed to half,
+                so the body is exactly that window's size at 1x. */}
+            <div className="uvarpop__scaled-body" style={fit ? {
+              width: (fit - 2) * 2,
+              overflow: "hidden",
+            } : {
+              width: classicWindowSize(variableEditorWindow(editingVar)).width * 2,
+              height: classicWindowSize(variableEditorWindow(editingVar)).height * 2,
+              overflow: "hidden",
+            }}>
 
             {editingVar === "density" && (
               <div className="udens__head" aria-hidden="true">

@@ -3,41 +3,69 @@
 
 import { MRuntime } from "../engine/runtime";
 import { useM } from "../state/store";
-import { decodeMidiMessage, mapAssignedInputChannel } from "../engine/midiinput";
-import { decodeClockInputMessage } from "../engine/clockinput";
+import { decodeMidiMessage, isChannelMessage, mapAssignedInputChannel } from "../engine/midiinput";
+import type { CanvasOutput } from "../engine/outputs/canvas";
 
 let runtime: MRuntime | null = null;
+
+/**
+ * What a host engine lends M: idMLab's audio context and mix, its MIDI
+ * access, and its sound modules for M's tracks. Without a host M plays on its
+ * own, as the standalone app does.
+ */
+export type RuntimeHost = {
+  audio?: () => { context: AudioContext; output: AudioNode } | null;
+  midiAccess?: () => Promise<MIDIAccess>;
+  canvas?: CanvasOutput;
+};
+
+let host: RuntimeHost | null = null;
+
+/** Set before M first plays. A runtime made earlier is stopped and replaced. */
+export function setRuntimeHost(next: RuntimeHost | null): void {
+  host = next;
+  runtime?.stop();
+  runtime = null;
+}
 
 export function getRuntime(): MRuntime {
   if (!runtime) {
     runtime = new MRuntime(
-      () => useM.getState().project,
+      () => {
+        // Tap Affects Velocity is a live input, not document state.
+        const { project, tapVelocityOffset } = useM.getState();
+        return tapVelocityOffset ? { ...project, velocityOffset: tapVelocityOffset } : project;
+      },
       (notes) => useM.getState().recordMidiNotes(notes),
       {
         onCyclicReset: (voices) => useM.getState().signalCyclicReset(voices),
         onPlannedSteps: (steps) => useM.getState().followDrumMachine(steps),
-        onClockDiagnostics: (diagnostics) => useM.getState().setClockInputDiagnostics(diagnostics),
-        onClockTransport: (transport) => {
-          if (transport === "stop") {
-            useM.getState().setPaused(false);
-            useM.getState().setPlaying(false);
-            return;
-          }
-          useM.getState().setPaused(false);
-          useM.getState().setPlaying(true);
+        onTransportSent: (type) => {
+          useM.getState().recordMidiTransport(type, "out", performance.now() / 1000);
         },
         onMidiMessage: (event) => {
           if (!event.data) return;
-          const realtime = decodeClockInputMessage(event.data);
-          if (realtime) {
-            const performanceMs = typeof (event as MIDIMessageEvent & { receivedTime?: number }).receivedTime === "number"
-              ? (event as MIDIMessageEvent & { receivedTime?: number }).receivedTime!
-              : performance.now();
-            void runtime?.onClockInput(realtime, performanceMs);
-            return;
-          }
           const message = decodeMidiMessage(event.data);
           if (!message) return;
+          // Clock and transport carry no channel, so they are taken by the
+          // runtime's follower and never reach the channel routing below.
+          if (!isChannelMessage(message)) {
+            const action = getRuntime()
+              .ingestClockMessage(message, performance.now() / 1000);
+            // The same path a Start from the Input Control System takes, so an
+            // external transport and a local one cannot drift out of step.
+            if (action) {
+              useM.getState()
+                .recordMidiTransport(action, "in", performance.now() / 1000);
+            }
+            if (action === "start" || action === "continue") {
+              void runtime?.start().then(() => useM.getState().setPlaying(true));
+            } else if (action === "stop") {
+              runtime?.stop();
+              useM.getState().setPlaying(false);
+            }
+            return;
+          }
           const deviceId = (event.currentTarget as MIDIInput | null)?.id ?? null;
           const mappedChannel = mapAssignedInputChannel(
             useM.getState().project.midiAssignments.inputs, deviceId, message.channel,
@@ -59,6 +87,19 @@ export function getRuntime(): MRuntime {
               runtime?.sync();
               continue;
             }
+            if (response.type === "tap-conduct-start") {
+              runtime?.beginTapConduct(response.held);
+              if (response.held) void runtime?.start().then(() => useM.getState().setPlaying(true));
+              continue;
+            }
+            if (response.type === "tap-beat") {
+              runtime?.tapConductBeat(response.beatSec);
+              continue;
+            }
+            if (response.type === "tap-freeze") {
+              runtime?.freezeTapConduct();
+              continue;
+            }
             if ("voice" in response) {
               const voice = useM.getState().project.voices[response.voice];
               runtime?.audition([response.note], response.velocity,
@@ -73,10 +114,13 @@ export function getRuntime(): MRuntime {
             useMetronome: state.options.useMetronome,
             sendClock: state.options.sendClock,
             syncRatio: state.syncRatio,
+            externalClock: state.options.externalClock,
             syncRatioDirection: state.syncRatioDirection,
-            externalClockEnabled: state.externalClockEnabled,
           };
         },
+        ...(host?.audio ? { audio: host.audio } : {}),
+        ...(host?.midiAccess ? { midiAccess: host.midiAccess } : {}),
+        ...(host?.canvas ? { canvas: host.canvas } : {}),
       },
     );
   }

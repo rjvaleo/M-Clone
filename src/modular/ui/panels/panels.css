@@ -1,0 +1,444 @@
+/* Module panels: four new looks and the originals' own.
+ *
+ * Each look commits to its hardware rather than following the app's theme: a
+ * Cabinet is black and wood whatever the theme, as the instrument it is drawn
+ * after is. Screens and readouts use Home Video, the shippable display face.
+ * Positions come from the layout, inline; everything here is appearance. */
+
+/* The lettering: Barlow Condensed for the hardware looks, IBM Plex Sans
+ * Condensed for Graph first. Both are under the SIL Open Font License 1.1,
+ * shipped with their licences beside them in public/fonts. Barlow has no 400
+ * here, so its Medium answers for normal weight too. */
+@font-face { font-family: "Barlow Condensed"; src: url("/fonts/BarlowCondensed-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("/fonts/BarlowCondensed-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("/fonts/BarlowCondensed-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "IBM Plex Sans Condensed"; src: url("/fonts/IBMPlexSansCondensed-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "IBM Plex Sans Condensed"; src: url("/fonts/IBMPlexSansCondensed-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "IBM Plex Sans Condensed"; src: url("/fonts/IBMPlexSansCondensed-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("/fonts/BarlowCondensed-Medium.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+
+.pnl {
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  --pnl-screen-font: "Home Video", ui-monospace, monospace;
+  --pnl-condensed: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+}
+.pnl-group, .pnl-display, .pnl-control { position: absolute; box-sizing: border-box; }
+.pnl-group__label { position: absolute; left: 6px; top: 3px; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap; }
+.pnl-display { overflow: hidden; }
+.pnl-display svg { display: block; }
+
+/* ---- shared control anatomy ---- */
+
+.pnl-knob { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+.pnl-knob__dial { position: relative; height: calc(100% - 24px); aspect-ratio: 1; max-width: 100%; cursor: ns-resize; touch-action: none; outline: none; }
+.pnl-knob__dial svg { width: 100%; height: 100%; overflow: visible; }
+.pnl-knob__dial:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 50%; }
+.pnl-knob__body { fill: #1e1f22; }
+.pnl-knob__track { fill: none; stroke: rgba(255, 255, 255, 0.18); stroke-width: 2.6; stroke-linecap: round; }
+.pnl-knob__arc { fill: none; stroke: var(--pnl-accent, currentColor); stroke-width: 2.6; stroke-linecap: round; }
+.pnl-knob__pointer { stroke: var(--pnl-ink, #f2ede0); stroke-width: 2.4; stroke-linecap: round; }
+.pnl-knob__value { display: block; text-align: center; font: 11px var(--pnl-screen-font); white-space: nowrap; line-height: 12px; }
+.pnl-knob__label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; line-height: 12px; text-align: center; }
+.pnl-knob__live { position: absolute; right: 0; top: 0; font: 9px var(--pnl-screen-font); color: var(--mod-color); }
+
+.mm-mod-target.is-modulated .pnl-knob__dial { border-radius: 50%; box-shadow: 0 0 0 2px var(--mod-color), 0 0 0 4px var(--mod-color-2), 0 0 8px var(--mod-color); }
+.mm-mod-target.is-modulated .pnl-slider__track { box-shadow: 0 0 0 2px var(--mod-color), 0 0 6px var(--mod-color); }
+.mm-canvas-viewport.is-mapping .mm-mod-target :is(.pnl-knob__dial, .pnl-slider__track) { outline: 2px dashed currentColor; outline-offset: 3px; cursor: crosshair; }
+.pnl-slider__mod { position: absolute; right: 0; top: 0; width: 14px; height: 14px; }
+
+.pnl-slider { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.pnl-slider--v { flex-direction: column; gap: 4px; }
+.pnl-slider__label, .pnl-slider__value { white-space: nowrap; letter-spacing: 0.08em; }
+.pnl-slider__value { font: 11px var(--pnl-screen-font); }
+.pnl-slider--v .pnl-slider__value { font-size: 10px; }
+.pnl-slider__label small { font-size: 8px; letter-spacing: 0; text-transform: none; opacity: 0.7; }
+.pnl-slider--h .pnl-slider__label { width: 48px; flex: none; text-transform: uppercase; }
+.pnl-slider--h .pnl-slider__value { min-width: 40px; flex: none; text-align: right; }
+.pnl-slider__track { position: relative; flex: 1; align-self: stretch; cursor: pointer; touch-action: none; outline: none; }
+.pnl-slider--h .pnl-slider__track { height: 100%; }
+.pnl-slider__fill { position: absolute; background: var(--pnl-accent, currentColor); opacity: 0.85; }
+.pnl-slider--h .pnl-slider__fill { left: 0; top: 40%; bottom: 40%; width: calc(var(--pnl-fill) * 100%); }
+.pnl-slider--v .pnl-slider__fill { left: 40%; right: 40%; bottom: 0; height: calc(var(--pnl-fill) * 100%); }
+.pnl-slider__handle { position: absolute; background: var(--pnl-ink); border-radius: 2px; }
+.pnl-slider--h .pnl-slider__handle { top: 0; bottom: 0; width: 10px; left: calc(var(--pnl-fill) * 100% - 5px); }
+.pnl-slider--v .pnl-slider__handle { left: 2px; right: 2px; height: 12px; bottom: calc(var(--pnl-fill) * 100% - 6px); }
+
+.pnl-switch { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 6px; font: inherit; font-size: 11px; letter-spacing: 0.08em; cursor: pointer; border: 1px solid; border-radius: 3px; }
+.pnl-switch__lamp { width: 8px; height: 8px; border-radius: 50%; flex: none; background: rgba(0, 0, 0, 0.35); }
+.is-on > .pnl-switch__lamp { background: var(--pnl-lamp, #f3a43a); box-shadow: 0 0 6px var(--pnl-lamp, #f3a43a); }
+.pnl-switch__text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.pnl-select { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 3px; }
+.pnl-select button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 0; font: inherit; font-size: 10px; letter-spacing: 0.04em; cursor: pointer; border: 1px solid; border-radius: 3px; min-width: 0; overflow: hidden; }
+.pnl-select .pnl-switch__lamp { width: 16px; height: 4px; border-radius: 2px; }
+
+.pnl-readout { display: flex; align-items: center; justify-content: space-between; padding: 0 8px; cursor: ns-resize; touch-action: none; border-radius: 4px; }
+.pnl-readout__label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; }
+.pnl-readout__value { font: 20px var(--pnl-screen-font); }
+
+.pnl-asset .mm-asset-slot { height: 100%; box-sizing: border-box; min-height: 0; padding: 2px 8px; font-size: 11px; display: flex; align-items: center; }
+.pnl-inert { opacity: 0.38; display: flex; align-items: center; justify-content: center; font-size: 11px; border: 1px dashed; border-radius: 9px; cursor: help; }
+.pnl-inert--knob { border-radius: 50%; }
+
+.pnl-screen__top, .pnl-screen__bottom { position: absolute; left: 6px; right: 6px; font: 12px var(--pnl-screen-font); white-space: nowrap; overflow: hidden; }
+.pnl-screen__top { top: 3px; }
+.pnl-screen__bottom { bottom: 3px; opacity: 0.75; }
+.pnl-screen__wave { position: absolute; left: 4px; top: 18px; }
+.pnl-plot__grid { fill: none; stroke-width: 1; }
+.pnl-plot__line { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.pnl-plot__text { font: 11px var(--pnl-screen-font); }
+
+/* ======================================================================
+ * Cabinet — after the Minimoog and Diva: black panel, cream lettering,
+ * wood cheeks, an amber screen.
+ * ==================================================================== */
+.pnl--cabinet { background: linear-gradient(180deg, #1d1e21, #141517); color: #e9e1cc; font-family: var(--pnl-condensed); --pnl-ink: #f2ede0; --pnl-accent: #e9e1cc; --pnl-lamp: #f3a43a; }
+.pnl--cabinet .pnl-group { border-right: 1px solid rgba(233, 225, 204, 0.08); }
+.pnl--cabinet .pnl-group__label { left: 8px; right: 8px; display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: 0.3em; font-size: 11px; justify-content: center; }
+.pnl--cabinet .pnl-group__label::before, .pnl--cabinet .pnl-group__label::after { content: ""; flex: 1; height: 1px; background: #e9e1cc; }
+.pnl--cabinet .pnl-display--cheek { background: linear-gradient(90deg, #4a2914, #8a5530 45%, #6b3d1f); }
+.pnl--cabinet .pnl-knob__body { fill: #0d0d0e; stroke: #3b3c40; stroke-width: 1.5; }
+.pnl--cabinet .pnl-knob__track { stroke: #e9e1cc; stroke-dasharray: 0.6 4.1; stroke-width: 2.4; stroke-linecap: butt; }
+.pnl--cabinet .pnl-knob__arc { display: none; }
+.pnl--cabinet .pnl-knob__value { color: #f3a43a; }
+.pnl--cabinet .pnl-knob__label { font-weight: 600; font-size: 10px; letter-spacing: 0.04em; }
+.pnl--cabinet .pnl-switch { background: #222326; border-color: #4a463d; color: #e9e1cc; font-size: 10px; letter-spacing: 0.04em; gap: 4px; padding: 0 4px; }
+.pnl--cabinet .pnl-select button { background: #222326; border-color: #4a463d; color: #a59d88; }
+.pnl--cabinet .pnl-select button.is-on { color: #fff4dc; }
+.pnl--cabinet :is(.pnl-display--grain-screen, .pnl-readout) { background: #0b0a08; border: 2px solid #3a332a; border-radius: 4px; color: #f3a43a; }
+.pnl--cabinet .pnl-screen__spray { fill: rgba(243, 164, 58, 0.16); }
+.pnl--cabinet .pnl-screen__trace { fill: rgba(243, 164, 58, 0.35); stroke: #f3a43a; stroke-width: 0.8; }
+.pnl--cabinet .pnl-screen__head { stroke: #ffd79a; stroke-width: 2; }
+.pnl--cabinet .pnl-key { fill: #e9e1cc; stroke: #0d0d0e; stroke-width: 1; }
+.pnl--cabinet .pnl-key--black { fill: #0d0d0e; }
+.pnl--cabinet .pnl-key.is-root { fill: #f3a43a; }
+.pnl--cabinet .pnl-asset .mm-asset-slot { background: #222326; border: 1px solid #4a463d; color: #e9e1cc; border-radius: 3px; }
+
+/* ======================================================================
+ * Night console — after Omnisphere and KULT: dark cells, a lit display,
+ * each group in its own colour.
+ * ==================================================================== */
+.pnl--night { background: #0b0f13; color: #c9d6de; font-family: var(--pnl-condensed); --pnl-ink: #eaf6fb; }
+.pnl--night .pnl-group { background: #10171d; border: 1px solid #22303a; border-radius: 4px; --pnl-accent: var(--pnl-tint, #5fe3ff); }
+.pnl--night .pnl-group[data-tint="input"] { --pnl-tint: #f3c94a; }
+.pnl--night .pnl-group[data-tint="tank"] { --pnl-tint: #5fe3ff; }
+.pnl--night .pnl-group[data-tint="mod"] { --pnl-tint: #ff6fd8; }
+.pnl--night .pnl-group[data-tint="out"] { --pnl-tint: #9df29a; }
+.pnl--night .pnl-group__label { left: 0; right: 0; top: 0; height: 16px; line-height: 16px; padding-left: 8px; background: #141e26; border-bottom: 1px solid #22303a; color: var(--pnl-tint); font-size: 10px; letter-spacing: 0.22em; }
+.pnl--night .pnl-knob__body { fill: #0b0f13; stroke: #22303a; stroke-width: 1; }
+.pnl--night .pnl-knob__track { stroke: #1d2a33; stroke-width: 3.2; }
+.pnl--night .pnl-knob__arc { stroke-width: 3.2; }
+.pnl--night .pnl-knob__pointer { display: none; }
+/* The value sits in the middle of the dial, which is the box less its label. */
+.pnl--night .pnl-knob__value { position: absolute; left: 0; right: 0; top: calc((100% - 24px) / 2 - 6px); color: #eaf6fb; font-size: 12px; pointer-events: none; }
+.pnl--night .pnl-knob__label { color: #8ea3af; font-size: 10px; }
+.pnl--night .pnl-display--plate-tail { background: #070a0d; border: 1px solid #22303a; border-radius: 4px; color: #5fe3ff; }
+.pnl--night .pnl-plot__grid { stroke: #14212a; }
+.pnl--night .pnl-plot__fill { fill: rgba(95, 227, 255, 0.12); }
+.pnl--night .pnl-plot__tick { fill: #4c6170; font: 9px var(--pnl-screen-font); }
+.pnl--night .pnl-plot__line { stroke: #5fe3ff; }
+.pnl--night .pnl-plot__line--high { stroke: #ff6fd8; stroke-dasharray: 5 4; stroke-width: 1.6; }
+.pnl--night .pnl-plot__marker { stroke: #f3c94a; stroke-width: 1.5; }
+.pnl--night .pnl-switch { background: #0b0f13; border-color: #2c3d49; color: #c9d6de; --pnl-lamp: #9df29a; }
+/* Each control takes the colour of the one group the layout places it in. */
+.pnl--night .pnl-control { --pnl-accent: #5fe3ff; }
+.pnl--night .pnl-control[data-tint="input"] { --pnl-accent: #f3c94a; }
+.pnl--night .pnl-control[data-tint="mod"] { --pnl-accent: #ff6fd8; }
+.pnl--night .pnl-control[data-tint="out"] { --pnl-accent: #9df29a; }
+
+/* ======================================================================
+ * Graph first — after the AG Controller and the MOTM-300: black on cream,
+ * the curve large, one red for what is being changed.
+ * ==================================================================== */
+.pnl--graph { background: #efece4; color: #141414; font-family: "IBM Plex Sans Condensed", var(--pnl-condensed); --pnl-ink: #141414; --pnl-accent: #141414; --pnl-lamp: #c4321c; }
+.pnl--graph .pnl-group { border: 1.5px solid #141414; margin: -0.75px; }
+.pnl--graph .pnl-group__label { left: 0; right: 0; top: 0; height: 15px; line-height: 15px; padding-left: 6px; border-bottom: 1.5px solid #141414; font-weight: 600; font-size: 10px; letter-spacing: 0.24em; }
+.pnl--graph .pnl-display { border: 1.5px solid #141414; background: #f8f6f0; margin: -0.75px; }
+.pnl--graph .pnl-plot__grid { stroke: #d8d4c8; }
+.pnl--graph .pnl-plot__unity { stroke: #b3ad9e; stroke-dasharray: 4 4; }
+.pnl--graph .pnl-plot__knee { fill: rgba(196, 50, 28, 0.08); }
+.pnl--graph .pnl-plot__line { stroke: #141414; stroke-width: 2.4; }
+.pnl--graph .pnl-plot__point { fill: #efece4; stroke: #c4321c; stroke-width: 2.5; }
+.pnl--graph .pnl-plot__text { fill: #c4321c; }
+.pnl--graph .pnl-slider__track { background: none; }
+.pnl--graph .pnl-slider--v .pnl-slider__track::before { content: ""; position: absolute; left: calc(50% - 2px); width: 4px; top: 0; bottom: 0; background: #141414; }
+.pnl--graph .pnl-slider--h .pnl-slider__track::before { content: ""; position: absolute; top: calc(50% - 2px); height: 4px; left: 0; right: 0; background: #141414; }
+.pnl--graph .pnl-slider__fill { display: none; }
+.pnl--graph .pnl-slider__label { font-weight: 600; font-size: 10px; }
+.pnl--graph .pnl-switch { background: #f8f6f0; border-color: #141414; color: #141414; }
+.pnl--graph .pnl-display--levels { padding: 0 6px; }
+.pnl-levels__title { position: absolute; left: 6px; top: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.2em; }
+.pnl-levels__row { position: absolute; left: 6px; right: 6px; display: grid; grid-template-columns: 22px 1fr 30px; align-items: center; gap: 4px; font: 10px var(--pnl-screen-font); }
+.pnl-levels__row span:last-child { text-align: right; }
+.pnl-levels__bar { height: 60%; background: #c4321c; justify-self: start; min-width: 1px; }
+
+/* ======================================================================
+ * Engineering strip — after the Panharmonium: white on black, the response
+ * across the top, each stage its colour, a switch and lamp at its edge.
+ * ==================================================================== */
+.pnl--strip { background: #0f0f10; color: #f1f1ee; font-family: var(--pnl-condensed); --pnl-ink: #f1f1ee; }
+.pnl--strip .pnl-group { border: 1px solid #3a3a3d; border-top: 4px solid var(--pnl-tint, #f1f1ee); }
+.pnl--strip .pnl-group[data-tint="notch"] { --pnl-tint: #ff8a3d; }
+.pnl--strip .pnl-group[data-tint="resonator"] { --pnl-tint: #46d4e6; }
+.pnl--strip .pnl-group[data-tint="regalia"] { --pnl-tint: #b7e34a; }
+.pnl--strip .pnl-group[data-tint="damping"] { --pnl-tint: #b48cff; }
+.pnl--strip .pnl-group__label { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; }
+.pnl--strip .pnl-display--bank-response { background: #050506; border: 1px solid #3a3a3d; color: #7d7d79; }
+.pnl--strip .pnl-plot__grid { stroke: #1d1d20; }
+.pnl--strip .pnl-plot__line { stroke: #f1f1ee; stroke-width: 2.2; }
+.pnl--strip .pnl-plot__text { fill: #7d7d79; }
+.pnl--strip .pnl-plot__marker { stroke-width: 1; stroke-dasharray: 2 3; }
+.pnl--strip .pnl-plot__marker--notch { stroke: #ff8a3d; }
+.pnl--strip .pnl-plot__marker--resonator { stroke: #46d4e6; }
+.pnl--strip .pnl-plot__marker--regalia { stroke: #b7e34a; }
+.pnl--strip .pnl-plot__marker--damping { stroke: #b48cff; }
+.pnl--strip .pnl-knob__body { fill: #232326; stroke: #f1f1ee; stroke-width: 1; }
+.pnl--strip .pnl-knob__track { stroke: #f1f1ee; stroke-dasharray: 0.6 4.1; stroke-linecap: butt; }
+.pnl--strip .pnl-knob__arc { display: none; }
+.pnl--strip .pnl-knob__value { color: #9a9a96; }
+.pnl--strip .pnl-knob__label { font-weight: 600; }
+.pnl--strip .pnl-switch { flex-direction: column; border-radius: 11px; background: #0f0f10; border-color: #f1f1ee; color: #9a9a96; padding: 4px 0; font-size: 9px; }
+/* Each stage's colour marks its knobs' pointers and its lamp. */
+.pnl--strip .pnl-control[data-tint="notch"] { --pnl-ink: #ff8a3d; --pnl-lamp: #ff8a3d; }
+.pnl--strip .pnl-control[data-tint="resonator"] { --pnl-ink: #46d4e6; --pnl-lamp: #46d4e6; }
+.pnl--strip .pnl-control[data-tint="regalia"] { --pnl-ink: #b7e34a; --pnl-lamp: #b7e34a; }
+.pnl--strip .pnl-control[data-tint="damping"] { --pnl-ink: #b48cff; --pnl-lamp: #b48cff; }
+.pnl--strip .pnl-knob__pointer { stroke-width: 3; }
+
+/* ======================================================================
+ * SoundHack — as Tom Erbe's ++ plug-ins draw it: a light panel, dark dials
+ * with the value inside, a coloured badge, pill switches grey when on.
+ * ==================================================================== */
+.pnl--soundhack { background: #e8e6e1; color: #1d1e20; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; --pnl-ink: #f4f2ee; --pnl-accent: #d9702a; }
+.pnl--soundhack .pnl-group[data-tint="delay"] { background: rgba(217, 112, 42, 0.08); }
+.pnl--soundhack .pnl-group[data-tint="modulation"] { background: rgba(60, 116, 201, 0.08); }
+.pnl--soundhack .pnl-group[data-tint="filter"] { background: rgba(47, 143, 138, 0.09); }
+.pnl--soundhack .pnl-group[data-tint="grain"] { background: rgba(154, 91, 208, 0.08); }
+.pnl--soundhack .pnl-group[data-tint="pitch"] { background: rgba(224, 193, 46, 0.1); }
+/* A full-width slider as JUCE draws it here: a dark bar filled in the badge's
+ * colour, the name at its left and the value at its right, inside it. */
+.pnl--soundhack .pnl-slider--h { gap: 0; border-radius: 4px; overflow: hidden; background: #2a2b2e; }
+.pnl--soundhack .pnl-slider--h .pnl-slider__track { position: absolute; inset: 0; }
+.pnl--soundhack .pnl-slider--h .pnl-slider__fill { top: 0; bottom: 0; opacity: 0.9; }
+.pnl--soundhack .pnl-slider--h .pnl-slider__handle { display: none; }
+.pnl--soundhack .pnl-slider--h :is(.pnl-slider__label, .pnl-slider__value) { position: relative; z-index: 1; pointer-events: none; color: #f4f2ee; font: 12px "Helvetica Neue", Helvetica, Arial, sans-serif; text-transform: none; letter-spacing: 0; padding: 0 8px; }
+.pnl--soundhack .pnl-slider--h .pnl-slider__label { width: auto; flex: 1; }
+.pnl--soundhack .pnl-slider--h .pnl-slider__value { font-weight: 600; }
+/* ++bubbler's interval keys: white keys white, black keys dark, lit in the badge colour. */
+.pnl--soundhack .pnl-switch.pnl-switch--small { background: #2a2b2e; border-color: #1d1e20; }
+.pnl--soundhack .pnl-switch.pnl-switch--small.is-on { background: var(--pnl-badge, #d9702a); }
+.pnl--soundhack .pnl-group[data-tint] .pnl-group__label { display: none; }
+.pnl--soundhack .pnl-group:first-child .pnl-group__label { left: 6px; top: 6px; height: 34px; line-height: 34px; padding: 0 14px; border-radius: 17px; background: var(--pnl-badge, #d9702a); color: var(--pnl-badge-ink, #fff); font-size: 20px; font-weight: 700; letter-spacing: 0; text-transform: none; }
+.pnl--soundhack .pnl-knob { overflow: visible; }
+.pnl--soundhack .pnl-knob__dial { height: 100%; }
+.pnl--soundhack .pnl-knob__body { fill: #2a2b2e; }
+.pnl--soundhack .pnl-knob__track { stroke: #55575c; }
+.pnl--soundhack .pnl-knob__value { position: absolute; left: 0; right: 0; top: 62%; color: #f4f2ee; font: 600 9px "Helvetica Neue", Helvetica, Arial, sans-serif; pointer-events: none; }
+.pnl--soundhack .pnl-knob--big .pnl-knob__value { font-size: 14px; }
+.pnl--soundhack .pnl-knob--small .pnl-knob__value { font-size: 7px; top: 64%; }
+.pnl--soundhack .pnl-knob__label { position: absolute; top: 100%; left: -10px; right: -10px; margin-top: 1px; text-transform: none; letter-spacing: 0; font-size: 11px; }
+.pnl--soundhack .pnl-knob--big .pnl-knob__label { font-size: 14px; }
+.pnl--soundhack .pnl-knob--small .pnl-knob__label { font-size: 9px; }
+.pnl--soundhack .pnl-switch { border-radius: 9px; border: 1.5px solid #8d8b85; background: #fbfaf8; color: #1d1e20; font-size: 11px; letter-spacing: 0; }
+.pnl--soundhack .pnl-switch.is-on { background: #bdbab3; }
+.pnl--soundhack .pnl-switch__lamp { display: none; }
+.pnl--soundhack .pnl-inert { border-color: #8d8b85; color: #1d1e20; }
+.pnl--soundhack .pnl-inert--knob { background: conic-gradient(#e07a2e, #e0c12e, #4fb06a, #3c86d6, #9a5bd0, #e07a2e); border-style: solid; }
+
+/* The node around a panel: no padding, so the panel is the module's width. */
+.mm-node.mm-node--panel .mm-node__face--panel { padding: 0; display: block; }
+
+/* ======================================================================
+ * Lexicon LXP Native — as PlugBG.png draws it: graphite chrome, dark
+ * panels, knobs whose arc lights #0092ff, a blue title bar and page row.
+ * ==================================================================== */
+.pnl--lexicon { background: #3a3a3b; color: #d9dde0; font-family: var(--pnl-condensed); --pnl-ink: #e8f4ff; --pnl-accent: #0092ff; --pnl-lamp: #32a8ff; }
+.pnl--lexicon .pnl-group[data-tint] .pnl-group__label { display: none; }
+.pnl-lxp-logo { display: flex; align-items: center; height: 100%; font-size: 24px; font-weight: 700; letter-spacing: 0.02em; color: #f2f4f5; }
+.pnl-lxp-title { display: flex; align-items: center; justify-content: flex-end; height: 100%; padding: 0 10px; box-sizing: border-box; background: #409ced; border-radius: 3px; color: #fff; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; }
+.pnl-lxp-rtv { display: flex; align-items: center; justify-content: center; height: 100%; background: #16171a; border: 2px solid #212a2e; border-radius: 5px; box-sizing: border-box; color: #4a555c; font-size: 22px; font-weight: 600; letter-spacing: 0.3em; }
+.pnl-lxp-meters { display: grid; grid-template-columns: 24px 1fr 1fr; gap: 0 6px; height: 100%; padding: 6px 8px; box-sizing: border-box; background: #1c2329; border-radius: 4px; }
+.pnl-lxp-meters__scale { display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 14px; font-size: 8px; color: #8d989f; text-align: right; }
+.pnl-lxp-meters__bar { display: flex; flex-direction: column; gap: 3px; }
+.pnl-lxp-meters__leds { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.pnl-lxp-meters__leds span { flex: 1; border-radius: 1px; background: #2a2f33; }
+.pnl-lxp-meters__name { text-align: center; font-size: 9px; font-weight: 600; letter-spacing: 0.1em; color: #8d989f; }
+.pnl--lexicon .pnl-knob { background: #212a2e; border: 1px solid #2c3338; border-radius: 4px; padding-top: 4px; }
+.pnl--lexicon .pnl-knob__value { order: -1; color: #f2f4f5; font: 600 12px var(--pnl-condensed); margin-bottom: 2px; }
+.pnl--lexicon .pnl-knob__dial { height: calc(100% - 40px); }
+.pnl--lexicon .pnl-knob__body { fill: #16171a; stroke: #2c3338; stroke-width: 1; }
+.pnl--lexicon .pnl-knob__track { stroke: #2f3a40; stroke-width: 2.4; }
+.pnl--lexicon .pnl-knob__pointer { display: none; }
+.pnl--lexicon .pnl-knob__label { color: #b8c2c8; font-size: 10px; letter-spacing: 0.06em; margin-top: 2px; }
+.pnl-pagetitle { display: flex; align-items: center; height: 100%; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; color: #8d989f; }
+.pnl-pages { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 5px; height: 100%; padding: 4px 6px; box-sizing: border-box; background: #3f9aeb; border-radius: 4px; }
+.pnl-pages button { display: flex; flex-direction: column; justify-content: flex-end; padding: 0; background: #2a3236; border: 1px solid #1d5f9e; border-radius: 3px; color: #c3ccd2; font: 600 9.5px var(--pnl-condensed); letter-spacing: 0; cursor: pointer; overflow: hidden; }
+.pnl-pages button span { padding: 0 3px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pnl-pages button::after { content: ""; height: 4px; background: #1c2329; }
+.pnl-pages button.is-on { background: #1c2329; color: #fff; }
+.pnl-pages button.is-on::after { background: #32a8ff; }
+.pnl--lexicon .pnl-switch { background: #2a3236; border-color: #4a555c; color: #d9dde0; font-size: 11px; }
+.pnl--lexicon .pnl-inert { border: 1px solid #4a555c; border-radius: 3px; background: #1c2329; color: #d9dde0; font-size: 11px; letter-spacing: 0.08em; opacity: 0.5; justify-content: flex-start; padding: 0 10px; }
+.pnl--lexicon .mm-mod-target.is-modulated .pnl-knob__dial { box-shadow: 0 0 0 2px var(--mod-color), 0 0 8px var(--mod-color); }
+
+/* ======================================================================
+ * Platinum — Hyperprism's controller window as Mac OS drew it: grey
+ * chrome, black outlines, white edit boxes, the deep blue window.
+ * ==================================================================== */
+.pnl--platinum { background: #dedede; color: #111; font-family: Geneva, "Lucida Grande", Verdana, sans-serif; font-size: 11px; --pnl-ink: #111; }
+.pnl--platinum .pnl-group[data-tint] .pnl-group__label { display: none; }
+.pnl--platinum .pnl-group + .pnl-group { border-left: 1px solid #a8a8a8; box-shadow: inset 1px 0 0 #f4f4f4; }
+.pnl-pad { background: #1f35b4; border: 2px solid #111; cursor: crosshair; touch-action: none; overflow: visible;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 26px 26px; }
+.pnl-pad__line { position: absolute; background: rgba(255, 255, 255, 0.35); pointer-events: none; }
+.pnl-pad__line--v { top: 0; bottom: 0; width: 1px; }
+.pnl-pad__line--h { left: 0; right: 0; height: 1px; }
+.pnl-pad__dot { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: #fff; border: 1.5px solid #111; pointer-events: none; }
+.mm-mod-target.is-modulated .pnl-pad { box-shadow: 0 0 0 2px var(--mod-color); }
+.pnl-hp-axis { display: flex; align-items: center; justify-content: space-between; gap: 4px; height: 100%; font-weight: 700; }
+.pnl-hp-axis__limit { font-weight: 400; min-width: 34px; padding: 1px 3px; background: #fff; border: 1px solid #555; box-shadow: inset 1px 1px 0 #bbb; font-size: 10px; text-align: center; }
+.pnl-hp-axis__name { flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pnl-hp-axis--y { flex-direction: column; }
+.pnl-hp-axis--y .pnl-hp-axis__limit { min-width: 0; width: 100%; box-sizing: border-box; padding: 1px 0; font-size: 9px; }
+.pnl-hp-axis--y .pnl-hp-axis__name { writing-mode: vertical-rl; transform: rotate(180deg); }
+.pnl-hp-values { display: flex; align-items: center; height: 100%; font-size: 10px; color: #333; }
+.pnl-field, .pnl-menu { display: flex; flex-direction: column; gap: 2px; }
+.pnl-field__label { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pnl--platinum .pnl-field input, .pnl--platinum .pnl-menu select { height: 20px; box-sizing: border-box; border: 1px solid #555; box-shadow: inset 1px 1px 0 #bbb; background: #fff; color: #111; font: 11px Geneva, "Lucida Grande", Verdana, sans-serif; padding: 0 4px; text-align: right; border-radius: 0; }
+.pnl--platinum .pnl-menu select { text-align: left; box-shadow: 1px 1px 0 #555; }
+.pnl--platinum .pnl-switch { justify-content: flex-start; gap: 6px; background: none; border: 0; color: #111; font-size: 11px; letter-spacing: 0; padding: 0 2px; }
+.pnl--platinum .pnl-switch__lamp { width: 11px; height: 11px; border-radius: 0; background: #fff; border: 1px solid #333; box-shadow: none; }
+.pnl--platinum .is-on > .pnl-switch__lamp { background: #111; box-shadow: inset 0 0 0 2px #fff; }
+.pnl--platinum .pnl-inert { border: 1px solid #555; border-radius: 3px; background: #eee; color: #111; font-size: 11px; justify-content: flex-start; padding: 0 6px; }
+
+/* ======================================================================
+ * The ported effects' plots (plots.ts), in each look's own inks. Tone a is
+ * the look's main line, b–e its others.
+ * ====================================================================== */
+
+.pnl-display--plotted .pnl-plot { position: absolute; left: 0; top: 0; }
+.pnl-plot__tick, .pnl-plot__title, .pnl-plot__label { font: 9px var(--pnl-screen-font); }
+.pnl-plot__trace, .pnl-plot__rule, .pnl-plot__stem { fill: none; stroke-linejoin: round; }
+.pnl-plot__trace { stroke-width: 2; }
+.pnl-plot__trace.is-dashed { stroke-dasharray: 5 4; stroke-width: 1.5; }
+.pnl-plot__rule { stroke-width: 1; stroke-dasharray: 2 3; }
+.pnl-plot__stem { stroke-width: 2; }
+.pnl-plot__area { stroke: none; opacity: 0.16; }
+.pnl-plot__dot.is-hollow { fill: none !important; stroke-width: 1.4; }
+.pnl-display--plotted .pnl-screen__top, .pnl-display--plotted .pnl-screen__bottom { font-size: 11px; }
+
+.pnl--night .pnl-display--plotted { background: #070a0d; border: 1px solid #22303a; border-radius: 4px; color: #5fe3ff; }
+.pnl--night .pnl-plot__title { fill: #4c6170; }
+.pnl--night { --pnl-tone-a: #5fe3ff; --pnl-tone-b: #ff6fd8; --pnl-tone-c: #f3c94a; --pnl-tone-d: #9df29a; --pnl-tone-e: #c9d6de; }
+.pnl--night .pnl-select button { background: #0b0f13; border-color: #2c3d49; color: #8ea3af; --pnl-lamp: #ff6fd8; }
+.pnl--night .pnl-select button.is-on { color: #eaf6fb; }
+.pnl--night .pnl-asset .mm-asset-slot { background: #0b0f13; border: 1px solid #2c3d49; color: #c9d6de; border-radius: 3px; }
+.pnl--night .pnl-inert { color: #8ea3af; }
+
+.pnl--strip .pnl-display--plotted { background: #050506; border: 1px solid #3a3a3d; color: #9a9a96; }
+.pnl--strip .pnl-plot__tick, .pnl--strip .pnl-plot__title { fill: #6d6d69; }
+.pnl--strip { --pnl-tone-a: #f1f1ee; --pnl-tone-b: #ff8a3d; --pnl-tone-c: #46d4e6; --pnl-tone-d: #b7e34a; --pnl-tone-e: #b48cff; }
+.pnl--strip .pnl-group[data-tint="drive"], .pnl--strip .pnl-group[data-tint="out"] { --pnl-tint: #f1f1ee; }
+.pnl--strip .pnl-group[data-tint="sv-low"], .pnl--strip .pnl-group[data-tint="eq1"] { --pnl-tint: #ff8a3d; }
+.pnl--strip .pnl-group[data-tint="sv-band"], .pnl--strip .pnl-group[data-tint="eq2"] { --pnl-tint: #46d4e6; }
+.pnl--strip .pnl-group[data-tint="sv-high"], .pnl--strip .pnl-group[data-tint="eq3"] { --pnl-tint: #b7e34a; }
+.pnl--strip .pnl-group[data-tint="sv-notch"], .pnl--strip .pnl-group[data-tint="eq4"] { --pnl-tint: #b48cff; }
+.pnl--strip .pnl-group[data-tint="eq0"], .pnl--strip .pnl-group[data-tint="eq7"] { --pnl-tint: #9a9a96; }
+.pnl--strip .pnl-group[data-tint="eq5"] { --pnl-tint: #ff5f7e; }
+.pnl--strip .pnl-group[data-tint="eq6"] { --pnl-tint: #f3c94a; }
+.pnl--strip .pnl-group[data-tint="noise"] { --pnl-tint: #d9d9d4; }
+.pnl--strip .pnl-control[data-tint="sv-low"], .pnl--strip .pnl-control[data-tint="eq1"] { --pnl-ink: #ff8a3d; --pnl-lamp: #ff8a3d; }
+.pnl--strip .pnl-control[data-tint="sv-band"], .pnl--strip .pnl-control[data-tint="eq2"] { --pnl-ink: #46d4e6; --pnl-lamp: #46d4e6; }
+.pnl--strip .pnl-control[data-tint="sv-high"], .pnl--strip .pnl-control[data-tint="eq3"] { --pnl-ink: #b7e34a; --pnl-lamp: #b7e34a; }
+.pnl--strip .pnl-control[data-tint="sv-notch"], .pnl--strip .pnl-control[data-tint="eq4"] { --pnl-ink: #b48cff; --pnl-lamp: #b48cff; }
+.pnl--strip .pnl-control[data-tint="eq5"] { --pnl-ink: #ff5f7e; --pnl-lamp: #ff5f7e; }
+.pnl--strip .pnl-control[data-tint="eq6"] { --pnl-ink: #f3c94a; --pnl-lamp: #f3c94a; }
+.pnl--strip .pnl-control:is([data-tint="out"], [data-tint="drive"], [data-tint="noise"], [data-tint="eq0"], [data-tint="eq7"]) { --pnl-lamp: #f1f1ee; }
+.pnl--strip .pnl-field__label { color: #9a9a96; text-transform: uppercase; letter-spacing: 0.1em; font-size: 9px; }
+.pnl--strip .pnl-field input { font: 12px var(--pnl-screen-font); text-align: right; }
+.pnl--strip .pnl-inert { color: #9a9a96; }
+
+.pnl--graph .pnl-display--plotted .pnl-screen__top, .pnl--graph .pnl-display--plotted .pnl-screen__bottom { color: #141414; }
+.pnl--graph .pnl-plot__tick, .pnl--graph .pnl-plot__title { fill: #6b675d; }
+.pnl--graph { --pnl-tone-a: #141414; --pnl-tone-b: #c4321c; --pnl-tone-c: #b3ad9e; --pnl-tone-d: #2f6f8f; --pnl-tone-e: #6b675d; }
+.pnl--graph .pnl-plot__trace.pnl-tone-a { stroke-width: 2.4; }
+.pnl--graph .pnl-select button { background: #f8f6f0; border-color: #141414; color: #6b675d; }
+.pnl--graph .pnl-select button.is-on { color: #141414; font-weight: 600; }
+.pnl--graph .pnl-knob__body { fill: #f8f6f0; stroke: #141414; stroke-width: 1.5; }
+.pnl--graph .pnl-knob__track { stroke: #d8d4c8; }
+.pnl--graph .pnl-knob__pointer { stroke: #141414; }
+.pnl--graph .pnl-knob__label { font-weight: 600; font-size: 10px; }
+.pnl--graph .pnl-asset .mm-asset-slot { background: #f8f6f0; border: 1.5px solid #141414; color: #141414; border-radius: 0; }
+
+.pnl--cabinet .pnl-display--plotted { background: #0b0a08; border: 2px solid #3a332a; border-radius: 4px; color: #f3a43a; }
+.pnl--cabinet .pnl-plot__tick, .pnl--cabinet .pnl-plot__title { fill: #8a6a3c; }
+.pnl--cabinet .pnl-plot__grid { stroke: #241d14; }
+.pnl--cabinet { --pnl-tone-a: #f3a43a; --pnl-tone-b: #ffd79a; --pnl-tone-c: #6e5432; --pnl-tone-d: #e9e1cc; --pnl-tone-e: #c47a2a; }
+
+.pnl-tone-a { stroke: var(--pnl-tone-a); fill: var(--pnl-tone-a); }
+.pnl-tone-b { stroke: var(--pnl-tone-b); fill: var(--pnl-tone-b); }
+.pnl-tone-c { stroke: var(--pnl-tone-c); fill: var(--pnl-tone-c); }
+.pnl-tone-d { stroke: var(--pnl-tone-d); fill: var(--pnl-tone-d); }
+.pnl-tone-e { stroke: var(--pnl-tone-e); fill: var(--pnl-tone-e); }
+.pnl-plot__trace.pnl-tone-a, .pnl-plot__trace.pnl-tone-b, .pnl-plot__trace.pnl-tone-c, .pnl-plot__trace.pnl-tone-d, .pnl-plot__trace.pnl-tone-e,
+.pnl-plot__rule, .pnl-plot__stem { fill: none; }
+.pnl-plot__label { stroke: none; }
+.pnl-display--plotted .pnl-screen__top, .pnl-display--plotted .pnl-screen__bottom { font-size: 10px; line-height: 11px; }
+.pnl--strip .pnl-display--plotted .pnl-screen__top { top: 1px; }
+.pnl--strip .pnl-display--plotted .pnl-screen__bottom { bottom: 1px; }
+.pnl--night .pnl-knob--small .pnl-knob__value { font-size: 10px; }
+.pnl--night .pnl-menu .pnl-field__label { color: #8ea3af; text-transform: uppercase; letter-spacing: 0.1em; font-size: 9px; }
+/* A pane's title keeps a halo of its screen's colour, so a trace under it never hides it. */
+.pnl-plot__title { paint-order: stroke; stroke: var(--pnl-plot-bg, #000); stroke-width: 3px; stroke-linejoin: round; }
+.pnl--night { --pnl-plot-bg: #070a0d; }
+.pnl--strip { --pnl-plot-bg: #050506; }
+.pnl--graph { --pnl-plot-bg: #f8f6f0; }
+.pnl--cabinet { --pnl-plot-bg: #0b0a08; }
+
+/* ---- polish: pop-ups drawn as part of the panel, not the browser's ---- */
+.pnl--night .pnl-menu select, .pnl--strip .pnl-menu select, .pnl--graph .pnl-menu select {
+  appearance: none; -webkit-appearance: none; width: 100%; min-width: 0; box-sizing: border-box; height: 20px;
+  padding: 0 18px 0 6px; cursor: pointer; background-repeat: no-repeat; background-position: right 6px center; background-size: 8px 5px;
+}
+.pnl--night .pnl-menu select { border: 1px solid #2c3d49; border-radius: 3px; background-color: #0b0f13; color: #eaf6fb; font: 600 11px var(--pnl-condensed); letter-spacing: 0.04em;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%235fe3ff'/%3E%3C/svg%3E"); }
+.pnl--night .pnl-menu select:hover { border-color: #3d5463; }
+.pnl--strip .pnl-menu select { border: 1px solid #3a3a3d; border-radius: 2px; background-color: #0f0f10; color: #f1f1ee; font: 600 11px var(--pnl-condensed); letter-spacing: 0.04em;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23f1f1ee'/%3E%3C/svg%3E"); }
+.pnl--strip .pnl-menu select:hover { border-color: #6d6d69; }
+.pnl--graph .pnl-menu select { border: 1.5px solid #141414; border-radius: 0; background-color: #f8f6f0; color: #141414; font: 600 11px "IBM Plex Sans Condensed", var(--pnl-condensed);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23141414'/%3E%3C/svg%3E"); }
+.pnl--graph .pnl-menu .pnl-field__label { font-weight: 600; font-size: 10px; letter-spacing: 0.04em; }
+.pnl--night .pnl-menu select:focus-visible, .pnl--strip .pnl-menu select:focus-visible, .pnl--graph .pnl-menu select:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.pnl--night .pnl-menu option, .pnl--strip .pnl-menu option { background: #0b0f13; color: #eaf6fb; }
+.pnl--strip .pnl-field input { height: 18px; box-sizing: border-box; border: 1px solid #3a3a3d; background: #0f0f10; color: #f1f1ee; padding: 0 4px; border-radius: 2px; min-width: 0; width: 100%; font: 12px var(--pnl-screen-font); text-align: right; }
+
+/* ---- polish: the screens' grids recede, their traces carry the weight ---- */
+.pnl-display--plotted .pnl-plot__tick { letter-spacing: 0.02em; }
+.pnl-display--plotted .pnl-plot__title { letter-spacing: 0.08em; }
+.pnl--night .pnl-display--plotted .pnl-plot__grid { stroke: #121c24; }
+.pnl--night .pnl-plot__trace.pnl-tone-a { filter: drop-shadow(0 0 2px rgba(95, 227, 255, 0.35)); }
+.pnl--strip .pnl-display--plotted .pnl-plot__grid { stroke: #19191c; }
+.pnl--strip .pnl-plot__area { opacity: 0.1; }
+.pnl--strip .pnl-plot__trace.pnl-tone-a { stroke-width: 2.2; }
+.pnl--graph .pnl-display--plotted .pnl-plot__grid { stroke: #e2ded3; }
+.pnl--graph .pnl-plot__dot.pnl-tone-a { stroke: #f8f6f0; stroke-width: 1; }
+.pnl--cabinet .pnl-display--plotted .pnl-plot__grid { stroke: #2a2116; }
+.pnl--cabinet { --pnl-tone-c: #8a6a3c; }
+.pnl--cabinet .pnl-plot__trace.pnl-tone-a { filter: drop-shadow(0 0 2px rgba(243, 164, 58, 0.45)); }
+.pnl--night .pnl-plot__area { opacity: 0.1; }
+.pnl-plot__stem { stroke-linecap: round; }
+@media (prefers-reduced-motion: no-preference) { .pnl-menu select { transition: border-color 120ms; } }
+
+/* ---- the level meters (meters.ts): IN and OUT, peak, −60 to 0 dBFS ---- */
+.pnl-meter { position: absolute; right: 4px; width: 9px; display: flex; gap: 1px; pointer-events: auto; }
+.pnl-meter__bar { position: relative; flex: 1; background: var(--pnl-meter-track, rgba(255, 255, 255, 0.06)); border-radius: 1px; overflow: hidden; }
+.pnl-meter__bar::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--pnl-level, 0) * 100%); background: var(--pnl-tone-a); }
+.pnl-meter__bar[data-level-side="in"]::after { opacity: 0.55; }
+.pnl-meter__bar[data-live="off"]::after { height: 0; }
+.pnl-meter__bar[data-clip="on"] { box-shadow: inset 0 2px 0 var(--pnl-meter-clip, #ff4d4d); }
+.pnl--graph { --pnl-meter-track: rgba(20, 20, 20, 0.08); --pnl-meter-clip: #c4321c; }
+.pnl-plot__live { fill: var(--pnl-tone-b); stroke: var(--pnl-plot-bg, #000); stroke-width: 1.5; }
