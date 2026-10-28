@@ -1,0 +1,212 @@
+/* Layout chrome for kit-gallery.html only — every control's own visual
+   design lives in faces/*.tsx and reads the app's real --mm-* tokens from
+   modular.css, imported alongside this file. This stylesheet never sets a
+   control colour itself. */
+
+/* modular.css pins html/body/#root to the viewport with overflow:hidden —
+   correct for the app, which is a fixed node canvas that scrolls inside its
+   own viewport element. This page is a document and has to scroll normally.
+   kitGallery.css is imported after modular.css (see kitGalleryMain.tsx), so
+   this wins on order at equal specificity. */
+html, body, #root {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+/* Painted on <html> as well as <body>: once the page scrolls, the element
+   that paints the canvas past the end of the content is <html>, and leaving
+   it unset lets the browser's own base colour show through there. */
+html {
+  background: var(--mm-canvas, #0e1216);
+}
+
+body {
+  margin: 0;
+  background: var(--mm-canvas, #0e1216);
+  color: var(--mm-text, #e7ecef);
+  font: 15px/1.5 ui-sans-serif, -apple-system, "Segoe UI", sans-serif;
+}
+
+.kg-page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 2.5rem clamp(1rem, 4vw, 2.5rem) 4rem;
+}
+
+.kg-page__head {
+  margin-bottom: 2rem;
+}
+
+.kg-eyebrow {
+  margin: 0 0 .3rem;
+  font: 700 .72rem/1 ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--mm-accent, #5fd0c2);
+}
+
+.kg-page__head h1 {
+  margin: 0 0 .6rem;
+  font-size: 1.6rem;
+  letter-spacing: -.01em;
+}
+
+.kg-lede {
+  max-width: 68ch;
+  color: var(--mm-muted, #8a97a0);
+  margin: 0;
+}
+
+.kg-lede code {
+  font-family: ui-monospace, monospace;
+  background: var(--mm-surface-2, #1a1f24);
+  padding: .1em .35em;
+  border-radius: 4px;
+}
+
+.kg-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.kg-card {
+  background: var(--mm-surface, #14181c);
+  /* Re-resolve the inherited colour against this card's own tokens — `color`
+     is computed at <body> against the page palette, so a light-panel kit
+     would otherwise inherit the dark page's near-white text. */
+  color: var(--mm-text, #e7ecef);
+  border: 1px solid var(--mm-border, rgba(255,255,255,.1));
+  border-radius: 12px;
+  padding: 1.25rem 1.35rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+/* Each card sets the --mm-* tokens to its kit's native palette, so a kit
+   meant for a white aluminium panel is shown on one instead of drawing dark
+   ink onto a dark card. This is also the clearest demonstration of the
+   split: nothing below overrides a face, it only supplies the same tokens a
+   real theme would, and every shape stays exactly as its kit drew it. */
+.kg-card[data-kit="vintage"] {
+  --mm-surface: #2b2119; --mm-surface-2: #3a2d21; --mm-text: #f1e9df;
+  --mm-accent: #d98a3d; --mm-muted: rgba(241,233,223,.55);
+  --mm-border: rgba(255,255,255,.18); --mm-on-accent: #2a1808;
+}
+
+.kg-card[data-kit="eurorack"] {
+  --mm-surface: #efece6; --mm-surface-2: #e1ddd4; --mm-text: #1a1815;
+  --mm-accent: #f2c14e; --mm-muted: rgba(26,24,21,.55);
+  --mm-border: rgba(0,0,0,.35); --mm-on-accent: #1a1815;
+}
+
+.kg-card[data-kit="thinRing"] {
+  --mm-surface: #14181c; --mm-surface-2: #1a1f24; --mm-text: #e7ecef;
+  --mm-accent: #5fd0c2; --mm-muted: #8a97a0;
+  --mm-border: rgba(255,255,255,.14); --mm-on-accent: #05100e;
+}
+
+.kg-card[data-kit="flatModern"] {
+  --mm-surface: #1c1a17; --mm-surface-2: #262320; --mm-text: #d7d2c8;
+  --mm-accent: #e0983c; --mm-muted: rgba(215,210,200,.5);
+  --mm-border: rgba(255,255,255,.12); --mm-on-accent: #17130c;
+}
+
+.kg-card[data-kit="lineArt"] {
+  --mm-surface: #fff; --mm-surface-2: #f4f4f4; --mm-text: #111;
+  --mm-accent: #111; --mm-muted: rgba(17,17,17,.45);
+  --mm-border: #111; --mm-on-accent: #fff;
+}
+
+.kg-card[data-kit="lcd"] {
+  --mm-surface: #d8e4f2; --mm-surface-2: #c7d5e9; --mm-text: #1b3a8a;
+  --mm-accent: #1b3a8a; --mm-muted: rgba(27,58,138,.55);
+  --mm-border: rgba(27,58,138,.4); --mm-on-accent: #d8e4f2;
+}
+
+.kg-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: .9rem;
+  border-bottom: 1px solid var(--mm-border, rgba(255,255,255,.1));
+}
+
+.kg-card__head h2 {
+  margin: 0 0 .3rem;
+  font-size: 1.05rem;
+}
+
+.kg-card__head p {
+  margin: 0;
+  font-size: .85rem;
+  color: var(--mm-muted, #8a97a0);
+}
+
+/* Sections run as columns that wrap, so a kit's fourteen controls stay
+   grouped by kind without the page scrolling sideways on a narrow window. */
+.kg-section {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: .55rem 0;
+}
+
+.kg-section + .kg-section {
+  border-top: 1px dashed var(--mm-border, rgba(255,255,255,.08));
+}
+
+.kg-section__title {
+  margin: 0;
+  flex: 0 0 5.5rem;
+  padding-top: .35rem;
+  font: 700 .66rem/1.2 ui-sans-serif, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--mm-muted, #8a97a0);
+}
+
+.kg-section__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem 1.4rem;
+  min-width: 0;
+}
+
+.kg-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.kg-card__family {
+  display: inline-block;
+  font: 600 .68rem/1 ui-sans-serif, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--mm-accent, #5fd0c2);
+  background: color-mix(in srgb, var(--mm-accent, #5fd0c2) 16%, transparent);
+  padding: .25rem .55rem;
+  border-radius: 999px;
+}
+
+.kg-led-toggle {
+  font: 600 9px/1 ui-sans-serif, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  background: none;
+  border: 1px solid var(--mm-border, rgba(255,255,255,.16));
+  color: var(--mm-muted, #8a97a0);
+  border-radius: 4px;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+@media (prefers-color-scheme: light) {
+  body { background: #f3f1ec; }
+}

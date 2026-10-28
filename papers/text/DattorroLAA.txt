@@ -1,0 +1,168 @@
+
+
+=== [p1] ===
+Linear Algebra and its Applications 428 (2008) 2597–2600
+Available online at www.sciencedirect.com
+www.elsevier.com/locate/laa
+Equality relating Euclidean distance cone to
+positive semideﬁnite cone
+Jon Dattorro
+Received 3 October 2005; accepted 10 December 2007
+Available online 7 March 2008
+Submitted by R.A. Brualdi
+Abstract
+We know that the cone of Euclidean distance matrices does not intersect the cone of positive semideﬁnite
+matrices except at the origin in the subspace of symmetric matrices. Even so, the two cones can be related
+by an equality.
+© 2007 Elsevier Inc. All rights reserved.
+AMS classiﬁcation: 51K05; 52A20; 15A48; 90C25; 74P20
+Keywords: Distance matrix
+1. Background
+In the subspace of symmetric matrices S, we know that the convex cone of Euclidean distance
+matrices EDM (the EDM cone) does not intersect the positive semideﬁnite cone S+ except at
+the origin, their only vertex; there can be no positive nor negative semideﬁnite EDM [6].
+EDM ∩S+ = 0
+(1)
+Even so, the two convex cones can be related. We establish an equality
+EDM = Sh ∩(S⊥
+c −S+)
+(2)
+where
+Sh
+= {A ∈S|diag(A) = 0}
+(3)
+is the symmetric hollow subspace, and where
+0024-3795/$ - see front matter ( 2007 Elsevier Inc. All rights reserved.
+doi:10.1016/j.laa.2007.12.008
+
+
+=== [p2] ===
+2598
+J. Dattorro / Linear Algebra and its Applications 428 (2008) 2597–2600
+S⊥
+c = {u1T + 1uT|u ∈RN}
+(4)
+is the orthogonal complement of the geometric center subspace
+Sc
+= {Y ∈S|Y1 = 0}
+(5)
+In N-dimensional real Euclidean vector space RN, 1 denotes a vector of ones. Equality (2) is
+not obvious from the various EDM deﬁnitions, such as in [5], because inclusion must be proved
+algebraically. Equality (2) is equally important as the known isomorphisms [2, Section 2] relating
+the EDM cone to a face of the positive semideﬁnite cone. But those isomorphisms have never led
+to this equality relating whole cones EDM and S+.
+WeinvokeamatrixvariantofthealgebraicSchoenbergcriterion[8]toillustratecorrespondence
+between the EDM and positive semideﬁnite cones:
+D ∈EDM ⇔
+−V DV ∈S+
+D ∈Sh
+(6)
+where V is the geometric centering matrix
+V
+= I −1
+N 11T ∈SN
+(7)
+in the ambient space of symmetric matrices S of dimension N.
+2. Equality
+Consider two convex cones K1 and K2 respectively deﬁned
+K1
+= Sh
+K2
+= {A ∈S|−V AV ∈S+}
+(8)
+so that
+K1 ∩K2 = EDM
+(9)
+Gaffke and Mathar [4, Section 5.3] observed that projection on K1 and K2 have simple closed
+forms: Projection on subspace K1 is easily performed by symmetrization and zeroing the main
+diagonal or vice versa, while projection of H ∈S on K2 is
+PK2H = H −PS+(V HV )
+(10)
+where PS+ denotes projection on the positive semideﬁnite cone. Matrix product V HV is the
+orthogonal projection of H on the geometric center subspace Sc. Thus the projection product
+PK2H = H −PS+PScH
+(11)
+Because projection on the intersection of the positive semideﬁnite cone with the geometric center
+subspace is equivalent to a (noncommutative [3, Section 5.14]) projection product
+PS+∩Sc = PS+PSc
+(12)
+a set equivalence follows:
+{PS+PScH|H ∈S} = {PS+∩ScH|H ∈S}
+(13)
+
+
+=== [p3] ===
+J. Dattorro / Linear Algebra and its Applications 428 (2008) 2597–2600
+2599
+Fig. 1. EDM cone construction in isometrically isomorphic R3.
+Polar cone K◦is a unique closed convex cone characterized by Moreau [7]:
+for closed convex cone K
+x = x1 + x2,
+x1 ∈K,
+x2 ∈K◦,
+x1 ⊥x2
+⇔
+x1 = PKx,
+x2 = PK◦x
+(14)
+which leads to concise cone relations
+K ≡{PKx|x ∈RN}
+K◦= {x −PKx|x ∈RN}
+(15)
+the former being obvious for any closed set K. Thus
+Sc ∩S+ ≡{PS+PScH|H ∈S}
+(Sc ∩S+)◦= {H −PS+PScH|H ∈S}
+(16)
+Deutsch [3, Section 4.6] provides polar transformation of an intersection of closed convex cones
+to vector sum, from which
+K2 = (Sc ∩S+)◦= S⊥
+c −S+
+(17)
+because the subspace polar is its orthogonal complement, and the positive semideﬁnite cone is
+self dual. We therefore get the equality
+EDM = K1 ∩K2 = Sh ∩(S⊥
+c −S+)
+(2)
+whose veracity is intuitively evident, in hindsight [1, p. 109].
+A realization of this construction in low dimension is illustrated in Fig. 1. Orthogonal comple-
+ment S2⊥
+c
+(4) of the geometric center subspace (a plane in isometrically isomorphic R3; drawn is a
+tiledfragment)supportsthepositivesemideﬁnitecone.(Roundedvertexisartifactofplot.)LineS2
+c
+runs along positive semideﬁnite cone boundary S2
++. EDM cone construction is accomplished by
+adding the polar positive semideﬁnite cone to S2⊥
+c . Difference S2⊥
+c
+−S2
++ is a halfspace partially
+bounded by S2⊥
+c . The EDM cone is a nonnegative halfline along S2
+h in this dimension.
+
+
+=== [p4] ===
+2600
+J. Dattorro / Linear Algebra and its Applications 428 (2008) 2597–2600
+3. Conclusion
+Although its roots lie in the algebra of Schoenberg, we derived our main result (2) via estab-
+lished projection theory given by Moreau and by Deutsch. Equality (2) is a recipe for constructing
+the EDM cone whole from large Euclidean bodies: the positive semideﬁnite cone, orthogonal
+complement of the geometric center subspace, and symmetric hollow subspace.
+References
+[1] Frank Critchley. Multidimensional Scaling: A Critical Examination and Some New Proposals. Ph.D. thesis, University
+of Oxford, Nufﬁeld College, 1980.
+[2] Frank Critchley, On certain linear mappings between inner-product and squared-distance matrices, Linear Algebra
+Appl. 105 (1988) 91–107.
+[3] Frank Deutsch, Best Approximation in Inner Product Spaces, Springer-Verlag, 2001.
+[4] Norbert Gaffke, Rudolf Mathar, A cyclic projection algorithm via duality, Metrika 36 (1989) 29–54.
+[5] Tom L. Hayden, Jim Wells, Wei-Min Liu, Pablo Tarazaga, The cone of distance matrices, Linear Algebra Appl. 144
+(1991) 153–169.
+[6] Monique Laurent, A tour d’horizon on positive semideﬁnite and Euclidean distance matrix completion problems, in:
+Panos M. Pardalos, Henry Wolkowicz (Eds.), Topics in Semideﬁnite and Interior-Point Methods, American Mathe-
+matical Society, 1998, pp. 51–76.
+[7] Jean-Jacques Moreau, Décomposition orthogonale d’un espace Hilbertien selon deux cônes mutuellement polaires,
+Comptes Rendus de l’Académie des Sciences, Paris 255 (1962) 238–240.
+[8] Isaac J. Schoenberg, Remarks to Maurice Fréchet’s article “Sur la déﬁnition axiomatique d’une classe d’espace
+distanciés vectoriellement applicable sur l’espace de Hilbert”, Annals of Mathematics 36 (3) (1935) 724–732.

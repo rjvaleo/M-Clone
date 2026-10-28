@@ -1,17 +1,30 @@
 /* Classic theme — a clean vector take on M's 1-bit Mac look.
    Colors are CSS variables so a future "modern" theme can reskin without
    touching layout or logic. */
+/*
+ * The palette, expressed against idMLab's theme tokens.
+ *
+ * Each one falls back to the colour it has always had, so this sheet on its
+ * own — M-Clone's own entry point, where no theme is applied — looks exactly
+ * as it did. When idMLab's theme engine writes its tokens onto the root
+ * element, these follow it instead.
+ *
+ * `--m-sel` is M's pale selection wash. It used to be called `--sel`, which is
+ * also the name idMLab gives its accent: since `applyTheme` writes tokens as
+ * inline style on the root, and inline beats a stylesheet rule, the theme was
+ * silently repainting M's selections. Renaming it ends that collision.
+ */
 :root {
-  --bg: #d9d9d3;
-  --panel: #f4f4ef;
-  --ink: #16160f;
-  --line: #16160f;
-  --accent: #16160f;
-  --cell: #ffffff;
-  --cell-on: #16160f;
-  --beat: #e6e6df;
-  --muted: #cfcfc7;
-  --sel: #fff7c2;
+  --bg: rgb(var(--s-page, 217 217 211));
+  --panel: rgb(var(--s-raised, 244 244 239));
+  --ink: var(--tx-800, #16160f);
+  --line: var(--bd-200, #16160f);
+  --accent: var(--ac-on, #16160f);
+  --cell: var(--s-card, #ffffff);
+  --cell-on: var(--ac-on, #16160f);
+  --beat: var(--hv-100, #e6e6df);
+  --muted: var(--bd-100, #cfcfc7);
+  --m-sel: var(--sel-soft, #fff7c2);
   --font: "Chicago", "Geneva", ui-sans-serif, system-ui, "Helvetica Neue", Arial,
     sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -46,10 +59,10 @@ body {
   z-index: 20000;
   flex: none;
   height: 22px;
-  padding: 1px 10px;
+  padding: 1px 6px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
@@ -70,11 +83,14 @@ body {
 /* The document name sits in the menu bar, where the original put the name of
    the Conducting Window. The bullet marks unsaved changes. */
 .app__doc {
+  min-width: 0;
   margin: 0 0 0 auto;
   padding-right: 8px;
+  overflow: hidden;
   font-size: 11px;
   opacity: 0.75;
   font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -185,7 +201,7 @@ body {
   font-size: 11px;
 }
 .voices__row--sel {
-  background: var(--sel);
+  background: var(--m-sel);
 }
 .voices input[type="number"] {
   width: 46px;
@@ -285,7 +301,7 @@ body {
   transform-origin: top left;
 }
 .theme-picker { display: flex; align-items: center; gap: 4px; font-size: 10px; }
-.theme-picker select { font: 10px var(--font); height: 18px; padding: 0 2px; }
+.theme-picker select { font: 10px var(--font); width: 64px; height: 18px; padding: 0 2px; }
 .channel-palette { display: flex; gap: 2px; align-items: center; }
 .channel-palette input[type="color"] {
   width: 22px; height: 22px; padding: 1px; border: 1px solid currentColor;
@@ -301,7 +317,7 @@ body {
 }
 .vtab--on {
   background: var(--cell-on);
-  color: #fff;
+  color: var(--m-on-strong);
 }
 
 /* ===== Unified classic interface (1-bit vector) ===== */
@@ -309,7 +325,7 @@ body {
    simulated desktop this used to sit in — the framed white screen and its
    menu bar — is gone; the windows float directly on the page. */
 .uroot {
-  color: #000;
+  color: var(--ink);
   font-size: 11px;
   line-height: 1.3;
   position: relative;
@@ -345,21 +361,21 @@ body {
 
 .uwin {
   flex: none;
-  border: 1px solid #000; /* hairline */
-  background: #fff; /* opaque — windows never show through each other */
+  border: 1px solid var(--line); /* hairline */
+  background: var(--panel); /* opaque — windows never show through each other */
   box-shadow: 2px 2px 0 rgb(0 0 0 / 18%);
 }
 .uwin__title {
   box-sizing: border-box;
   height: 24px;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--line);
   padding: 1px 6px;
   font-weight: 700;
   font-size: 12px;
   display: flex;
   gap: 6px;
   align-items: center;
-  background: #fff;
+  background: var(--panel);
 }
 .uwin__slash { opacity: 0.4; }
 .uwin__note { font-weight: 400; font-size: 10px; opacity: 0.7; }
@@ -375,9 +391,10 @@ body {
   font-size: 11px;
 }
 .uroot input[type="number"], .uroot select {
-  border: 1px solid #000;
+  border: 1px solid var(--line);
   padding: 1px 2px;
-  background: #fff;
+  background: var(--cell);
+  color: var(--ink);
 }
 .unum { width: 34px; }
 .unum--s { width: 22px; }
@@ -385,23 +402,23 @@ body {
 /* group tabs */
 .ugroup { display: flex; gap: 2px; margin-bottom: 4px; }
 .utab {
-  width: 20px; height: 18px; border: 1px solid #000; background: #fff; cursor: pointer;
+  width: 20px; height: 18px; border: 1px solid var(--m-line); background: var(--panel); cursor: pointer;
 }
-.utab--on { background: #000; color: #fff; }
+.utab--on { background: var(--m-strong); color: var(--m-on-strong); }
 
 /* generic tables */
 .utable { border-collapse: collapse; width: 100%; min-width: 640px; }
 .utable th, .utable td {
-  border: 1px solid #000; padding: 1px 3px; text-align: center;
+  border: 1px solid var(--m-line); padding: 1px 3px; text-align: center;
 }
 .utable th { background: #eee; font-size: 10px; }
-.utable__sel { background: var(--sel); }
+.utable__sel { background: var(--m-sel); }
 .ustepcell { padding: 1px !important; }
 .ustep {
-  width: 18px; height: 16px; border: 1px solid #999; background: #fff; padding: 0; cursor: pointer; display: block;
+  width: 18px; height: 16px; border: 1px solid #999; background: var(--panel); padding: 0; cursor: pointer; display: block;
 }
-.ustep--beat { border-left: 2px solid #000; }
-.ustep--on { background: #000; }
+.ustep--beat { border-left: 2px solid var(--m-line); }
+.ustep--on { background: var(--m-strong); }
 .uvoice--1 { --voice-color: var(--channel-1); }
 .uvoice--2 { --voice-color: var(--channel-2); }
 .uvoice--3 { --voice-color: var(--channel-3); }
@@ -409,13 +426,13 @@ body {
 .uvoice .ustep--on,
 .uvoice .ucyccell--level-4 { background: var(--voice-color); }
 .uvoice .ucyccell--level-3 {
-  background: color-mix(in srgb, var(--voice-color) 78%, white);
+  background: color-mix(in srgb, var(--voice-color) 78%, var(--cell));
 }
 .uvoice .ucyccell--level-2 {
-  background: color-mix(in srgb, var(--voice-color) 55%, white);
+  background: color-mix(in srgb, var(--voice-color) 55%, var(--cell));
 }
 .uvoice .ucyccell--level-1 {
-  background: color-mix(in srgb, var(--voice-color) 30%, white);
+  background: color-mix(in srgb, var(--voice-color) 30%, var(--cell));
 }
 .uvoice > td.b, .uvoice .ucyc__lab { color: var(--voice-color); }
 .ustep:disabled { background: #ddd; cursor: default; }
@@ -423,16 +440,16 @@ body {
 /* transport */
 .utransport { display: flex; gap: 4px; margin-bottom: 6px; }
 .ubtn {
-  border: 1px solid #000; background: #fff; padding: 4px 8px; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--m-line); background: var(--panel); padding: 4px 8px; font-weight: 700; cursor: pointer;
 }
-.ubtn--on { background: #000; color: #fff; }
+.ubtn--on { background: var(--m-strong); color: var(--m-on-strong); }
 .ubtn--wide { flex: 1; }
 .ubtn:disabled { opacity: 0.4; cursor: default; }
 .urow2 { display: flex; gap: 6px; align-items: center; margin-bottom: 5px; }
 .usplit { justify-content: space-between; }
 .uwrap { flex-wrap: wrap; }
 .uchk { display: flex; align-items: center; gap: 3px; }
-.udiv { border-top: 1px solid #000; padding-top: 5px; margin-top: 2px; }
+.udiv { border-top: 1px solid var(--m-line); padding-top: 5px; margin-top: 2px; }
 
 /* ===== Conducting Window =====
    Rebuilt from reference/transport and conductor.png: transport block at left,
@@ -485,14 +502,15 @@ body {
   background: var(--panel);
   color: var(--ink);
   font-family: var(--mono);
-  transform: scale(0.5);
-  transform-origin: top left;
+  /* Laid out at twice the window's size, then zoomed (not transformed), so
+     text and lines are drawn at their final size rather than shrunk. */
+  zoom: 0.5;
 }
 .uconduct button, .uconduct select, .uconduct input { font-family: inherit; }
 .uconduct__left {
   box-sizing: border-box;
   padding: 48px 8px 8px;
-  border-right: 1px solid #000;
+  border-right: 1px solid var(--m-line);
 }
 .uconduct__transport, .uconduct__secondary { display: grid; height: 43px; }
 .uconduct__transport { grid-template-columns: 1fr 1fr 1fr; margin-bottom: 10px; }
@@ -500,9 +518,9 @@ body {
 .uconduct__transport button, .uconduct__secondary button {
   position: relative;
   margin-right: -1px;
-  border: 1px solid #000;
-  background: #fff;
-  color: #000;
+  border: 1px solid var(--m-line);
+  background: var(--panel);
+  color: var(--ink);
   font-size: 21px;
   font-weight: 900;
   cursor: pointer;
@@ -514,7 +532,7 @@ body {
   position: absolute; z-index: 0;
   top: -5px; right: -8px;
   width: 1px; height: 54px;
-  background: #000;
+  background: var(--m-strong);
   transform: rotate(43deg);
   transform-origin: top;
 }
@@ -543,7 +561,7 @@ body {
   touch-action: none;
   cursor: crosshair;
   overflow: hidden;
-  background-color: #fff;
+  background-color: var(--panel);
   background-image:
     radial-gradient(circle at 1px 1px, #000 0 0.8px, transparent 1.2px),
     radial-gradient(circle at 1px 1px, #000 0 0.8px, transparent 1.2px);
@@ -553,13 +571,13 @@ body {
 .uconduct__grid::after {
   content: "";
   position: absolute; inset: 0;
-  border: 1px solid #000;
+  border: 1px solid var(--m-line);
   pointer-events: none;
 }
 .uconduct__baton {
   position: absolute; z-index: 2;
   width: 8px; height: 8px;
-  border-radius: 50%; background: #000;
+  border-radius: 50%; background: var(--m-strong);
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
@@ -570,14 +588,14 @@ body {
   align-items: stretch;
   border-top: 1px solid currentColor;
 }
-.uconduct__bottom > * { min-width: 0; border: 0; border-right: 1px solid #000; }
+.uconduct__bottom > * { min-width: 0; border: 0; border-right: 1px solid var(--m-line); }
 .uconduct__bottom > *:last-child { border-right: 0; }
-.uconduct__tempo-arrow { width: 100%; height: 100%; border: 0; border-right: 1px solid #000; }
+.uconduct__tempo-arrow { width: 100%; height: 100%; border: 0; border-right: 1px solid var(--m-line); }
 .uconduct__tempo { display: grid; grid-template-rows: 27px 1fr; padding: 5px 7px 0; }
 .uconduct__range {
   position: relative; height: 20px;
-  border: 1px solid #000;
-  background: repeating-conic-gradient(#000 0 25%, #fff 0 50%) 0 0 / 2px 2px;
+  border: 1px solid var(--m-line);
+  background: color-mix(in srgb, var(--m-strong) 50%, var(--cell));
 }
 .uconduct__range input {
   position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
@@ -585,16 +603,16 @@ body {
 }
 .uconduct__range input::-webkit-slider-thumb {
   appearance: none; width: 8px; height: 22px;
-  border: 1px solid #000; background: #fff; pointer-events: auto; cursor: ew-resize;
+  border: 1px solid var(--m-line); background: var(--panel); pointer-events: auto; cursor: ew-resize;
 }
 .uconduct__range input::-moz-range-thumb {
   width: 8px; height: 22px;
-  border: 1px solid #000; border-radius: 0; background: #fff;
+  border: 1px solid var(--m-line); border-radius: 0; background: var(--panel);
   pointer-events: auto; cursor: ew-resize;
 }
 .uconduct__tempo-mark {
   position: absolute; top: -2px; bottom: -2px;
-  width: 1px; background: #000; pointer-events: none;
+  width: 1px; background: var(--m-strong); pointer-events: none;
 }
 .uconduct__tempo-readout {
   display: grid; grid-template-columns: 27px 1fr var(--conductor-tempo-numerical) 30px;
@@ -602,28 +620,29 @@ body {
 }
 .uconduct__tempo-readout b { font-size: 12px; }
 .uconduct__tempo-readout input {
-  box-sizing: border-box; width: var(--conductor-tempo-numerical); height: 24px; padding: 0 1px;
-  border: 0; border-left: 1px solid #000; border-right: 1px solid #000;
-  background: #fff; color: #000; font: 800 15px/24px var(--mono);
+  /* 19px: with the slider row above it, exactly the bottom strip's height. */
+  box-sizing: border-box; width: var(--conductor-tempo-numerical); height: 19px; padding: 0 1px;
+  border: 0; border-left: 1px solid var(--m-line); border-right: 1px solid var(--m-line);
+  background: var(--panel); color: var(--ink); font: 800 15px/19px var(--mono);
   text-align: center;
   appearance: textfield;
 }
 .uconduct__tempo-readout input::-webkit-inner-spin-button,
 .uconduct__tempo-readout input::-webkit-outer-spin-button { appearance: none; margin: 0; }
 .uconduct__ratio-dir, .uconduct__robot {
-  background: #fff; color: #000; font-size: 14px; font-weight: 800; cursor: pointer;
+  background: var(--panel); color: var(--ink); font-size: 14px; font-weight: 800; cursor: pointer;
 }
 .uconduct__ratio, .uconduct__robot-time {
   box-sizing: border-box; appearance: none; padding: 0 2px; text-align: center;
   text-align-last: center; line-height: 1;
-  background: #fff; color: #000; font-weight: 800; cursor: pointer;
+  background: var(--panel); color: var(--ink); font-weight: 800; cursor: pointer;
 }
 .uconduct__robot { font-size: 23px; }
 .uconduct__robot svg {
   display: block; width: 38px; height: 38px; margin: auto;
   fill: currentColor;
 }
-.uconduct__robot.is-on { background: #000; color: #fff; }
+.uconduct__robot.is-on { background: var(--m-strong); color: var(--m-on-strong); }
 .uconduct__robot-range {
   display: grid; grid-template-rows: 14px 1fr;
   place-items: center; font-size: 10px; font-weight: 800;
@@ -663,11 +682,11 @@ body {
   display: flex;
   flex-direction: column;
   width: max-content;
-  border: 1px solid #000;
-  background: #fff;
-  color: #000;
+  border: 1px solid var(--m-line);
+  background: var(--panel);
+  color: var(--ink);
 }
-.usnapwin button { background: #fff; color: #000; }
+.usnapwin button { background: var(--panel); color: var(--ink); }
 .usnapwin__holddo {
   display: flex;
   align-items: flex-end;
@@ -675,10 +694,10 @@ body {
   gap: 4px;
   padding: 4px;
   border: none;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--m-line);
   cursor: pointer;
 }
-.usnapwin__row { display: flex; border-bottom: 1px solid #000; }
+.usnapwin__row { display: flex; border-bottom: 1px solid var(--m-line); }
 .usnapwin__arrow,
 .usnapwin__quant,
 .usnapwin__slidebtn {
@@ -687,7 +706,7 @@ body {
   flex: none;
   padding: 0;
   border: none;
-  border-right: 1px solid #000;
+  border-right: 1px solid var(--m-line);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -698,44 +717,44 @@ body {
 .usnapwin__snaps {
   display: grid;
   grid-template-columns: repeat(2, var(--snap-cell));
-  border-right: 1px solid #000;
+  border-right: 1px solid var(--m-line);
 }
 .usnapwin__shows { display: flex; flex-direction: column; }
 .usnap, .usnapwin__show {
   width: var(--snap-cell);
-  height: var(--snap-cell);
+  height: var(--snap-cell-h, var(--snap-cell));
   padding: 0;
   border: none;
-  border-right: 1px solid #000;
-  border-bottom: 1px solid #000;
+  border-right: 1px solid var(--m-line);
+  border-bottom: 1px solid var(--m-line);
   cursor: pointer;
 }
 .usnapwin__snaps .usnap:nth-child(2n) { border-right: none; }
 .usnapwin__shows .usnapwin__show,
-.usnapwin__shows .usnapwin__slidebtn { border-right: none; border-bottom: 1px solid #000; }
+.usnapwin__shows .usnapwin__slidebtn { border-right: none; border-bottom: 1px solid var(--m-line); }
 /* A stored Snapshot: the letter posing in the sun. */
 .usnap__art { display: grid; place-items: center; }
 .usnap__sun {
   position: relative;
   display: block;
   width: 9px; height: 9px;
-  border: 1px solid #000; border-radius: 50%;
+  border: 1px solid var(--m-line); border-radius: 50%;
   margin: 0 auto 1px;
 }
 /* The Current Snapshot indicator — a black mark in the sun. */
 .usnap__mark {
   position: absolute; inset: 1.5px;
-  border-radius: 50%; background: #000;
+  border-radius: 50%; background: var(--m-strong);
 }
 .usnap__letter { font-weight: 800; font-size: 12px; line-height: 1; }
-.usnap--current { outline: 1px solid #000; outline-offset: -3px; }
+.usnap--current { outline: 1px solid var(--m-line); outline-offset: -3px; }
 
-.usnapwin__foot { display: flex; border-top: 1px solid #000; }
+.usnapwin__foot { display: flex; border-top: 1px solid var(--m-line); }
 .usnapwin__tool {
   flex: 1;
   padding: 3px;
   border: none;
-  border-right: 1px solid #000;
+  border-right: 1px solid var(--m-line);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -745,12 +764,19 @@ body {
 .usnapwin__holddo[aria-pressed="true"],
 .usnapwin__slidebtn[aria-pressed="true"],
 .usnapwin__show--active { animation: snapshot-blink 0.7s steps(2, end) infinite; }
-.usnapwin__show--full { background: #000 !important; }
+.usnapwin__show--full { background: var(--m-strong) !important; }
 @keyframes snapshot-blink { 50% { filter: invert(1); } }
+/* With reduced motion the blinking controls hold the blink's "on" state:
+   still marked as running, without flashing. */
+@media (prefers-reduced-motion: reduce) {
+  .usnapwin__holddo[aria-pressed="true"],
+  .usnapwin__slidebtn[aria-pressed="true"],
+  .usnapwin__show--active { animation: none; filter: invert(1); }
+}
 .usnapwin__globe {
   padding: 4px;
   border: none;
-  border-top: 1px solid #000;
+  border-top: 1px solid var(--m-line);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -778,21 +804,21 @@ body {
   width: 26px;
   flex: none;
   padding: 0;
-  border: 2px solid #000;
-  background: #fff;
-  color: #000;
+  border: 2px solid var(--m-line);
+  background: var(--panel);
+  color: var(--ink);
   cursor: pointer;
   display: grid;
   place-items: center;
   touch-action: none;
 }
-.uarrow--on { background: #000; color: #fff; }
+.uarrow--on { background: var(--m-strong); color: var(--m-on-strong); }
 /* The six Positions share one enclosing box with hairlines between them. */
 .uvars__cells {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   flex: 1;
-  border: 2px solid #000;
+  border: 2px solid var(--m-line);
 }
 .umini {
   display: grid;
@@ -802,15 +828,15 @@ body {
   overflow: hidden;
   padding: 2px;
   border: none;
-  border-right: 1px solid #000;
-  background: #fff;
-  color: #000;
+  border-right: 1px solid var(--m-line);
+  background: var(--panel);
+  color: var(--ink);
   cursor: pointer;
 }
 .umini:last-child { border-right: none; }
 /* The Active Position inverts, and the artwork inverts with it because every
    thumbnail paints in currentColor. */
-.umini--on { background: #000; color: #fff; }
+.umini--on { background: var(--m-strong); color: var(--m-on-strong); }
 .umini__art { display: block; width: 100%; height: 100%; }
 .umini--group { place-items: center; }
 .umini--group { font-weight: 800; font-size: 15px; }
@@ -828,7 +854,7 @@ body {
 }
 .uvarpop {
   width: min(560px, calc(100vw - 48px));
-  border: 2px solid #000;
+  border: 2px solid var(--m-line);
   background: #f2f2f2;
   box-shadow: 8px 8px 0 rgb(0 0 0 / 35%);
 }
@@ -847,27 +873,27 @@ body {
 .uposbox {
   margin-left: auto;
   display: flex;
-  border: 1px solid #000;
+  border: 1px solid var(--m-line);
 }
 .uposcell {
   width: 13px;
   height: 16px;
   padding: 0;
   border: none;
-  border-right: 1px solid #000;
-  background: #fff;
+  border-right: 1px solid var(--m-line);
+  background: var(--panel);
   cursor: pointer;
 }
 .uposcell:last-child { border-right: none; }
-.uposcell--on { background: #000; }
+.uposcell--on { background: var(--m-strong); }
 .uvarpop__close {
   flex: none;
   width: 20px;
   height: 18px;
   padding: 0;
   line-height: 1;
-  border: 1px solid #000;
-  background: #fff;
+  border: 1px solid var(--m-line);
+  background: var(--panel);
   cursor: pointer;
   font-weight: 700;
 }
@@ -903,11 +929,11 @@ body {
 }
 .uorch__channel {
   height: 25px;
-  border: 1px solid #000;
-  background: #fff;
+  border: 1px solid var(--m-line);
+  background: var(--panel);
   cursor: pointer;
 }
-.uorch__channel--on { background: #000; color: #fff; }
+.uorch__channel--on { background: var(--m-strong); color: var(--m-on-strong); }
 .umidi__velocity { white-space: nowrap; text-align: center; font-weight: 700; }
 
 .uvelocity {
@@ -920,7 +946,7 @@ body {
 .uvelocity input[type="number"] {
   width: 100%;
   height: 29px;
-  border: 2px solid #000;
+  border: 2px solid var(--m-line);
   font: inherit;
   font-weight: 700;
   text-align: center;
@@ -929,7 +955,7 @@ body {
   position: relative;
   height: 30px;
   border-block: 2px solid transparent;
-  background: linear-gradient(#000, #000) center / 100% 2px no-repeat;
+  background: linear-gradient(var(--m-strong), var(--m-strong)) center / 100% 2px no-repeat;
 }
 .uvelocity__fill {
   position: absolute;
@@ -948,8 +974,8 @@ body {
   width: 12px;
   height: 26px;
   padding: 0;
-  border: 2px solid #000;
-  background: #fff;
+  border: 2px solid var(--m-line);
+  background: var(--panel);
   cursor: ew-resize;
   touch-action: none;
   transform: translateX(-50%);
@@ -978,8 +1004,8 @@ body {
   width: 100%;
   height: 26px;
   padding: 0;
-  border: 2px solid #000;
-  background: #fff;
+  border: 2px solid var(--m-line);
+  background: var(--panel);
   font: inherit;
   font-weight: 700;
   text-align: center;
@@ -991,14 +1017,14 @@ body {
   height: 24px;
   cursor: crosshair;
   touch-action: none;
-  background: linear-gradient(#000, #000) center / 100% 2px no-repeat;
+  background: linear-gradient(var(--m-strong), var(--m-strong)) center / 100% 2px no-repeat;
 }
 .uvel__band {
   position: absolute;
   top: 3px;
   bottom: 3px;
   pointer-events: none;
-  background: repeating-conic-gradient(#000 0 25%, #fff 0 50%) 0 0 / 3px 3px;
+  background: color-mix(in srgb, var(--m-strong) 50%, var(--cell));
 }
 
 /* Note Density editor — M's layout: row #, a boxed percentage numerical, then
@@ -1016,6 +1042,8 @@ body {
 .udens__pct { text-align: center; }
 .udens__scale { position: relative; height: 15px; }
 .udens__tick { position: absolute; bottom: 0; transform: translateX(-50%); }
+/* The 100 sits at the window's right edge, so it ends there instead of centring past it. */
+.udens__tick:last-child { transform: translateX(-100%); }
 
 .uvarcontrol--dens {
   display: block;
@@ -1038,8 +1066,8 @@ body {
   width: 100%;
   height: 26px;
   padding: 0;
-  border: 2px solid #000;
-  background: #fff;
+  border: 2px solid var(--m-line);
+  background: var(--panel);
   font: inherit;
   font-weight: 700;
   text-align: center;
@@ -1049,7 +1077,7 @@ body {
 .udens__num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
 .udens__track {
-  --udens-guide: repeating-linear-gradient(180deg, #000 0 2px, transparent 2px 4px);
+  --udens-guide: repeating-linear-gradient(180deg, var(--m-line) 0 2px, transparent 2px 4px);
   position: relative;
   height: 30px;
   cursor: crosshair;
@@ -1070,7 +1098,7 @@ body {
   top: 50%;
   height: 1px;
   margin-top: -1px;
-  background: repeating-linear-gradient(90deg, #000 0 1px, transparent 1px 3px);
+  background: repeating-linear-gradient(90deg, var(--m-strong) 0 1px, transparent 1px 3px);
 }
 /* The stop at 100%. */
 .udens__track::after {
@@ -1081,9 +1109,9 @@ body {
   width: 4px;
   height: 4px;
   margin-top: -2px;
-  border: 1px solid #000;
+  border: 1px solid var(--m-line);
   border-radius: 50%;
-  background: #fff;
+  background: var(--panel);
 }
 .udens__bar {
   position: absolute;
@@ -1091,7 +1119,7 @@ body {
   top: 50%;
   height: 5px;
   margin-top: -3px;
-  background: #000;
+  background: var(--m-strong);
   pointer-events: none;
 }
 .udens__handle {
@@ -1102,7 +1130,7 @@ body {
   margin: -7px 0 0 -6px;
   padding: 0;
   border: none;
-  background: #000;
+  background: var(--m-strong);
   cursor: ew-resize;
   touch-action: none;
 }
@@ -1118,13 +1146,13 @@ body {
   font-weight: 700;
   cursor: pointer;
 }
-.umenu__title:hover, .umenu__title--on { background: #000; color: #fff; }
+.umenu__title:hover, .umenu__title--on { background: var(--m-strong); color: var(--m-on-strong); }
 .umenu__list {
   z-index: 100;
   min-width: 190px;
   padding: 2px 0;
-  border: 1px solid #000;
-  background: #fff;
+  border: 1px solid var(--m-line);
+  background: var(--panel);
   box-shadow: 3px 3px 0 rgb(0 0 0 / 35%);
 }
 .umenu__item {
@@ -1133,13 +1161,13 @@ body {
   padding: 2px 12px;
   border: none;
   background: transparent;
-  color: #000;
+  color: var(--ink);
   font: inherit;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
 }
-.umenu__item:hover:not(:disabled) { background: #000; color: #fff; }
+.umenu__item:hover:not(:disabled) { background: var(--m-strong); color: var(--m-on-strong); }
 .umenu__item:disabled { opacity: 0.35; cursor: default; }
 /* Every item in a checkable menu reserves the tick gutter, so the labels stay
    in one column whether or not the option is on. */
@@ -1160,12 +1188,12 @@ body {
 .utr__head { font-weight: 700; text-align: center; padding-bottom: 3px; }
 .utr__voice { font-weight: 700; text-align: center; }
 /* The four rows share one enclosing box, as the original's do. */
-.utr__row .utr__num { border: 1px solid #000; margin: -1px 0 0 -1px; }
+.utr__row .utr__num { border: 1px solid var(--m-line); margin: -1px 0 0 -1px; }
 .utr__num {
   height: 22px;
   padding: 0;
-  background: #fff;
-  color: #000;
+  background: var(--panel);
+  color: var(--ink);
   font: inherit;
   font-size: 13px;
   font-weight: 800;
@@ -1189,18 +1217,18 @@ body {
 .utd__voices { display: flex; gap: 2px; }
 .utd__voice {
   width: 20px; height: 20px; padding: 0;
-  border: 1px solid #000; background: #fff; color: #000;
+  border: 1px solid var(--m-line); background: var(--panel); color: var(--ink);
   font: inherit; font-weight: 700; cursor: pointer;
 }
-.utd__voice--on { outline: 1px solid #000; outline-offset: 1px; }
+.utd__voice--on { outline: 1px solid var(--m-line); outline-offset: 1px; }
 .utd__clear {
   height: 20px; padding: 0 8px; margin-left: 6px;
-  border: 1px solid #000; background: #fff; color: #000;
+  border: 1px solid var(--m-line); background: var(--panel); color: var(--ink);
   font: inherit; font-weight: 700; cursor: pointer;
 }
 .utd__len {
   width: 42px; height: 20px; padding: 0; text-align: center;
-  border: 1px solid #000; background: #fff; font: inherit; font-weight: 700;
+  border: 1px solid var(--m-line); background: var(--panel); font: inherit; font-weight: 700;
   -moz-appearance: textfield;
 }
 .utd__len::-webkit-inner-spin-button,
@@ -1217,13 +1245,13 @@ body {
   touch-action: none;
   cursor: crosshair;
 }
-.utd__frame { fill: #fff; stroke: #000; stroke-width: 1; }
+.utd__frame { fill: var(--cell); stroke: var(--m-line); stroke-width: 1; }
 /* The neutral map — clock time and real time running together. */
 .utd__identity { stroke: #c9a227; stroke-width: 1; }
 /* The other Voices' maps, drawn thin behind the one being edited. */
 .utd__other { fill: none; stroke: #9a9a9a; stroke-width: 1; }
 .utd__live { fill: none; stroke: #444; stroke-width: 2.5; }
-.utd__grip { fill: #000; cursor: grab; }
+.utd__grip { fill: var(--m-strong); cursor: grab; }
 
 /* ===== Pattern Editor =====
    Everything here is locked to the grid module: a 10x8 cell and a 46px left
@@ -1236,33 +1264,35 @@ body {
   --pe-cell-w: 10px;
   --pe-cell-h: 8px;
   --pe-keyw: 26px; /* the right Reference Keyboard */
-  --pe-paper: #fff;
-  --pe-rule: #000;
+  --pe-paper: var(--cell);
+  --pe-rule: var(--m-line);
   --pe-dot: #9a9a9a;
-  border: 1px solid #000;
-  background: #fff;
-  color: #000;
+  border: 1px solid var(--m-line);
+  background: var(--panel);
+  color: var(--ink);
   width: max-content;
 }
 .peditor__tools { margin-left: auto; display: flex; }
+/* The close box follows the tools to the right edge, as in every other window. */
+.peditor__tools + .uwin__close { margin-left: 2px; }
 .petool {
   width: 24px; height: 20px; padding: 0; cursor: pointer;
-  border: 1px solid #000; border-right: none; border-top: none; border-bottom: none;
-  background: #fff; color: #000; display: grid; place-items: center;
+  border: 1px solid var(--m-line); border-right: none; border-top: none; border-bottom: none;
+  background: var(--panel); color: var(--ink); display: grid; place-items: center;
 }
-.petool:last-child { border-right: 1px solid #000; }
-.petool--on { background: #000; color: #fff; --pe-paper: #000; }
+.petool:last-child { border-right: 1px solid var(--m-line); }
+.petool--on { background: var(--m-strong); color: var(--m-on-strong); --pe-paper: var(--m-strong); }
 
 /* --- shared row scaffold --- */
 .perow { display: flex; align-items: stretch; }
-.perow--head { height: 16px; border-bottom: 1px solid #000; }
+.perow--head { height: 16px; border-bottom: 1px solid var(--m-line); }
 .perow--body { align-items: flex-start; }
-.perow--range { height: 15px; border-top: 1px solid #000; }
-.perow--foot { height: 18px; border-top: 1px solid #000; align-items: stretch; }
+.perow--range { height: 15px; border-top: 1px solid var(--m-line); }
+.perow--foot { height: 18px; border-top: 1px solid var(--m-line); align-items: stretch; }
 
 .peoct, .pearrow {
-  flex: none; padding: 0; cursor: pointer; color: #000; background: #fff;
-  border: none; border-right: 1px solid #000;
+  flex: none; padding: 0; cursor: pointer; color: var(--ink); background: var(--panel);
+  border: none; border-right: 1px solid var(--m-line);
   display: grid; place-items: center;
 }
 .peoct { width: 30px; }
@@ -1270,20 +1300,20 @@ body {
 
 /* --- row 1: the step ruler, which is also where the tools operate --- */
 .peruler {
-  position: relative; height: 100%; background: #fff;
-  border-right: 1px solid #000; overflow: hidden; cursor: crosshair;
+  position: relative; height: 100%; background: var(--panel);
+  border-right: 1px solid var(--m-line); overflow: hidden; cursor: crosshair;
 }
 .peruler--erase, .peruler--plunge, .peruler--scissor { cursor: cell; }
 .peruler__num {
   position: absolute; bottom: 1px; font-size: 9px; line-height: 1;
-  font-family: var(--mono); color: #000;
+  font-family: var(--mono); color: var(--ink);
 }
 .peruler__num--live { font-weight: 700; }
-.peruler__region { position: absolute; top: 0; bottom: 0; background: #000; }
+.peruler__region { position: absolute; top: 0; bottom: 0; background: var(--m-strong); }
 .peruler__point {
   position: absolute; bottom: 0; width: 0; height: 0;
   border-left: 4px solid transparent; border-right: 4px solid transparent;
-  border-bottom: 6px solid #000;
+  border-bottom: 6px solid var(--m-line);
 }
 
 /* The Mode Selector is one table: header and rows share a column template, and
@@ -1295,16 +1325,16 @@ body {
 }
 .pemodes__head {
   height: 100%; font-size: 9px; font-weight: 700;
-  justify-items: center; border-left: 1px solid #000;
+  justify-items: center; border-left: 1px solid var(--m-line);
 }
 .pekeygap { width: var(--pe-keyw); flex: none; }
 
 /* --- row 2: keyboards and the Editing Grid --- */
-.pesidecol { position: relative; width: 46px; flex: none; border-right: 1px solid #000; }
+.pesidecol { position: relative; width: 46px; flex: none; border-right: 1px solid var(--m-line); }
 .penote {
   position: absolute; z-index: 2; top: 0; left: 0; padding: 0 2px;
   font-size: 9px; font-family: var(--mono); font-weight: 700;
-  background: #fff; color: #000;
+  background: var(--panel); color: var(--ink);
 }
 /* Reference Keyboards. Each chromatic pitch is one row so the keys stay locked
    to the Editing Grid, and the keyboard reads as a keyboard by drawing the
@@ -1313,23 +1343,23 @@ body {
    keyboards mirror, so each one's blacks grow away from the grid. */
 .pekeys { display: flex; flex-direction: column; --pe-blackdepth: 72%; }
 .pekeys--left { width: 100%; }
-.pekeys--right { width: var(--pe-keyw); flex: none; border-right: 1px solid #000; }
-.pekey { display: block; width: 100%; padding: 0; border: none; background: #fff; cursor: pointer; }
+.pekeys--right { width: var(--pe-keyw); flex: none; border-right: 1px solid var(--m-line); }
+.pekey { display: block; width: 100%; padding: 0; border: none; background: var(--panel); cursor: pointer; }
 .pekeys--left .pekey--black {
-  background: linear-gradient(90deg, #000 0 var(--pe-blackdepth), #fff var(--pe-blackdepth));
+  background: linear-gradient(90deg, var(--m-strong) 0 var(--pe-blackdepth), var(--cell) var(--pe-blackdepth));
 }
 .pekeys--right .pekey--black {
   background: linear-gradient(
-    270deg, #000 0 var(--pe-blackdepth), #fff var(--pe-blackdepth));
+    270deg, var(--m-strong) 0 var(--pe-blackdepth), var(--cell) var(--pe-blackdepth));
 }
 /* F-E and C-B are the only places two white keys touch on a descending
    chromatic run, so those are the only rows that need a key edge drawn. */
-.pekey--split { box-shadow: inset 0 -1px 0 #000; }
+.pekey--split { box-shadow: inset 0 -1px 0 var(--m-line); }
 .pekey:hover { filter: invert(1); }
 
 .pegrid {
   position: relative; overflow: hidden;
-  background-color: #fff;
+  background-color: var(--panel);
   background-image: radial-gradient(circle at 1px 1px, var(--pe-dot) 0.5px, transparent 0.9px);
   background-size: var(--pe-cell-w) var(--pe-cell-h);
 }
@@ -1347,31 +1377,31 @@ body {
   cursor: crosshair; touch-action: none;
 }
 .pecell--on {
-  background-color: var(--voice-color, #000);
+  background-color: var(--voice-color, var(--m-strong));
   background-image: repeating-linear-gradient(135deg, transparent 0 2px, rgb(255 255 255 / 32%) 2px 3px);
 }
 /* A Pattern shown behind the edited one (shift-click a View number). */
-.pecell--ghost { background: repeating-conic-gradient(#9a9a9a 0 25%, transparent 0 50%) 0 0 / 2px 2px; }
+.pecell--ghost { background: color-mix(in srgb, #9a9a9a 50%, transparent); }
 .pegrid__region {
   position: absolute; z-index: 3; top: 0; bottom: 0;
   pointer-events: none; background: rgb(0 0 0 / 18%);
 }
 /* The Legend: dotted guide marks tracking the cursor. */
 .pelegend { position: absolute; z-index: 4; pointer-events: none; }
-.pelegend--v { top: 0; bottom: 0; width: 0; border-left: 1px dotted #000; }
-.pelegend--h { left: 0; right: 0; height: 0; border-top: 1px dotted #000; }
+.pelegend--v { top: 0; bottom: 0; width: 0; border-left: 1px dotted var(--m-line); }
+.pelegend--h { left: 0; right: 0; height: 0; border-top: 1px dotted var(--m-line); }
 
 /* Cells butt up against each other and share rules, the way the original's
    table did — hence the inset shadow rather than a border on every cell. */
-.pemodes { align-self: flex-start; border-left: 1px solid #000; }
+.pemodes { align-self: flex-start; border-left: 1px solid var(--m-line); }
 .pemodes__row > * {
   width: 100%; height: 18px; padding: 0; border: none;
-  box-shadow: inset -1px -1px 0 #000;
-  background: #fff; color: #000;
+  box-shadow: inset -1px -1px 0 var(--m-line);
+  background: var(--panel); color: var(--ink);
 }
 .peview__num { cursor: pointer; font-weight: 700; font-size: 10px; }
-.peview__num--on { box-shadow: inset -1px -1px 0 #000, inset 0 0 0 2px #000; }
-.peview__num--ghost { box-shadow: inset -1px -1px 0 #000, inset 0 0 0 1px #9a9a9a; }
+.peview__num--on { box-shadow: inset -1px -1px 0 var(--m-line), inset 0 0 0 2px var(--m-line); }
+.peview__num--ghost { box-shadow: inset -1px -1px 0 var(--m-line), inset 0 0 0 1px #9a9a9a; }
 .pepic { cursor: pointer; display: grid; place-items: center; }
 .pesize__num, .pevel {
   font: inherit; font-size: 10px; font-weight: 700; text-align: center;
@@ -1379,7 +1409,7 @@ body {
 }
 .pevel {
   width: 44px; height: 100%; padding: 0; border: none;
-  border-right: 1px solid #000; background: #fff; color: #000;
+  border-right: 1px solid var(--m-line); background: var(--panel); color: var(--ink);
 }
 .pesize__num::-webkit-inner-spin-button,
 .pesize__num::-webkit-outer-spin-button,
@@ -1388,40 +1418,40 @@ body {
 
 /* --- row 3: MIDI Edit Range Bar, All / Ctr, Editor Sound Velocity --- */
 .perange {
-  position: relative; height: 100%; background: #fff;
-  border-right: 1px solid #000; overflow: hidden; cursor: pointer;
+  position: relative; height: 100%; background: var(--panel);
+  border-right: 1px solid var(--m-line); overflow: hidden; cursor: pointer;
 }
-.perange__bar { position: absolute; top: 4px; height: 6px; background: #000; }
+.perange__bar { position: absolute; top: 4px; height: 6px; background: var(--m-strong); }
 .perange__ctr {
   position: absolute; top: 1px; bottom: 1px; width: var(--pe-cell-w);
-  background: #000; box-shadow: inset 0 0 0 1px #fff;
+  background: var(--m-strong); box-shadow: inset 0 0 0 1px #fff;
 }
 .pebtn {
-  min-width: 30px; padding: 0 5px; border: none; border-right: 1px solid #000;
-  background: #fff; color: #000; font-size: 10px; font-weight: 700; cursor: pointer;
+  min-width: 30px; padding: 0 5px; border: none; border-right: 1px solid var(--m-line);
+  background: var(--panel); color: var(--ink); font-size: 10px; font-weight: 700; cursor: pointer;
 }
-.perow--range .pevel { border: none; border-right: 1px solid #000; height: 100%; }
+.perow--range .pevel { border: none; border-right: 1px solid var(--m-line); height: 100%; }
 
 /* --- row 4: scroll bar, Editor Sound Enable, Size Box --- */
 .pescrollbtn {
-  width: 24px; flex: none; padding: 0; border: none; border-right: 1px solid #000;
-  background: #fff; color: #000; cursor: pointer; display: grid; place-items: center;
+  width: 24px; flex: none; padding: 0; border: none; border-right: 1px solid var(--m-line);
+  background: var(--panel); color: var(--ink); cursor: pointer; display: grid; place-items: center;
 }
 .pescrollbtn:disabled { opacity: 0.35; cursor: default; }
 .pescroll {
   position: relative; flex: 1; min-width: 60px; cursor: pointer;
-  background: repeating-conic-gradient(#000 0 25%, #fff 0 50%) 0 0 / 2px 2px;
+  background: color-mix(in srgb, var(--m-strong) 50%, var(--cell));
 }
 .pescroll__thumb {
   position: absolute; top: 0; bottom: 0; min-width: 14px; box-sizing: border-box;
-  background: #fff; border-left: 1px solid #000; border-right: 1px solid #000;
+  background: var(--panel); border-left: 1px solid var(--m-line); border-right: 1px solid var(--m-line);
   cursor: grab; touch-action: none;
 }
 .pesound, .pesizebox {
-  width: 28px; flex: none; padding: 0; border: none; border-left: 1px solid #000;
-  background: #fff; color: #000; cursor: pointer; display: grid; place-items: center;
+  width: 28px; flex: none; padding: 0; border: none; border-left: 1px solid var(--m-line);
+  background: var(--panel); color: var(--ink); cursor: pointer; display: grid; place-items: center;
 }
-.pesound--on { background: #000; color: #fff; --pe-paper: #000; }
+.pesound--on { background: var(--m-strong); color: var(--m-on-strong); --pe-paper: var(--m-strong); }
 .pesizebox { cursor: nwse-resize; touch-action: none; }
 
 
@@ -1436,11 +1466,11 @@ body {
   display: flex;
   height: 22px;
   overflow: hidden;
-  border: 1px solid #000;
-  background: #fff;
+  border: 1px solid var(--m-line);
+  background: var(--panel);
 }
 .unoteorder__bar > span { height: 100%; }
-.unoteorder__original { background: #000; }
+.unoteorder__original { background: var(--m-strong); }
 .unoteorder__cyclic {
   background-color: #aaa;
   background-image: repeating-linear-gradient(
@@ -1448,7 +1478,7 @@ body {
   );
 }
 .unoteorder__utterly {
-  background-color: #fff;
+  background-color: var(--panel);
   background-image: radial-gradient(#222 1px, transparent 1.2px);
   background-size: 5px 5px;
 }
@@ -1467,8 +1497,8 @@ body {
   width: 24px;
   height: 28px;
   padding: 0;
-  border: 2px solid #000;
-  background: #fff;
+  border: 2px solid var(--m-line);
+  background: var(--panel);
   cursor: ew-resize;
   touch-action: none;
 }
@@ -1492,7 +1522,7 @@ body {
   display: block;
   width: 72px;
   height: 10px;
-  border: 1px solid #000;
+  border: 1px solid var(--m-line);
 }
 
 /* cyclic */
@@ -1502,24 +1532,24 @@ body {
 .ucyc__row { display: flex; align-items: center; gap: 3px; margin-bottom: 2px; }
 .ucyc__lab { width: 8px; font-size: 9px; font-weight: 700; }
 .ucyc__cells { display: flex; gap: 1px; }
-.ucyccell { width: 9px; height: 12px; border: 1px solid #bbb; background: #fff; padding: 0; cursor: pointer; }
-.ucyccell--level-0 { background: #fff; }
+.ucyccell { width: 9px; height: 12px; border: 1px solid #bbb; background: var(--panel); padding: 0; cursor: pointer; }
+.ucyccell--level-0 { background: var(--panel); }
 .ucyccell--level-1 { background: #c8c8c8; }
 .ucyccell--level-2 { background: #8d8d8d; }
 .ucyccell--level-3 { background: #4c4c4c; }
-.ucyccell--level-4 { background: #000; }
+.ucyccell--level-4 { background: var(--m-strong); }
 
 .ucycpos {
   display: grid; grid-template-columns: 14px repeat(4, 1fr); align-items: center;
-  width: 100%; height: 22px; padding: 1px 2px; border: 1px solid #000;
-  margin-top: -1px; background: #fff; color: #000; cursor: pointer;
+  width: 100%; height: 22px; padding: 1px 2px; border: 1px solid var(--m-line);
+  margin-top: -1px; background: var(--panel); color: var(--ink); cursor: pointer;
 }
-.ucycpos.is-on { outline: 2px solid #000; outline-offset: -3px; }
+.ucycpos.is-on { outline: 2px solid var(--m-line); outline-offset: -3px; }
 .ucycpos i { display: block; height: 3px; max-width: 28px; background: var(--voice-color); }
 
 .cyced {
   width: 439px; overflow: hidden;
-  background: #fff; color: #000; box-shadow: none;
+  background: var(--panel); color: var(--ink); box-shadow: none;
   font-family: var(--mono); font-size: 10px;
 }
 .cyced--modern { width: 782px; }
@@ -1529,7 +1559,8 @@ body {
   display: grid; grid-template-columns: 20px 12px 190px 12px;
   grid-template-rows: 48px 13px; align-items: center; height: 76px;
 }
-.cyced__voice > b { grid-row: 1; font-size: 14px; color: var(--voice-color); }
+/* Centred in its column, clear of the voice's colour stripe down the left edge. */
+.cyced__voice > b { grid-row: 1; justify-self: center; font-size: 14px; color: var(--voice-color); }
 .cyced__levels {
   grid-row: 1; font-size: 8px; line-height: 9.5px; text-align: center;
   color: var(--voice-color);
@@ -1538,12 +1569,12 @@ body {
 .cyced__grid {
   grid-column: 3; grid-row: 1; display: grid;
   grid-template-columns: repeat(16, 1fr); grid-template-rows: repeat(5, 9.6px);
-  border-left: 1px solid #000; border-top: 1px dotted #000; touch-action: none;
+  border-left: 1px solid var(--m-line); border-top: 1px dotted var(--m-line); touch-action: none;
 }
 .cyced__grid button {
   width: auto; height: 9.6px; padding: 0; border: 0;
-  border-right: 1px dotted #000; border-bottom: 1px dotted #000;
-  background: #fff; cursor: crosshair;
+  border-right: 1px dotted var(--m-line); border-bottom: 1px dotted var(--m-line);
+  background: var(--panel); cursor: crosshair;
 }
 .cyced__grid button.is-on::after {
   content: ""; display: block; width: 6px; height: 6px; margin: 1px auto;
@@ -1554,16 +1585,16 @@ body {
   grid-column: 3; grid-row: 2; display: grid; grid-template-columns: repeat(16, 1fr);
 }
 .cyced__steps button {
-  padding: 0; border: 0; background: #fff; font: inherit; font-size: 8px; cursor: pointer;
+  padding: 0; border: 0; background: var(--panel); font: inherit; font-size: 8px; cursor: pointer;
 }
 .cyced__steps button.is-on {
-  background: var(--voice-color); color: #fff;
+  background: var(--voice-color); color: var(--m-on-strong);
   text-shadow: 0 1px 0 rgb(0 0 0 / 60%);
 }
 .cyced__side { display: grid; padding-top: 0; overflow: hidden; }
 .cyced__descriptor {
   display: grid; grid-template-columns: 34px 1fr; align-content: center;
-  padding: 2px 4px; border-bottom: 1px solid #000; overflow: hidden;
+  padding: 2px 4px; border-bottom: 1px solid var(--m-line); overflow: hidden;
   font: 8px/11px var(--mono);
 }
 .cyced__descriptor b { grid-row: 1 / 4; align-self: center; font-size: 10px; }
@@ -1572,7 +1603,7 @@ body {
 .cyced__pick { position: relative; width: 92px; }
 .cyced__kind {
   position: relative; z-index: 2; width: 92px; height: 26px; padding: 1px 22px 1px 6px;
-  border: 0; background: transparent !important; color: #000; text-align: left;
+  border: 0; background: transparent !important; color: var(--ink); text-align: left;
   font: inherit; font-size: 15px; font-weight: 900; cursor: pointer;
 }
 .cyced__kind::before,
@@ -1584,26 +1615,26 @@ body {
 }
 .cyced__kind::before {
   z-index: 0;
-  background: #000;
+  background: var(--m-strong);
   clip-path: var(--cyclic-selector-outer);
 }
 .cyced__kind::after {
   z-index: 1;
-  background: #fff;
+  background: var(--panel);
   clip-path: var(--cyclic-selector-inner);
 }
 .cyced__kind > span { position: relative; z-index: 2; }
-.cyced__control.is-current .cyced__kind { color: #fff; }
+.cyced__control.is-current .cyced__kind { color: var(--m-on-strong); }
 .cyced__control.is-current .cyced__kind::after { display: none; }
 .cyced__positions {
   width: 31px; margin-top: 2px; display: grid;
   grid-template-rows: repeat(6, var(--cyclic-position-row-height, 10px));
-  border: 1px solid #000;
+  border: 1px solid var(--m-line);
 }
-.cyced__positions button { padding: 0; border: 0; border-bottom: 1px solid #000; background: #fff; cursor: pointer; }
+.cyced__positions button { padding: 0; border: 0; border-bottom: 1px solid var(--m-line); background: var(--panel); cursor: pointer; }
 .cyced__positions button:last-child { border-bottom: 0; }
-.cyced__positions button.is-on { background: #000; }
-.cyced__positions button.is-editing { outline: 1px solid #000; outline-offset: -3px; }
+.cyced__positions button.is-on { background: var(--m-strong); }
+.cyced__positions button.is-editing { outline: 1px solid var(--m-line); outline-offset: -3px; }
 .cyced__positions button.is-on.is-editing { outline-color: #fff; }
 .cyced__values { padding: 1px 0 0 3px; overflow: hidden; }
 .cyced__values label {
@@ -1615,44 +1646,44 @@ body {
 .cyced__values input {
   width: var(--cyclic-value-box-width, 34px);
   height: calc(var(--cyclic-value-row-height, 18px) - 1px);
-  padding: 0 2px; border: 1px solid #000;
-  background: #fff; color: #000; font: inherit; font-size: 14px; font-weight: 900;
+  padding: 0 2px; border: 1px solid var(--m-line);
+  background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; font-weight: 900;
 }
 .cyced__accent-key { padding-top: 24px; width: 82px; text-align: center; }
 .cyced__accent-key span { display: grid; grid-template-columns: repeat(4, 1fr); font-size: 11px; }
 .cyced__accent-key i {
   display: block; width: 62px; height: 12px; margin: 1px auto 8px;
-  border-bottom: 1px solid #000;
-  background: repeating-conic-gradient(#777 0 25%, #fff 0 50%) 0 7px / 2px 2px;
+  border-bottom: 1px solid var(--m-line);
+  background: color-mix(in srgb, #777 50%, var(--cell));
 }
 .cyced__accent-key strong { display: inline-block; margin: 0 8px; font-size: 20px; }
 
 /* Modern Cyclic Editor — all three variables remain open and editable. */
 .cyced__modern {
   display: grid; grid-template-columns: repeat(3, 260px); height: 365px;
-  border-top: 1px solid #000;
+  border-top: 1px solid var(--m-line);
 }
-.cyced__modern-module { min-width: 0; border-right: 1px solid #000; overflow: hidden; }
+.cyced__modern-module { min-width: 0; border-right: 1px solid var(--m-line); overflow: hidden; }
 .cyced__modern-module:last-child { border-right: 0; }
 .cyced__modern-module h3 {
   height: 27px; margin: 0; display: grid; place-items: center;
-  border-bottom: 1px solid #000; font-size: 16px;
+  border-bottom: 1px solid var(--m-line); font-size: 16px;
 }
 .cyced__modern-positions {
   height: 25px; display: grid; grid-template-columns: repeat(6, 1fr);
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--m-line);
 }
 .cyced__modern-positions button {
-  padding: 0; border: 0; border-right: 1px solid #000;
-  background: #fff; color: #000; font: 700 11px var(--mono); cursor: pointer;
+  padding: 0; border: 0; border-right: 1px solid var(--m-line);
+  background: var(--panel); color: var(--ink); font: 700 11px var(--mono); cursor: pointer;
 }
 .cyced__modern-positions button:last-child { border-right: 0; }
-.cyced__modern-positions button.is-on { background: #000; color: #fff; }
+.cyced__modern-positions button.is-on { background: var(--m-strong); color: var(--m-on-strong); }
 .cyced__modern-positions button.is-editing { outline: 2px solid #777; outline-offset: -3px; }
 .cyced__modern-positions button.is-on.is-editing { outline-color: #fff; }
 .cyced__modern-values {
   height: 37px; display: grid; grid-template-columns: repeat(5, 1fr);
-  align-items: stretch; border-bottom: 1px solid #000;
+  align-items: stretch; border-bottom: 1px solid var(--m-line);
 }
 .cyced__modern-values label {
   min-width: 0; display: grid; grid-template-rows: 12px 1fr;
@@ -1661,7 +1692,7 @@ body {
 .cyced__modern-values label:last-child { border-right: 0; }
 .cyced__modern-values input, .cyced__modern-values output {
   box-sizing: border-box; width: 100%; min-width: 0; height: 23px;
-  padding: 1px; border: 0; background: #fff; color: #000;
+  padding: 1px; border: 0; background: var(--panel); color: var(--ink);
   font: 700 10px var(--mono); text-align: center;
 }
 .cyced__modern-values output { display: grid; place-items: center; }
@@ -1673,72 +1704,153 @@ body {
 /* Midi View — four live tracker lanes fed by the runtime's planned output. */
 .u-midiview-win { width: 760px; --midiview-time-column: 112px; }
 .u-midiview-win > .uwin__body { padding: 0; overflow: hidden; }
-.midiview { background: #fff; color: #000; font-family: var(--mono); }
+/* ===========================================================================
+   MIDI READOUT — a tracker.
+
+   A row is one subdivision of the beat and every subdivision gets one, so the
+   grid is even whether the music is dense or sparse. Rows are uniform height
+   and stack in normal flow: new ones arrive at the top and push the rest down
+   a whole row at a time. Nothing is absolutely positioned and nothing is
+   transformed, so the movement is a clock tick rather than a glide, and text
+   cannot overlap because a row is one line tall by construction.
+
+   Set in Home Video, which is public domain and the only face in fonts/ that
+   is both genuinely monospaced across all printable ASCII and legible as
+   text. A grid needs every glyph the same width or the columns drift.
+   =========================================================================== */
+@font-face {
+  font-family: "Home Video";
+  src: url("/fonts/HomeVideo-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+.midiview {
+  --mv-ctrl: 62px;
+  --mv-tune: 42px;
+  --mv-row: 14px;
+  --mv-phosphor: #6ad46a;
+  background: #0b0f0b;
+  color: var(--mv-phosphor);
+  font-family: "Home Video", var(--mono);
+}
 .midiview__tools {
   height: 25px; display: flex; align-items: center; justify-content: flex-end;
-  gap: 5px; padding: 2px 5px; border-bottom: 1px solid #000; font-size: 10px;
+  gap: 5px; padding: 2px 5px; border-bottom: 1px solid #1e2a1e; font-size: 10px;
+  color: #4f8f4f;
 }
 .midiview__tools span { margin-right: auto; }
-.midiview__tools button {
-  height: 19px; padding: 0 7px; border: 1px solid #000;
-  background: #fff; color: #000; font: inherit; cursor: pointer;
+.midiview__tools button, .midiview__speed select {
+  height: 19px; padding: 0 7px; border: 1px solid #2c3f2c;
+  background: #111a11; color: var(--mv-phosphor); font: inherit; cursor: pointer;
 }
-.midiview__tools button.is-on { background: #000; color: #fff; }
+.midiview__speed { display: flex; align-items: center; gap: 4px; font-size: 9px; }
+
 .midiview__tracker-head, .midiview__row {
   display: grid;
-  grid-template-columns: var(--midiview-time-column) repeat(4, minmax(0, 1fr));
+  grid-template-columns:
+    var(--mv-ctrl) var(--mv-tune) repeat(4, minmax(0, 1fr));
 }
 .midiview__tracker-head {
-  height: 24px; background: #eee; border-bottom: 1px solid #000;
+  height: 18px; background: #111a11; border-bottom: 1px solid #2c3f2c;
 }
 .midiview__tracker-head > b {
-  padding: 5px 6px; border-right: 1px solid #aaa;
-  color: #555; font-size: 9px; letter-spacing: 0.06em;
+  padding: 3px 5px; border-right: 1px solid #1e2a1e;
+  color: #4f8f4f; font-size: 9px; letter-spacing: 0.08em;
 }
 .midiview__tracker-head > b.uvoice { color: var(--voice-color); }
+
 .midiview__viewport {
-  position: relative; height: 300px; overflow-y: auto; overflow-x: hidden;
-  background:
-    linear-gradient(90deg, transparent calc(var(--midiview-time-column) - 1px), #aaa calc(var(--midiview-time-column) - 1px) var(--midiview-time-column), transparent var(--midiview-time-column)),
-    repeating-linear-gradient(90deg, transparent 0 calc((100% - var(--midiview-time-column)) / 4 - 1px), #ddd calc((100% - var(--midiview-time-column)) / 4 - 1px) calc((100% - var(--midiview-time-column)) / 4));
+  position: relative; height: 300px; overflow: hidden;
+  background: repeating-linear-gradient(180deg, rgb(255 255 255 / 3%) 0 1px, transparent 1px 3px), #0b0f0b;
 }
+
+/* Uniform, in normal flow. One line tall, so nothing can overlap. */
 .midiview__row {
-  min-height: 20px;
-  border-top: 1px solid #ddd; border-bottom: 1px solid #bbb;
-  background: rgb(255 255 255 / 94%);
+  height: var(--mv-row); line-height: var(--mv-row);
+  font-size: 10px; white-space: nowrap;
 }
-.midiview__row > time {
-  padding: 6px; border-right: 1px solid #aaa; color: #555;
-  font-size: 9px; font-variant-numeric: tabular-nums;
+/* The beat, so the pulse is readable without counting rows. */
+.midiview__row.is-beat { background: rgb(106 212 106 / 5%); }
+/* The row the transport is on. Inverted rather than outlined: at one line
+   tall a border would change the row's height and shift everything below. */
+.midiview__row.is-now {
+  background: rgb(106 212 106 / 16%);
+  box-shadow: inset 0 0 0 1px rgb(106 212 106 / 45%);
 }
-.midiview__cell {
-  min-width: 0; padding: 3px 4px; border-right: 1px solid #ccc;
-  display: flex; flex-direction: column; gap: 2px; overflow: hidden;
+
+.midiview__ctrl, .midiview__tune, .midiview__cell {
+  padding: 0 5px; overflow: hidden; text-overflow: clip;
+  border-right: 1px solid #162116;
 }
-.midiview__cell:last-child { border-right: 0; }
-.midiview__message {
-  display: grid; grid-template-columns: repeat(3, max-content);
-  justify-content: space-between; align-items: baseline; row-gap: 1px;
-  width: 100%; max-width: 100%; min-width: 0;
-  color: #222; font-size: 8px; white-space: nowrap;
+.midiview__ctrl { color: #8ce88c; font-size: 9px; }
+.midiview__tune { color: #3f7a3f; font-size: 9px; }
+
+.midiview__cell { min-width: 0; }
+
+/*
+ * Notes sit over the grid, not inside a row.
+ *
+ * A row is one line tall and a note can be taller, so the note layer is
+ * positioned against the same row height the grid uses. This is the one place
+ * absolute positioning is right: the grid stays uniform and steps, and the
+ * blocks are measured off it rather than floating free.
+ */
+/* The overlay repeats the grid's columns, so a stream is exactly as wide as
+   its heading and neither has to know the other's measurements. */
+.midiview__notes {
+  position: absolute; inset: 0; pointer-events: none;
+  display: grid;
+  grid-template-columns:
+    var(--mv-ctrl) var(--mv-tune) repeat(4, minmax(0, 1fr));
 }
-.midiview__message strong, .midiview__message b {
-  color: var(--voice-color); font-style: normal;
+.midiview__stream { position: relative; grid-row: 1; }
+.midiview__stream:nth-child(1) { grid-column: 3; }
+.midiview__stream:nth-child(2) { grid-column: 4; }
+.midiview__stream:nth-child(3) { grid-column: 5; }
+.midiview__stream:nth-child(4) { grid-column: 6; }
+
+.midiview__note {
+  position: absolute; overflow: hidden;
+  display: flex; align-items: flex-start; gap: 4px;
+  padding: 0 4px; font-size: 10px; line-height: var(--mv-row);
+  white-space: pre;
+  /* Length is height. A block twice as tall lasted twice as long, so the
+     shape of a phrase reads without anyone parsing the numbers. */
+  border-left: 2px solid currentColor;
+  background: color-mix(in srgb, currentColor 14%, transparent);
 }
-.midiview__message i { font-style: normal; }
-.midiview__message--note-off { opacity: 0.55; }
+.midiview__note b, .midiview__note i { font-style: normal; }
+.midiview__efx { color: #3f7a3f; }
+/*
+ * Colour by which Note Order list the step came from, so the three-way mix is
+ * visible in the output rather than only on the slider. Hue stays the Voice's,
+ * so a stream still reads as one stream.
+ */
+.midiview__note--original { color: var(--voice-color); }
+.midiview__note--cyclic { color: var(--voice-color); opacity: 0.66; }
+.midiview__note--utterly {
+  color: var(--voice-color); opacity: 0.66;
+  border-left-style: dashed;
+}
+
 .midiview__waiting {
-  position: absolute; inset: 0; display: grid; place-items: center; color: #777;
+  position: absolute; inset: 0; display: grid; place-items: center; color: #3f7a3f;
 }
 
 /* ===========================================================================
    DARK THEME — identical Unified interface, dark palette. Scoped to .theme-dark.
    =========================================================================== */
-body.dark-bg { background: #191919; }
+/* Dark mode does the heavy lifting — it inverts the whole interface, all 250-odd
+   surfaces, and it already works. The only thing it should not decide for
+   itself is the colour of the desktop behind the windows: that comes from the
+   chosen theme, so picking a theme tints the app while dark mode keeps
+   everything on top of it legible. Falls back to the original #191919 when no
+   theme is applied. */
+body.dark-bg { background: rgb(var(--s-body, 25 25 25)); }
 
 .theme-dark {
   color: #e8e8e8;
-  background: #191919;
+  background: rgb(var(--s-body, 25 25 25));
   min-height: 100vh;
 }
 .theme-dark .app__doc { opacity: 0.7; }
@@ -1873,10 +1985,10 @@ body.dark-bg { background: #191919; }
 .theme-dark .pekey--split { box-shadow: inset 0 -1px 0 #101010; }
 
 .theme-dark .pecell--on {
-  background: repeating-conic-gradient(#e8e8e8 0 25%, #242424 0 50%) 0 0 / 2px 2px;
+  background: color-mix(in srgb, #e8e8e8 50%, #242424);
 }
 .theme-dark .pecell--ghost {
-  background: repeating-conic-gradient(#6a6a6a 0 25%, transparent 0 50%) 0 0 / 2px 2px;
+  background: color-mix(in srgb, #6a6a6a 50%, transparent);
 }
 .theme-dark .pegrid__region { background: rgb(255 255 255 / 16%); }
 .theme-dark .pelegend--v { border-left-color: #e8e8e8; }
@@ -1885,7 +1997,7 @@ body.dark-bg { background: #191919; }
 .theme-dark .perange__bar { background: #e8e8e8; }
 .theme-dark .perange__ctr { background: #e8e8e8; box-shadow: inset 0 0 0 1px #242424; }
 .theme-dark .pescroll {
-  background: repeating-conic-gradient(#cfcfcf 0 25%, #444 0 50%) 0 0 / 2px 2px;
+  background: color-mix(in srgb, #cfcfcf 50%, #444);
 }
 .theme-dark .pescroll__thumb { background: #333; border-color: #cfcfcf; }
 
@@ -1946,13 +2058,13 @@ body.dark-bg { background: #191919; }
   background: linear-gradient(#8a8a8a, #8a8a8a) center / 100% 2px no-repeat;
 }
 .theme-dark .uvel__band {
-  background: repeating-conic-gradient(#cfcfcf 0 25%, #4a4a4a 0 50%) 0 0 / 3px 3px;
+  background: color-mix(in srgb, #cfcfcf 50%, #4a4a4a);
 }
 
 /* Note Order regions */
 .theme-dark .unoteorder__bar { border-color: #5a5a5a; }
 .theme-dark .unoteorder__original { background: #e8e8e8; }
-.theme-dark .unoteorder__handle { background: #444; border-color: #cfcfcf; color: #fff; }
+.theme-dark .unoteorder__handle { background: #444; border-color: #cfcfcf; color: var(--m-on-strong); }
 
 /* Cyclic Variables levels — flip so higher level = lighter on dark */
 .theme-dark .cyced__kind::after { background: #333; }
@@ -1961,7 +2073,7 @@ body.dark-bg { background: #191919; }
 .theme-dark .ucyccell--level-1 { background: #4c4c4c; }
 .theme-dark .ucyccell--level-2 { background: #8d8d8d; }
 .theme-dark .ucyccell--level-3 { background: #c8c8c8; }
-.theme-dark .ucyccell--level-4 { background: #fff; }
+.theme-dark .ucyccell--level-4 { background: var(--cell); }
 
 /* Pattern grid step cells (Patterns window) */
 .theme-dark .ustep { background: #333; border-color: #555; }
@@ -1998,13 +2110,17 @@ body.dark-bg { background: #191919; }
 
 .u-conductor-win { width: 229px; }
 .u-conductor-win > .uwin__body { width: 229px; height: 107px; }
-.uconduct { transform: scale(0.4978, 0.5); }
+.uconduct { zoom: 0.5; }
 
 .u-flexsnap > .uwin__body { padding: 0; }
-.usnapwin { --snap-cell: 18px; }
 .u-flexsnap { width: 62px; overflow: hidden; }
-.usnapwin { --snap-cell: 16px; }
-.usnapwin__holddo { height: 28px; padding: 2px; }
+/* Snapshot fills M's 57 x 315 body exactly: three 18-point columns (the two
+   Snapshot columns and the Slideshow column) and thirteen 17-point rows, with
+   Hold/Do taking up whatever height is left. */
+.usnapwin { --snap-cell: 18px; --snap-cell-h: 17px; width: 100%; height: 100%; }
+.usnapwin__holddo { flex: 1 0 28px; padding: 2px; }
+/* The Conducting Arrow takes one column, like the Quantization box beside it. */
+.usnapwin__row .uarrow { width: var(--snap-cell); height: var(--snap-cell); }
 .usnapwin__holddo svg { max-width: 18px; max-height: 18px; }
 .usnapwin__arrow, .usnapwin__quant, .usnapwin__slidebtn { font-size: 10px; }
 .usnapwin__row svg, .usnapwin__shows svg { max-width: 12px; max-height: 12px; }
@@ -2018,34 +2134,44 @@ body.dark-bg { background: #191919; }
 .u-variables { width: 220px; height: 156px; }
 .u-variables .uwin__note { display: none; }
 .u-variables > .uwin__body { padding: 2px; }
-.u-variables .uvars { gap: 2px; }
-.u-variables .uvars__row { gap: 1px; height: 21px; }
+/* The six rows share M's 158-point body between them, rather than stopping
+   short and leaving a blank strip at the foot. */
+.u-variables .uvars { gap: 2px; height: 100%; }
+.u-variables .uvars__row { gap: 1px; flex: 1 1 0; min-height: 0; }
 .u-variables .uvars__label { width: 43px; font-size: 8px; }
 .u-variables .uarrow { width: 16px; border-width: 1px; }
-.u-variables .umini { height: 21px; padding: 1px; }
+.u-variables .umini { height: auto; padding: 1px; }
 .u-variables .uvars__cells { border-width: 1px; }
 .u-variables .umini--group { font-size: 9px; }
 
 .u-cyclic-vars { width: 229px; height: 156px; }
 .u-cyclic-vars > .uwin__body { padding: 2px; }
-.u-cyclic-vars .ucyclics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+/* Three equal columns inside M's 226-point body (plain 1fr let the widest
+   content push Rhythm off the edge), each Position row taking an equal share
+   of the height. */
+.u-cyclic-vars .ucyclics {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; height: 100%;
+}
+.u-cyclic-vars .ucyc { display: flex; flex-direction: column; min-width: 0; }
+.u-cyclic-vars .ucyc__head { flex: none; }
 .u-cyclic-vars .ucyc__name { font-size: 8px; margin-bottom: 1px; }
-.u-cyclic-vars .ucycpos { height: 20px; padding: 1px; font-size: 8px; }
+.u-cyclic-vars .ucycpos { flex: 1 1 0; min-height: 0; height: auto; padding: 1px; font-size: 8px; }
 .u-cyclic-vars .ucycpos i { height: 2px; margin-bottom: 1px; }
 
 .u-midi { width: 454px; min-height: 45px; }
 .u-midi > .uwin__body { padding: 1px; }
-.u-midi .uvars--inline { margin: 0; }
-.u-midi .uvars__row { height: 25px; gap: 1px; }
+/* The Orchestration row fills M's 44-point body. */
+.u-midi .uvars--inline { margin: 0; height: 100%; }
+.u-midi .uvars__row { flex: 1 1 0; min-height: 0; gap: 1px; }
 .u-midi .uvars__label { width: 42px; font-size: 8px; }
 .u-midi .uarrow { width: 16px; border-width: 1px; }
 .u-midi .uvars__cells { border-width: 1px; }
-.u-midi .umini { height: 25px; padding: 1px; }
+.u-midi .umini { height: auto; padding: 1px; }
 .u-midi-assignment { width: 560px; height: auto; }
 .u-midi-assignment > .uwin__body { padding: 1px; }
 .umidi__assignment-head {
   width: 556px; display: flex; align-items: center; gap: 5px; padding: 2px 0;
-  border-top: 1px solid #000; border-bottom: 1px solid #000;
+  border-top: 1px solid var(--m-line); border-bottom: 1px solid var(--m-line);
   font-size: 8px; white-space: nowrap;
 }
 .umidi__assignment-head :is(button, label, input, select) { font: inherit; }
@@ -2104,7 +2230,7 @@ body.dark-bg { background: #191919; }
   background: linear-gradient(var(--voice-color), var(--voice-color)) center / 100% 2px no-repeat;
 }
 .voice-colorized--velocity-range .uvel__band {
-  background-color: color-mix(in srgb, var(--voice-color) 62%, white);
+  background-color: color-mix(in srgb, var(--voice-color) 62%, var(--cell));
   background-image: repeating-linear-gradient(
     135deg, rgb(255 255 255 / 72%) 0 1px, transparent 1px 3px
   );
@@ -2118,23 +2244,23 @@ body.dark-bg { background: #191919; }
   border-color: var(--voice-color);
 }
 .voice-colorized--note-order .unoteorder__cyclic {
-  background-color: color-mix(in srgb, var(--voice-color) 52%, white);
+  background-color: color-mix(in srgb, var(--voice-color) 52%, var(--cell));
   background-image: repeating-linear-gradient(
     135deg, rgb(255 255 255 / 52%) 0 1px, transparent 1px 3px
   );
 }
 .voice-colorized--note-order .unoteorder__utterly {
-  background-color: color-mix(in srgb, var(--voice-color) 10%, white);
+  background-color: color-mix(in srgb, var(--voice-color) 10%, var(--cell));
   background-image: radial-gradient(var(--voice-color) 1px, transparent 1.2px);
 }
 .voice-colorized--note-order .unoteorder__handle {
   color: var(--voice-color);
-  background: color-mix(in srgb, var(--voice-color) 12%, white);
+  background: color-mix(in srgb, var(--voice-color) 12%, var(--cell));
 }
 .voice-colorized--cyclic {
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--voice-color) 14%, white),
+    color-mix(in srgb, var(--voice-color) 14%, var(--cell)),
     transparent 72%
   );
   box-shadow: inset 3px 0 0 var(--voice-color);
@@ -2151,13 +2277,13 @@ body.dark-bg { background: #191919; }
 .u-patterns { width: 228px; height: 120px; overflow: visible; }
 .u-patterns > .uwin__title {
   position: relative; z-index: 3; width: 91px; height: 20px;
-  padding: 0 4px; gap: 3px; border-right: 0; background: #fff;
+  padding: 0 4px; gap: 3px; border-right: 0; background: var(--panel);
   font-size: 11px; line-height: 18px;
 }
 .u-patterns > .uwin__title::after {
   content: ""; position: absolute; left: 89px; top: -1px;
-  width: 15px; height: 20px; background: #fff;
-  border-top: 1px solid #000; border-right: 1px solid #000;
+  width: 15px; height: 20px; background: var(--cell);
+  border-top: 1px solid var(--m-line); border-right: 1px solid var(--m-line);
   transform: skewX(-42deg); transform-origin: bottom left;
 }
 .u-patterns .uwin__name, .u-patterns .umenu { position: relative; z-index: 1; }
@@ -2168,7 +2294,7 @@ body.dark-bg { background: #191919; }
 .pwin__channel-head {
   position: absolute; z-index: 2; left: 103px; right: 1px; top: 0; height: 20px;
   display: grid; grid-template-columns: 25px 1fr; grid-template-rows: 10px 10px;
-  padding: 0 2px; border-bottom: 1px solid #000; background: #fff;
+  padding: 0 2px; border-bottom: 1px solid var(--m-line); background: var(--cell);
   font: 8px/9px var(--mono); font-weight: 700;
 }
 .pwin__channel-head > span:not(.pwin__input-icon) { display: grid; grid-template-columns: repeat(8, 1fr); }
@@ -2178,33 +2304,36 @@ body.dark-bg { background: #191919; }
   background: transparent; color: inherit; font: inherit; line-height: 9px;
   text-align: center; cursor: pointer;
 }
-.pwin__channel-head button.is-on { background: #000; color: #fff; }
+.pwin__channel-head button.is-on { background: var(--m-strong); color: var(--m-on-strong); }
 .pwin__input-icon { grid-row: 1 / 3; display: grid; place-items: center; font-size: 16px; }
 .pwin__labels, .pwin__row {
   position: absolute; left: 0; right: 0;
-  display: grid; grid-template-columns: 20px 17px 16px 15px 15px 48px 23px 43px 31px;
+  /* Nine columns in M's 216-point body, to the pixel: wider than that and the
+     Phase column runs off the window's edge. */
+  display: grid; grid-template-columns: 20px 16px 15px 14px 14px 44px 22px 41px 30px;
 }
-.pwin__labels { top: 20px; height: 19px; border-bottom: 1px solid #000; background: #fff; }
+.pwin__labels { top: 20px; height: 19px; border-bottom: 1px solid var(--m-line); background: var(--cell); }
 .pwin__labels > b {
   min-width: 0; display: grid; place-items: center; overflow: hidden;
   font-size: 8px; line-height: 1; white-space: nowrap;
 }
 .pwin__labels > b:nth-child(1), .pwin__labels > b:nth-child(2),
 .pwin__labels > b:nth-child(6) { place-items: end start; padding: 0 0 3px 2px; }
+.pwin__labels > b:nth-child(2) { padding-left: 1px; }
 .pwin__speaker-head svg { width: 12px; height: 12px; fill: currentColor; }
 .pwin__echo-head { display: flex !important; gap: 1px; align-items: center; }
 .pwin__echo-head > i { font-style: normal; font-size: 8px; }
 .pwin__echo-head > span { display: grid; grid-template-columns: repeat(2, 2px); gap: 1px; }
 .pwin__echo-head > span i { width: 2px; height: 2px; background: currentColor; }
 .pwin__mouse-head { position: relative; }
-.pwin__mouse-head > i { width: 7px; height: 10px; border: 1px solid #000; border-radius: 50%; }
-.pwin__mouse-head > span { position: absolute; width: 1px; height: 12px; background: #000; transform: rotate(35deg); }
+.pwin__mouse-head > i { width: 7px; height: 10px; border: 1px solid var(--m-line); border-radius: 50%; }
+.pwin__mouse-head > span { position: absolute; width: 1px; height: 12px; background: var(--m-strong); transform: rotate(35deg); }
 .pwin__rows { position: absolute; inset: 39px 0 0; }
 .pwin__row { position: relative; height: 20px; }
 .pwin__row > button, .pwin__row > input, .pwin__select, .pwin__base {
   width: 100%; height: 20px; min-width: 0; margin: 0; padding: 0;
-  border: 0; border-right: 1px solid #000; border-bottom: 1px solid #000;
-  border-radius: 0; background: #fff; color: #000;
+  border: 0; border-right: 1px solid var(--m-line); border-bottom: 1px solid var(--m-line);
+  border-radius: 0; background: var(--cell); color: var(--ink);
   font: 700 9px/18px var(--mono); text-align: center;
 }
 .pwin__src { font-family: var(--font) !important; font-size: 9px !important; }
@@ -2216,7 +2345,7 @@ body.dark-bg { background: #191919; }
 .pwin__row.is-selected .pwin__select { background: #bdbdbd; }
 .pwin__select > button {
   width: 100%; height: 19px; padding: 0; border: 0; background: transparent;
-  color: #000; display: grid; place-items: center;
+  color: var(--ink); display: grid; place-items: center;
 }
 .pwin__select svg { width: 11px; height: 11px; }
 .pwin__length, .pwin__phase { -moz-appearance: textfield; }
@@ -2253,7 +2382,7 @@ body.dark-bg { background: #191919; }
   grid-template-columns: 18px 1fr; gap: 6px; min-height: 43px; border: 0;
 }
 .uvarpop-host:has([aria-label="Note Order Editor"]) .uvarcontrol__voice {
-  display: grid; place-items: center; font-size: 15px; color: #000;
+  display: grid; place-items: center; font-size: 15px; color: var(--ink);
 }
 .uvarpop-host:has([aria-label="Note Order Editor"]) .unoteorder {
   grid-column: 2; height: 43px;
@@ -2301,15 +2430,15 @@ body.dark-bg { background: #191919; }
 }
 .uvarpop-host:has([aria-label="Orchestration Editor"]) .uorch {
   grid-column: 2; display: grid; grid-template-columns: repeat(16, 1fr);
-  gap: 0; padding: 0; border-top: 1px solid #000; border-left: 1px solid #000;
+  gap: 0; padding: 0; border-top: 1px solid var(--m-line); border-left: 1px solid var(--m-line);
 }
 .uvarpop-host:has([aria-label="Orchestration Editor"]) .uorch__channel {
   width: auto; height: 12px; padding: 0; border: 0;
-  border-right: 1px solid #000; border-bottom: 1px solid #000;
-  color: transparent; background: #fff;
+  border-right: 1px solid var(--m-line); border-bottom: 1px solid var(--m-line);
+  color: transparent; background: var(--cell);
 }
 .uvarpop-host:has([aria-label="Orchestration Editor"]) .uorch__channel--on {
-  background: repeating-linear-gradient(135deg, var(--voice-color) 0 1px, #fff 1px 2px);
+  background: repeating-linear-gradient(135deg, var(--voice-color) 0 1px, var(--cell) 1px 2px);
 }
 
 /* Secondary-reference captures are another 2× above the logical dimensions
@@ -2317,8 +2446,7 @@ body.dark-bg { background: #191919; }
    once here, and let workspace zoom scale everything together afterwards. */
 .uvarpop__scaled-body {
   width: 200%;
-  transform: scale(0.5);
-  transform-origin: top left;
+  zoom: 0.5;
 }
 .uvarpop-host:has([aria-label="Note Density Editor"]) .uvarpop { width: 145px; height: 90px; }
 .uvarpop-host:has([aria-label="Note Density Editor"]) .uvarpop__scaled-body { width: 270px; }
@@ -2331,12 +2459,12 @@ body.dark-bg { background: #191919; }
 .cyced--classic { width: 220px; height: 183px; }
 .cyced--classic .cyced__body {
   width: 439px; height: 328px;
-  transform: scale(0.5); transform-origin: top left;
+  zoom: 0.5;
 }
 .cyced--modern { width: 391px; height: 199px; }
 .cyced--modern .cyced__modern {
   width: 782px; height: 365px;
-  transform: scale(0.5); transform-origin: top left;
+  zoom: 0.5;
 }
 
 /* Compact editor chrome. Position selectors were previously left at their
@@ -2416,6 +2544,15 @@ body.dark-bg { background: #191919; }
 .uwin__body :is(button, input, select, output, th, td, label, b, strong, p) {
   font-size: var(--type-body) !important;
 }
+/* The Synth's knob labels and menus are dense readouts: the compact tier. */
+.uwin__body .synthpanel :is(button, select, label, b, strong, span) {
+  font-size: var(--type-compact) !important;
+}
+/* A 9px menu holds 7px text only with no vertical padding, and its sized
+   width holds the longest choice only with a slim side padding. */
+.app .synthchoice select { padding: 0 2px; line-height: 7px; }
+/* On the tinted sections a hairline well vanishes; an ink edge reads in both themes. */
+.app.m-skin .ustage .synthpanel .synthchoice select { border-color: color-mix(in srgb, var(--ink) 45%, transparent); }
 
 /* Conducting's reference body is horizontally scaled to 0.4978. */
 .uconduct :is(button, input, select, output, label, b, strong, p, span) {
@@ -2492,12 +2629,12 @@ body.dark-bg { background: #191919; }
 .cyced--classic { width: 275px; height: 222px; }
 .cyced--classic .cyced__body {
   width: 439px; height: 328px;
-  transform: scale(0.625); transform-origin: top left;
+  zoom: 0.625;
 }
 .cyced--modern { width: 489px; height: 245px; }
 .cyced--modern .cyced__modern {
   width: 782px; height: 365px;
-  transform: scale(0.625); transform-origin: top left;
+  zoom: 0.625;
 }
 .cyced__body :is(button, input, select, output, label, b, strong, p, span),
 .cyced__modern :is(button, input, select, output, label, b, strong, p, span) {
@@ -2604,7 +2741,7 @@ body.dark-bg { background: #191919; }
 .theme-dark .uconduct__baton { background: #e8e8e8; }
 .theme-dark .uconduct__range {
   border-color: #8a8a8a;
-  background: repeating-conic-gradient(#cfcfcf 0 25%, #444 0 50%) 0 0 / 2px 2px;
+  background: color-mix(in srgb, #cfcfcf 50%, #444);
 }
 .theme-dark .uconduct__range input::-webkit-slider-thumb {
   border-color: #cfcfcf; background: #333;
@@ -2652,20 +2789,11 @@ body.dark-bg { background: #191919; }
    brings its controls up to comfortable physical size. */
 .u-synth-win { width: 366px; }
 .u-synth-win > .uwin__body { padding: 0; }
-.u-synth-win > .uwin__title,
-.u-synth-win > .uwin__title .uwin__name {
-  font-size: 8.5px !important;
-  text-transform: uppercase;
-}
-.u-synth-win > .uwin__title .uwin__note {
-  font-size: 6.8px !important;
-  text-transform: uppercase;
-}
 .synthpanel {
   display: flex;
   height: 81px;
   border: 3px solid var(--voice-color);
-  background: #fff;
+  background: var(--cell);
   color: var(--ink);
   font: 4.25px/1.05 var(--mono);
   text-transform: uppercase;
@@ -2679,7 +2807,7 @@ body.dark-bg { background: #191919; }
 }
 .synthpanel__section:last-child { border-right: 0; }
 .synthpanel__section:nth-of-type(odd) {
-  background: color-mix(in srgb, var(--voice-color) 34%, #fff);
+  background: color-mix(in srgb, var(--voice-color) 34%, var(--cell));
 }
 .synthpanel__section:nth-of-type(odd) h3 { color: #111; }
 .synthpanel__section h3 {
@@ -2708,10 +2836,13 @@ body.dark-bg { background: #191919; }
   color: var(--voice-color);
   font: 700 5.1px/1 var(--mono);
 }
-.synthstreams button.is-on { background: var(--voice-color); color: #fff; }
+.synthstreams button.is-on { background: var(--voice-color); color: var(--m-on-strong); }
 .synthpanel__section h3 { color: var(--voice-color); }
-.synthpanel__lfo { flex: 0 0 46px; }
-.synthpanel__osc { flex: 0 0 92px; }
+/* Widths share out M's 459-point column so every section fits its 81-point
+   height: the LFO is wide enough for Glide beside Rate and Depth, and Output,
+   which holds only two knobs and Power, gives up what it doesn't use. */
+.synthpanel__lfo { flex: 0 0 66px; }
+.synthpanel__osc { flex: 0 0 100px; }
 .synthpanel__mixer { flex: 0 0 46px; }
 .synthpanel__filter { flex: 0 0 50px; }
 .synthpanel__envelopes { flex: 0 0 78px; }
@@ -2723,6 +2854,7 @@ body.dark-bg { background: #191919; }
   row-gap: 1px;
 }
 .synthpanel__knobs--2 { grid-template-columns: repeat(2, 19px); column-gap: 2px; }
+.synthpanel__knobs--3 { grid-template-columns: repeat(3, 19px); column-gap: 2px; }
 .synthpanel__mixer .synthpanel__knobs { padding-bottom: 4px; }
 .synthknob {
   position: relative;
@@ -2752,7 +2884,7 @@ body.dark-bg { background: #191919; }
   left: 5px;
   width: 1px;
   height: 5px;
-  background: #000;
+  background: var(--m-strong);
   content: "";
 }
 .synthknob--large { grid-template-rows: 17px 6px; }
@@ -2821,7 +2953,7 @@ body.dark-bg { background: #191919; }
   border-bottom: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
 }
 .synthosc em { padding-top: 7px; font-size: 6.8px; font-style: normal; font-weight: 800; }
-.synthosc .synthchoice:not(.synthchoice--octave) { display: block; padding-top: 3px; }
+.synthosc .synthchoice:not(.synthchoice--octave) { display: block; padding-top: 0; }
 .synthosc .synthchoice:not(.synthchoice--octave) span { display: block; text-align: center; }
 .synthosc .synthchoice:not(.synthchoice--octave) select { margin-top: 1px; }
 .synthpanel__osc > .synthchoice { grid-template-columns: 36px 1fr; }
@@ -2867,7 +2999,7 @@ body.dark-bg { background: #191919; }
 .theme-dark .synthpanel__section:nth-of-type(odd) {
   background: color-mix(in srgb, var(--voice-color) 42%, #202020);
 }
-.theme-dark .synthpanel__section:nth-of-type(odd) h3 { color: #fff; }
+.theme-dark .synthpanel__section:nth-of-type(odd) h3 { color: var(--m-on-strong); }
 .theme-dark .synthpanel__section,
 .theme-dark .synthstreams,
 .theme-dark .synthknob__dial,
@@ -2876,7 +3008,7 @@ body.dark-bg { background: #191919; }
 .theme-dark .synthknob__dial {
   border-color: #111;
   background: #bdbdb8;
-  box-shadow: 0 1px 1px #000;
+  box-shadow: 0 1px 1px var(--m-line);
 }
 .theme-dark .synthchoice select { background: #333; color: #e8e8e8; }
 .theme-dark .synthpower span { background: #333; }
@@ -2922,7 +3054,7 @@ body.dark-bg { background: #191919; }
 .save-name-dialog input {
   border: 1px solid currentColor;
   padding: 4px;
-  background: var(--paper, #fff);
+  background: var(--paper, var(--cell));
   color: inherit;
   font: inherit;
 }
@@ -3054,3 +3186,329 @@ body.dark-bg { background: #191919; }
   white-space: nowrap;
   border: 0;
 }
+
+/* Transport messages in the MIDI readout. They span the row rather than
+   sitting in a stream column, because a Start belongs to no single Voice. */
+.midiview__transport {
+  grid-column: 2 / -1; display: inline-flex; gap: 6px; align-items: center;
+  padding: 0 4px; font-size: 9px; letter-spacing: .06em;
+}
+.midiview__transport--out { color: #6ad46a; }
+.midiview__transport--in { color: #6ab8ff; }
+
+/* ===========================================================================
+   MODERN VECTOR STYLE
+   The interface keeps the original's windows and their sizes, drawn in a
+   clean modern style: system UI type, smooth anti-aliased shapes, hairline
+   borders, rounded corners and soft shadows. Every colour above is one of
+   these tokens, so the whole look is set here. Inside idMLab the theme's own
+   tokens still win, through the `var(--s-…, fallback)` chain.
+   =========================================================================== */
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --bg: rgb(var(--s-page, 233 236 241));
+  --panel: rgb(var(--s-raised, 255 255 255));
+  --ink: var(--tx-800, #1f2430);
+  --line: var(--bd-200, #c7cdd6);
+  --accent: var(--ac-on, #2f6bec);
+  --cell: var(--s-card, #ffffff);
+  --cell-on: var(--ac-on, #2f6bec);
+  --beat: var(--hv-100, #f0f3f8);
+  --muted: var(--bd-100, #e1e5eb);
+  --m-sel: var(--sel-soft, #dce8ff);
+  /* The roles the 1-bit look painted in pure black and white. */
+  --m-line: var(--bd-200, #aeb6c2);
+  --m-strong: var(--ac-on, #2f6bec);
+  --m-on-strong: #ffffff;
+  --m-title: color-mix(in srgb, var(--panel) 92%, var(--ink));
+  /* Windows (modules) stay square-cornered; only small controls round off. */
+  --m-radius: 0;
+  --m-radius-sm: 3px;
+  --m-shadow: 0 1px 2px rgb(16 24 40 / 8%), 0 8px 22px rgb(16 24 40 / 12%);
+  --m-shadow-focus: 0 1px 2px rgb(16 24 40 / 10%), 0 12px 32px rgb(16 24 40 / 18%);
+}
+.theme-dark {
+  --bg: rgb(var(--s-page, 24 26 31));
+  --panel: rgb(var(--s-raised, 37 40 47));
+  --ink: var(--tx-800, #e7eaf0);
+  --line: var(--bd-200, #3d434e);
+  --cell: var(--s-card, #2c3038);
+  --beat: var(--hv-100, #323741);
+  --muted: var(--bd-100, #3a404b);
+  --m-sel: var(--sel-soft, #24375f);
+  --m-line: var(--bd-200, #4b5260);
+  --m-strong: var(--ac-on, #5a8cff);
+  --m-title: color-mix(in srgb, var(--panel) 88%, #000);
+  --m-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 26px rgb(0 0 0 / 40%);
+  --m-shadow-focus: 0 1px 2px rgb(0 0 0 / 35%), 0 14px 34px rgb(0 0 0 / 50%);
+}
+
+body, .app, .uwin, .uvarpop, .peditor, .cyced, .midiview, .uconduct,
+.uwin :is(button, input, select, output, label, textarea) {
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+.midiview, .midiview * { font-family: var(--mono); }
+.uconduct :is(output, .uconduct__tempo input) { font-variant-numeric: tabular-nums; }
+
+/* Window chrome */
+.uwin, .uvarpop, .peditor, .cyced {
+  border: 1px solid var(--line);
+  border-radius: var(--m-radius);
+  background: var(--panel);
+  box-shadow: var(--m-shadow);
+  overflow: hidden;
+}
+.movable:focus-within,
+.theme-dark .movable:focus-within { box-shadow: var(--m-shadow-focus); }
+.theme-dark .uwin, .theme-dark .peditor, .theme-dark .uvarpop {
+  background: var(--panel); border-color: var(--line); color: var(--ink);
+  box-shadow: var(--m-shadow);
+}
+.uwin__title, .theme-dark .uwin__title {
+  background: var(--m-title);
+  background-image: none;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.uwin__slash { display: none; }
+.uwin__note { font-weight: 400; opacity: 0.6; }
+.u-patterns > .uwin__title::after { display: none; }
+.uwin__close, .uvarpop__close {
+  border: 0; border-radius: 50%;
+  background: transparent; color: var(--ink); opacity: 0.55;
+}
+.uwin__close:hover, .uvarpop__close:hover { opacity: 1; background: var(--muted); }
+
+/* Controls: rounded, hairline, no hard offset shadows */
+.uwin :is(button, select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"])),
+.uvarpop :is(button, select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"])),
+.peditor :is(button, select, input:not([type="checkbox"]):not([type="radio"])),
+.cyced :is(button, select, input:not([type="checkbox"]):not([type="radio"])) {
+  border-radius: var(--m-radius-sm);
+  box-shadow: none;
+}
+.btn, .window { box-shadow: none; border-width: 1px; border-radius: var(--m-radius-sm); }
+.btn:active { transform: none; box-shadow: none; filter: brightness(0.94); }
+.uwin input[type="checkbox"], .uvarpop input[type="checkbox"] { accent-color: var(--accent); }
+
+/* Menus */
+.umenu__list, .app__menubar .umenu__list {
+  border: 1px solid var(--line);
+  border-radius: var(--m-radius);
+  box-shadow: var(--m-shadow);
+  overflow: hidden;
+  background: var(--panel);
+}
+.app__menubar { border-bottom-color: var(--line); background: var(--panel); }
+.app__menubar .umenu__title { border-radius: var(--m-radius-sm); font-weight: 600; }
+.app__menubar .umenu__title:hover,
+.app__menubar .umenu__title--on { background: var(--m-sel); color: var(--ink); }
+
+/* The 1x / 2x view switch */
+.zoom-control { display: inline-flex; gap: 0; border: 1px solid var(--line);
+  border-radius: var(--m-radius-sm); overflow: hidden; }
+.zoom-control button { border: 0; border-radius: 0; padding: 0 8px; height: 18px;
+  background: var(--panel); color: var(--ink); font: 600 10px var(--font); }
+.zoom-control button + button { border-left: 1px solid var(--line); }
+.zoom-control button.is-on { background: var(--accent); color: #fff; }
+
+/* ===== Drum lanes in the Pattern Editor ================================ */
+/* A Pattern in Drum mode names its rows by pad: the left column carries the
+   pad names, the right one a trigger per lane. */
+.pesidecol--lanes { width: 92px; }
+.pelanes { display: flex; flex-direction: column; }
+.pelanes--left { width: 100%; }
+.pelanes--right { width: var(--pe-keyw); flex: none; border-right: 1px solid var(--m-line); }
+.pelane {
+  display: flex; align-items: center; gap: 3px; width: 100%; padding: 0 3px;
+  border: none; border-bottom: 1px solid var(--m-line); background: var(--panel);
+  font: inherit; font-size: 9px; line-height: 1; color: inherit; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-align: left;
+}
+.pelanes--right .pelane { justify-content: center; font-size: 8px; }
+.pelane:hover { background: color-mix(in srgb, var(--panel) 80%, var(--m-strong)); }
+.pelane__name { overflow: hidden; text-overflow: ellipsis; }
+.pelane__choke { margin-left: auto; font-size: 8px; opacity: .65; }
+.pelanes__all { width: auto; padding: 0 4px; font-size: 9px; }
+.pesidecol--lanes .penote { display: none; }
+
+/* =====================================================================
+   M NODE SKIN
+   M's windows as small instruments: compact and vector, with just enough
+   depth to read as objects. Each window is a raised face with a lit top
+   edge and a soft shadow; its title bar is a slightly brighter strip;
+   buttons are raised and press in; numbers sit in inset wells; ruled
+   grids use a hairline instead of black. Colour, edges and shadows only,
+   so no window changes size. Every colour comes from the theme tokens
+   above, so idMLab's themes and palettes still reskin M.
+   ===================================================================== */
+.app.m-skin {
+  --ms-ground: color-mix(in srgb, var(--panel) 90%, var(--ink));
+  --ms-face-top: color-mix(in srgb, var(--panel) 70%, #fff);
+  --ms-title-top: color-mix(in srgb, var(--panel) 97%, var(--ink));
+  --ms-title-bot: color-mix(in srgb, var(--panel) 91%, var(--ink));
+  --ms-edge: color-mix(in srgb, var(--panel) 66%, var(--ink));
+  --ms-hair: color-mix(in srgb, var(--panel) 82%, var(--ink));
+  --ms-well: color-mix(in srgb, var(--panel) 95%, var(--ink));
+  --ms-raise-top: color-mix(in srgb, var(--panel) 60%, #fff);
+  --ms-raise-bot: color-mix(in srgb, var(--panel) 93%, var(--ink));
+  --ms-key: color-mix(in srgb, var(--panel) 70%, #fff);
+  --ms-key-black: color-mix(in srgb, var(--ink) 80%, var(--panel));
+  --ms-hi: rgb(255 255 255 / 80%);
+  --ms-inset: rgb(15 23 42 / 13%);
+  --ms-shadow: 0 1px 1px rgb(15 23 42 / 7%), 0 3px 10px rgb(15 23 42 / 9%);
+  --line: var(--ms-edge);
+  --m-line: var(--ms-hair);
+  --bg: var(--ms-ground);
+}
+.app.m-skin.theme-dark {
+  --ms-ground: color-mix(in srgb, var(--panel) 68%, #000);
+  --ms-face-top: color-mix(in srgb, var(--panel) 95%, #fff);
+  --ms-title-top: color-mix(in srgb, var(--panel) 89%, #fff);
+  --ms-title-bot: color-mix(in srgb, var(--panel) 95%, #fff);
+  --ms-edge: color-mix(in srgb, var(--panel) 42%, #000);
+  --ms-hair: color-mix(in srgb, var(--panel) 74%, #000);
+  --ms-well: color-mix(in srgb, var(--panel) 74%, #000);
+  --ms-raise-top: color-mix(in srgb, var(--panel) 86%, #fff);
+  --ms-raise-bot: color-mix(in srgb, var(--panel) 96%, #fff);
+  --ms-key: color-mix(in srgb, var(--panel) 88%, #fff);
+  --ms-key-black: color-mix(in srgb, var(--panel) 45%, #000);
+  --ms-hi: rgb(255 255 255 / 7%);
+  --ms-inset: rgb(0 0 0 / 45%);
+  --ms-shadow: 0 1px 1px rgb(0 0 0 / 40%), 0 4px 14px rgb(0 0 0 / 32%);
+}
+
+/* The stage behind the windows. */
+.app.m-skin .uroot, .app.m-skin .ustage { background: transparent; }
+
+/* Windows */
+.app.m-skin :is(.uwin, .uvarpop, .peditor, .cyced) {
+  border: 1px solid var(--ms-edge);
+  border-radius: 5px;
+  background: linear-gradient(180deg, var(--ms-face-top), var(--panel) 48px);
+  box-shadow: inset 0 1px 0 var(--ms-hi), var(--ms-shadow);
+  color: var(--ink);
+}
+.app.m-skin .uwin__title {
+  background: linear-gradient(180deg, var(--ms-title-top), var(--ms-title-bot));
+  border-bottom: 1px solid var(--ms-hair);
+  box-shadow: inset 0 1px 0 var(--ms-hi);
+  color: var(--ink);
+}
+.app.m-skin .uwin__name { font-weight: 600; letter-spacing: 0.01em; }
+/* Dimmed, but still 4.5:1 against the title bar at 8px (it was 3.7:1). */
+.app.m-skin .uwin__note { font-weight: 400; opacity: 0.75; }
+.app.m-skin :is(.uwin__close, .uvarpop__close) {
+  border: 0; border-radius: 50%; background: transparent;
+  color: var(--ink); opacity: 0.45; box-shadow: none;
+}
+.app.m-skin :is(.uwin__close, .uvarpop__close):hover { opacity: 1; background: var(--ms-hair); }
+
+/* Raised buttons, which press in when on. */
+.app.m-skin :is(
+  .uarrow, .pwin__src, .pwin__use, .pwin__play, .pwin__echo, .pwin__mouse,
+  .usnapwin__show, .usnapwin__slidebtn, .usnapwin__tool, .usnapwin__holddo,
+  .usnapwin__quant, .usnapwin__globe, .uconduct__sync, .uconduct__ratio-dir,
+  .uconduct__robot, .petool, .pebtn, .pearrow, .peoct, .pescrollbtn, .pesound,
+  .pesizebox, .peview__num, .midiview__tools button, .pelanes__all
+) {
+  border: 1px solid var(--ms-hair);
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--ms-raise-top), var(--ms-raise-bot));
+  box-shadow: inset 0 1px 0 var(--ms-hi), 0 1px 1px var(--ms-inset);
+  color: var(--ink);
+}
+.app.m-skin :is(
+  .uarrow, .pwin__src, .pwin__use, .pwin__play, .pwin__echo, .pwin__mouse,
+  .usnapwin__show, .usnapwin__slidebtn, .usnapwin__tool, .usnapwin__holddo,
+  .usnapwin__quant, .usnapwin__globe, .uconduct__sync, .uconduct__ratio-dir,
+  .uconduct__robot, .petool, .pebtn, .pearrow, .peoct, .pescrollbtn, .pesound,
+  .pesizebox, .peview__num
+):is(.is-on, [class*="--on"], [aria-pressed="true"]) {
+  background: var(--m-strong);
+  color: var(--m-on-strong);
+  border-color: color-mix(in srgb, var(--m-strong) 70%, #000);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 30%);
+}
+
+/* Numbers and menus sit in inset wells. */
+.app.m-skin .ustage :is(input[type="number"], select) {
+  border: 1px solid var(--ms-hair);
+  border-radius: 3px;
+  background-color: var(--ms-well);
+  box-shadow: inset 0 1px 2px var(--ms-inset);
+  color: var(--ink);
+}
+
+/* Pattern Editor: a keyboard in ink, not accent; notes in their track's colour. */
+.app.m-skin .pekey { background: var(--ms-key); }
+.app.m-skin .pekeys--left .pekey--black {
+  background: linear-gradient(90deg, var(--ms-key-black) 0 var(--pe-blackdepth), var(--ms-key) var(--pe-blackdepth));
+}
+.app.m-skin .pekeys--right .pekey--black {
+  background: linear-gradient(270deg, var(--ms-key-black) 0 var(--pe-blackdepth), var(--ms-key) var(--pe-blackdepth));
+}
+.app.m-skin .pekey--split { box-shadow: inset 0 -1px 0 var(--ms-hair); }
+.app.m-skin :is(.pegrid, .peruler, .perange) { background-color: var(--ms-well); }
+.app.m-skin .pecell--on {
+  background-color: var(--voice-color, var(--m-strong));
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 30%), transparent 60%);
+  border-radius: 1px;
+}
+
+/* The synth wears its track's colour as a stripe, not a frame. */
+.app.m-skin .synthpanel {
+  border: 1px solid var(--ms-hair);
+  border-left: 3px solid var(--voice-color);
+  background: var(--ms-well);
+  color: var(--ink);
+}
+.app.m-skin .synthpanel__section { border-right-color: var(--ms-hair); }
+.app.m-skin .synthpanel__section:nth-of-type(odd) {
+  background: color-mix(in srgb, var(--voice-color) 10%, var(--ms-well));
+}
+.app.m-skin .synthpanel__section h3,
+.app.m-skin .synthpanel__section:nth-of-type(odd) h3 { color: var(--ink); opacity: 0.75; }
+
+/* Midi View: the generated stream in M's own palette, not a green terminal. */
+.app.m-skin .midiview {
+  --mv-phosphor: var(--ink);
+  background: var(--ms-well);
+  color: var(--ink);
+}
+.app.m-skin .midiview__tools {
+  border-bottom: 1px solid var(--ms-hair);
+  background: linear-gradient(180deg, var(--ms-title-top), var(--ms-title-bot));
+  color: color-mix(in srgb, var(--ink) 60%, transparent);
+}
+.app.m-skin .midiview__tracker-head { background: var(--panel); border-bottom: 1px solid var(--ms-hair); }
+.app.m-skin .midiview__tracker-head > b {
+  border-right: 1px solid var(--ms-hair);
+  color: color-mix(in srgb, var(--ink) 60%, transparent);
+}
+.app.m-skin .midiview__tracker-head > b.uvoice { color: var(--voice-color); }
+.app.m-skin .midiview__viewport { background: var(--ms-well); }
+.app.m-skin .midiview__row.is-beat { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.app.m-skin .midiview__row.is-now {
+  background: color-mix(in srgb, var(--m-strong) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--m-strong) 45%, transparent);
+}
+.app.m-skin :is(.midiview__ctrl, .midiview__tune, .midiview__cell) { border-right-color: var(--ms-hair); }
+.app.m-skin .midiview__ctrl { color: var(--ink); }
+.app.m-skin :is(.midiview__tune, .midiview__efx, .midiview__waiting) {
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+.app.m-skin .midiview__row { background: transparent; border-color: var(--ms-hair); }
+
+/* Midi Assignment fills its column rather than running past it. */
+.app.m-skin :is(.umidi-assign, .umidi__assignment-head) { width: 100%; min-width: 0; }
+.app.m-skin .umidi__assignment-head { gap: 3px; border-color: var(--ms-hair); }
+.app.m-skin .umidi-assign :is(th, td) { border-color: var(--ms-hair); }
+.app.m-skin .umidi-assign th { background: var(--ms-title-bot); color: var(--ink); }

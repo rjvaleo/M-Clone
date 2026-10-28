@@ -1,0 +1,21 @@
+[package]
+name = "idmlab-engine"
+version = "0.1.0"
+edition = "2021"
+description = "The AudioWorklet-facing shell around dsp-core. No DSP of its own."
+
+# A cdylib is the only crate type that produces a loadable `.wasm`. dsp-core
+# builds for wasm32 as an .rlib, which proves it is portable and produces
+# nothing a browser can instantiate.
+[lib]
+crate-type = ["cdylib"]
+
+# No wasm-bindgen, deliberately.
+#
+# The worklet needs four verbs — write a buffer, call a function, read a buffer,
+# set a number — and every one of them is expressible in the raw C ABI that
+# `WebAssembly.instantiate` already speaks. wasm-bindgen would add a build step,
+# a JS glue file the worklet has to import, and roughly its own size again in
+# generated bindings, all to marshal types nothing here uses.
+[dependencies]
+dsp-core = { path = "../dsp-core" }

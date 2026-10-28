@@ -1,0 +1,2333 @@
+
+
+=== [p1] ===
+ 
+i 
+ 
+ 
+ 
+ 
+ 
+ 
+Design of a Reverb Plugin and Evaluation of the Quality of 
+Convolution Reverb 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+KAAN SHENHUY 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+BSc (Hons) Sound Engineering and Production 
+ 
+ 
+ 
+May 2014 
+ 
+ 
+ 
+ 
+
+
+=== [p2] ===
+ 
+ii 
+ 
+ 
+ 
+ 
+ 
+Design of a Reverb Plugin and Evaluation of the Quality of 
+Convolution Reverb 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+KAAN SHENHUY 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Supervisor: Dr. Ryan Stables 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p3] ===
+ 
+iii 
+Abstract 
+ 
+Convolution reverb is the process used for reverberating a signal by an impulse 
+response of an actual space. The product of this operation is a third signal, 
+containing reverberation of the space where the impulse response is captured. This 
+project is based on creating a convolution reverb plugin on MaxMSP and evaluating 
+the perceptual quality of convolution reverb. 
+ 
+ 
+The real-time fast convolution reverb plugin was implemented using multiple 
+frequency delay line non-uniform partitioned convolution method on MaxMSP. An 
+experimental design methodology was introduced in order to evaluate the perceptual 
+quality of convolution reverb. In order to realise, anechoic drum kit music samples 
+were recorded and re-recorded in a chamber to form the control signal. Also, using 
+same equipment and setup, an impulse response was captured in the same chamber 
+to form the test sample. These samples were then used for subjective analysis in a 
+pair-wise categorical preference type listening test. The samples were also analysed 
+in their spectrogram views in order to analyse the quality objectively. 
+ 
+ 
+Listening tests were designed so that realism, quality and personal preference 
+categories were present. Null hypothesis was proved, where the realism difference of 
+the two samples resulted in 52% of the participants preferring chamber reverb 
+(control signal). However personal preference category resulted in 61%of the 
+subjects preferring the chamber reverb. This was justified by objective analysis, 
+where the convolution reverb shown to be having a faster decay rate for high 
+frequency bands, thus sounding unnatural. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p4] ===
+ 
+iv
+Acknowledgements 
+ 
+ 
+I would like to thank to my family, Resat Shenhuy, Ilhamiye Shenhuy and Boran 
+Shenhuy for their unconditional support throughout my entire life. 
+ 
+Also I would like to thank to my mentors and teachers who supported me in my 
+education life. 
+ 
+And lastly, I would like to thank to my partner Damla Kiral for her unconditional love 
+and support throughout my hardest times.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p5] ===
+ 
+v
+Contents 
+ 
+Abstract                                                                                                                       iii 
+Acknowledgements                                                                                                     iv 
+Contents                                                                                                                      v 
+List of figures                                                                                                               vi                            
+1.0 Introduction                                                                                                            1 
+1.1 Problem definition                                                                                      1 
+1.2 Scope                                                                                                         1 
+1.3 Rationale                                                                                                   1 
+1.4 Aims                                                                                                           2 
+1.5 Objectives                                                                                                  2 
+1.6 Background information                                                                             2 
+                                                                         
+2.0 Review of existing knowledge                                                                               4 
+2.1 Introduction                                                                                                4 
+2.2 The propagation of sound                                                                         4 
+2.3 Reflection and sound in enclosed spaces                                                 7 
+2.4 Reverberation                                                                                            9 
+2.5 Digital Audio                                                                                             12 
+2.6 Real-time convolution algorithms                                                             17   
+2.7 Earlier studies on evaluation of the quality of artificial reverberation       17 
+ 
+3.0 Methodology                                                                                                        19 
+3.1 Hardware                                                                                                 19 
+3.2 Software                                                                                                   21                            
+3.3 Plugin design                                                                                           24 
+3.4 Impulse response capture methodology                                                  26 
+3.5 Anechoic chamber recordings                                                                  27 
+3.6 Experimental design                                                                                 28 
+ 
+4.0 Results                                                                                                                 31 
+4.1 Spectral tests’ results                                                                               31  
+4.2 Listening test results                                                                                34 
+ 
+ 
+5.0 Discussion and analysis                                                                                      38 
+5.1 Analysis of spectrogram results                                                               38 
+5.2 Analysis of subjective test results                                                            39 
+ 
+6.0 Conclusions                                                                                                         41 
+7.0 Recommendations                                                                                               43 
+List of references                                                                                                       44 
+Appendix A: Listening Test Questionnaire                                                                49 
+Appendix B: Digital Files                                                                                            51 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p6] ===
+ 
+vi
+List of Figures and Tables 
+ 
+Figure 1.1 Motion of air molecules                                                4 
+Figure 1.1.1 Sound Intensity                                                         6 
+Figure 1.2 Specular reflections and diffuse reflections                  7 
+Figure 1.3 Individual Reflections                                                   9 
+Figure 1.4 DFT Terminologies                                                     12 
+Figure 1.5 Block diagrams of FIR and IIR filters                          13 
+Figure 1.6 Delta function                                                              14 
+Figure 1.7 Convolution operations                                               14 
+Figure 1.8 the convolution machine                                             15 
+Table 1 Available measurement microphones                             19  
+Table 2 Available monitor loudspeakers                                      20 
+Table 3 Available portable audio interfaces                                 21 
+Table 4 Possible programming software comparison                  22 
+Table 5 Possible impulse response capturing software               23 
+Figure 3.4.1 first prototypes                                                         24 
+Figure 3.4.2 Convolution sub-patch for the left channel              25 
+Figure 3.4.3 Working patch                                                         26 
+Figure 4.1.1 Spectrogram of bass drum (chamber recording)     31 
+Figure 4.1.2 Spectrogram of bass drum (convolved signal)        31 
+Figure 4.1.3 Spectrogram of snare (chamber recording)            32 
+Figure 4.1.4 Spectrogram of snare (convolved signal)                32 
+Figure 4.1.5 Spectrogram of ride cymbal (chamber recording)   33 
+Figure 4.1.6 Spectrogram of ride cymbal (convolved signal)      33 
+Table 6 Indıvidual listening test results                                       34 
+Table 7 Participants’ comments                                                  35 
+Figure 4.2.1 Realism category                                                    36 
+Figure 4.2.2 Quality category                                                      36 
+Figure 4.2.3 Personal preference category                                 37 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p7] ===
+ 
+1 
+1.0 INTRODUCTION 
+ 
+1.1 Problem definition 
+ 
+Convolution reverb is an effect used to reverberate a signal by convolving the signal 
+with an impulse response of an actual space. Any physical space can be emulated 
+by using this technique, thus it is a widely used artificial reverberation technique for 
+film and audio applications. Although its wide use, lack of a freely available MaxMSP 
+plugin is an issue.  Another problem in this subject is that the deficiency of a reliable 
+study comparing convolution reverb to a natural reverb such as a chamber reverb.  
+ 
+ 
+1.2 Scope 
+ 
+The scope of this project covers activities needed associated with the achievement of 
+objectives stated in 1.5.  These include research for implementing real-time, fast 
+convolution and carefully designing of the listening tests to truly assess the perceived 
+quality of convolution reverberation. The scope of this project does not cover the 
+testing of the other auralisation approaches and research for the objective analysis 
+tools of the artificial reverberation algorithms.   
+ 
+1.3 Rationale 
+ 
+The topic was chosen in order to provide a freely available MaxMSP plugin for 
+convolution reverberation for digital media industries and to provide a reliable study 
+on the evaluation the quality of convolution reverb compared to natural reflections in 
+a physical space. Frequency analysis and listening tests will supply both subjective 
+and objective analysis on the quality of convolution reverb. The product of this project 
+can benefit a large scale of amateurs and professionals working in the digital media 
+industry. 
+ 
+ 
+Convolution reverb can be widely used in many digital media industries like TV, film 
+and games where the receiver should get an accurate perception of space when 
+audio is convolved with the impulse response of the target space. This means 
+
+
+=== [p8] ===
+ 
+2 
+impulse responses for convolution reverb must be recorded from the target for audio 
+and games, or actual spaces for film industry. 
+ 
+Convolution also can be used for adding other effects to the signal rather than 
+reverb. This project will design and conduct experiments for subjective evaluation of 
+the perceptual quality of convolution as a reverb effect. 
+ 
+ 
+1.4 Aims 
+ 
+To design a fast convolution patch on Max/MSP and to evaluate quality of 
+convolution reverb compared to recordings from the physical space from which 
+impulse response recorded. 
+ 
+1.5 Objectives 
+ 
+• 
+To recall the theories and processes behind real-time convolution and 
+efficient collection of impulse responses. 
+• 
+To design a Fast Convolution patch on Max/MSP 
+• 
+To record IR for testing the patch 
+• 
+To apply the patch on recorded IR and perform frequency analysis 
+• 
+To create testing criteria for listening tests 
+• 
+To perform listening tests 
+• 
+To evaluate with respect to frequency analysis and listeners‘ opinions 
+ 
+ 
+1.6 Background information 
+ 
+Artificial reverberation has been a tool used in commercial music recording nearly a 
+century, with the methods of chamber reverberators in early days, spring 
+reverberators in late 1930’s, plate reverberators in late 1950’s and with the rise of the 
+digital age and digital signal processing methodologies and tools, digital 
+reverberators and finally convolution reverb for the last 30 years. However real-time 
+convolution reverb is fairly new to the industry as opposed to the techniques stated 
+
+
+=== [p9] ===
+ 
+3 
+above. The implementation of real-time, fast convolution reverb was viable with 
+regards to high CPU power of recent years.  
+ 
+ 
+Testing the quality of artificial reverberators has been a common and important 
+subject among the researchers through last four decades. However these studies are 
+focused on the different techniques of artificial reverberators rather than convolution 
+reverb. The latest papers on this subject were published in 2007. These studies are 
+mentioned and analysed in the later sections of this report.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p10] ===
+ 
+4 
+ 
+2.0 Review of Existing Knowledge 
+ 
+2.1 Introduction 
+ 
+This section combines the existing knowledge with the findings from broad research 
+into areas of propagation of sound, reverberation, digital signal processing, artificial 
+reverberation techniques and methods of evaluation of the quality of artificial 
+reverberation that are crucial for understanding the concept and findings of this 
+paper. 
+ 
+ 
+2.2 The propagation of sound 
+ 
+Sound is a mechanical wave motion that travels in air or other elastic media and can 
+be perceived by humans or other animals (Everest and Pohlmann 2009). 
+Propagation of sound is often described as air molecules moving back and forth 
+forming pressure variations above and below atmospheric pressure called 
+compressions (region of high pressure) and rarefactions (region of low pressure) (fig. 
+1.1). 
+ 
+ 
+ 
+Fig.  1.1 Motion of air particles (taken from Master Handbook of Acoustics, 2009) 
+ 
+ 
+  
+ 
+ 
+
+
+=== [p11] ===
+ 
+5 
+Speed of sound in air can be calculated by the following equation: 
+ 
+ 
+!!"# =  
+!!"#
+!!"#
+=  
+ℸ!
+(!"
+!" )
+=  
+ℸ!"
+! 
+ 
+Where ! = the pressure of the gas 
+! = the equivalent Young’s Modulus of the gas 
+! = the gas constant (8.31 ! !!! !"#$!!) 
+! = temperature in K 
+! = the molecular mass of the gas (! !"#$!!) 
+ℸ = the heat capacity ratio of the gas (1.4 for air) 
+ 
+ 
+2.2.1 Sound Intensity  
+ 
+Howard and Angus (2009) states that ‘sound from a point source is propagated 
+spherically and uniformly in all directions’. As the area of a sphere is 4!!!, the area 
+of a selected region on a sphere varies as the square of its radius (Everest and 
+Pohlmann 2009). Therefore sound intensity diminishes as the square of the radius. 
+This is called inverse square law. Figure 1.1.1 shows an example of an area on a 
+hemi-spherical sound field formed by a loudspeaker. Everest and Pohlmann states 
+that ‘the intensity of a point-source sound in a free field is inversely proportional to 
+the square of the distance from the source. Therefore sound intensity of a point 
+source can be given by the following formula: 
+ 
+! =   !
+4!!! 
+ 
+Where ! = intensity of sound per unit area 
+! = power of source 
+ ! = distance from source (radius) 
+ 
+ 
+
+
+=== [p12] ===
+ 
+6 
+ 
+Fig. 1.1.1 Sound Intensity (taken from Acoustics and Psychoacoustics, 2009) 
+ 
+ 
+2.2.2 Sound Power  
+ 
+Sound power is a measure of the total power radiated from a point source in all 
+directions (Howard and Angus 2009). It is given the abbreviation SWL. SWL is 
+expressed in dB as the logarithm of a ratio of existent power level to a reference level 
+of 1 picowatt.  
+ 
+ 
+!"# = 10!"#!"
+!!"#$!%
+!!"#
+ 
+ 
+ 
+ 
+Where !!"#$!% = the actual sound power level (in watts)  
+and !!"#  = the reference sound power level (10!!" !) 
+ 
+ 
+2.2.3 Sound Pressure 
+ 
+Although sound intensity is a functional measure of describing the amplitude of a 
+sound at a given point, it is not the usual measure for depicting amplitude of the 
+sound. Instead, pressure is used (Howard and Angus 2009). Human perception 
+capacity encompasses a large dynamic: a factor of 1:1000000, which extends from 
+
+
+=== [p13] ===
+ 
+7 
+20 !"# (threshold of hearing) to 20 !" (threshold of pain) (Mommertz et al 2009). 
+Sound pressure level is often expressed in logarithmic scale because the way 
+humans perceive sound. It is given as a ratio of actual sound pressure to the human 
+threshold of hearing at 1 kHz of 20 !"# (Howard and Angus 2009). 
+ 
+ 
+!"# = 20!"#!"
+!!"#$!%
+!!"#
+ 
+ 
+ 
+Where !!"#$!% = the actual pressure level (in !") 
+!!"# = the reference pressure level (20 !"#) 
+ 
+ 
+ 
+2.3 Reflection and sound in enclosed spaces 
+ 
+Howard and Angus (2009) describes free field as ‘… a free space that allows sound 
+to travel without interference’. When sound wave hits a hard boundary some of its 
+energy is absorbed and some is reflected depending on the size of the boundary 
+compared to the wavelength of the sound and absorption coefficient of the materials 
+(Rumsey & McCormick, 2006). Angle of reflection is equal to the angle of incidence if 
+the reflecting surface is perfectly flat; this is called specular reflection (fig. 1.2 (a)). If 
+the reflecting surface is not smooth, sound is scattered in all directions; this is called 
+diffuse reflection (fig. 1.2 (b)) (Peters, 2013).  
+ 
+ 
+ 
+                  a)                                                  b) 
+ 
+Fig. 1.2 Specular Reflections (a) and Diffuse Reflections (b) (taken from Acoustics and Noise Control, 
+2013) 
+ 
+ 
+
+
+=== [p14] ===
+ 
+8 
+ 
+When sound energy is radiated in a room, direct sound reaches the listener first 
+followed by early reflections and reverberation. Perception of early reflections 
+determines the acoustical size of the space and the position of the source in the 
+space (Howard and Angus 2009). Reflections delayed more than 30 milliseconds are 
+perceived as echoes (Haas effect) (Howard and Angus 2009).  
+ 
+The mean free path (MFP) of a room gives the average distance a sound wave 
+travels between interactions of surfaces (Everest and Pohlmann 2009). An average 
+MFP of a rectangular room can be calculated by using the equation below: 
+ 
+ 
+!"# =  4!
+! 
+ 
+Where !"# = the mean free path (in m) 
+! = Volume of the room (in !!) 
+! = Surface area of the room (in !!) 
+ 
+ 
+Therefore an average length of time takes a sound wave to travel between 
+successive reflections can be predicted by dividing the MFP by the speed of sound: 
+ 
+ 
+! =  4!
+!" 
+ 
+Where ! = the time between reflections (in !) 
+and ! = the speed of sound (in !"!!) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p15] ===
+ 
+9 
+2.4 Reverberation 
+ 
+As stated above sound field in an enclosed space is divided in three regions: direct 
+sound, early reflections and reverberation. After the direct sound and early reflections 
+reaching the ear, a dense sound field is formed by very closely spaced reflections 
+from all directions. This region of the sound is called reverberation (Howard and 
+Angus 2009). Mommertz (2009) states that the reverberation of a room is the most 
+significant acoustic quality feature.  
+ 
+ 
+ 
+ 
+Fig. 1.3 Individual reflections as impulses on intensity over time graph 
+ 
+Figure 1.3 shows intensity levels of multiple reflections as impulses occurring over 
+time. Direct sound can be seen as the most intense single impulse on the graph 
+followed by early reflections spaced over time with relatively low intensities and 
+reverberant field of dense, less intense reflections decaying exponentially to 
+inaudibility. 
+ 
+2.4.1 Reverberation time 
+ 
+The time that it takes sound to decay into inaudibility is called the reverberation time 
+(Everest and Pohlmann 2009). It is often given the abbreviation !"!", which accounts 
+for pressure level decreasing by 60 dB, into inaudibility. According to Peters (2013), 
+W. C. Sabine’s investigation into room acoustics proved that the reverberation time, 
+RT, of a room is dependent on its volume and amount of absorption of its surface 
+area. Sabine’s formula is the simplest to predict the reverberation time of a space. 
+ 
+
+
+=== [p16] ===
+ 
+10
+ 
+!"!" =  !. 16!
+!
+ 
+ 
+ 
+Where !"!"= reverberation time (in s) 
+! = volume of the room 
+! = total absorption of the room (in metric Sabins) 
+ 
+Using this equation one can obtain !"!" of a room but the following assumptions and 
+limitations should be considered when dealing with large halls: 
+ 
+ 
+Air absorption is neglected 
+ 
+Audience absorption is neglected 
+ 
+Quantity ! is the total absorption of all the surfaces of the room and it is given 
+by ! =  
+!!!!, where !! is surface area of the material and !! is the 
+absorption coefficient of the material. In most cases doors, windows, seats 
+etc. are not taken into account (Everest and Pohlmann 2009). 
+ 
+2.4.2 Artificial reverberation techniques 
+ 
+Everest and Pohlmann points out that music recorded in a ‘dry’ room often miss 
+richness of the room sound. In the early days of studio recording, reverberation was 
+added to the record by natural means. The process included, placing a loudspeaker 
+and a microphone in a reverberant chamber and recording the room’s response. This 
+signal was then added to the mix. The reverberation characteristics of a room were 
+altered by placement of glass plates around the room. Small reverberation rooms are 
+often dictated by room modes, which cause timbral defects. On the other hand large 
+halls were often expensive to hire for reverberation purposes. This yielded a search 
+for practical solutions for reverberating a signal (White, 2006; Everest and Pohlmann, 
+2009).   
+ 
+ 
+ 
+ 
+
+
+=== [p17] ===
+ 
+11
+2.4.3 Analogue reverb 
+ 
+First approach was spring reverb, where a loudspeaker was coupled at one end of a 
+spring and a pickup on the other end. When an audio signal is playing, the waves 
+travel along the spring and reach the microphone, but a part of the waves energy is 
+reflected and stays in the spring, which creates the sense of reverberation over 
+sound (Lehmann, 1996). 
+ 
+Next approach was plate reverberation. In the late 1950’s Elektro-Mass-Technik 
+(EMT) introduced EMT 140, a large plate of sheet metal is vibrated by a loudspeaker 
+at one side and vibrations picked up by a pickup (two pickups for stereo use). This 
+technique gave more control over the reverberation time by a damping pad made 
+from framed acoustic tiles (Dennis, 2001). Plate reverberation was widely used in 
+commercial recordings; the biggest advantage over spring reverb was its brightness 
+(Robjohns, 1997). While this technique was widely used, it was not capable of 
+simulating true room acoustics (Bateman, 2002).  
+ 
+2.4.4 Digital reverb 
+ 
+ 
+With rise of digital signal processing, digital reverb algorithms elevated. The earliest 
+approach was a theorised by Schroeder in 1961, where he proposed using a 
+combination of allpass and comb filters to create digital delay networks that will form 
+early and late reflections that naturally occur in a space (Schroeder, 1961, 1962). 
+Later on Moorer, in his 1979 Computer Music Journal article, developed Schroeder’s 
+approach but again this method was not capable of emulating a satisfactory true 
+room reverberation (Bateman, 2002). 
+ 
+2.4.5 Convolution reverb 
+ 
+Convolution reverberation uses one of the most important digital signal processing 
+fundamentals, convolution: an input signal is combined with an impulse response to 
+output a third signal. In this method impulse response of a linear time invariant 
+system, in this case a room, is convolved with an input signal to truly emulate the 
+systems response to an impulse, decay over time.  
+
+
+=== [p18] ===
+ 
+12
+2.5 Digital audio 
+ 
+Manolakis and Ingle (2011) states that ‘… a signal is defined as any physical quantity 
+that varies as a function of time, space, or any other variable or variables’. 
+Transforming sound waves into electrical currents by a microphone forms audio 
+signals. A signal can be decomposed into series of sine and cosine waves called 
+Fourier series (Smith, 1997). Jean Baptiste Joseph Fourier theorized that combining 
+enough sine waves one could model any waveform (Howard and Angus 2009). This 
+approach has simplified the analysis of any complex waveforms (Howard and Angus 
+2009). 
+ 
+ 
+2.5.1 DFT and FFT 
+ 
+DFT refers to discrete Fourier transform: calculating frequency domain data from a 
+given time domain signal (Smith, 1997).  DFT works with discrete and periodic 
+signals; therefore it is crucial for understanding the digital signal processing.  
+ 
+ 
+ 
+Fig. 1.4 DFT Terminology (taken from The Scientist and Engineer’s Guide to Digital Signal Processing, 1997) 
+Figure 1.4 shows the application and terminology of DFT. Time domain input signal 
+is translated into frequency domain, outputting real !" ! [ ] and imaginary !" ! [ ] 
+parts. This technique is very important when performing convolution because it is 
+computationally less expensive to perform convolution in frequency domain rather 
+than in time domain (Smith, 1997; Lyons, 2004).  
+ 
+
+
+=== [p19] ===
+ 
+13
+While there are several ways to compute DFT, the most efficient algorithm is the Fast 
+Fourier Transform (FFT). Smith (1997) states that FFT reduces computation time by 
+hundreds. He further describes the efficiency as ‘flying in a jet aircraft versus walking’ 
+(Smith, 1997). It operates by decomposing an N point signal into N signals each 
+containing a single point by bit reversal sorting algorithm. After this step each point 
+contains frequency spectra of their selves. Last step is to combine N frequency in the 
+exact reverse order (Smith, 1997). 
+ 
+ 
+2.5.2 Digital filters 
+ 
+ 
+Lyons (2004) states that ‘… filtering is the processing of a time-domain signal 
+resulting in some change in that signal’s original spectral contents’. In this case a 
+room can be described as a filter, altering the spectra of an impulse giving an 
+impulse response. There are two types of digital filters: the Finite Impulse Response 
+(FIR) and the Infinite Impulse Response (IIR) (Marven and Ewers 1996). An IIR filter 
+uses output samples to feed the input (recursive) therefore its output is infinite. In 
+contrast an FIR filter, also known as non-recursive filter, only use current and past 
+input samples (Kirk and Hunt 1999). Block diagrams of FIR and IIR filters can be 
+seen in fig. 1.5. For this projects purposes FIR filters will be studied.  
+ 
+ 
+Fig. 1.5 Block diagrams of FIR and IIR filters (taken from Digital Filter Design by Zoran Milivojević) 
+ 
+In fig. 1.5, block diagram of an FIR filter shows input !(!) passing through a system 
+depicted as ℎ(!) giving the output !(!). In digital signal processing, this is described 
+as: ! ! equals to the convolution of ℎ(!) and !(!) (Lyons, 2004). 
+ 
+ 
+
+
+=== [p20] ===
+ 
+14
+2.5.3 Convolution 
+ 
+Smith (2003) states that ‘an impulse is a signal composed of all zeros except a single 
+non-zero point’. Delta function is a normalized impulse, where sample number zero 
+has a value of one and all other samples have a value of zero. Impulse response is a 
+name given to a product signal from a system where delta function is the input 
+(Smith, 2003). See fig. 1.6 where ! ! is the delta function and ℎ! is the impulse 
+response of a linear system. 
+ 
+ 
+ 
+Fig. 1.6 Delta Function & Impulse Response (taken from Digital Signal Processing) 
+ 
+Convolution is a mathematical operation just like addition and subtraction that is used 
+in digital signal processing for describing linear time-invariant systems and designing 
+filters. In figure 1.7 convolution is abbreviated as ‘∗’ which refers to convolution 
+operation given in the formula below called convolution integral. 
+ 
+ 
+Fig. 1.7 Convolution operation (taken from Digital Signal Processing, 2003) 
+ 
+! ! =  
+ℎ! !(! −!
+!
+!!
+)!" = ℎ! ∗!(!) 
+ 
+ 
+The length of the output sample ! (!) is equal to the length of input sample !(!) plus 
+impulse response ℎ(!) minus one. For example if the input sample ! (!) consisting 
+of 4 points is convolved with a 3-point impulse response ℎ (!) outputs a 6-point 
+signal ! (!) (Lynn and Fuerst 1994). 
+
+
+=== [p21] ===
+ 
+15
+2.5.4 Convolution machine 
+ 
+ 
+Understanding how convolution works is the single most important part of achieving 
+the objectives of this project. Steven Smith (2003) suggests studying convolution 
+from the viewpoint of output side algorithm in order to understand the practical side 
+of this operation. This viewpoint analyses each output sample by finding the 
+contributing input points. Figure 1.8 shows a convolution machine, a flow diagram of 
+input ! (!) contributes to output ! (!). 
+ 
+ 
+Fig. 1.8 The convolution machine (taken from S. Smith (2007)). 
+ 
+In figure 1.8, output sample ! (6) is obtained by multiplying ! (6) by ℎ (0), !  5 by 
+ℎ (1), ! (4) by ℎ (2) and !  3  by ℎ (3), then by summing up all the values. This 
+machine is free to move from left to right or right to left. An important part to 
+remember is that impulse response ℎ  ! is flipped. In order to calculate output 
+sample ! (0), flipped ℎ  ! is shifted so that sample ℎ0 is in correspondence with 
+! (0). But this leaves samples ℎ  1 , ℎ  2 and ℎ (3) in line with the non-existent 
+
+
+=== [p22] ===
+ 
+16
+samples; this problem is overcome by simply adding samples each having a value of 
+zero. This is called padding (Smith, 2003). 
+ 
+ 
+ 
+2.5.5 Overlap-add method and FFT convolution 
+ 
+ 
+In order to operate convolution for real-time purposes, ! point input signal is 
+segmented into overlapping partitions (!! + !!+. . . ). In this case convolution is 
+applied simultaneously and each overlapping product is summed to form the output 
+signal. This method is called overlap-add (Lockhart and Barry 1989; Lynn and 
+Fuerst, 1994).  
+ 
+For example if a 300-point signal is to be filtered by a 101-point impulse response, 
+the output signal will be 400 samples. To implement fast convolution, input sequence 
+is broken into 3 segments that are running from 0 to 99, 100 to 199 and 200 to 299. 
+The end of the each segment is padded with zero’s to allow overlapping. Each input 
+segment is filtered by the 101-point impulse response resulting in a 200-point output 
+segment. In order to form output signal, each overlapping output segment is 
+summed. For example, to form samples running from 100 -199 output segment 1 (0-
+199) is added to output segment 2 (100-299) (Smith, 2003). 
+ 
+Smith (1997) states that after the development of FFT algorithms convolution in 
+frequency domain became more efficient than in time domain. FFT Convolution uses 
+overlap-add method; only difference is when the segments are transformed in 
+frequency domain, calculations are carried out such that real and imaginary parts of 
+frequency response and input segments are calculated and then transformed back 
+into time domain.    
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p23] ===
+ 
+17
+2.6 Real-time convolution algorithms 
+ 
+ 
+As stated earlier room impulse response (RIR) contains information of the response 
+of a reverberant space to an impulse. These RIR’s are often longer than 3 seconds, 
+which makes them almost impossible to convolve with an incoming signal for real-
+time purposes (Muller-Tomfelde, 1999). In order to realize this operation room 
+impulse response is divided into segments where convolution for each block can be 
+achieved in parallel with appropriate frequency-domain delay lines (FDL) (Battenberg 
+and Avizienis 2011). This method is called uniform partitioned convolution where 
+each segment of impulse response is partitioned in uniform block sizes by FFT 
+convolution. This method has reduced time required for the operations however it is 
+not ideal for real-time purposes. In order to accomplish enough reduction in latency, 
+Gardner (1995) suggested using blocks of different lengths. This approach uses 
+smaller partitions in the beginning of an IR and exponentially increasing blocks 
+towards the end (Battenberg and Avizienis 2011). This further improvement in the 
+partitioning scheme has reduced the latency at a stage that real-time convolution is 
+now achievable.  
+ 
+ 
+ 
+2.7 Earlier studies on evaluation of the quality of artificial reverberation 
+techniques (subjective methods) 
+ 
+ 
+A number of studies have been carried on the evaluation of artificial reverberation 
+techniques. Only a small percentage of these studies assessed the perceptual 
+differences of artificial reverberation techniques. Czyzewski (1990) in his article on 
+Journal of Audio Engineering Society (JAES) suggests the efficiency of paired 
+comparison tests for the subjective assessment of reverberation techniques. His 
+method assessed the subjective preference of the individuals on a two level 
+‘’better/worse’’ scale. On his earlier article (1988) with Sankiewicz, they highlight two 
+testing methods, parametric and non-parametric methods. Parametric methods 
+include assessing the predetermined parameters of sound. Disadvantage of this 
+
+
+=== [p24] ===
+ 
+18
+method is that the participants have to have significant background in the subject 
+area. Non-parametric methods include comparison test methods stated earlier. 
+ 
+Another study carried out by Extra et al. (2006), employed a non-parametric method, 
+Two Alternative Forced Choice (2AFC) listening test, similar to the method stated 
+above, where participants are expected to compare the same signal reverberated 
+with two different algorithms. This study included only one comparison category that 
+was which signal sounds more natural. Their study concluded that objective 
+measures couldn’t replace listening tests. Another outcome was that drum samples 
+are a good starting point for further tests. 
+ 
+In 2007, two more articles were published in the subject area. Marui (2007) has 
+created most in-depth and exhaustive listening test, comprising of 225 sound stimuli. 
+He asked the participants to relate each of the samples to three parameters 
+depending on the amount of reverberation present on each signal. He included three 
+test samples: a noise sample, a small orchestral piece and drums music. He also 
+points out the importance of recording these test samples in an anechoic 
+environment. 
+ 
+Another interesting study carried out by Haines et al. (2007) assessed participants’ 
+preference on three different reverberation techniques. These techniques included 
+convolving the test audio samples with mono impulse responses, placed impulse 
+responses, where impulse responses for each instrument depending on their position 
+on a stage and a panned dry recording with a centre impulse response. They used 
+three preference categories, realism, quality and personal preference to obtain 
+subjective results. A paired comparison test was their test strategy to minimise the 
+concerns due to participants’ ability to distinguish between the samples. Their study 
+concluded that location-based convolution reverberation is a promising technique 
+having a high realism over other techniques. They also stated that due to preference 
+ratings being high on location-based reverberation, this technique has a real viability 
+in the commercial realm. 
+ 
+ 
+ 
+ 
+
+
+=== [p25] ===
+ 
+19
+3.0 Methodology 
+ 
+ 
+3.1 Hardware 
+ 
+In this section available hardware apparatus has been analysed in order to detect 
+and use the most appropriate ones. Important data have been tabulated in order to 
+show in a more convenient style. 
+ 
+3.1.1.Microphones 
+ 
+The two measurement microphones at TEE studios have been analysed for their 
+frequency response in order to capture a linear IR of the corridor. In frequency 
+response charts, Audix TM1 shows flatter response. Therefore, all the recordings 
+including drum audio sample has been captured withTM1.  
+ 
+ 
+Table 1 Available measurement microphones in TEE studios  
+Available Measurement 
+Microphones 
+Frequency Response 
+Polar Pattern 
+Audix TM1 
+20 Hz - 25 kHz +/-2dB 
+Omni-directional 
+Behringer ECM8000 
+20 Hz - 20 kHz +/-5dB 
+Omni-directional 
+ 
+3.1.2 Loudspeakers 
+ 
+Most of the available monitor loudspeakers at TEE studios have been analysed for 
+their frequency responses in order to reproduce flat playback of the recorded drum 
+sample and sine sweeps for collection of impulse responses. Through in-depth 
+research Tannoy has been the most suitable loudspeaker for the application. As well 
+as its near-flat frequency response, it is capable of reproducing efficient playback of 
+low-end frequencies as low as 33 Hz, where the competitors HS5 and Rokit 5’’ are 
+capable of 54 Hz and 45 Hz respectively. This low frequency response is extremely 
+important as the designed audio test sample being a drum kit containing a kick drum.  
+
+
+=== [p26] ===
+ 
+20
+ 
+ 
+Table 2 Available monitor loudspeakers in TEE studios 
+Available Monitor Loudspeakers 
+Frequency Response 
+Tannoy Ellipse 10 iDP 
+33 Hz – 50 kHz +/- 1.5 dB 
+Yamaha HS5 
+54 Hz – 30 kHz +/- 10 dB 
+KRK Rokit 5’’ 
+45 Hz – 35 kHz +/- 10 dB 
+ 
+ 
+3.1.3 Audio interfaces 
+ 
+Portable audio interfaces available in TEE studios have been analysed. Most 
+important specifications are detailed below. Input and output frequency responses 
+are as important as microphones and loudspeakers. In this category Saffire Pro has 
+shown the least effect on responses. M-box mini 2 has failed the test as it only 
+accommodates only a headphone output. Signal to noise ratio (SNR) is important in 
+terms of capability of reproducing and recording clear signals. Saffire Pro has a far 
+better SNR than the other competitor, Fast Track Pro. The last test category, digital 
+conversion specifications, has made it obvious that Saffire Pro is the most 
+appropriate interface to for recording and reproduction purposes. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p27] ===
+ 
+21
+Table 3 Available portable audio interfaces 
+Available 
+Portable 
+Interfaces 
+Input 
+Frequency 
+Response 
+Output 
+Frequency 
+Response 
+A/D – D/A 
+Conversion 
+Multiple 
+Outputs
+? 
+Signal to 
+Noise 
+Ratio 
+M-Audio Fast 
+Track Pro 
+ 
+20 Hz – 20 
+kHz, +/- 0.2 dB 
+20 Hz – 20 kHz, 
++/- 0.2 dB 
+16 Bit  
+48 kHz 
+Yes 
+-102 dB 
+M-Audio M-
+Box Mini 2 
+ 
+20 Hz – 20 
+kHz, +/- 0.1 dB  
+20 Hz – 20 kHz, 
++/- 0.25 dB 
+24 Bit 
+44.1, 48 
+kHz 
+No 
+Not 
+specified 
+Focusrite 
+Saffire Pro 
+ 
+20 Hz – 20 
+kHz, +/- 0.1 dB 
+20 Hz – 20 kHz, 
++/- 0.1 dB 
+24 Bit 
+96 kHz 
+Yes 
+-105.3 dB 
+ 
+ 
+ 
+3.2 Software 
+ 
+This section provides information and comparison about alternative software for 
+programming, capturing IR’s and analysis uses. Each software have been analysed 
+for their advantages and limitations in order to detect most applicable ones. 
+Justifications have been made towards the usefulness, user-friendliness and material 
+costs in order to save time, effort and money.   
+ 
+3.2.1 Programming 
+ 
+Although programming software platform has been defined for this project as 
+Max/MSP in the project aims, a research has been made to find alternative ones to 
+justify the selection. A range of audio synthesis software is given below. First 
+category for comparison deals with the cost of the software. In this sense, Reaktor 
+has been eliminated in the first stage due to budget constraints where it is 
+unattainable neither on TEE computers nor on author’s personal computer. 
+Max/MSP being reachable on TEE computers eliminates the need for a purchase. 
+Another concern is the native platform of the software. Byond, being only available 
+for Windows computers makes it almost impossible to use as the author’s personal 
+
+
+=== [p28] ===
+ 
+22
+computer running Mac OSX and permission and stability of installing software on 
+TEE computers is not known. The last and the most important criteria is the 
+programming language used by the software. The language required is a real issue 
+where, if the author is not familiar with it, it will consume much time and much effort. 
+In this case, Faust and SuperCollider requiring functional and dynamic programming 
+respectively are eliminated due to author’s theoretical and practical knowledge 
+constraints. The remaining software Pure Data and Max/MSP are the most 
+convenient ones to use. In retrospect, Max/MSP has been the fundamental software 
+used in Sound Synthesis UG2 and Digital Audio Effects UG3 modules. This makes 
+Max/MSP a more advantageous environment compared to Pure Data. 
+ 
+ 
+Table 4 possible programming software comparisons 
+Software 
+Cost 
+Language 
+Platform 
+Faust 
+Free 
+Functional 
+programming 
+Linux, Mac 
+OSX, Windows, 
+Unix 
+Pure Data 
+Free 
+Visual programming 
+Cross-Platform 
+Max/MSP v.5 
+$400, available on 
+TEE computers 
+Visual programming 
+Windows, Mac 
+OSX 
+SuperCollider 
+Free 
+Dynamic 
+programming 
+Linux, Mac 
+OSX, Windows, 
+FreeBSD 
+Reaktor 
+$399 
+Conventional 
+programming 
+Windows, Mac 
+OSX 
+Byond 
+Free 
+C# 
+Windows 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p29] ===
+ 
+23
+3.2.2 IR capturing 
+ 
+In the table 5 some of the alternative impulse response capturing software are 
+included. IR Utility is included in the Logic Pro software package, which is licensed 
+on the author’s personal computer. Room EQ Wizard is a great tool for acoustical 
+analysis of spaces. It includes sine sweep method for capturing impulse responses 
+but does not involve a deconvolution function. FuzzMeasure Pro 2 is free to use but it 
+does not involve a deconvolve function in this version rather it is included in Pro 3 
+version where it is priced for $90 for educational use. Therefore most applicable 
+software is IR Utility. The advantage of sine sweep method is justified later on in this 
+chapter. 
+ 
+Table 5 Possible impulse response capturing software 
+Software 
+Platform 
+Method(s) 
+Cost 
+Deconvolve? 
+File type 
+IR Utility 
+Mac OSX 
+Sine Sweep Included in 
+Logic Pro 
+Yes 
+.aiff, .wav 
+Room EQ 
+Wizard 
+Mac OSX, 
+Windows 
+Sine Sweep Free 
+No 
+- 
+FuzzMeasure Mac OSX 
+Sine Sweep Pro 2 
+Version: 
+Free  
+Pro 3 
+Version 
+Educational 
+Use: $90 
+Not in Pro 2 
+version 
+.aiff, .wav 
+ 
+ 
+ 
+3.2.3 Spectrum Analysis 
+ 
+A range of spectrum analysis software have been analysed in order to detect most 
+appropriate ones. Through analysis Sonic Visualiser has been found to be the most 
+appropriate software offering flexible settings to view the spectrogram of the signals. 
+Another advantage of this software is that, it is free to download and it offers versions 
+
+
+=== [p30] ===
+ 
+24
+for Mac OSX. The ease of use of this software was another advantage saving the 
+time needed to learn how to use.  
+ 
+3.3 Plugin Design 
+ 
+Initial design procedure for the creation of plugin has started with analysing available 
+max objects and concepts towards creating a convolution reverb plugin. As 
+described earlier target plugin will use non-uniform partitioned convolution method in 
+order to achieve near zero latency convolution in frequency domain. Therefore 
+transformation of a signal from time domain to frequency domain is the first goal. In 
+order to achieve this, typical max objects are analysed. Max/MSP’s pfft~ object is a 
+tool designed for spectral audio processing that uses Fast Fourier Transform (FFT) 
+to transform time domain signals into frequency domain. The object works as a sub-
+patch containing fftin~ and ifftout~ objects which determine the number of inputs and 
+outputs of its mother-patch. Using these objects one can process any signal in its 
+frequency domain. The object fft~ outputs a stream of real and imaginary numbers 
+where ifft~ expects these. These values are Cartesian coordinates where vertical 
+axis is the real part and horizontal axis is the imaginary part. In order to work with 
+signals amplitude and phase components there are two ways to compute. Those 
+Cartesian coordinates are transformed into polar coordinates by cartopol~ objects 
+(poltocar~ for polar coordinates into Cartesian coordinates). Another way to compute 
+phase and amplitude is to use complex multiplications, which is a method that takes 
+less CPU power. 
+ 
+Figure 3.4.1 below shows the first prototypes created using this method. Prototype 
+on the right shows a method for using less CPU power. First inlet (fftin~ 1) into the 
+sub-patch loads the input signal and the second inlet (fftin~ 2) loads the impulse 
+response. 
+ 
+Fig. 3.4.1 First Prototypes for convolution 
+
+
+=== [p31] ===
+ 
+25
+ 
+Using the prototypes shown above one can convolve a signal with another signal 
+however; these methods are not practical for a real time convolution. Instead 
+alternative external objects are needed. 
+ 
+The most efficient externals found through research are part of Alex Harker 
+Max/MSP externals (2011). The two external objects named partconvolve~ and 
+timeconvolve~ copies the impulse response from a buffer and performs partitioned 
+convolution to an incoming signal. Real-time convolution can be achieved when 
+partconvolve~ is used in combination with timeconvolve~ with correct attributes. The 
+attributes needed to state are fftsize, offset, length and chan. These attributes are 
+needed in order to set the partitioning scheme.  
+ 
+Figure 3.4.2 shows convolution sub-patch for left channel that is used inside the final 
+patch named Corridor Reverb. Inlet 1 loads the input signal and inlet 2 loads the 
+impulse response where they are sent to following partconvolve~ and timeconvolve~ 
+objects. The object timeconvolve~ is used for the first partition where the block size is 
+128 samples thus, convolution in time domain is faster. Series of partconvolve~ 
+objects are attributed in exponentially increasing block sizes as Gardner (1995) 
+suggests. The outlets of these objects are sent to series of signal summation objects 
+in order add overlapping blocks. In the final stage, summed signal is sent to the 
+outlet of the sub-patch into the mother-patch Corridor Reverb for mixing stage. 
+ 
+ 
+ 
+Fig. 3.4.2 Convolution sub-patch for the left channel 
+ 
+
+
+=== [p32] ===
+ 
+26
+The patching mode of final patch Corridor Reverb is shown in the fig.  below. The 
+object sfplay~ 2 loads the user-selected input signal buffered by open object into the 
+patch. The object buffer~ contains the impulse response that has been recorded in 
+the corridor leading to semi-anechoic chamber in Millenium Point building of 
+Birmingham City University. Mixing stage of the patch contains a live.dial object for 
+setting the amount of the wet signal to a line~ object where it sends a control signal 
+whose amplitude is set by ‘Wetness’ to be multiplied by the wet signal and the dry 
+signal.   
+ 
+ 
+ 
+Fig. 3.4.3 Working patch with the mixing stage present 
+ 
+ 
+ 
+3.4 Impulse response capture methodology 
+ 
+Exponential sine sweep method, as stated in the literature review section, has been 
+accommodated for capturing of the impulse responses due to the method having 
+greatest signal to noise ratio. The most important element of this activity has been 
+ensuring dry audio sample was also recorded with every source-receiver position of 
+the recording of the impulse response. The importance of this element is due to 
+offering smallest variation for test purposes.  
+ 
+
+
+=== [p33] ===
+ 
+27
+Prior to the recordings, the software has been calibrated so that hardware has least 
+effect on the recorded impulse response. Another important precaution was using 
+acoustically absorbent stands for microphone and speaker. This is due to vibrations 
+travelling from loudspeaker stand reach to the microphone stand before the pressure 
+waves reaching the diaphragm wherefore sound waves travelling at a faster rate in 
+denser materials. 
+ 
+As stated earlier IR Utility was employed for the auralisation of the corridor reverb. 
+Tannoy loudspeaker has been used as the source, positioned in one end of the 
+corridor, facing the other end with equal distances from the sidewalls. The 
+microphone, Audix TM1, was positioned in various distances from the loudspeaker 
+pointing upwards.  
+ 
+ 
+3.5 Anechoic chamber recordings 
+ 
+Audio test sample was recorded in BCU’s semi-anechoic chamber in order to capture 
+a signal that has the least reverberation. Instrument chosen for this recording was a 
+drum kit comprising of a kick drum, a snare and a ride cymbal. The instrument has 
+two advantages in terms of testing. Each element of the drum kit has their spectrum 
+in different spectral bands. The bass drum covers low-end and low mid, snare covers 
+low mid and high mid and ride cymbal covers high mid and high-end spectral bands. 
+This coverage is important in terms of assessing the reverberation for a wide range 
+spectrum. Another advantage is that the instrument is percussive which will ease the 
+perception of reflections for assessing the characteristics of the reverberation. An 
+alternative instrument could be a piano where it is still a percussive instrument that 
+can cover a wide range spectrum. Another advantage of drum kit opposed to a piano 
+is its ease of transportation. 
+ 
+Microphone employed for this recording session was the Audix TM1. This is due to 
+the microphone having least coloration on the recorded sound as stated earlier and 
+also its polar pattern being omni-directional. Position for the microphone was set by 
+trial. The most appropriate position for the microphone was discovered by 
+examination of the spectrum via real-time analyser while drummer was playing the 
+beat. Equal magnitude over the spectrum was the most important principle for this 
+
+
+=== [p34] ===
+ 
+28
+test. After several trials, the most appropriate position was found to be 30 cm above 
+the bass drum in between the snare and the ride cymbal. 
+ 
+The beat composed for the recording was in 4/4 time signatures, playing each 
+element of the kit on separate times to ensure each hit can be perceived distinctly. 
+ 
+ 
+ 
+3.6 Experimental design 
+ 
+The initial research on the assessment methods of perceptual quality of artificial 
+reverberation in 2.7 showed that most reliable way to assess these qualities is the 
+careful design of listening tests. Another reason for the need for subjective listening 
+tests is that, as Extra et al. (2006) stated, objective measures for perceptual qualities 
+being less effective on reflecting healthy results. Thus, the experimental design of 
+this study shall fulfil careful design of testing criteria allowing participants to assess 
+the qualities of techniques in predetermined objective metrics. These objective 
+metrics should be intuitive to allow the administration to be able to use naïve 
+participants as well as semi-professionals in the field. The importance of selecting 
+the subject pool is another aspect. Although Haines et al. (2007) points out that 
+demographics of the subjects has no expected effect on the results, noting the 
+personal backgrounds of participants is a convenience when analysing the results to 
+show possible correlations. Another important precaution mentioned by Marui (2007) 
+that there were no known auditory health issues of their subjects.  
+ 
+The author believes that the gender of the participants has lesser effect on the 
+results than the age. This is due to the fact that hearing spectrum range of the 
+humans become narrower with respect to age; thus, subject pool of ages in 
+between18 and 26 is selected. 
+ 
+Dry sound samples chosen for these tests are justified above in 3.6, anechoic drum 
+music, should be generated so that a control signal was paired with the convolved 
+signal. In order to generate this control signal, the anechoic drum sample has been 
+played from the Tannoy loudspeaker in the corridor and recorded in the same setup 
+and source-receiver positions for a fair control signal. This signal has been named as 
+
+
+=== [p35] ===
+ 
+29
+Chamber Reverb and given the symbol ‘B’. The test signal has been given the name 
+Convolution Reverb and given the symbol ‘A’ hereafter. Both signals have been 
+equalised for 0 dB peak amplitudes in order to minimise the effects of processing.  
+ 
+Test methodology chosen for the test is the categorical pair-wise comparison test. 
+Three preference categories were identified similar to the strategy followed by 
+Haines et al. (2007). These categories were: realism, defined as the likeliness to 
+actual reverberations that take place in a real space, quality and personal 
+preference, defined as ‘which technique do you would prefer to use for reverberating 
+a signal’. Personal preference category allowed participants to state the reason for 
+their preference optionally. These statements may help the administration to identify 
+the perceptual differences in an informal way. 
+ 
+A questionnaire has been prepared for the listening test with naïve subjects in mind. 
+This was realised by stating the definitions of reverberant sound field and 
+reverberation from Audio Engineering Society’s (AES) Acoustical Terms Dictionary. 
+Tabulation was designed for intuitive recording of the responses. Also each category 
+was defined prior to the test on the questionnaire to ensure each subject understood 
+the parameters. Instructions were written on the questionnaire to minimise the 
+administration needs and to ensure each subject received the same information 
+ensuring a fair test for all subjects. The questionnaire can be seen in the appendix 
+section. 
+ 
+The most appropriate environment for a test of this nature is the semi-anechoic 
+chamber in Millennium Point. However access to this facility is restricted to the staff 
+where students are expected to access with the studio manager. Another issue was 
+the TEE’s procedure for non-students entering the faculty. Non-students are 
+expected to be informed to security staff three days prior to the entry for recording 
+purposes. These limitations made the use of semi-anechoic chamber for listening 
+tests impractical. The solution found was using a portable high quality sound 
+interface card with flat frequency response headphones for the realisation of listening 
+tests. The solution eliminated the need for an anechoic environment due to subjects 
+listening the material on headphones. 
+ 
+
+
+=== [p36] ===
+ 
+30
+In order to avoid bias, listening tests have been carried out in single blind fashion that 
+is subjects were informed that they were comparing different reverberation 
+techniques without knowing the nature of techniques. Subjects were told to read the 
+questionnaire first, then to set the volume to a comfortable level that would stay the 
+same through the test. In order to avoid perspective loss, subjects were told to listen 
+to the samples as minimum times as they would need to.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p37] ===
+ 
+31
+4.0 Results 
+ 
+ 
+ 
+4.1 Spectral tests’ results 
+ 
+ 
+Fig. 4.1.1 Spectrogram view of the bass drum (chamber recording)  
+ 
+Fig. 2.1.2 Spectrogram view of the bass drum (convolved signal) 
+
+
+=== [p38] ===
+ 
+32
+ 
+ 
+Fig. 4.1.3 Spectrogram view of the snare (chamber recording) 
+ 
+ 
+Fig. 4.1.4 Spectrogram view of the snare (convolved signal) 
+ 
+
+
+=== [p39] ===
+ 
+33
+ 
+Fig. 4.1.5 Spectrogram view of the ride cymbal (chamber recording) 
+ 
+Fig. 4.1.6 Spectrogram view of the ride cymbal (convolved signal) 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p40] ===
+ 
+34
+4.2 Listening tests 
+ 
+This section presents results from subjective listening tests. There are 23 subjects 
+participated in the tests. As stated earlier ‘A’ stands for the convolution reverb and ‘B’ 
+stands for chamber reverb (chamber reverb). Also in the table *** convolution reverb 
+is referred sample 1 and chamber reverb is referred to as sample 2.  
+ 
+Table 6 Individual listening test responses with ID numbering 
+Subject 
+ID 
+Realism 
+Quality 
+Preference 
+1  A 
+A 
+A 
+2  B 
+B 
+B 
+3  A 
+A 
+A 
+4  B 
+B 
+B 
+5  B 
+B 
+B 
+6  B 
+B 
+B 
+7  A 
+B 
+B 
+8  A 
+B 
+B 
+9  B 
+B 
+B 
+10  B 
+A 
+B 
+11  A 
+B 
+B 
+12  B 
+B 
+B 
+13  A 
+A 
+A 
+14  B 
+B 
+A 
+15  B 
+B 
+B 
+16  A 
+B 
+B 
+17  A 
+A 
+A 
+18  A 
+B 
+B 
+19  B 
+B 
+B 
+20  B 
+B 
+A 
+21  A 
+A 
+A 
+
+
+=== [p41] ===
+ 
+35
+22  A 
+A 
+A 
+23  A 
+A 
+A 
+ 
+ 
+ 
+The table above shows the individual choices of participants for each category. 
+Subjects are given numbers ID numbers.  
+ 
+Table 7 Participants’ comments on their personal preference choices 
+Subject ID Preference 
+1 Sample 1 sounds more nonsynthetic 
+2 Sample 2 fits the personal preference for drum reverb 
+3 Sample 1, better mixture of separate elements 
+4 Sample 2, no big difference. 
+5 Sample 2, no big difference 
+6 Sample 2,No big difference 
+7 Sample 2 sounds brighter 
+8 Sample 2 sounds cleaner, more distinguishable 
+9 Sample 2, no big difference 
+10 Sample 2 feels more roomy 
+11 Sample 2, more distinct cymbal sound 
+12 Sample 2, sounds brighter 
+13 Sample 1, sounds more powerful 
+14 Sample 1, better distinguishable sound 
+15 Sample 2, sounds more authentic 
+16 Sample 2, sounds more lively in the low-end and high-end is clearer 
+17 Sample 1, sounds warmer 
+18 Sample 2, sounds brighter 
+19 Sample 2, sounds brighter 
+20 Sample 1, better sounding 
+21 Sample 1, sounds more synchronizing 
+22 Sample 1 (no reasoning) 
+23 Sample 1 (no reasoning) 
+ 
+
+
+=== [p42] ===
+ 
+36
+ 
+ 
+As stated earlier in the 3.7 subjects are given the option to state the reasons of their 
+personal preferences. All the participants responded to this optional request except 
+two subjects. They are labelled as ‘(no reasoning)’. ID numbers in this table are listed 
+in order with respect to the previous table.  
+ 
+ 
+ 
+ 
+ 
+ 
+Fig. 4.2.1 Realism category responses shown as frequency on pie chart  
+ 
+ 
+ 
+Fig. 4.2.2 Quality category responses shown as frequency on pie chart 
+Corridor 
+Reverb  
+48% 
+Natural 
+Reverb 
+52% 
+Realism 
+Corridor 
+Reverb  
+39% 
+Natural 
+Reverb 
+61% 
+Quality 
+
+
+=== [p43] ===
+ 
+37
+ 
+ 
+Fig. 4.2.3 Personal preference category shown as frequency on pie chart 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Corridor 
+Reverb  
+39% 
+Natural 
+Reverb 
+61% 
+Preference 
+
+
+=== [p44] ===
+ 
+38
+5.0 Discussions and analysis 
+ 
+ 
+The main aim of this project was to build a convolution reverb plugin and to 
+investigate the quality of convolution reverb by spectrum analysis and listening tests. 
+This was done by collection of an impulse response from a chamber to convolve with 
+a musical excerpt. For the test purposes same anechoic musical excerpt was 
+recorded in the chamber by using the same equipment and setup. For objective 
+measure purposes both signals’ spectrograms were plotted using the software Sonic 
+Visualiser with same settings for each pair to compare the responses fairly. For 
+subjective assessment purposes carefully designed and administered listening tests 
+were realised. The results of spectrogram analysis and listening tests were shown in 
+4.1 and 4.2 respectively. These results are analysed and discussed in the following 
+sections.  
+ 
+As reviewed in the literature review section, none of the earlier studies concentrated 
+on the perceived quality of convolution reverb compared to chamber reverb, the 
+experiments were rather focusing on digital artificial reverberation techniques. Thus 
+expectations of the results of the experiments were not conclusive. This also resulted 
+in a deficiency to relate the results obtained to a certain reason. However the same 
+reason, lack of similar studies, was a great motivation for the completion of this 
+project. 
+ 
+5.1 Analysis of spectrogram results 
+ 
+Spectrogram views are healthy representations of the magnitude, shown over a time 
+vs. frequency plot. These views of the frequency domain of a signal are promising 
+representations to analyse the differences of the responses of systems for the input 
+signal. The results of these tests can be used to identify the perceptual differences 
+that effected participants’ preferences.  
+ 
+Results from the chamber recording show denser magnitude dispersion in the low 
+frequency region in the bass drum tests. It also shows higher magnitude response in 
+the same region. Another interesting result is that energy decay in the chamber 
+recording is rather smooth in the region below 80 Hz. This decay forms earlier for the 
+
+
+=== [p45] ===
+ 
+39
+higher frequency bands where above the 4kHz range, the magnitude response 
+becomes rather scarce. Interestingly in the mid range, 1.5 kHz – 4 kHz, both the 
+magnitude response and the energy decay is more present in the convolved signal. 
+ 
+In the snare spectrograms, the dense dispersion of the magnitude in the 3 kHz – 9 
+kHz range is intense in the chamber recording. Energy decay differences can be 
+clearly seen between the two spectrograms. In the 14 kHz - 19 kHz region, there is 
+obvious magnitude differences. The decay of energy in the same region is similar 
+until a point where, in the convolved signal, there is a quite rate of decay. However 
+this decay is not present in the range below 10 kHz. 
+ 
+Cymbal recording spectrograms show a obvious difference of the dispersion of 
+energy. The dense energy lines, which are the harmonics of the fundamental 
+frequency of the ride cymbal, are clearer for the convolved signal. This shows that 
+magnitude dispersion is weaker as opposed to the chamber recording. There is also 
+an obvious difference of magnitude response for the frequency bands over 8 kHz. In 
+this region, energy decay is rather at a faster rate in the spectrogram of the 
+convolved signal.  
+ 
+Observations over the spectrogram views show poor energy decays of the 
+convolution reverb plugin, especially for the higher frequency bands. Although early 
+energy decays for the low frequencies match the opposing natural reverb 
+characteristics, response to the high mid frequencies in this time region is rather 
+weak.  
+ 
+ 
+ 
+5.2 Analysis of subjective test results 
+ 
+Prior to analysis of the listening test results, it should be mentioned that due to small 
+population of participants, statistical significance tests were not carried out. Also due 
+to tests being performed only once for each person, there is no need for a confidence 
+interval or binomial distribution computation. 
+ 
+
+
+=== [p46] ===
+ 
+40
+Hypothesis for comparison of realism of two reverberation techniques was that 
+convolution reverb could emulate true characteristics of the reverberation chamber. 
+This was due to the fact that an impulse response contains realistic reflection of a 
+linear time-invariant system’s response to any input signal. Subjects preferring 
+convolution reverb for this category form 48% of the total population with the size of 
+11 out of 23 total responses. Results from the subjective listening tests for this 
+category show that hypothesis is proved, which means subjects were unable to 
+distinguish the quality of realism from either sample. 
+ 
+Quality category asked the participants to state their preference of the reverberation 
+techniques proposed. A frequency of 61% of the participants stated that sample B 
+(chamber reverb) has higher quality than sample A (corridor reverb). A reason for 
+this result can be the plugin’s poor response for the high mid frequency bands. 
+Another reason for this result can be the plugin’s faster energy decay for the high 
+frequency bands, which may be perceived as lower quality in terms of reflecting 
+higher frequency bands of reflections. 
+ 
+Personal preference category asked the participants to state their personal choices 
+of reverberation techniques. This resulted in 61% of the population preferring 
+chamber reverb. An interesting fact is that, 56.5% from 61% total preferences for 
+chamber reverb also preferred the same technique in the quality category. This 
+shows an obvious relation of quality to personal preference on the choices. The 
+relation shows that perceived quality of reverberation has a great influence on 
+personal preference. Alternative or rather main reasoning for this relation can be 
+drawn from faster decay rates of high frequency of convolution reverb plugin.  
+ 
+Optional request for reasons of the participants’ personal preferences has been 
+yielded a range of answers that helped to identify the nature of their personal 
+preference. Responses to the question by individuals with ID numbers: 7, 11, 12, 
+16,18 and19, shown that 35.7% of the personal preferences were chamber reverb 
+because it sounded brighter. This obviously shows that results of spectrogram tests, 
+plugins’ weak response to high frequency and faster decay rate at high mid 
+frequencies are perceivable. Another outcome of these responses was that 17.4% of 
+the participants stated that they perceived very little or no differences. 
+ 
+
+
+=== [p47] ===
+ 
+41
+6.0 Conclusions 
+ 
+In conclusion, the project aimed to cover the design of a convolution reverb plugin on 
+MaxMSP and to evaluate the quality of convolution reverb with respect to 
+spectrogram analysis and analysis of listening tests that has been carried out. The 
+plugin was designed using non-uniform partitioned convolution method for real-time 
+purposes. The designed plugin has been successful, convolving the input signal with 
+an impulse response recorded from a chamber in Millennium Point campus of 
+Birmingham City University with near zero latency. In order to fulfil the second part of 
+the aim of this report, an anechoic drum sample has been recorded in the semi-
+anechoic chamber. This signal was then recorded in the chamber using the same 
+equipment and setup, in order to create a testing material for the comparison of the 
+different methods for testing the quality of the convolution reverb purposes.  
+ 
+In order to achieve the first objective, extensive research has been carried out in the 
+areas of digital signal processing, artificial reverberation techniques, real-time 
+convolution methods and methods for testing the quality of artificial reverberation. 
+The second objective was to design a fast convolution plugin on MaxMSP, which has 
+been achieved by implementing the multiple frequency delay line non uniform 
+partitioned convolution method that has been researched. In order fulfil the next 
+objective; exponential swept sine wave method has been used to capture the 
+impulse response of the chamber. After this stage recorded impulse response has 
+been applied to the plugin with the anechoic signal recorded in semi-anechoic 
+chamber to test the plugin. After the succession of this objective extensive research 
+has been carried out in the subject of perceptual quality evaluation of artificial 
+reverberation techniques by identifying the earlier studies and observing the methods 
+tested. After this stage, testing methodology has been created for listening tests. 
+Listening tests were carried out with over 23 participants and results of these tests 
+are analysed. In order to measure the quality objectively, spectrogram views of the 
+signals have been visualised.  
+ 
+Results of the objective tests show that the convolution reverberation had 
+shortcomings in the higher frequency spectrum range that was, faster decay of the 
+energy than the chamber reverb technique which was sometimes referred to as 
+original reverb. The reason for this result has not been identified clearly, but the 
+
+
+=== [p48] ===
+ 
+42
+possible justifications were made towards the impulse response capturing method. 
+However testing of the alternative impulse response capturing methods was not the 
+scope of this project, further studies should resonate in these tests.  
+ 
+Results of the subjective tests showed a clear relation to the shortcoming of the 
+convolution reverb discussed earlier. That is, 35.7% of the participants who preferred 
+chamber reverb technique justified that this technique was brighter sounding than the 
+other technique. Interestingly realism category has verified null hypothesis, that they 
+were unable to define which technique has a higher realism. This result showed that 
+the convolution reverb could realistically emulate a space, which was the hypothesis 
+at the initial stages of the project.  
+ 
+Overall, the aim of this project has been achieved with activities planned for the 
+achievement of the demanding objectives. Recommendations for further studies are 
+presented in 7.0.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p49] ===
+ 
+43
+7.0 Recommendations 
+ 
+This project supplies a firm starting point for further investigations, as the specified 
+scope was rather limiting. Recommendations for further research are: 
+ 
+• 
+Investigations into alternative impulse response capturing methods are 
+needed to provide further auralisation approaches in order to test the quality 
+of convolution with the new methods. 
+• 
+Further investigations into perceptual audio quality testing in order to design 
+more reliable subjective testing criteria for realisation of the qualities 
+associated with perception of the reverberation. 
+• 
+Identifying and using better hardware for more realistic auralisation 
+approaches. 
+• 
+Additionally the scope can be extended, covering the recommendations 
+stated above to re-design and repeat the activities for identification of the 
+problems raised in this project 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p50] ===
+ 
+44
+ 
+List of References 
+ 
+ 
+Bateman, A. and Paterson-Stephens, I. (2002). The DSP Handbook: 
+Algorithms, Applications and Design Techniques. Harlow: Pearson Education 
+Limited. Pages 499-509. 
+ 
+ 
+Battenberg E. and Avizienis, R. (2011). Implementing real-time partition 
+convolution algorithms on conventional operating systems. 14th International 
+Conference on Digital Audio Effects (DaFX-11) proceedings, Paris, 
+September (2011). 
+ 
+ 
+Czyzewski, A. and Sankiewicz, M. (1988). Subjective Methods for the 
+Assessing Properties of Artificial Reverberation. Technical University Gdansk, 
+Poland. Presented at the 84th Convention, Paris, March 1988. 
+ 
+ 
+Czyzewski, A. (1990). A Method of Artificial Reverberation Quality Testing. 
+Journal of Audio Engineering Society, Vol. 38, No.3, March 1990.   
+ 
+ 
+Dennis, R. (2001). Advanced Recording Primer. Last accessed on 15/05/2014 
+from: http://www.recordinginstitute.com/da154/ARP/chap3Sig/0308hist.html 
+ 
+ 
+Everest, F. A. and Pohlmann K. C. (2009). Master Handbook of Acoustics, 
+fifth edition, USA, McGraw-Hill Companies. 
+ 
+ 
+Extra, D.; Simmer, U.; Fischer, S. and Bitzer, J. (2006). Artiﬁcial 
+Reverberation: Comparing algorithms by using monaural analysis tools. Audio 
+
+
+=== [p51] ===
+ 
+45
+Engineering Society, 121st Convention, San Francisco, CA, USA, October 
+2006. 
+ 
+ 
+Gardner, W. G. (1995). Efficient Convolution without Input-Output Delay. 
+Journal of the Audio Engineering Society, Vol. 43 (3), Pages 127-136. 
+ 
+Haines, W. D.; Vernon, J. R.; Dannenberg R. B.; Driessen P. F. (2007). 
+Placement of Sound Sources in the Stereo Field Using Measured Room 
+Impulse Responses. In R. Kronland-Martinet, S. Ystad, and K. Jensen (Eds.): 
+Computer Music Modelling and Retrieval. Sense of Sounds, Lecture Notes in 
+Computer Science LNCS 4969, Berlin and Heidelberg: Springer-Verlag, 
+Pages 276-287, 2008. 
+ 
+ 
+Harker, A. (2011). A. Harker Externals for MaxMSP. Last accessed on 
+15/05/2014 from: www.alexanderjharker.co.uk/Software.html  
+ 
+ 
+Howard, D. M. and Angus, J. A. S. (2009). Acoustics and Psychoacoustics, 
+fourth edition, Great Britain, Focal Press, Elsevier Ltd. 
+ 
+ 
+Kirk, R. and Hunt, A. (1999). Digital Sound Processing for Music and 
+Mulitmedia. Oxford, Focal Press. Pages 165-167. 
+ 
+ 
+Lehmann, S. (1996). Reverberation. Last accessed on 15/05/2014 from: 
+ http://www.harmony- central.com/Effects/Articles/Reverb/  
+ 
+ 
+
+
+=== [p52] ===
+ 
+46
+Lockhart, G. B. and Cheetham, B. M. G. (1989). Basic Digital Signal 
+Processing. Published by Batterworths, 1989.  
+ 
+ 
+Lynn, P. A. and Fuerst, W. (1994). Introductory Digital Signal Processing with 
+Computer Applications. Published by Wiley, Chichester, 1994. Available at 
+Millennium Point. 
+ 
+ 
+Lyons, R. G. (2004). Understanding Digital Signal Processing. 2nd edition, 
+Prentice Hall Published Upper Saddle River, N.J., 2004. 
+Manolakis, D. G. and Ingle, V. K. (2011). Applied Digital Signal Processing. 
+First edition, Cambridge University Press, Cambridge, 2011. 
+ 
+ 
+Marui, A. (2007). Perceptual Categories of Artificial Reverberation for 
+Headphone Reproduction of Music. Audio Engineering Society, convention 
+paper 723, 123rd Convention, New York, NY, October 2007. 
+ 
+ 
+Mommertz, E. (2009). Acoustics and Sound Insulation. First edition, published 
+by Aumuller Druck. Regensburg, 2009. 
+ 
+ 
+Moorer, J. (1979). About this Reverberation Business. Computer Music 
+Journal, Vol. 3, Pages  
+13–28. 
+ 
+ 
+Marven, C. and Ewers, G. (1996). A Simple Approach to Digital Signal 
+Processing. 
+Volume 8 of Topics in digital signal processing, published by Wiley, original 
+
+
+=== [p53] ===
+ 
+47
+from the University of California. 
+ 
+ 
+Muller-Tomfelde, C. (1999). Low-Latency Convolution for Real-Time 
+Applications. Audio Engineering Society 16th International Conference. No. 
+16-040. March 1999. 
+ 
+ 
+Peters, R. J., Smith, B. J. and Hollins, M. (2013). Acoustics and Noise 
+Control, third edition, New York, Routledge, Taylor & Francis Group. 
+ 
+ 
+Robjohns, H. (1997). Space: Reverb first principles. Last accessed on 
+15/05/2014 from: 
+http://www.soundonsound.com/sos/1997_articles/mar97/reverbbasics.html  
+ 
+ 
+Rumsey, F. and McCormick, T. (2006). Sound and Recording, sixth edition, 
+Great Britain, Focal Press, Elsevier Ltd. 
+ 
+ 
+Schroeder, M.R. (1961). Improved Quasi-Stereophony and Colourless 
+Artificial Reverberation. Journal of Audio Engineering Society. Volume 9, 
+Number 3. New York. Pages 192-197. 
+ 
+ 
+Schroeder, M.R. (1962). Natural-Sounding Artificial Reverberation. Journal of 
+Audio Engineering Society. Volume 10, Number 3. New York. Pages 219-223. 
+ 
+ 
+Smith, S. W. (1997). The Scientist and Engineer’s Guide to Digital Signal 
+Processing. California Technical Publishing, San Diego. 
+
+
+=== [p54] ===
+ 
+48
+ 
+ 
+Smith, S. W. (2003). Digital Signal Processing: A Practical Guide for 
+Engineers and Scientists. Newnes, Elsevier Science, the USA. 
+ 
+ 
+White, P. (2006). Choosing the Right Reverb: How best to use different 
+reverbs, Sound on Sound (SOS) journal, March 2006. Last accessed on 
+15/05/2014 from: 
+http://www.soundonsound.com/sos/mar06/articles/usingreverb.htm 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+=== [p55] ===
+ 
+49
+Appendix: A Listening Test Questionnaire 
+ 
+Comparison of Different Reverberation Techniques 
+ 
+This listening test is designed to compare two different techniques of 
+reverberating an audio signal. Comparison categories are defined below. There 
+are two different samples in the audio file provided named respectively Sample 
+No: 1 and Sample No: 2.  
+ 
+Reverberant sound field: The sound in an enclosed or partially enclosed space 
+that has been reflected repeatedly or continuously from the boundaries.  
+ 
+Reverberation: The persistence of sound in an enclosed or partially enclosed 
+space after the source of sound has stopped; by extension, in some contexts, the 
+sound that so persists.  
+ 
+*Definitions are taken from Audio Engineering Society’ s Acoustical Term’s Dictionary. 
+ 
+There are three comparison categories:  
+ 
+ Realism: Which reverberation technique sounds more realistic? 
+ 
+ Quality: Which reverberation technique has a higher quality? 
+ 
+ Personal Preference: Which reverberation technique do you prefer? 
+ 
+Instructions: 
+ 
+I. Listen to the audio file provided.  
+II. Compare the samples with respect to category definitions and state your 
+answer by simply adding ‘X’ into the relevant cell. 
+III. (Optional) State why do you prefer your selection in the personal 
+preference category. 
+ 
+Comparison 
+Categories 
+Sample No: 1 
+Sample: No: 2 
+
+
+=== [p56] ===
+ 
+50
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Realism 
+ 
+ 
+ 
+Quality 
+ 
+ 
+ 
+Personal Preference 
+ 
+A: 
+ 
+B: 
+  
+ 
+I prefer Sample No: 1 
+ 
+I prefer Sample No: 2 
+ 
+
+
+=== [p57] ===
+ 
+51
+Appendix: B Digital Files 
+ 
+Digital files are uploaded to the Moodle, as a single .zip file 

@@ -5,19 +5,20 @@
 // it is given, so modules can be dragged anywhere the viewport reaches, while
 // layouts saved against the original 640 × 480 grid still land.
 //
-// Zoom stays, because 1-bit controls drawn at their original size are tiny on
-// a modern display. Zoom scales the desktop's contents; it no longer decides
-// how much desktop there is.
+// There are two views: 1x, where every window is its original size in points,
+// and 2x, exactly double. Only whole-number scales are offered, so every line
+// still lands on a whole pixel and nothing is resampled. The scale sizes the
+// desktop's contents; it does not decide how much desktop there is.
 
 export const MIN_WORKSPACE_WIDTH = 640;
 export const MIN_WORKSPACE_HEIGHT = 480;
-export const MIN_WORKSPACE_ZOOM = 50;
-export const MAX_WORKSPACE_ZOOM = 200;
-export const WORKSPACE_ZOOM_STEP = 10;
+export const WORKSPACE_ZOOMS = [100, 200] as const;
+export const MIN_WORKSPACE_ZOOM = WORKSPACE_ZOOMS[0];
+export const MAX_WORKSPACE_ZOOM = WORKSPACE_ZOOMS[WORKSPACE_ZOOMS.length - 1];
 
+/** The supported view nearest to `value`: 100 (1x) or 200 (2x). */
 export function clampWorkspaceZoom(value: number): number {
-  const rounded = Math.round(value / WORKSPACE_ZOOM_STEP) * WORKSPACE_ZOOM_STEP;
-  return Math.max(MIN_WORKSPACE_ZOOM, Math.min(MAX_WORKSPACE_ZOOM, rounded));
+  return value >= 150 ? MAX_WORKSPACE_ZOOM : MIN_WORKSPACE_ZOOM;
 }
 
 export function logicalDragDelta(physicalDelta: number, zoom: number): number {

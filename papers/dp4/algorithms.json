@@ -1,0 +1,3545 @@
+[
+ {
+  "name": "EQ - DDL - WITH LFO",
+  "pdf_page_start": 44,
+  "pdf_page_end": 45,
+  "param_count": 23,
+  "max_param": 23,
+  "gaps": [],
+  "ranges_seen": 15,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "DDL+LFO Left Delay Time"
+   },
+   {
+    "n": 4,
+    "label": "DDL+LFO Right Delay Time"
+   },
+   {
+    "n": 5,
+    "label": "DDL+LFO LFO Rate"
+   },
+   {
+    "n": 6,
+    "label": "DDL+LFO LFO Width"
+   },
+   {
+    "n": 7,
+    "label": "Left/Right LFO"
+   },
+   {
+    "n": 8,
+    "label": "DDL+LFO Delay Regen"
+   },
+   {
+    "n": 9,
+    "label": "DDL+LFO Delay Cross Regen"
+   },
+   {
+    "n": 10,
+    "label": "DDL+LFO Regen Damping"
+   },
+   {
+    "n": 11,
+    "label": "DDL+LFO Right Delay Input"
+   },
+   {
+    "n": 12,
+    "label": "DDL+LFO Right Output Level"
+   },
+   {
+    "n": 13,
+    "label": "Bass Fc"
+   },
+   {
+    "n": 14,
+    "label": "Bass EQ Gain"
+   },
+   {
+    "n": 15,
+    "label": "Treble Fc"
+   },
+   {
+    "n": 16,
+    "label": "Treble EQ Gain"
+   },
+   {
+    "n": 17,
+    "label": "EQ Input Level Trim"
+   },
+   {
+    "n": 18,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 19,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 20,
+    "label": "Mod1 Param Range Min 24 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 21,
+    "label": "Mod1 Param Range Max25 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 22,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 23,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "EQ - FLANGER - DDL",
+  "pdf_page_start": 46,
+  "pdf_page_end": 45,
+  "param_count": 7,
+  "max_param": 7,
+  "gaps": [],
+  "ranges_seen": 5,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Flanger LFO Rate"
+   },
+   {
+    "n": 4,
+    "label": "Flanger LFO Width"
+   },
+   {
+    "n": 5,
+    "label": "Flanger Center"
+   },
+   {
+    "n": 6,
+    "label": "Flanger Feedback"
+   },
+   {
+    "n": 7,
+    "label": "Flanger Notch Depth"
+   }
+  ]
+ },
+ {
+  "name": "FLANGER",
+  "pdf_page_start": 46,
+  "pdf_page_end": 47,
+  "param_count": 26,
+  "max_param": 26,
+  "gaps": [],
+  "ranges_seen": 18,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Flanger LFO Rate"
+   },
+   {
+    "n": 4,
+    "label": "Flanger LFO Width"
+   },
+   {
+    "n": 5,
+    "label": "Flanger Center"
+   },
+   {
+    "n": 6,
+    "label": "Flanger Feedback"
+   },
+   {
+    "n": 7,
+    "label": "Flanger Notch Depth"
+   },
+   {
+    "n": 8,
+    "label": "Left/Right LFO"
+   },
+   {
+    "n": 9,
+    "label": "Flanger Sample & Hold Rate"
+   },
+   {
+    "n": 10,
+    "label": "Flanger Left Delay Time Range:  0 to 1500 ms"
+   },
+   {
+    "n": 11,
+    "label": "Flanger Right Delay Time"
+   },
+   {
+    "n": 12,
+    "label": "Flanger Delay Feedback Range:  -99 to +99"
+   },
+   {
+    "n": 13,
+    "label": "Flanger Left Echo Time"
+   },
+   {
+    "n": 14,
+    "label": "Flanger Right Echo Time"
+   },
+   {
+    "n": 15,
+    "label": "Flanger Echo Level"
+   },
+   {
+    "n": 16,
+    "label": "Bass Fc"
+   },
+   {
+    "n": 17,
+    "label": "EQ Gain"
+   },
+   {
+    "n": 18,
+    "label": "Treble Fc"
+   },
+   {
+    "n": 19,
+    "label": "EQ Gain"
+   },
+   {
+    "n": 20,
+    "label": "EQ Input Level Trim"
+   },
+   {
+    "n": 21,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 22,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 23,
+    "label": "Mod1 Param Range Min 27 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 24,
+    "label": "Mod1 Param Range Max28 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 25,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 26,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "EQ - PANNER - DDL",
+  "pdf_page_start": 48,
+  "pdf_page_end": 49,
+  "param_count": 23,
+  "max_param": 23,
+  "gaps": [],
+  "ranges_seen": 15,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Panner Rate"
+   },
+   {
+    "n": 4,
+    "label": "Panner Width"
+   },
+   {
+    "n": 5,
+    "label": "Left/Right LFO"
+   },
+   {
+    "n": 6,
+    "label": "Panner Sample & Hold Rate"
+   },
+   {
+    "n": 7,
+    "label": "Panner Left Delay Time"
+   },
+   {
+    "n": 8,
+    "label": "Panner Right Delay Time"
+   },
+   {
+    "n": 9,
+    "label": "Panner Delay Regen"
+   },
+   {
+    "n": 10,
+    "label": "Panner Left Echo Time"
+   },
+   {
+    "n": 11,
+    "label": "Panner Right Echo Time"
+   },
+   {
+    "n": 12,
+    "label": "Panner Echo Level"
+   },
+   {
+    "n": 13,
+    "label": "Bass Fc"
+   },
+   {
+    "n": 14,
+    "label": "Bass EQ Gain"
+   },
+   {
+    "n": 15,
+    "label": "Treble Fc"
+   },
+   {
+    "n": 16,
+    "label": "Treble EQ Gain"
+   },
+   {
+    "n": 17,
+    "label": "EQ Input Level Trim"
+   },
+   {
+    "n": 18,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 19,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 20,
+    "label": "Mod1 Param Range Min 24 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 21,
+    "label": "Mod1 Param Range Max25 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 22,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 23,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "EQ-TREMOLO-DDL",
+  "pdf_page_start": 50,
+  "pdf_page_end": 51,
+  "param_count": 23,
+  "max_param": 23,
+  "gaps": [],
+  "ranges_seen": 15,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Tremolo Rate"
+   },
+   {
+    "n": 4,
+    "label": "Tremolo Depth"
+   },
+   {
+    "n": 5,
+    "label": "Left/Right LFO"
+   },
+   {
+    "n": 6,
+    "label": "Tremolo Sample & Hold Rate"
+   },
+   {
+    "n": 7,
+    "label": "Tremolo Left Delay Time"
+   },
+   {
+    "n": 8,
+    "label": "Tremolo Right Delay Time"
+   },
+   {
+    "n": 9,
+    "label": "Tremolo Delay Regen"
+   },
+   {
+    "n": 10,
+    "label": "Tremolo Left Echo Time Range:  0 to 1500 ms"
+   },
+   {
+    "n": 11,
+    "label": "Tremolo Right Echo Time"
+   },
+   {
+    "n": 12,
+    "label": "Tremolo Echo Level"
+   },
+   {
+    "n": 13,
+    "label": "Bass Fc"
+   },
+   {
+    "n": 14,
+    "label": "Bass EQ Gain"
+   },
+   {
+    "n": 15,
+    "label": "Treble Fc"
+   },
+   {
+    "n": 16,
+    "label": "Treble EQ Gain"
+   },
+   {
+    "n": 17,
+    "label": "EQ Input Level Trim"
+   },
+   {
+    "n": 18,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 19,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 20,
+    "label": "Mod1 Param Range Min 24 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 21,
+    "label": "Mod1 Param Range Max25 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 22,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 23,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "EQ - VIBRATO - DDL",
+  "pdf_page_start": 52,
+  "pdf_page_end": 53,
+  "param_count": 23,
+  "max_param": 23,
+  "gaps": [],
+  "ranges_seen": 15,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Vibrato Rate"
+   },
+   {
+    "n": 4,
+    "label": "Vibrato Width"
+   },
+   {
+    "n": 5,
+    "label": "Left/Right LFO"
+   },
+   {
+    "n": 6,
+    "label": "Vibrato Sample & Hold Rate"
+   },
+   {
+    "n": 7,
+    "label": "Vibrato Left Delay Time"
+   },
+   {
+    "n": 8,
+    "label": "Vibrato Right Delay Time"
+   },
+   {
+    "n": 9,
+    "label": "Vibrato Delay Regen"
+   },
+   {
+    "n": 10,
+    "label": "Vibrato Left Echo Time"
+   },
+   {
+    "n": 11,
+    "label": "Vibrato Right Echo Time"
+   },
+   {
+    "n": 12,
+    "label": "Vibrato Echo Level"
+   },
+   {
+    "n": 13,
+    "label": "Bass Fc"
+   },
+   {
+    "n": 14,
+    "label": "Bass EQ Gain"
+   },
+   {
+    "n": 15,
+    "label": "Treble Fc"
+   },
+   {
+    "n": 16,
+    "label": "Treble EQ Gain"
+   },
+   {
+    "n": 17,
+    "label": "EQ Input Level Trim"
+   },
+   {
+    "n": 18,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 19,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 20,
+    "label": "Mod1 Param Range Min 24 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 21,
+    "label": "Mod1 Param Range Max25 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 22,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 23,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "EXPANDER",
+  "pdf_page_start": 54,
+  "pdf_page_end": 55,
+  "param_count": 21,
+  "max_param": 21,
+  "gaps": [],
+  "ranges_seen": 13,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Exp Ratio"
+   },
+   {
+    "n": 4,
+    "label": "Exp Threshold"
+   },
+   {
+    "n": 5,
+    "label": "Gain Change"
+   },
+   {
+    "n": 6,
+    "label": "Exp Attack"
+   },
+   {
+    "n": 7,
+    "label": "Exp Release"
+   },
+   {
+    "n": 8,
+    "label": "Expander Gate Hold Time"
+   },
+   {
+    "n": 9,
+    "label": "Sidechain EQ Gain"
+   },
+   {
+    "n": 10,
+    "label": "HighPass Fc"
+   },
+   {
+    "n": 11,
+    "label": "LowPass Fc"
+   },
+   {
+    "n": 12,
+    "label": "Trigger Mask"
+   },
+   {
+    "n": 13,
+    "label": "Time"
+   },
+   {
+    "n": 14,
+    "label": "Trig Mask Lower Threshold"
+   },
+   {
+    "n": 15,
+    "label": "Expander Output Gain"
+   },
+   {
+    "n": 16,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 17,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 18,
+    "label": "Mod1 Param Range Min 22 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 19,
+    "label": "Mod1 Param Range Max23 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 20,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 21,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "FAST PITCH SHIFT",
+  "pdf_page_start": 56,
+  "pdf_page_end": 57,
+  "param_count": 16,
+  "max_param": 16,
+  "gaps": [],
+  "ranges_seen": 12,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "PitchShifter Vc 1 Fine"
+   },
+   {
+    "n": 4,
+    "label": "PitchShifter Vc 1 Level"
+   },
+   {
+    "n": 5,
+    "label": "PitchShifter Vc 1 Pan"
+   },
+   {
+    "n": 6,
+    "label": "PitchShifter Vc 2 Fine"
+   },
+   {
+    "n": 7,
+    "label": "PitchShifter Vc 2 Level"
+   },
+   {
+    "n": 8,
+    "label": "PitchShifter Vc 2 Pan"
+   },
+   {
+    "n": 9,
+    "label": "PitchShifter LFO Rate"
+   },
+   {
+    "n": 10,
+    "label": "PitchShifter LFO Width Range:"
+   },
+   {
+    "n": 11,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 12,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 13,
+    "label": "Mod1 Param Range Min 17 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 14,
+    "label": "Mod1 Param Range Max18 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 15,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 16,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "GATED REVERB",
+  "pdf_page_start": 58,
+  "pdf_page_end": 60,
+  "param_count": 25,
+  "max_param": 25,
+  "gaps": [],
+  "ranges_seen": 14,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Attack"
+   },
+   {
+    "n": 4,
+    "label": "Hold Time"
+   },
+   {
+    "n": 5,
+    "label": "Decay"
+   },
+   {
+    "n": 6,
+    "label": "Release Time"
+   },
+   {
+    "n": 7,
+    "label": "Trigger Threshold"
+   },
+   {
+    "n": 8,
+    "label": "Retrigger Threshold"
+   },
+   {
+    "n": 9,
+    "label": "HF Damping"
+   },
+   {
+    "n": 10,
+    "label": "Diffusion 1"
+   },
+   {
+    "n": 11,
+    "label": "Diffusion 2"
+   },
+   {
+    "n": 12,
+    "label": "Decay Definition"
+   },
+   {
+    "n": 13,
+    "label": "Slapback"
+   },
+   {
+    "n": 14,
+    "label": "Slapback Level"
+   },
+   {
+    "n": 15,
+    "label": "Early Reflections 1"
+   },
+   {
+    "n": 16,
+    "label": "Early Reflections 2"
+   },
+   {
+    "n": 17,
+    "label": "Early Reflections 3"
+   },
+   {
+    "n": 18,
+    "label": "Early Reflections 4"
+   },
+   {
+    "n": 19,
+    "label": "Left/Right Balance"
+   },
+   {
+    "n": 20,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 21,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 22,
+    "label": "Mod1 Param Range Min 26 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 23,
+    "label": "Mod1 Param Range Max27 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 24,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 25,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "GUITAR AMP 1, GUITAR AMP 2",
+  "pdf_page_start": 61,
+  "pdf_page_end": 62,
+  "param_count": 27,
+  "max_param": 27,
+  "gaps": [],
+  "ranges_seen": 19,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Amp Preamp Gain"
+   },
+   {
+    "n": 4,
+    "label": "Output Level"
+   },
+   {
+    "n": 5,
+    "label": "Amp Tube Bias"
+   },
+   {
+    "n": 6,
+    "label": "Pre-EQ Input Level Trim Range:  -24 to +00 dB"
+   },
+   {
+    "n": 7,
+    "label": "Pre-EQ High Pass Cutoff"
+   },
+   {
+    "n": 8,
+    "label": "Pre-EQ Fc"
+   },
+   {
+    "n": 9,
+    "label": "Pre-EQ Gain"
+   },
+   {
+    "n": 10,
+    "label": "Pre-EQ Q"
+   },
+   {
+    "n": 11,
+    "label": "Noise Gate Off Below"
+   },
+   {
+    "n": 12,
+    "label": "Noise Gate On Above"
+   },
+   {
+    "n": 13,
+    "label": "Gate Release Time"
+   },
+   {
+    "n": 14,
+    "label": "Speaker High Pass Cutoff"
+   },
+   {
+    "n": 15,
+    "label": "OutEQ1 Fc"
+   },
+   {
+    "n": 16,
+    "label": "OutEQ1 Gain"
+   },
+   {
+    "n": 17,
+    "label": "OutEQ1 Q"
+   },
+   {
+    "n": 18,
+    "label": "OutEQ2 Fc"
+   },
+   {
+    "n": 19,
+    "label": "OutEQ2 Gain"
+   },
+   {
+    "n": 20,
+    "label": "OutEQ2 Q"
+   },
+   {
+    "n": 21,
+    "label": "Speaker Low Pass Cutoff"
+   },
+   {
+    "n": 22,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 23,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 24,
+    "label": "Mod1 Param Range Min 28 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 25,
+    "label": "Mod1 Param Range Max29 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 26,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 27,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "GUITAR AMP 3",
+  "pdf_page_start": 63,
+  "pdf_page_end": 64,
+  "param_count": 28,
+  "max_param": 28,
+  "gaps": [],
+  "ranges_seen": 20,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Preamp Gain"
+   },
+   {
+    "n": 4,
+    "label": "Output Level"
+   },
+   {
+    "n": 5,
+    "label": "PreEQ Input Level Trim Range:"
+   },
+   {
+    "n": 6,
+    "label": "Pre-EQ Fc"
+   },
+   {
+    "n": 7,
+    "label": "Pre-EQ Gain"
+   },
+   {
+    "n": 8,
+    "label": "Pre-EQ Q"
+   },
+   {
+    "n": 9,
+    "label": "ExpndRatio"
+   },
+   {
+    "n": 10,
+    "label": "Threshold"
+   },
+   {
+    "n": 11,
+    "label": "Gain Change"
+   },
+   {
+    "n": 12,
+    "label": "Noise Gate Off Below"
+   },
+   {
+    "n": 13,
+    "label": "Noise Gate On Above"
+   },
+   {
+    "n": 14,
+    "label": "Gate Release Time"
+   },
+   {
+    "n": 15,
+    "label": "Speaker High Pass Cutoff"
+   },
+   {
+    "n": 16,
+    "label": "OutEQ1 Fc"
+   },
+   {
+    "n": 17,
+    "label": "OutEQ1 Gain"
+   },
+   {
+    "n": 18,
+    "label": "OutEQ1 Q"
+   },
+   {
+    "n": 19,
+    "label": "OutEQ2 Fc"
+   },
+   {
+    "n": 20,
+    "label": "OutEQ2 Gain"
+   },
+   {
+    "n": 21,
+    "label": "OutEQ2 Q"
+   },
+   {
+    "n": 22,
+    "label": "Speaker Low Pass Cutoff"
+   },
+   {
+    "n": 23,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 24,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 25,
+    "label": "Mod1 Param Range Min 29 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 26,
+    "label": "Mod1 Param Range Max30 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 27,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 28,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "GUITAR AMP 4",
+  "pdf_page_start": 65,
+  "pdf_page_end": 66,
+  "param_count": 28,
+  "max_param": 28,
+  "gaps": [],
+  "ranges_seen": 20,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Amp Preamp Gain"
+   },
+   {
+    "n": 4,
+    "label": "Output Level"
+   },
+   {
+    "n": 5,
+    "label": "Amp Level Detect Attack"
+   },
+   {
+    "n": 6,
+    "label": "Amp Level Detect Release"
+   },
+   {
+    "n": 7,
+    "label": "Amp Tube Bias"
+   },
+   {
+    "n": 8,
+    "label": "Pre-EQ InputLevel Trim"
+   },
+   {
+    "n": 9,
+    "label": "Pre-EQHighPass Cutoff"
+   },
+   {
+    "n": 10,
+    "label": "Pre-EQ Fc"
+   },
+   {
+    "n": 11,
+    "label": "Pre-EQ Gain"
+   },
+   {
+    "n": 12,
+    "label": "Pre-EQ Q"
+   },
+   {
+    "n": 13,
+    "label": "Noise Gate Off Below"
+   },
+   {
+    "n": 14,
+    "label": "Gate Release Time"
+   },
+   {
+    "n": 15,
+    "label": "Speaker HighPass Cutoff"
+   },
+   {
+    "n": 16,
+    "label": "OutEQ1 Fc"
+   },
+   {
+    "n": 17,
+    "label": "OutEQ1 Gain"
+   },
+   {
+    "n": 18,
+    "label": "OutEQ1 Q"
+   },
+   {
+    "n": 19,
+    "label": "OutEQ2 Fc"
+   },
+   {
+    "n": 20,
+    "label": "OutEQ2 Gain"
+   },
+   {
+    "n": 21,
+    "label": "OutEQ2 Q"
+   },
+   {
+    "n": 22,
+    "label": "Speaker Low Pass Cutoff"
+   },
+   {
+    "n": 23,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 24,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 25,
+    "label": "Mod1 Param Range Min 29 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 26,
+    "label": "Mod1 Param Range Max30 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 27,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 28,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "GUITAR TUNER 2U",
+  "pdf_page_start": 67,
+  "pdf_page_end": 67,
+  "param_count": 5,
+  "max_param": 6,
+  "gaps": [
+   5
+  ],
+  "ranges_seen": 5,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Note"
+   },
+   {
+    "n": 4,
+    "label": "Range"
+   },
+   {
+    "n": 6,
+    "label": "Reference"
+   }
+  ]
+ },
+ {
+  "name": "HALL REVERB",
+  "pdf_page_start": 68,
+  "pdf_page_end": 70,
+  "param_count": 28,
+  "max_param": 28,
+  "gaps": [],
+  "ranges_seen": 18,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Decay"
+   },
+   {
+    "n": 4,
+    "label": "Predelay Time"
+   },
+   {
+    "n": 5,
+    "label": "LF DecayTime"
+   },
+   {
+    "n": 6,
+    "label": "HF Damping"
+   },
+   {
+    "n": 7,
+    "label": "HF Bandwidth"
+   },
+   {
+    "n": 8,
+    "label": "Diffusion1"
+   },
+   {
+    "n": 9,
+    "label": "Diffusion2"
+   },
+   {
+    "n": 10,
+    "label": "Decay Definition"
+   },
+   {
+    "n": 11,
+    "label": "Detune Rate"
+   },
+   {
+    "n": 12,
+    "label": "Detune Depth"
+   },
+   {
+    "n": 13,
+    "label": "Primary Send"
+   },
+   {
+    "n": 14,
+    "label": "Ref 1 Time"
+   },
+   {
+    "n": 15,
+    "label": "Ref 1 Level"
+   },
+   {
+    "n": 16,
+    "label": "Ref 1 Send"
+   },
+   {
+    "n": 17,
+    "label": "Ref 2 Time"
+   },
+   {
+    "n": 18,
+    "label": "Ref 2 Level"
+   },
+   {
+    "n": 19,
+    "label": "Ref 2 Send"
+   },
+   {
+    "n": 20,
+    "label": "Position Balance (1)"
+   },
+   {
+    "n": 21,
+    "label": "Position Balance (2)"
+   },
+   {
+    "n": 22,
+    "label": "Position Balance (3)"
+   },
+   {
+    "n": 23,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 24,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 25,
+    "label": "Mod1 Param Range Min 29 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 26,
+    "label": "Mod1 Param Range Max30 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 27,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 28,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "INVERSE EXPANDER",
+  "pdf_page_start": 71,
+  "pdf_page_end": 72,
+  "param_count": 20,
+  "max_param": 20,
+  "gaps": [],
+  "ranges_seen": 12,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Expnd Ratio"
+   },
+   {
+    "n": 4,
+    "label": "Threshold"
+   },
+   {
+    "n": 5,
+    "label": "Gain Change"
+   },
+   {
+    "n": 6,
+    "label": "Exp Attack"
+   },
+   {
+    "n": 7,
+    "label": "Exp Release"
+   },
+   {
+    "n": 8,
+    "label": "Exp Noise Gate Off Below"
+   },
+   {
+    "n": 9,
+    "label": "Comp Noise Gate On Above"
+   },
+   {
+    "n": 10,
+    "label": "Bass Fc"
+   },
+   {
+    "n": 11,
+    "label": "Bass EQ Gain"
+   },
+   {
+    "n": 12,
+    "label": "Treble Fc"
+   },
+   {
+    "n": 13,
+    "label": "Treble EQ Gain"
+   },
+   {
+    "n": 14,
+    "label": "EQ Input Level Trim"
+   },
+   {
+    "n": 15,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 16,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 17,
+    "label": "Mod1 Param Range Min 21 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 18,
+    "label": "Mod1 Param Range Max22 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 19,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 20,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "KEYED EXPANDER",
+  "pdf_page_start": 73,
+  "pdf_page_end": 74,
+  "param_count": 22,
+  "max_param": 22,
+  "gaps": [],
+  "ranges_seen": 14,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Exp Ratio"
+   },
+   {
+    "n": 4,
+    "label": "Exp Threshold"
+   },
+   {
+    "n": 5,
+    "label": "Gain Change"
+   },
+   {
+    "n": 6,
+    "label": "Exp Attack"
+   },
+   {
+    "n": 7,
+    "label": "Exp Release"
+   },
+   {
+    "n": 8,
+    "label": "Expander Gate Hold Time"
+   },
+   {
+    "n": 9,
+    "label": "Sidechain EQ Gain"
+   },
+   {
+    "n": 10,
+    "label": "HighPass Fc"
+   },
+   {
+    "n": 11,
+    "label": "LowPass Fc"
+   },
+   {
+    "n": 12,
+    "label": "Trigger Mask"
+   },
+   {
+    "n": 13,
+    "label": "Trigger Time"
+   },
+   {
+    "n": 14,
+    "label": "Trigger Mask Threshold Range:  -96 to +00 dB"
+   },
+   {
+    "n": 15,
+    "label": "Expander Output Mix"
+   },
+   {
+    "n": 16,
+    "label": "Expander Output Gain"
+   },
+   {
+    "n": 17,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 18,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 19,
+    "label": "Mod1 Param Range Min 23 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 20,
+    "label": "Mod1 Param Range Max24 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 21,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 22,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "LARGE PLATE",
+  "pdf_page_start": 75,
+  "pdf_page_end": 76,
+  "param_count": 20,
+  "max_param": 20,
+  "gaps": [],
+  "ranges_seen": 9,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Decay"
+   },
+   {
+    "n": 4,
+    "label": "Predelay Time"
+   },
+   {
+    "n": 5,
+    "label": "HF Damping"
+   },
+   {
+    "n": 6,
+    "label": "HF Bandwidth"
+   },
+   {
+    "n": 7,
+    "label": "Diffusion 1"
+   },
+   {
+    "n": 8,
+    "label": "Diffusion 2"
+   },
+   {
+    "n": 9,
+    "label": "Decay Definition"
+   },
+   {
+    "n": 10,
+    "label": "Early Ref Level 1"
+   },
+   {
+    "n": 11,
+    "label": "Early Ref Level 2"
+   },
+   {
+    "n": 12,
+    "label": "Early Ref Level 3"
+   },
+   {
+    "n": 13,
+    "label": "Early Ref Level 4"
+   },
+   {
+    "n": 14,
+    "label": "Left/Right Balance"
+   },
+   {
+    "n": 15,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 16,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 17,
+    "label": "Mod1 Param Range Min 21 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 18,
+    "label": "Mod1 Param Range Max22 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 19,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 20,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "LARGE ROOM REV",
+  "pdf_page_start": 77,
+  "pdf_page_end": 79,
+  "param_count": 28,
+  "max_param": 28,
+  "gaps": [],
+  "ranges_seen": 18,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Decay"
+   },
+   {
+    "n": 4,
+    "label": "Predelay Time"
+   },
+   {
+    "n": 5,
+    "label": "LF DecayTime"
+   },
+   {
+    "n": 6,
+    "label": "HF Damping"
+   },
+   {
+    "n": 7,
+    "label": "HF Bandwidth"
+   },
+   {
+    "n": 8,
+    "label": "Diffusion1"
+   },
+   {
+    "n": 9,
+    "label": "Diffusion2"
+   },
+   {
+    "n": 10,
+    "label": "Decay Definition"
+   },
+   {
+    "n": 11,
+    "label": "Detune Rate"
+   },
+   {
+    "n": 12,
+    "label": "Detune Depth"
+   },
+   {
+    "n": 13,
+    "label": "Primary Send"
+   },
+   {
+    "n": 14,
+    "label": "Ref 1 Time"
+   },
+   {
+    "n": 15,
+    "label": "Ref 1 Level"
+   },
+   {
+    "n": 16,
+    "label": "Ref 1 Send"
+   },
+   {
+    "n": 17,
+    "label": "Ref 2 Time"
+   },
+   {
+    "n": 18,
+    "label": "Ref 2 Level"
+   },
+   {
+    "n": 19,
+    "label": "Ref 2 Send"
+   },
+   {
+    "n": 20,
+    "label": "Position Balance (1)"
+   },
+   {
+    "n": 21,
+    "label": "Position Balance (2)"
+   },
+   {
+    "n": 22,
+    "label": "Position Balance (3)"
+   },
+   {
+    "n": 23,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 24,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 25,
+    "label": "Mod1 Param Range Min 29 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 26,
+    "label": "Mod1 Param Range Max30 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 27,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 28,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "MULTI TAP DELAY",
+  "pdf_page_start": 80,
+  "pdf_page_end": 79,
+  "param_count": 25,
+  "max_param": 25,
+  "gaps": [],
+  "ranges_seen": 5,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "MultiTap 1 Time"
+   },
+   {
+    "n": 4,
+    "label": "MultiTap 1 Level"
+   },
+   {
+    "n": 5,
+    "label": "MultiTap 1 Regen"
+   },
+   {
+    "n": 6,
+    "label": "MultiTap 1 Pan"
+   },
+   {
+    "n": 7,
+    "label": "MultiTap 2 Time"
+   },
+   {
+    "n": 8,
+    "label": "MultiTap 2 Level"
+   },
+   {
+    "n": 9,
+    "label": "MultiTap 2 Regen"
+   },
+   {
+    "n": 10,
+    "label": "MultiTap 2 Pan"
+   },
+   {
+    "n": 11,
+    "label": "MultiTap 3 Time"
+   },
+   {
+    "n": 12,
+    "label": "MultiTap 3 Level"
+   },
+   {
+    "n": 13,
+    "label": "MultiTap 3 Regen"
+   },
+   {
+    "n": 14,
+    "label": "MultiTap 3 Pan"
+   },
+   {
+    "n": 15,
+    "label": "MultiTap 4 Time"
+   },
+   {
+    "n": 16,
+    "label": "MultiTap 4 Level"
+   },
+   {
+    "n": 17,
+    "label": "MultiTap 4 Regen"
+   },
+   {
+    "n": 18,
+    "label": "MultiTap 4 Pan"
+   },
+   {
+    "n": 19,
+    "label": "Regen Damping"
+   },
+   {
+    "n": 20,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 21,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 22,
+    "label": "Mod1 Param Range Min 26 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 23,
+    "label": "Mod1 Param Range Max27 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 24,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 25,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "NO EFFECT (BYPASS EFFECT)",
+  "pdf_page_start": 80,
+  "pdf_page_end": 81,
+  "param_count": 25,
+  "max_param": 25,
+  "gaps": [],
+  "ranges_seen": 7,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "MultiTap 1 Time"
+   },
+   {
+    "n": 4,
+    "label": "MultiTap 1 Level"
+   },
+   {
+    "n": 5,
+    "label": "MultiTap 1 Regen"
+   },
+   {
+    "n": 6,
+    "label": "MultiTap 1 Pan"
+   },
+   {
+    "n": 7,
+    "label": "MultiTap 2 Time"
+   },
+   {
+    "n": 8,
+    "label": "MultiTap 2 Level"
+   },
+   {
+    "n": 9,
+    "label": "MultiTap 2 Regen"
+   },
+   {
+    "n": 10,
+    "label": "MultiTap 2 Pan"
+   },
+   {
+    "n": 11,
+    "label": "MultiTap 3 Time"
+   },
+   {
+    "n": 12,
+    "label": "MultiTap 3 Level"
+   },
+   {
+    "n": 13,
+    "label": "MultiTap 3 Regen"
+   },
+   {
+    "n": 14,
+    "label": "MultiTap 3 Pan"
+   },
+   {
+    "n": 15,
+    "label": "MultiTap 4 Time"
+   },
+   {
+    "n": 16,
+    "label": "MultiTap 4 Level"
+   },
+   {
+    "n": 17,
+    "label": "MultiTap 4 Regen"
+   },
+   {
+    "n": 18,
+    "label": "MultiTap 4 Pan"
+   },
+   {
+    "n": 19,
+    "label": "Regen Damping"
+   },
+   {
+    "n": 20,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 21,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 22,
+    "label": "Mod1 Param Range Min 26 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 23,
+    "label": "Mod1 Param Range Max27 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 24,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 25,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "NON LIN REVERB 1, 2, 3",
+  "pdf_page_start": 82,
+  "pdf_page_end": 84,
+  "param_count": 28,
+  "max_param": 29,
+  "gaps": [
+   6
+  ],
+  "ranges_seen": 15,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Envelope Level 1"
+   },
+   {
+    "n": 4,
+    "label": "Envelope Level 2"
+   },
+   {
+    "n": 5,
+    "label": "Envelope Level 3"
+   },
+   {
+    "n": 7,
+    "label": "Envelope Level 5"
+   },
+   {
+    "n": 8,
+    "label": "Envelope Level 6"
+   },
+   {
+    "n": 9,
+    "label": "Envelope Level 4"
+   },
+   {
+    "n": 10,
+    "label": "Envelope Level 8"
+   },
+   {
+    "n": 11,
+    "label": "Envelope Level 9"
+   },
+   {
+    "n": 12,
+    "label": "NonLin HF Damping"
+   },
+   {
+    "n": 13,
+    "label": "NonLin HF Bandwidth"
+   },
+   {
+    "n": 14,
+    "label": "NonLin Diffusion1"
+   },
+   {
+    "n": 15,
+    "label": "NonLin Diffusion2"
+   },
+   {
+    "n": 16,
+    "label": "NonLin Density 1"
+   },
+   {
+    "n": 17,
+    "label": "NonLin Density 2"
+   },
+   {
+    "n": 18,
+    "label": "NonLin Primary Send"
+   },
+   {
+    "n": 19,
+    "label": "Reflection 1 Time"
+   },
+   {
+    "n": 20,
+    "label": "Reflection 1 Send"
+   },
+   {
+    "n": 21,
+    "label": "Reflection 2 Time"
+   },
+   {
+    "n": 22,
+    "label": "Reflection 2 Send"
+   },
+   {
+    "n": 23,
+    "label": "Left/Right Balance"
+   },
+   {
+    "n": 24,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 25,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 26,
+    "label": "Mod1 Param Range Min 30 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 27,
+    "label": "Mod1 Param Range Max31 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 28,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 29,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "PARAMETRIC EQ",
+  "pdf_page_start": 85,
+  "pdf_page_end": 85,
+  "param_count": 19,
+  "max_param": 19,
+  "gaps": [],
+  "ranges_seen": 8,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Bass Fc"
+   },
+   {
+    "n": 4,
+    "label": "Bass Gain (loShv)"
+   },
+   {
+    "n": 5,
+    "label": "Mid1 Fc"
+   },
+   {
+    "n": 6,
+    "label": "Mid1 Gain"
+   },
+   {
+    "n": 7,
+    "label": "Mid1 Q"
+   },
+   {
+    "n": 8,
+    "label": "Mid2 Fc"
+   },
+   {
+    "n": 9,
+    "label": "Mid2 Gain"
+   },
+   {
+    "n": 10,
+    "label": "Mid2 Q"
+   },
+   {
+    "n": 11,
+    "label": "Treble Fc"
+   },
+   {
+    "n": 12,
+    "label": "Treble Gain (HiShv)"
+   },
+   {
+    "n": 13,
+    "label": "EQ Input Level Attenuation"
+   },
+   {
+    "n": 14,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 15,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 16,
+    "label": "Mod1 Param Range Min 20 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 17,
+    "label": "Mod1 Param Range Max21 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 18,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 19,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "PHASER-DDL",
+  "pdf_page_start": 86,
+  "pdf_page_end": 87,
+  "param_count": 18,
+  "max_param": 18,
+  "gaps": [],
+  "ranges_seen": 10,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Phaser LFO Rate"
+   },
+   {
+    "n": 4,
+    "label": "Phaser LFO Width"
+   },
+   {
+    "n": 5,
+    "label": "Phaser Center"
+   },
+   {
+    "n": 6,
+    "label": "Phaser Feedback"
+   },
+   {
+    "n": 7,
+    "label": "Phaser Notch Depth"
+   },
+   {
+    "n": 8,
+    "label": "Left/Right LFO"
+   },
+   {
+    "n": 9,
+    "label": "Phaser Sample & Hold Rate"
+   },
+   {
+    "n": 10,
+    "label": "Phaser Left Delay Time"
+   },
+   {
+    "n": 11,
+    "label": "Phaser Right Delay Time"
+   },
+   {
+    "n": 12,
+    "label": "Phaser Delay Feedback"
+   },
+   {
+    "n": 13,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 14,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 15,
+    "label": "Mod1 Param Range Min 19 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 16,
+    "label": "Mod1 Param Range Max20 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 17,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 18,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "PITCH SHIFT 2U",
+  "pdf_page_start": 88,
+  "pdf_page_end": 89,
+  "param_count": 12,
+  "max_param": 12,
+  "gaps": [],
+  "ranges_seen": 10,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "PitchShifter Vc 1 Semi"
+   },
+   {
+    "n": 4,
+    "label": "PitchShifter Vc 1 Fine"
+   },
+   {
+    "n": 5,
+    "label": "PitchShifter Vc 1 Level"
+   },
+   {
+    "n": 6,
+    "label": "PitchShifter Vc 1 Pan"
+   },
+   {
+    "n": 7,
+    "label": "PitchShifter Vc 2 Semi"
+   },
+   {
+    "n": 8,
+    "label": "PitchShifter Vc 2 Fine"
+   },
+   {
+    "n": 9,
+    "label": "PitchShifter Vc 2 Level"
+   },
+   {
+    "n": 10,
+    "label": "PitchShifter Vc 2 Pan"
+   },
+   {
+    "n": 11,
+    "label": "PitchShifter LFO Rate"
+   },
+   {
+    "n": 12,
+    "label": "PitchShifter LFO Width Range:"
+   }
+  ]
+ },
+ {
+  "name": "PITCHSHIFT - DDL",
+  "pdf_page_start": 90,
+  "pdf_page_end": 91,
+  "param_count": 21,
+  "max_param": 21,
+  "gaps": [],
+  "ranges_seen": 13,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "PitchShift Vc 1 Semi"
+   },
+   {
+    "n": 4,
+    "label": "PitchShift Vc 1 Fine"
+   },
+   {
+    "n": 5,
+    "label": "PitchShift Vc 1 Level"
+   },
+   {
+    "n": 6,
+    "label": "PitchShifter Vc 1 Pan"
+   },
+   {
+    "n": 7,
+    "label": "PitchShift Vc 2 Semi"
+   },
+   {
+    "n": 8,
+    "label": "PitchShift Vc 2 Fine"
+   },
+   {
+    "n": 9,
+    "label": "PitchShift Vc 2 Level"
+   },
+   {
+    "n": 10,
+    "label": "PitchShifter Vc 2 Pan"
+   },
+   {
+    "n": 11,
+    "label": "PitchShift Dry Level to DDL"
+   },
+   {
+    "n": 12,
+    "label": "PitchShift Left Delay Time"
+   },
+   {
+    "n": 13,
+    "label": "PitchShift Right Delay Time"
+   },
+   {
+    "n": 14,
+    "label": "PitchShift Delay Mix"
+   },
+   {
+    "n": 15,
+    "label": "PitchShift Delay Regen Range:"
+   },
+   {
+    "n": 16,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 17,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 18,
+    "label": "Mod1 Param Range Min 22 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 19,
+    "label": "Mod1 Param Range Max23 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 20,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 21,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "PITCH SHIFTER",
+  "pdf_page_start": 92,
+  "pdf_page_end": 93,
+  "param_count": 11,
+  "max_param": 11,
+  "gaps": [],
+  "ranges_seen": 11,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "PitchShifter Vc 1 Semi"
+   },
+   {
+    "n": 4,
+    "label": "PitchShifter Vc 1 Fine"
+   },
+   {
+    "n": 5,
+    "label": "PitchShifter Vc 1 Level"
+   },
+   {
+    "n": 6,
+    "label": "PitchShifter Vc 1 Pan"
+   },
+   {
+    "n": 7,
+    "label": "PitchShifter Vc 2 Semi"
+   },
+   {
+    "n": 8,
+    "label": "PitchShifter Vc 2 Fine"
+   },
+   {
+    "n": 9,
+    "label": "PitchShifter Vc 2 Level"
+   },
+   {
+    "n": 10,
+    "label": "PitchShifter Vc 2 Pan"
+   },
+   {
+    "n": 11,
+    "label": "Delay vs Quality"
+   }
+  ]
+ },
+ {
+  "name": "REVERSE REVERB 1",
+  "pdf_page_start": 94,
+  "pdf_page_end": 95,
+  "param_count": 18,
+  "max_param": 18,
+  "gaps": [],
+  "ranges_seen": 10,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Envelope Hold Time"
+   },
+   {
+    "n": 4,
+    "label": "Envelope Attack"
+   },
+   {
+    "n": 5,
+    "label": "Envelope Release"
+   },
+   {
+    "n": 6,
+    "label": "Trigger Threshold"
+   },
+   {
+    "n": 7,
+    "label": "HF Damping"
+   },
+   {
+    "n": 8,
+    "label": "Diffusion 1"
+   },
+   {
+    "n": 9,
+    "label": "Diffusion 2"
+   },
+   {
+    "n": 10,
+    "label": "Decay Definition"
+   },
+   {
+    "n": 11,
+    "label": "Slapback"
+   },
+   {
+    "n": 12,
+    "label": "Slapback Level"
+   },
+   {
+    "n": 13,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 14,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 15,
+    "label": "Mod1 Param Range Min 19 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 16,
+    "label": "Mod1 Param Range Max20 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 17,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 18,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "REVERSE REVERB 2",
+  "pdf_page_start": 96,
+  "pdf_page_end": 97,
+  "param_count": 17,
+  "max_param": 17,
+  "gaps": [],
+  "ranges_seen": 9,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Envelope Hold Time"
+   },
+   {
+    "n": 4,
+    "label": "Attack"
+   },
+   {
+    "n": 5,
+    "label": "Release"
+   },
+   {
+    "n": 6,
+    "label": "Trigger Threshold"
+   },
+   {
+    "n": 7,
+    "label": "Pre-Trigger Memory"
+   },
+   {
+    "n": 8,
+    "label": "HF Damping"
+   },
+   {
+    "n": 9,
+    "label": "Diffusion 1"
+   },
+   {
+    "n": 10,
+    "label": "Diffusion 2"
+   },
+   {
+    "n": 11,
+    "label": "Decay Definition"
+   },
+   {
+    "n": 12,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 13,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 14,
+    "label": "Mod1 Param Range Min 18 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 15,
+    "label": "Mod1 Param Range Max19 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 16,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 17,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "ROTATING SPEAKER",
+  "pdf_page_start": 98,
+  "pdf_page_end": 99,
+  "param_count": 16,
+  "max_param": 16,
+  "gaps": [],
+  "ranges_seen": 8,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Rotating Speaker Slow Speed"
+   },
+   {
+    "n": 4,
+    "label": "Rotating Speaker Fast Speed"
+   },
+   {
+    "n": 5,
+    "label": "Rotating Speaker SpeedRange:  Slow or Fast"
+   },
+   {
+    "n": 6,
+    "label": "Rotating Speaker InertiaRange:  00 to 99"
+   },
+   {
+    "n": 7,
+    "label": "Distortion Level In"
+   },
+   {
+    "n": 8,
+    "label": "Distortion Level Out"
+   },
+   {
+    "n": 9,
+    "label": "Rotating Speaker Distortion Tone   Range:  000 to 127"
+   },
+   {
+    "n": 10,
+    "label": "Rotating Speaker Stereo Spread    Range:  00 to 99"
+   },
+   {
+    "n": 11,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 12,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 13,
+    "label": "Mod1 Param Range Min 17 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 14,
+    "label": "Mod1 Param Range Max18 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 15,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 16,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "RUMBLE FILTER",
+  "pdf_page_start": 100,
+  "pdf_page_end": 100,
+  "param_count": 11,
+  "max_param": 11,
+  "gaps": [],
+  "ranges_seen": 3,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "HighPass Fc"
+   },
+   {
+    "n": 4,
+    "label": "LowPass Fc"
+   },
+   {
+    "n": 5,
+    "label": "Filter Gain"
+   },
+   {
+    "n": 6,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 7,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 8,
+    "label": "Mod1 Param Range Min 12 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 9,
+    "label": "Mod1 Param Range Max13 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 10,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 11,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "SINE/NOISE GEN",
+  "pdf_page_start": 101,
+  "pdf_page_end": 101,
+  "param_count": 16,
+  "max_param": 16,
+  "gaps": [],
+  "ranges_seen": 8,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Sine Frequency"
+   },
+   {
+    "n": 4,
+    "label": "Sine/Noise Gen Balance Range:  00 to 99"
+   },
+   {
+    "n": 5,
+    "label": "Noise Filter Low Pass Fc"
+   },
+   {
+    "n": 6,
+    "label": "Bass Fc"
+   },
+   {
+    "n": 7,
+    "label": "Bass EQ Gain"
+   },
+   {
+    "n": 8,
+    "label": "Treble Fc"
+   },
+   {
+    "n": 9,
+    "label": "Treble EQ Gain"
+   },
+   {
+    "n": 10,
+    "label": "EQ Input Level Trim"
+   },
+   {
+    "n": 11,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 12,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 13,
+    "label": "Mod1 Param Range Min 17 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 14,
+    "label": "Mod1 Param Range Max18 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 15,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 16,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "SMALL PLATE",
+  "pdf_page_start": 102,
+  "pdf_page_end": 103,
+  "param_count": 20,
+  "max_param": 20,
+  "gaps": [],
+  "ranges_seen": 9,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Decay"
+   },
+   {
+    "n": 4,
+    "label": "Predelay Time"
+   },
+   {
+    "n": 5,
+    "label": "HF Damping"
+   },
+   {
+    "n": 6,
+    "label": "HF Bandwidth"
+   },
+   {
+    "n": 7,
+    "label": "Diffusion 1"
+   },
+   {
+    "n": 8,
+    "label": "Diffusion 2"
+   },
+   {
+    "n": 9,
+    "label": "Decay Definition"
+   },
+   {
+    "n": 10,
+    "label": "Early Ref Level 1"
+   },
+   {
+    "n": 11,
+    "label": "Early Ref Level 2"
+   },
+   {
+    "n": 12,
+    "label": "Early Ref Level 3"
+   },
+   {
+    "n": 13,
+    "label": "Early Ref Level 4"
+   },
+   {
+    "n": 14,
+    "label": "Left/Right Balance"
+   },
+   {
+    "n": 15,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 16,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 17,
+    "label": "Mod1 Param Range Min 21 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 18,
+    "label": "Mod1 Param Range Max22 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 19,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 20,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "SMALL ROOM REV",
+  "pdf_page_start": 104,
+  "pdf_page_end": 106,
+  "param_count": 28,
+  "max_param": 28,
+  "gaps": [],
+  "ranges_seen": 18,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Decay"
+   },
+   {
+    "n": 4,
+    "label": "Predelay Time"
+   },
+   {
+    "n": 5,
+    "label": "LF DecayTime"
+   },
+   {
+    "n": 6,
+    "label": "HF Damping"
+   },
+   {
+    "n": 7,
+    "label": "HF Bandwidth"
+   },
+   {
+    "n": 8,
+    "label": "Diffusion1"
+   },
+   {
+    "n": 9,
+    "label": "Diffusion2"
+   },
+   {
+    "n": 10,
+    "label": "Decay Definition"
+   },
+   {
+    "n": 11,
+    "label": "Detune Rate"
+   },
+   {
+    "n": 12,
+    "label": "Detune Depth"
+   },
+   {
+    "n": 13,
+    "label": "Primary Send"
+   },
+   {
+    "n": 14,
+    "label": "Ref 1 Time"
+   },
+   {
+    "n": 15,
+    "label": "Ref 1 Level"
+   },
+   {
+    "n": 16,
+    "label": "Ref 1 Send"
+   },
+   {
+    "n": 17,
+    "label": "Ref 2 Time"
+   },
+   {
+    "n": 18,
+    "label": "Ref 2 Level"
+   },
+   {
+    "n": 19,
+    "label": "Ref 2 Send"
+   },
+   {
+    "n": 20,
+    "label": "Position Balance (1)"
+   },
+   {
+    "n": 21,
+    "label": "Position Balance (2)"
+   },
+   {
+    "n": 22,
+    "label": "Position Balance (3)"
+   },
+   {
+    "n": 23,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 24,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 25,
+    "label": "Mod1 Param Range Min 29 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 26,
+    "label": "Mod1 Param Range Max30 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 27,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 28,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "SPEAKER CABINET",
+  "pdf_page_start": 107,
+  "pdf_page_end": 107,
+  "param_count": 9,
+  "max_param": 9,
+  "gaps": [],
+  "ranges_seen": 1,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Speaker Output Gain"
+   },
+   {
+    "n": 4,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 5,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 6,
+    "label": "Mod1 Param Range Min 10 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 7,
+    "label": "Mod1 Param Range Max11 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 8,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 9,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "TEMPO DELAY",
+  "pdf_page_start": 108,
+  "pdf_page_end": 111,
+  "param_count": 22,
+  "max_param": 22,
+  "gaps": [],
+  "ranges_seen": 21,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Tempo Delay Time"
+   },
+   {
+    "n": 4,
+    "label": "Internal Clock Tempo"
+   },
+   {
+    "n": 5,
+    "label": "TempoDelay Fine Tune Range:"
+   },
+   {
+    "n": 6,
+    "label": "Tempo Control"
+   },
+   {
+    "n": 7,
+    "label": "Tempo Delay Regen"
+   },
+   {
+    "n": 8,
+    "label": "Tempo Delay Pan"
+   },
+   {
+    "n": 9,
+    "label": "Tempo Delay Smoothing"
+   },
+   {
+    "n": 10,
+    "label": "Tempo Delay Pan"
+   },
+   {
+    "n": 11,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 12,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 13,
+    "label": "Mod1 Param Range Min 17 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 14,
+    "label": "Mod1 Param Range Max18 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 15,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 16,
+    "label": "Mod2 Destination"
+   },
+   {
+    "n": 17,
+    "label": "Mod1 Param Range Max21 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 18,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 19,
+    "label": "Mod2 Destination"
+   },
+   {
+    "n": 20,
+    "label": "Mod1 Param Range Max24 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 21,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 22,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "VAN DER POL FILTER",
+  "pdf_page_start": 112,
+  "pdf_page_end": 112,
+  "param_count": 11,
+  "max_param": 11,
+  "gaps": [],
+  "ranges_seen": 3,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "HighPass Fc"
+   },
+   {
+    "n": 4,
+    "label": "LowPass Fc"
+   },
+   {
+    "n": 5,
+    "label": "Filter Gain"
+   },
+   {
+    "n": 6,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 7,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 8,
+    "label": "Mod1 Param Range Min 12 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 9,
+    "label": "Mod1 Param Range Max13 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 10,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 11,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "VCF - DISTORT 1",
+  "pdf_page_start": 113,
+  "pdf_page_end": 114,
+  "param_count": 20,
+  "max_param": 20,
+  "gaps": [],
+  "ranges_seen": 9,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Distortion Level In"
+   },
+   {
+    "n": 4,
+    "label": "Distortion Level Out"
+   },
+   {
+    "n": 5,
+    "label": "Pre-Distortion VCF Fc"
+   },
+   {
+    "n": 6,
+    "label": "Pre-Distortion VCF Q"
+   },
+   {
+    "n": 7,
+    "label": "Envelope Follower to Pre VCF"
+   },
+   {
+    "n": 8,
+    "label": "Post-Distortion VCF Fc"
+   },
+   {
+    "n": 9,
+    "label": "Post-Distortion VCF Q"
+   },
+   {
+    "n": 10,
+    "label": "Envelope Follower to Post VCF"
+   },
+   {
+    "n": 11,
+    "label": "Envelope Follower Attack"
+   },
+   {
+    "n": 12,
+    "label": "Envelope Follower Release"
+   },
+   {
+    "n": 13,
+    "label": "Distortion Bypass"
+   },
+   {
+    "n": 14,
+    "label": "Pre-EQ High Pass Cutoff"
+   },
+   {
+    "n": 15,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 16,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 17,
+    "label": "Mod1 Param Range Min 21 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 18,
+    "label": "Mod1 Param Range Max22 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 19,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 20,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "VCF - DISTORT 2",
+  "pdf_page_start": 115,
+  "pdf_page_end": 116,
+  "param_count": 18,
+  "max_param": 18,
+  "gaps": [],
+  "ranges_seen": 12,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Distortion Level In"
+   },
+   {
+    "n": 4,
+    "label": "Distortion Level Out"
+   },
+   {
+    "n": 5,
+    "label": "Pre-Distortion VCF Fc"
+   },
+   {
+    "n": 6,
+    "label": "Pre-Distortion VCF Q"
+   },
+   {
+    "n": 7,
+    "label": "Envelope Follower to Pre VCF"
+   },
+   {
+    "n": 8,
+    "label": "Post-Distortion VCF Fc"
+   },
+   {
+    "n": 9,
+    "label": "Post-Distortion VCF Q"
+   },
+   {
+    "n": 10,
+    "label": "Envelope Follower to Post VCF"
+   },
+   {
+    "n": 11,
+    "label": "Envelope Follower Attack"
+   },
+   {
+    "n": 12,
+    "label": "Envelope Follower Release"
+   },
+   {
+    "n": 13,
+    "label": "Distortion Bypass"
+   },
+   {
+    "n": 14,
+    "label": "Pre-EQ High Pass Cutoff"
+   },
+   {
+    "n": 15,
+    "label": "Speaker HighPass Cutoff"
+   },
+   {
+    "n": 16,
+    "label": "Amp Feedback Amount"
+   },
+   {
+    "n": 17,
+    "label": "Amp Feedback HF Damping"
+   },
+   {
+    "n": 18,
+    "label": "Amp Feedback Delay"
+   }
+  ]
+ },
+ {
+  "name": "VOCAL REMOVER",
+  "pdf_page_start": 117,
+  "pdf_page_end": 118,
+  "param_count": 17,
+  "max_param": 17,
+  "gaps": [],
+  "ranges_seen": 9,
+  "params": [
+   {
+    "n": 1,
+    "label": "Mix"
+   },
+   {
+    "n": 2,
+    "label": "Volume"
+   },
+   {
+    "n": 3,
+    "label": "Vocal Pos"
+   },
+   {
+    "n": 4,
+    "label": "L/R Delay"
+   },
+   {
+    "n": 5,
+    "label": "Bass Level"
+   },
+   {
+    "n": 6,
+    "label": "Treble Level"
+   },
+   {
+    "n": 7,
+    "label": "Mid Level"
+   },
+   {
+    "n": 8,
+    "label": "Bass Fc"
+   },
+   {
+    "n": 9,
+    "label": "Trebl Fc"
+   },
+   {
+    "n": 10,
+    "label": "Mid Fc"
+   },
+   {
+    "n": 11,
+    "label": "BW"
+   },
+   {
+    "n": 12,
+    "label": "Mod1 Source"
+   },
+   {
+    "n": 13,
+    "label": "Mod1 Destination"
+   },
+   {
+    "n": 14,
+    "label": "Mod1 Param Range Min 18 \u2014 Mod2 Param Range Min"
+   },
+   {
+    "n": 15,
+    "label": "Mod1 Param Range Max19 \u2014 Mod2 Param Range Max"
+   },
+   {
+    "n": 16,
+    "label": "Mod2 Source"
+   },
+   {
+    "n": 17,
+    "label": "Mod2 Destination"
+   }
+  ]
+ },
+ {
+  "name": "VOCODER",
+  "pdf_page_start": 119,
+  "pdf_page_end": 121,
+  "param_count": 0,
+  "max_param": 0,
+  "gaps": [],
+  "ranges_seen": 6,
+  "params": []
+ }
+]

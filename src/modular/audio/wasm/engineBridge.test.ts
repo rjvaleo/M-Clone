@@ -1,0 +1,1365 @@
+import { describe, expect, it } from "vitest";
+import { REPORT_INTERVAL_QUANTA } from "./rackProtocol";
+import { moduleRegistry } from "../../registry/registry";
+import { WasmRack, MODULE_KINDS, PARAMS_HANDLED_ELSEWHERE, ENGINE_ONLY_PARAMS, NOT_YET_IN_RUST, PARAM_INDICES, NO_MODULE, variantOf, type EngineExports } from "./engineBridge";
+import type { AudioPlan, AudioNodeSpec } from "../audioPlan";
+
+/**
+ * The bridge between a compiled `AudioPlan` and the Rust engine.
+ *
+ * Everything below the WASM boundary is covered by `cargo test` and
+ * `rust/wasm/verify.mjs`; everything above it by the existing plan tests. This
+ * is the join, and it is where the interesting mistakes live: a module id
+ * mapped to the wrong node, a parameter sent to the wrong index, a plan update
+ * that rebuilds a node it should have ramped.
+ */
+
+/** Records every call, and behaves the way the real `.wasm` behaves. */
+class FakeEngine implements EngineExports {
+  readonly calls: string[] = [];
+  readonly params = new Map<string, number>();
+  readonly cables = new Set<string>();
+  readonly modules = new Map<number, number>();
+  memory = { buffer: new ArrayBuffer(4096) };
+
+  /** What `memory.grow` looks like from JavaScript: a fresh, larger buffer,
+   * with every view into the old one now detached. */
+  growMemory(): void {
+    this.memory = { buffer: new ArrayBuffer(8192) };
+  }
+  private nextId = 0;
+  /** Kinds this build does not have, to stand in for a version skew. */
+  unknownKinds = new Set<number>();
+
+  init(sampleRate: number): void {
+    this.calls.push(`init:${sampleRate}`);
+  }
+  variants = new Map<number, number>();
+  add_module(kind: number): number {
+    if (this.unknownKinds.has(kind)) return -1; // u32::MAX, seen from JS as i32
+    const id = this.nextId++;
+    this.modules.set(id, kind);
+    this.calls.push(`add:${kind}→${id}`);
+    return id;
+  }
+  /** Records the variant so a test can assert the algorithm reached the ABI. */
+  add_module_variant(kind: number, variant: number): number {
+    const id = this.add_module(kind);
+    if (id >= 0) this.variants.set(id, variant);
+    return id;
+  }
+  remove_module(id: number): number {
+    this.calls.push(`remove:${id}`);
+    const had = this.modules.delete(id);
+    for (const cable of [...this.cables]) {
+      if (cable.startsWith(`${id}:`) || cable.includes(`→${id}:`)) this.cables.delete(cable);
+    }
+    return had ? 1 : 0;
+  }
+  connect(fm: number, fp: number, tm: number, tp: number): number {
+    const key = `${fm}:${fp}→${tm}:${tp}`;
+    this.calls.push(`connect:${key}`);
+    if (this.cables.has(key)) return 0;
+    this.cables.add(key);
+    return 1;
+  }
+  disconnect(fm: number, fp: number, tm: number, tp: number): number {
+    const key = `${fm}:${fp}→${tm}:${tp}`;
+    this.calls.push(`disconnect:${key}`);
+    return this.cables.delete(key) ? 1 : 0;
+  }
+  connect_param(fm: number, fp: number, tm: number, param: number, scale: number, min: number, max: number): number {
+    this.calls.push(`route:${fm}:${fp}→${tm}.${param}*${scale}[${min},${max}]`);
+    return 1;
+  }
+  disconnect_param(fm: number, fp: number, tm: number, param: number): number {
+    this.calls.push(`unroute:${fm}:${fp}→${tm}.${param}`);
+    return 1;
+  }
+  /** What every module reports, for asserting on the report. */
+  telemetry = Number.NaN;
+  moduleOutput = 0;
+  module_telemetry(): number {
+    return this.telemetry;
+  }
+  module_output(): number {
+    return this.moduleOutput;
+  }
+  /** The modules being metered, and what every one of them reads. */
+  readonly metered = new Set<number>();
+  level: [number, number] = [0, 0];
+  set_metered(module: number, on: number): number {
+    this.calls.push(`meter:${module}=${on}`);
+    if (on) this.metered.add(module);
+    else this.metered.delete(module);
+    return this.modules.has(module) ? 1 : 0;
+  }
+  module_level(module: number, side: number): number {
+    return this.metered.has(module) ? this.level[side] : Number.NaN;
+  }
+  clear_levels(module: number): void {
+    this.calls.push(`clearlevels:${module}`);
+  }
+  set_param(module: number, index: number, value: number): void {
+    this.calls.push(`param:${module}.${index}=${value}`);
+    this.params.set(`${module}.${index}`, value);
+  }
+  note_on(module: number, note: number, velocity: number, detuneCents: number): void {
+    this.calls.push(`noteon:${module}.${note}@${velocity}+${detuneCents}`);
+  }
+  note_on_with_step(module: number, note: number, velocity: number, detuneCents: number, stepSec: number): void {
+    this.calls.push(`noteon:${module}.${note}@${velocity}+${detuneCents}~${stepSec}`);
+  }
+  note_off(module: number, note: number): void {
+    this.calls.push(`noteoff:${module}.${note}`);
+  }
+  all_notes_off(module: number): void {
+    this.calls.push(`allnotesoff:${module}`);
+  }
+  set_modulation(module: number, source: number, dest: number, amount: number): void {
+    this.calls.push(`mod:${module}.${source}->${dest}=${amount}`);
+  }
+  set_sample_slot(module: number, slot: number, sample: number): void {
+    this.calls.push(`slot:${module}.${slot}=${sample}`);
+  }
+  set_slot_shape(module: number, slot: number, gain: number, pan: number, chokeGroup: number): void {
+    this.calls.push(`shape:${module}.${slot}=${gain},${pan},${chokeGroup}`);
+  }
+  /** A real little allocator, so the transfer's pointer maths is exercised. */
+  private sampleLens = new Map<number, number>();
+  private samplePtrs = new Map<number, number>();
+  private nextPtr = 1024;
+  sample_alloc(id: number, channels: number, frames: number, rate: number): number {
+    if (channels === 0 || frames === 0 || rate <= 0) return 0;
+    this.samplePtrs.set(id, this.nextPtr);
+    this.sampleLens.set(id, channels * frames);
+    this.nextPtr += channels * frames * 4;
+    this.calls.push(`salloc:${id}=${channels}x${frames}`);
+    return 1;
+  }
+  sample_ptr(id: number): number {
+    return this.samplePtrs.get(id) ?? 0;
+  }
+  sample_len(id: number): number {
+    return this.sampleLens.get(id) ?? 0;
+  }
+  sample_free(id: number): void {
+    this.samplePtrs.delete(id);
+    this.sampleLens.delete(id);
+  }
+  set_bypassed(module: number, bypassed: number): void {
+    this.calls.push(`bypass:${module}=${bypassed}`);
+  }
+  set_io(input: number, output: number): void {
+    this.calls.push(`io:${input},${output}`);
+  }
+  reset(): void {
+    this.calls.push("reset");
+  }
+  input_ptr(): number {
+    return 0;
+  }
+  output_ptr(): number {
+    return 512;
+  }
+  quantum_size(): number {
+    return 128;
+  }
+  module_count(): number {
+    return this.modules.size;
+  }
+  cable_count(): number {
+    return this.cables.size;
+  }
+  sample_count(): number {
+    return this.samplesHeld;
+  }
+  samplesHeld = 0;
+  process_quantum(): void {
+    this.process_range(0, 128);
+  }
+  /** What every rendered sample comes out at, so a peak is assertable. */
+  renderLevel = 0;
+  /** Records the range, so a test can see where a quantum was broken. */
+  process_range(start: number, len: number): void {
+    this.calls.push(`process:${start}+${len}`);
+    const output = new Float32Array(this.memory.buffer, this.output_ptr(), 256);
+    output.fill(this.renderLevel, start, start + len);
+  }
+  /** Every rendered range, in order, as `start+len` pairs. */
+  get ranges(): string[] {
+    return this.calls.filter((call) => call.startsWith("process:")).map((c) => c.slice(8));
+  }
+
+  /** Only the calls of one kind, for asserting on a slice of the traffic. */
+  of(prefix: string): string[] {
+    return this.calls.filter((call) => call.startsWith(`${prefix}:`));
+  }
+}
+
+const node = (
+  nodeId: string,
+  moduleType: string,
+  parameters: Record<string, number> = {},
+  overrides: Partial<AudioNodeSpec> = {},
+): AudioNodeSpec => ({
+  nodeId,
+  moduleType,
+  structure: {},
+  parameters,
+  bypass: false,
+  wet: 1,
+  ...overrides,
+});
+
+/** Gain → Audio Output: the smallest patch that makes a sound. */
+const plan = (
+  nodes: AudioNodeSpec[],
+  connections: AudioPlan["connections"] = [],
+  generation = 1,
+): AudioPlan => ({
+  generation,
+  nodes: Object.fromEntries(nodes.map((spec) => [spec.nodeId, spec])),
+  connections,
+});
+
+const wire = (from: string, to: string) => ({
+  from: { nodeId: from, portId: "audio-out" },
+  to: { nodeId: to, portId: "audio-in" },
+});
+
+const simplePlan = () =>
+  plan(
+    [node("g", "m.audio-gain", { gain: 0.5 }), node("out", "m.audio-output", {})],
+    [wire("g", "out")],
+  );
+
+describe("Samplers and their audio", () => {
+  const kit = (slots: unknown) =>
+    plan([node("p", "m.percussion", {}, { structure: { slots } as never })]);
+
+  it("points each note at the slot its document names", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.setSampleMap({ kick: 0, snare: 1 });
+    rack.update(kit([{ note: 36, assetId: "kick" }, { note: 38, assetId: "snare" }]));
+    const id = rack.moduleIdOf("p")!;
+    expect(engine.of("slot")).toEqual([`slot:${id}.36=0`, `slot:${id}.38=1`]);
+  });
+
+  it("gives the engine each pad's gain, pan and choke group", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.setSampleMap({ ohat: 0, chat: 1 });
+    rack.update(kit([
+      { note: 46, assetId: "ohat", gain: 0.9, pan: 0.35, chokeGroup: 1 },
+      { note: 42, assetId: "chat", chokeGroup: 1 },
+    ]));
+    const id = rack.moduleIdOf("p")!;
+    expect(engine.of("shape")).toEqual([`shape:${id}.46=0.9,0.35,1`, `shape:${id}.42=1,0,1`]);
+  });
+
+  it("sends a pad's shape again when it changes, and not when it does not", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.setSampleMap({ ohat: 0 });
+    rack.update(kit([{ note: 46, assetId: "ohat", pan: 0.35 }]));
+    const first = rack.moduleIdOf("p")!;
+    rack.update(kit([{ note: 46, assetId: "ohat", pan: 0.35 }]));
+    // A slot is structure, so a moved pad rebuilds the kit under a new id.
+    rack.update(kit([{ note: 46, assetId: "ohat", pan: -0.5 }]));
+    const second = rack.moduleIdOf("p")!;
+    expect(engine.of("shape")).toEqual([`shape:${first}.46=1,0.35,0`, `shape:${second}.46=1,-0.5,0`]);
+  });
+
+  it("assigns nothing for an asset the engine was never told about", () => {
+    // The map is the only thing that turns a content hash into a number; an
+    // asset missing from it has no audio loaded either.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(kit([{ note: 36, assetId: "kick" }]));
+    expect(engine.of("slot")).toEqual([]);
+  });
+
+  it("does not re-issue an assignment that has not changed", () => {
+    // A knob move recompiles the plan. Re-pointing every note of every kit on
+    // each of those is pure traffic on the audio thread.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.setSampleMap({ kick: 0 });
+    rack.update(kit([{ note: 36, assetId: "kick" }]));
+    rack.update({ ...kit([{ note: 36, assetId: "kick" }]), generation: 2 });
+    expect(engine.of("slot")).toHaveLength(1);
+  });
+
+  it("writes a sample's audio into the engine", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    const written = rack.loadSample(3, {
+      channels: [Float32Array.from([0.25, 0.5]), Float32Array.from([-0.25, -0.5])],
+      sampleRate: 44100,
+    });
+    expect(written).toBe(true);
+    const view = new Float32Array(engine.memory.buffer, engine.sample_ptr(3), engine.sample_len(3));
+    // Planar, matching the Rust bank's layout.
+    expect([...view]).toEqual([0.25, 0.5, -0.25, -0.5]);
+  });
+});
+
+describe("variantOf", () => {
+  it("maps a structural name onto the number Rust builds from", () => {
+    // The order is the wire protocol: it matches `Dp4Algorithm` in Rust, so a
+    // reordering here silently turns every saved hall into a plate.
+    expect(variantOf("m.audio-dp4-reverb", { algorithm: "small-plate" })).toBe(0);
+    expect(variantOf("m.audio-dp4-reverb", { algorithm: "hall" })).toBe(4);
+    expect(variantOf("m.audio-dp4-nonlin", { variant: "non-lin-2" })).toBe(1);
+  });
+
+  it("reads the looper's time-stretch flag as a variant", () => {
+    // A boolean rather than a name, because the two engines behind it have no
+    // names — but choosing one is still topology, so it goes through the same
+    // door as the DP/4's algorithms.
+    expect(variantOf("m.looper", { "time-stretch": false })).toBe(0);
+    expect(variantOf("m.looper", { "time-stretch": true })).toBe(1);
+    // A document that predates the control plays rather than stretches.
+    expect(variantOf("m.looper", {})).toBe(0);
+  });
+
+  it("builds the default for a name this build does not know", () => {
+    // A document from a newer build should still make a sound.
+    expect(variantOf("m.audio-dp4-reverb", { algorithm: "cathedral" })).toBe(0);
+    expect(variantOf("m.audio-dp4-reverb", {})).toBe(0);
+  });
+
+  it("is zero for a module that has no variants at all", () => {
+    expect(variantOf("m.audio-gain", { algorithm: "hall" })).toBe(0);
+    expect(variantOf("m.synth", {})).toBe(0);
+  });
+
+  it("carries the algorithm through to the engine", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(
+      plan([node("v", "m.audio-dp4-reverb", {}, { structure: { algorithm: "hall" } })]),
+    );
+    expect(engine.variants.get(rack.moduleIdOf("v")!)).toBe(4);
+  });
+});
+
+describe("The plan-to-engine bridge", () => {
+  it("initialises the engine at the context's sample rate", () => {
+    const engine = new FakeEngine();
+    new WasmRack(engine, 44100);
+    expect(engine.calls[0]).toBe("init:44100");
+  });
+
+  it("builds a module for every node and wires them together", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+
+    expect(rack.moduleIdOf("g")).not.toBeUndefined();
+    expect(rack.moduleIdOf("out")).not.toBeUndefined();
+    expect([...engine.cables]).toContain(`${rack.moduleIdOf("g")}:0→${rack.moduleIdOf("out")}:0`);
+  });
+
+  it("always builds the host input, so a rack is never deaf", () => {
+    // The one module no document mentions. Forgetting it would leave a patch
+    // that compiles, wires and processes silence — the failure this codebase
+    // has shipped twice.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+    expect(engine.of("io")).toHaveLength(1);
+    expect(engine.of("io")[0]).toBe(`io:${rack.hostInputId},${rack.moduleIdOf("out")}`);
+  });
+
+  it("re-derives its buffers after WASM memory grows", () => {
+    // Adding a module that allocates — a reverb's delay lines, say — can grow
+    // linear memory, which *detaches* every existing view into it. The rack
+    // held its input and output views from construction, so the first quantum
+    // after a Blackhole was added threw
+    // "Cannot perform %TypedArray%.prototype.fill on a detached ArrayBuffer"
+    // and the worklet went silent. Found in the browser, not in a test.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    const before = rack.input;
+    expect(before.byteLength).toBeGreaterThan(0);
+
+    engine.growMemory();
+
+    expect(rack.input).not.toBe(before);
+    expect(rack.input.buffer).toBe(engine.memory.buffer);
+    expect(rack.output.buffer).toBe(engine.memory.buffer);
+    expect(rack.input).toHaveLength(before.length);
+  });
+
+  it("keeps handing back the same buffers while memory is stable", () => {
+    // The views are on the audio path; rebuilding one per quantum for no
+    // reason would allocate in the hot loop.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    expect(rack.input).toBe(rack.input);
+    expect(rack.output).toBe(rack.output);
+  });
+
+  it("knows Blackhole's wire number and its whole parameter surface", () => {
+    // The discriminants are the protocol with rust/dsp-core/src/modules.rs.
+    // A drift here does not fail loudly — it sends Gravity to whatever
+    // parameter happens to sit at that index instead.
+    expect(MODULE_KINDS["m.audio-blackhole"]).toBe(4);
+    const indices = PARAM_INDICES["m.audio-blackhole"];
+    expect(Object.values(indices).sort((a, b) => a - b)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+    ]);
+    // Spot-check the two ends and the shell's own handles.
+    expect(indices.gravity).toBe(0);
+    expect(indices.resonance).toBe(8);
+    expect(indices.level).toBe(10);
+    expect(indices.mute).toBe(11);
+    // `line-count` is structural: it rebuilds the node rather than moving a
+    // value, so it must not claim a parameter slot.
+    expect(indices["line-count"]).toBeUndefined();
+  });
+
+  it("gives every ported module a distinct wire number", () => {
+    // The prism effects share one kind and are told apart by their code, so
+    // what is unique is the kind and the variant a default build gets.
+    const builds = Object.entries(MODULE_KINDS).map(([type, kind]) =>
+      kind === 19 ? `19:${variantOf(type, {})}` : String(kind));
+    expect(new Set(builds).size).toBe(builds.length);
+  });
+
+  it("sends each parameter to the index its module declares", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+    const gainId = rack.moduleIdOf("g")!;
+    expect(engine.params.get(`${gainId}.${PARAM_INDICES["m.audio-gain"].gain}`)).toBe(0.5);
+  });
+
+  it("opens each module's fade handle so the patch is audible", () => {
+    // Every module is built silent by design. Something has to raise it, and
+    // if that is nobody the whole rack is a correct, silent graph.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+    const gainId = rack.moduleIdOf("g")!;
+    expect(engine.params.get(`${gainId}.${PARAM_INDICES["m.audio-gain"].level}`)).toBe(1);
+  });
+
+  it("ramps a parameter change without rebuilding the module", () => {
+    // The rule the whole audio layer is built around, restated at this seam.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+    const before = rack.moduleIdOf("g");
+    const addsBefore = engine.of("add").length;
+
+    rack.update(
+      plan(
+        [node("g", "m.audio-gain", { gain: 0.9 }), node("out", "m.audio-output", {})],
+        [wire("g", "out")],
+        2,
+      ),
+    );
+
+    expect(rack.moduleIdOf("g")).toBe(before);
+    expect(engine.of("add")).toHaveLength(addsBefore);
+    expect(engine.params.get(`${before}.${PARAM_INDICES["m.audio-gain"].gain}`)).toBe(0.9);
+  });
+
+  it("rebuilds a module when its structure changes", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+    const before = rack.moduleIdOf("g");
+
+    rack.update(
+      plan(
+        [
+          node("g", "m.audio-gain", { gain: 0.5 }, { structure: { shape: "different" } }),
+          node("out", "m.audio-output", {}),
+        ],
+        [wire("g", "out")],
+        2,
+      ),
+    );
+
+    expect(rack.moduleIdOf("g")).not.toBe(before);
+    expect(engine.of("remove")).toContain(`remove:${before}`);
+  });
+
+  it("removes a module the plan no longer has, and its cables with it", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+    const gainId = rack.moduleIdOf("g");
+
+    rack.update(plan([node("out", "m.audio-output", {})], [], 2));
+    expect(rack.moduleIdOf("g")).toBeUndefined();
+    expect(engine.of("remove")).toContain(`remove:${gainId}`);
+    expect(engine.cable_count()).toBe(0);
+  });
+
+  it("skips a module type the engine does not have yet", () => {
+    // During the migration some modules are still Web Audio. A plan naming one
+    // must leave the rest of the rack working rather than take it down.
+    //
+    // `m.stream` is the stand-in because it is genuinely unported. This has
+    // been `m.audio-reverb` and then `m.percussion`; each time one landed in
+    // Rust this test failed, which is exactly what it is for.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(
+      plan(
+        [node("r", "m.stream", {}), node("out", "m.audio-output", {})],
+        [wire("r", "out")],
+      ),
+    );
+    expect(rack.moduleIdOf("r")).toBeUndefined();
+    expect(rack.moduleIdOf("out")).not.toBeUndefined();
+    expect(rack.unsupported).toEqual(["m.stream"]);
+  });
+
+  it("treats a refused module id as a failure rather than a negative id", () => {
+    // WASM returns i32, so `NO_MODULE` arrives as -1. Storing that as an id
+    // would send every later parameter to module 4294967295.
+    const engine = new FakeEngine();
+    engine.unknownKinds.add(MODULE_KINDS["m.audio-gain"]);
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+    expect(rack.moduleIdOf("g")).toBeUndefined();
+    expect(engine.of("param").some((call) => call.includes(`${NO_MODULE}`))).toBe(false);
+    expect(engine.of("param").some((call) => call.includes("-1"))).toBe(false);
+  });
+
+  it("drops a connection whose endpoint was never built", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(
+      plan(
+        [node("r", "m.stream", {}), node("out", "m.audio-output", {})],
+        [wire("r", "out")],
+      ),
+    );
+    expect(engine.cable_count()).toBe(0);
+    expect(rack.moduleIdOf("out")).not.toBeUndefined();
+  });
+
+  it("carries bypass across", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(
+      plan([node("g", "m.audio-gain", {}, { bypass: true }), node("out", "m.audio-output", {})]),
+    );
+    expect(engine.of("bypass")).toContain(`bypass:${rack.moduleIdOf("g")}=1`);
+  });
+
+  it("applies the same plan twice without emitting any work", () => {
+    // Idempotence is what makes it safe to call on every document change.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+    const after = engine.calls.length;
+    rack.update(simplePlan());
+    expect(engine.calls.length).toBe(after);
+  });
+
+  it("feeds the host's audio into every input the patch left open", () => {
+    // The bug this exists to prevent, found in a browser after every unit test
+    // passed: `set_io` tells the engine where to *write* incoming samples, but
+    // a module only hears them if the host input is actually cabled to it. The
+    // plan has no node for the host input — no document mentions it — so
+    // nothing in a plan-shaped test could notice the missing wire, and the rack
+    // rendered pure silence while reporting a correct graph.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+
+    const hostToGain = `${rack.hostInputId}:0→${rack.moduleIdOf("g")}:0`;
+    expect([...engine.cables]).toContain(hostToGain);
+    // The output is already fed by the gain, so it is left alone.
+    expect([...engine.cables]).not.toContain(`${rack.hostInputId}:0→${rack.moduleIdOf("out")}:0`);
+  });
+
+  it("stops feeding a module once the patch gives it a source", () => {
+    // Patching something into an open input has to take the host feed away, or
+    // the two sum and the module hears both at once.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("a", "m.audio-gain"), node("out", "m.audio-output")], [wire("a", "out")]));
+    expect([...engine.cables]).toContain(`${rack.hostInputId}:0→${rack.moduleIdOf("a")}:0`);
+
+    rack.update(
+      plan(
+        [node("src", "m.audio-gain"), node("a", "m.audio-gain"), node("out", "m.audio-output")],
+        [wire("src", "a"), wire("a", "out")],
+        2,
+      ),
+    );
+    expect([...engine.cables]).not.toContain(`${rack.hostInputId}:0→${rack.moduleIdOf("a")}:0`);
+    expect([...engine.cables]).toContain(`${rack.hostInputId}:0→${rack.moduleIdOf("src")}:0`);
+  });
+
+  it("never feeds the host input into the master output", () => {
+    // An Audio Output with nothing patched in is an idle rack, not a wire from
+    // the microphone straight to the speakers.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("out", "m.audio-output")]));
+    expect(engine.cable_count()).toBe(0);
+  });
+
+  it("unpatches a cable the plan dropped, leaving both modules standing", () => {
+    // Distinct from removing a node: both endpoints survive, so the mirror has
+    // to issue a real disconnect rather than relying on the engine dropping
+    // cables along with a module.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+    const documentCable = `${rack.moduleIdOf("g")}:0→${rack.moduleIdOf("out")}:0`;
+    expect([...engine.cables]).toContain(documentCable);
+
+    rack.update(
+      plan([node("g", "m.audio-gain", { gain: 0.5 }), node("out", "m.audio-output", {})], [], 2),
+    );
+
+    // Both sides of the stereo pair.
+    expect(engine.of("disconnect")).toHaveLength(2);
+    expect([...engine.cables]).not.toContain(documentCable);
+    expect(rack.moduleIdOf("g")).not.toBeUndefined();
+    expect(rack.moduleIdOf("out")).not.toBeUndefined();
+
+    // And patching it back is a connect, not a rebuild.
+    const addsBefore = engine.of("add").length;
+    rack.update(simplePlan());
+    expect([...engine.cables]).toContain(documentCable);
+    expect(engine.of("add")).toHaveLength(addsBefore);
+  });
+
+  it("advances the engine one quantum at a time", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+    rack.process();
+    rack.process();
+    // Nothing scheduled, so each quantum is one whole range: the common case
+    // must not pay for the scheduler.
+    expect(engine.ranges).toEqual(["0+128", "0+128"]);
+  });
+
+  it("breaks the quantum at the frame a scheduled note is due", () => {
+    // The whole reason `process_range` exists. A note that may only start on a
+    // quantum boundary carries up to 2.7 ms of jitter at 48 kHz, which is
+    // audible on anything with a sharp attack.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    // Frame 1050 is 26 frames into the quantum starting at 1024.
+    rack.schedule("s", 1050 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.process(1024);
+
+    expect(engine.ranges).toEqual(["0+26", "26+102"]);
+    expect(engine.of("noteon")).toEqual([`noteon:${rack.moduleIdOf("s")}.60@1+0`]);
+  });
+
+  it("holds a note until the quantum it belongs to", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule("s", 5000 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+
+    rack.process(0);
+    expect(engine.of("noteon")).toEqual([]);
+    expect(engine.ranges).toEqual(["0+128"]);
+  });
+
+  it("plays a chord as one break rather than several", () => {
+    // Three notes at one moment are one edge in the render, not three.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule("s", 64 / 48000, [
+      { type: "note-on", note: 60, velocity: 1, detuneCents: 0 },
+      { type: "note-on", note: 64, velocity: 1, detuneCents: 0 },
+      { type: "note-on", note: 67, velocity: 1, detuneCents: 0 },
+    ]);
+    rack.process(0);
+    expect(engine.ranges).toEqual(["0+64", "64+64"]);
+    expect(engine.of("noteon")).toHaveLength(3);
+  });
+
+  it("breaks the quantum twice for two notes at different frames", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule("s", 32 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.schedule("s", 96 / 48000, [{ type: "note-off", note: 60 }]);
+    rack.process(0);
+    expect(engine.ranges).toEqual(["0+32", "32+64", "96+32"]);
+  });
+
+  it("plays an overdue note at the start of the quantum rather than dropping it [R-TIME-03]", () => {
+    // A note the host was slow to deliver is late; a note that never sounds is
+    // a hole in the piece.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule("s", 10 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.process(4096);
+    expect(engine.ranges).toEqual(["0+128"]);
+    expect(engine.of("noteon")).toHaveLength(1);
+  });
+
+  it("plays a note landing exactly on a quantum boundary in that quantum [R-TIME-02]", () => {
+    // The off-by-one that would make every on-the-beat note a quantum late.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule("s", 128 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+
+    rack.process(0);
+    expect(engine.of("noteon")).toEqual([]);
+    rack.process(128);
+    expect(engine.of("noteon")).toHaveLength(1);
+  });
+
+  it("schedules note off and all-notes-off, not just note on", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule("s", 0, [{ type: "note-off", note: 60 }, { type: "all-notes-off" }]);
+    rack.process(0);
+    const synth = rack.moduleIdOf("s");
+    expect(engine.of("noteoff")).toEqual([`noteoff:${synth}.60`]);
+    expect(engine.of("allnotesoff")).toEqual([`allnotesoff:${synth}`]);
+  });
+
+  it("hands a sequenced note's step to the engine with the note", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule("s", 0, [{ type: "note-on", note: 62, velocity: 1, detuneCents: 0, stepSec: 0.125 }]);
+    rack.process(0);
+    expect(engine.of("noteon")).toEqual([`noteon:${rack.moduleIdOf("s")}.62@1+0~0.125`]);
+  });
+
+  it("cancels the future when the transport resets", () => {
+    // The scheduled notes belong to a passage that is no longer playing.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.schedule("s", 64 / 48000, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.reset();
+    rack.process(0);
+    expect(engine.of("noteon")).toEqual([]);
+    expect(engine.ranges).toEqual(["0+128"]);
+  });
+
+  it("plays a scheduled note only on the instrument it was addressed to", () => {
+    // The note adapter resolves an event's target on the main thread, and for
+    // a while the message shape then threw that away: every instrument in the
+    // patch played every note, so a four-part kit played all four parts on
+    // each hit.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("kick", "m.percussion"), node("lead", "m.synth")]));
+
+    rack.schedule("kick", 0, [{ type: "note-on", note: 36, velocity: 1, detuneCents: 0 }]);
+    rack.process(0);
+
+    expect(engine.of("noteon")).toEqual([`noteon:${rack.moduleIdOf("kick")}.36@1+0`]);
+  });
+
+  it("sounds nothing for a node that is no longer in the plan [R-PROTO-06]", () => {
+    // The id names a node that has been deleted or rebuilt. Falling back to a
+    // broadcast would put the note on an instrument nobody addressed.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+
+    rack.schedule("gone", 0, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.process(0);
+
+    expect(engine.of("noteon")).toEqual([]);
+  });
+
+  it("still broadcasts an unaddressed note, for the bench and MIDI thru", () => {
+    // No id at all is a different case from an id that does not resolve: there
+    // is no document routing to consult, so every instrument is the intent.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("a", "m.synth"), node("b", "m.percussion")]));
+
+    rack.noteOn(60, 1, 0);
+
+    expect(engine.of("noteon")).toHaveLength(2);
+  });
+
+  it("says nothing until a report is due [R-PROTO-07]", () => {
+    // The audio thread must not spend its budget describing itself: at 48 kHz
+    // a report per quantum would be four hundred messages a second.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) {
+      expect(rack.takeReport()).toBeUndefined();
+      rack.process(i * 128);
+    }
+    expect(rack.takeReport()).toBeDefined();
+  });
+
+  it("reports what the engine holds, including how many samples arrived", () => {
+    // The question that could not be asked before this existed, and the reason
+    // "does a sample actually reach the bank" went unverified for so long.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("out", "m.audio-output")]));
+    engine.samplesHeld = 3;
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+
+    const report = rack.takeReport();
+    expect(report?.samples).toBe(3);
+    expect(report?.modules).toBe(engine.modules.size);
+    expect(report?.cables).toBe(engine.cables.size);
+    expect(report?.quanta).toBe(REPORT_INTERVAL_QUANTA);
+  });
+
+  it("reports the loudest sample of the interval just ended", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    engine.renderLevel = 0.5;
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.peak).toBeCloseTo(0.5);
+  });
+
+  it("starts the peak over each interval rather than keeping a high-water mark [R-PROTO-08]", () => {
+    // A running maximum only ever climbs, so a meter drawn from it would stick
+    // at the loudest moment of the session and never fall.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    engine.renderLevel = 0.9;
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    rack.takeReport();
+
+    engine.renderLevel = 0.1;
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.peak).toBeCloseTo(0.1);
+  });
+
+  it("counts every quantum it has rendered, so a stalled worklet shows", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA * 2; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.quanta).toBe(REPORT_INTERVAL_QUANTA * 2);
+  });
+
+  it("forwards a transport reset to the engine", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.reset();
+    expect(engine.calls).toContain("reset");
+  });
+
+  it("exposes the quantum buffers the worklet reads and writes", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    expect(rack.input).toHaveLength(128);
+    expect(rack.output).toHaveLength(128);
+  });
+
+  it("never feeds the host input into a source", () => {
+    // A synth generates rather than processes. Patching the host into it is a
+    // cable to a port that is not there — the engine refuses it silently, so
+    // the mirror would believe in a cable that does not exist and disconnect a
+    // real one on the next update.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("out", "m.audio-output")], [wire("s", "out")]));
+    expect([...engine.cables]).not.toContain(`${rack.hostInputId}:0→${rack.moduleIdOf("s")}:0`);
+    expect([...engine.cables]).toContain(`${rack.moduleIdOf("s")}:0→${rack.moduleIdOf("out")}:0`);
+  });
+
+  it("knows which nodes take notes", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(
+      plan([node("s", "m.synth"), node("g", "m.audio-gain"), node("out", "m.audio-output")]),
+    );
+    expect(rack.instruments).toEqual(["s"]);
+  });
+
+  it("plays notes on every instrument and nothing else", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("g", "m.audio-gain")]));
+
+    rack.noteOn(60, 0.8, 0);
+    rack.noteOff(60);
+    rack.allNotesOff();
+
+    const synth = rack.moduleIdOf("s");
+    expect(engine.of("noteon")).toEqual([`noteon:${synth}.60@0.8+0`]);
+    expect(engine.of("noteoff")).toEqual([`noteoff:${synth}.60`]);
+    expect(engine.of("allnotesoff")).toEqual([`allnotesoff:${synth}`]);
+  });
+
+  it("carries a note's microtonal detune across the ABI", () => {
+    // The far end of the tuning library. A scale that does not fit the twelve
+    // keys arrives as a note plus a remainder in cents, and the remainder has
+    // to reach `note_on` or all eighty-one scales sound like 12-TET.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+
+    rack.noteOn(60, 0.8, -33.4);
+
+    expect(engine.of("noteon")).toEqual([`noteon:${rack.moduleIdOf("s")}.60@0.8+-33.4`]);
+  });
+
+  it("sends a matrix routing to the node that owns it", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.setModulation("s", 0, 11, 1);
+    expect(engine.of("mod")).toEqual([`mod:${rack.moduleIdOf("s")}.0->11=1`]);
+  });
+
+  it("ignores a routing for a node that is not built", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    rack.setModulation("nope", 0, 11, 1);
+    expect(engine.of("mod")).toHaveLength(0);
+  });
+
+  it("opens the synth's fade handle like any other module", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth")]));
+    expect(engine.params.get(`${rack.moduleIdOf("s")}.${PARAM_INDICES["m.synth"]["rack-fade"]}`)).toBe(1);
+  });
+
+  it("gives every synth parameter a distinct index", () => {
+    // A duplicated index silently ties two controls together, which reads as a
+    // wiring bug in the DSP rather than a typo in a table.
+    const indices = Object.values(PARAM_INDICES["m.synth"]);
+    expect(new Set(indices).size).toBe(indices.length);
+    // And none of them stray past what the Rust module declares: `Synth` in
+    // modules.rs has PARAM_COUNT = 65, so 64 — the LFO touch — is the last valid index.
+    expect(Math.max(...indices)).toBe(64);
+    expect(PARAM_INDICES["m.synth"]["lfo-touch"]).toBe(64);
+    // The synth has no gate: note length is the sequencer's, by note-off.
+    expect(PARAM_INDICES["m.synth"]).not.toHaveProperty("gate");
+  });
+
+  it("every module kind it claims to support has parameter indices", () => {
+    // A kind with no index table would send every parameter to index 0, which
+    // is a gain change that looks like a wiring bug.
+    for (const moduleType of Object.keys(MODULE_KINDS)) {
+      expect(PARAM_INDICES[moduleType], moduleType).toBeDefined();
+    }
+  });
+});
+
+describe("Building the looper's two engines", () => {
+  it("builds the stretch engine when the document asks for it", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(
+      plan([node("l", "m.looper", {}, { structure: { "time-stretch": true } as never })]),
+    );
+    expect(engine.variants.get(rack.moduleIdOf("l")!)).toBe(1);
+  });
+
+  it("rebuilds the node when the mode changes, rather than ramping it", () => {
+    // Swapping engines mid-note would cut the sound, which is why this is
+    // structure: the plan removes and re-adds behind the usual crossfade.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("l", "m.looper", {}, { structure: { "time-stretch": false } as never })]));
+    const first = rack.moduleIdOf("l")!;
+
+    rack.update(
+      plan([node("l", "m.looper", {}, { structure: { "time-stretch": true } as never })], [], 2),
+    );
+    expect(engine.of("remove")).toContain(`remove:${first}`);
+    expect(engine.variants.get(rack.moduleIdOf("l")!)).toBe(1);
+  });
+});
+
+describe("Stereo cabling", () => {
+  it("wires two ports between two stereo modules [R-FRAME-05]", () => {
+    // The synth has computed a stereo pair since it was written and only port 0
+    // was ever patched, so pan was correct inside the voice and inaudible.
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("out", "m.audio-output")], [wire("s", "out")]));
+    const s = rack.moduleIdOf("s");
+    const out = rack.moduleIdOf("out");
+    expect(engine.cables.has(`${s}:0→${out}:0`)).toBe(true);
+    expect(engine.cables.has(`${s}:1→${out}:1`)).toBe(true);
+  });
+
+  it("wires both sides through the effects, which are stereo now", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("d", "m.audio-delay"), node("out", "m.audio-output")], [wire("s", "d"), wire("d", "out")]));
+    const [s, d, out] = ["s", "d", "out"].map((id) => rack.moduleIdOf(id));
+    for (const port of [0, 1]) {
+      expect(engine.cables.has(`${s}:${port}→${d}:${port}`)).toBe(true);
+      expect(engine.cables.has(`${d}:${port}→${out}:${port}`)).toBe(true);
+    }
+  });
+
+  it("lands each mixer input on its own pair of engine ports", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("m", "m.audio-mixer")], [
+      { from: { nodeId: "s", portId: "audio-out" }, to: { nodeId: "m", portId: "audio-in-3" } },
+    ]));
+    const [s, m] = ["s", "m"].map((id) => rack.moduleIdOf(id));
+    expect(engine.cables.has(`${s}:0→${m}:4`)).toBe(true);
+    expect(engine.cables.has(`${s}:1→${m}:5`)).toBe(true);
+    expect(engine.cable_count()).toBe(2);
+  });
+
+  it("sums a stereo source into a DP/4 input, and spreads a DP/4 output to both sides", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("dp", "m.audio-dp4"), node("out", "m.audio-output")], [
+      { from: { nodeId: "s", portId: "audio-out" }, to: { nodeId: "dp", portId: "audio-in-2" } },
+      { from: { nodeId: "dp", portId: "audio-out-3" }, to: { nodeId: "out", portId: "audio-in" } },
+    ]));
+    const [s, dp, out] = ["s", "dp", "out"].map((id) => rack.moduleIdOf(id));
+    expect(engine.cables.has(`${s}:0→${dp}:1`)).toBe(true);
+    expect(engine.cables.has(`${s}:1→${dp}:1`)).toBe(true);
+    expect(engine.cables.has(`${dp}:2→${out}:0`)).toBe(true);
+    expect(engine.cables.has(`${dp}:2→${out}:1`)).toBe(true);
+  });
+
+  it("feeds the host's input to both sides of a stereo effect", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("d", "m.audio-delay")]));
+    const d = rack.moduleIdOf("d");
+    const host = [...engine.cables].filter((cable) => cable.endsWith(`→${d}:0`) || cable.endsWith(`→${d}:1`));
+    expect(host).toHaveLength(2);
+  });
+
+  it("hands back left and right as distinct views of one buffer", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    expect(rack.output).toHaveLength(128);
+    expect(rack.outputRight).toHaveLength(128);
+    expect(rack.output).not.toBe(rack.outputRight);
+    // Held rather than sliced per call: this is read once per render callback.
+    expect(rack.output).toBe(rack.output);
+    expect(rack.outputRight).toBe(rack.outputRight);
+  });
+
+  it("drops both cables of a stereo pair when the connection goes", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    const nodes = [node("s", "m.synth"), node("out", "m.audio-output")];
+    rack.update(plan(nodes, [wire("s", "out")]));
+    rack.update(plan(nodes, [], 2));
+    expect(engine.cable_count()).toBe(0);
+  });
+});
+
+describe("The descriptor-to-engine parameter contract", () => {
+  /**
+   * Both halves of `PARAM_INDICES` are string maps, so a name that matches
+   * nothing fails silently: the knob turns, the document records the value,
+   * and the engine never hears it. The synth's entire filter section was inert
+   * on this path because the descriptor said `cutoff` and the table said
+   * `filter-cutoff`, and no test could see it.
+   *
+   * These make the contract total in both directions. A new knob on an audio
+   * module now has to say what the engine does with it.
+   */
+  const audioModules = [...moduleRegistry.values()].filter(
+    (descriptor) =>
+      MODULE_KINDS[descriptor.type] !== undefined &&
+      descriptor.ports.some((port) => port.signal.kind === "audio"),
+  );
+
+  it("covers every audio module the engine can build", () => {
+    // Guards the list below against being empty or accidentally narrowed.
+    expect(audioModules.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it.each(audioModules.map((d) => [d.type, d] as const))(
+    "%s: every parameter either reaches the engine or says why not [R-PARAM-05]",
+    (type, descriptor) => {
+      const indices = PARAM_INDICES[type] ?? {};
+      const excused = PARAMS_HANDLED_ELSEWHERE[type] ?? {};
+      const orphans = descriptor.parameters
+        .map((parameter) => parameter.id)
+        .filter((id) => indices[id] === undefined && excused[id] === undefined);
+      expect(orphans).toEqual([]);
+    },
+  );
+
+  it.each(audioModules.map((d) => [d.type, d] as const))(
+    "%s: every engine index names a real parameter [R-PARAM-06]",
+    (type, descriptor) => {
+      // The other direction. An index for a parameter no descriptor declares
+      // is either a typo or capability nothing can reach, and both are worth
+      // saying out loud rather than leaving in a table.
+      const declared = new Set(descriptor.parameters.map((parameter) => parameter.id));
+      const strays = Object.keys(PARAM_INDICES[type] ?? {}).filter(
+        (id) => !declared.has(id) && !ENGINE_ONLY_PARAMS.has(id),
+      );
+      expect(strays).toEqual([]);
+    },
+  );
+
+  it("excuses only parameters that actually exist", () => {
+    // A reason attached to a parameter that has since been renamed or removed
+    // is a licence for the real one to go missing.
+    const stale: string[] = [];
+    for (const [type, excuses] of Object.entries(PARAMS_HANDLED_ELSEWHERE)) {
+      const descriptor = moduleRegistry.get(type);
+      const declared = new Set(descriptor?.parameters.map((parameter) => parameter.id) ?? []);
+      for (const id of Object.keys(excuses)) {
+        if (!declared.has(id)) stale.push(`${type}.${id}`);
+      }
+    }
+    expect(stale).toEqual([]);
+  });
+
+  it("names every audio module the engine cannot build at all", () => {
+    // A module with an audio port and no `ModuleKind` is skipped by `update`
+    // and renders silence on this backend while working on the other. That is
+    // allowed during the migration, but it has to be a listed decision rather
+    // than something a reader has to derive by diffing two tables.
+    const unbuildable = [...moduleRegistry.values()]
+      .filter((descriptor) => descriptor.ports.some((port) => port.signal.kind === "audio"))
+      .map((descriptor) => descriptor.type)
+      .filter((type) => MODULE_KINDS[type] === undefined);
+    expect(unbuildable).toEqual(NOT_YET_IN_RUST);
+  });
+});
+
+describe("The dry/wet mix", () => {
+  // The plan carries an effect's mix as `wet`, not among its parameters, so a
+  // bridge that only walks `parameters` never moves the mix knob in Rust.
+  it("reaches the engine's mix index", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("d", "m.audio-delay", {}, { wet: 0.25 })]));
+    const id = rack.moduleIdOf("d")!;
+    expect(engine.params.get(`${id}.${PARAM_INDICES["m.audio-delay"].mix}`)).toBe(0.25);
+  });
+
+  it("follows the knob without rebuilding the module", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("d", "m.audio-delay", {}, { wet: 0.25 })]));
+    rack.update(plan([node("d", "m.audio-delay", {}, { wet: 0.75 })], [], 2));
+    const id = rack.moduleIdOf("d")!;
+    expect(engine.params.get(`${id}.${PARAM_INDICES["m.audio-delay"].mix}`)).toBe(0.75);
+    expect(engine.of("remove")).toEqual([]);
+  });
+
+  it("sends nothing for a module with no mix", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth", {}, { wet: 0.5 })]));
+    const id = rack.moduleIdOf("s")!;
+    const sent = engine.of("param").filter((call) => call.startsWith(`param:${id}.`));
+    expect(sent.every((call) => !call.endsWith("=0.5"))).toBe(true);
+  });
+});
+
+describe("The modules ported for the Rust default", () => {
+  it("builds the mixer, the widener and the DP/4 machine", () => {
+    expect(MODULE_KINDS["m.audio-mixer"]).toBe(16);
+    expect(MODULE_KINDS["m.audio-widener"]).toBe(17);
+    expect(MODULE_KINDS["m.audio-dp4"]).toBe(18);
+    expect(NOT_YET_IN_RUST).toEqual([]);
+  });
+
+  it("sends each mixer channel's controls to its own stride", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("m", "m.audio-mixer", { "level-3": 1.5, "pan-3": -0.5, "solo-2": 1 })]));
+    const m = rack.moduleIdOf("m")!;
+    expect(engine.params.get(`${m}.8`)).toBe(1.5);
+    expect(engine.params.get(`${m}.9`)).toBe(-0.5);
+    expect(engine.params.get(`${m}.7`)).toBe(1);
+    expect(engine.params.get(`${m}.16`)).toBe(1);
+  });
+
+  it("packs the DP/4's configuration into its build variant", () => {
+    // The layout of `Dp4Machine::variant` in Rust: config − 1, AB, CD, AB↔CD,
+    // then each unit's algorithm in three bits.
+    const variant = variantOf("m.audio-dp4", {
+      "source-config": 3,
+      "ab-routing": "feedback1",
+      "cd-routing": "parallel",
+      "abcd-routing": "parallel",
+      "unit-a-algorithm": "hall",
+      "unit-b-algorithm": "large-room",
+      "unit-c-algorithm": "small-room",
+      "unit-d-algorithm": "large-plate",
+    });
+    expect(variant).toBe(2 | (2 << 2) | (1 << 4) | (1 << 6) | (4 << 7) | (3 << 10) | (2 << 13) | (1 << 16));
+    // A document from a newer build still makes a sound: names this one does
+    // not know build the defaults.
+    expect(variantOf("m.audio-dp4", { "source-config": 9, "unit-a-algorithm": "cathedral" }))
+      .toBe(variantOf("m.audio-dp4", {}));
+    expect(variantOf("m.audio-dp4", {})).toBe(0 | (0 << 2) | (1 << 4) | (0 << 6) | (1 << 7) | (2 << 10) | (4 << 13) | (0 << 16));
+  });
+});
+
+describe("Values the plan files as structure", () => {
+  // Web Audio rebuilds a node for these — a convolver's impulse, a wave's
+  // oscillator type — so the plan carries them as structure. Rust takes them
+  // as plain values, and a bridge that read only `parameters` left them all
+  // at their defaults: a reverb whose tail never moved, a crusher stuck at its
+  // default depth, a synth that only ever played its default waves.
+  it("sends a structural number that has an engine index", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([
+      node("r", "m.audio-reverb", {}, { structure: { "tail-seconds": 6, "decay-rate": 2, "impulse-seed": 3 } }),
+      node("b", "m.audio-bitcrusher", {}, { structure: { "bit-depth": 5 } }),
+    ]));
+    const [r, b] = ["r", "b"].map((id) => rack.moduleIdOf(id)!);
+    expect(engine.params.get(`${r}.${PARAM_INDICES["m.audio-reverb"]["tail-seconds"]}`)).toBe(6);
+    expect(engine.params.get(`${r}.${PARAM_INDICES["m.audio-reverb"]["decay-rate"]}`)).toBe(2);
+    expect(engine.params.get(`${b}.${PARAM_INDICES["m.audio-bitcrusher"]["bit-depth"]}`)).toBe(5);
+  });
+
+  it("sends a synth wave as the number Rust's Wave uses", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth", {}, {
+      structure: { "osc1-wave": "sine", "osc2-wave": "square", "osc3-wave": "pulse" },
+    })]));
+    const s = rack.moduleIdOf("s")!;
+    const at = (name: string) => engine.params.get(`${s}.${PARAM_INDICES["m.synth"][name]}`);
+    // `Wave` in rust/dsp-core/src/osc.rs: sine, triangle, sawtooth, square, pulse.
+    expect([at("osc1-wave"), at("osc2-wave"), at("osc3-wave")]).toEqual([0, 3, 4]);
+  });
+});
+
+describe("Prism effects in Rust", () => {
+  it("builds each as a prism module from its effect's code", () => {
+    expect(MODULE_KINDS["m.prism-tremolo"]).toBe(19);
+    expect(variantOf("m.prism-tremolo", {})).toBe(1);
+    expect(variantOf("m.prism-sh-compand", {})).toBe(16);
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("t", "m.prism-tremolo", { depth: 0.9, shape: 1 })]));
+    const t = rack.moduleIdOf("t")!;
+    expect(engine.modules.get(t)).toBe(19);
+    expect(engine.variants.get(t)).toBe(1);
+    expect(engine.params.get(`${t}.1`)).toBe(0.9);
+    expect(engine.params.get(`${t}.2`)).toBe(1);
+    // The fade, after the kernel's four controls.
+    expect(engine.params.get(`${t}.4`)).toBe(1);
+  });
+
+  it("feeds both sides of the host input into an unpatched one", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("t", "m.prism-tremolo")]));
+    const t = rack.moduleIdOf("t");
+    expect([...engine.cables].filter((c) => c.endsWith(`→${t}:0`) || c.endsWith(`→${t}:1`))).toHaveLength(2);
+  });
+});
+
+describe("LFOs and their routes", () => {
+  const lfo = (targets: { nodeId: string; parameterId: string }[] = []) => ({
+    ...plan([node("d", "m.audio-delay", { feedback: 0.4 })]),
+    modulators: [node("l", "m.lfo", { rate: 2, shape: 0, amount: 0.5, phase: 0 })],
+    modulations: targets.map((to) => ({ from: "l", to, scale: 0.475, min: 0, max: 0.95 })),
+  });
+
+  it("builds an LFO and sends it its controls", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(lfo());
+    const l = rack.moduleIdOf("l")!;
+    expect(engine.modules.get(l)).toBe(20);
+    expect(engine.params.get(`${l}.0`)).toBe(2);
+    expect(engine.params.get(`${l}.2`)).toBe(0.5);
+  });
+
+  it("routes the LFO to each mapped knob's engine index, and unroutes it", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(lfo([{ nodeId: "d", parameterId: "feedback" }]));
+    const [l, d] = ["l", "d"].map((id) => rack.moduleIdOf(id)!);
+    expect(engine.of("route")).toEqual([`route:${l}:0→${d}.${PARAM_INDICES["m.audio-delay"].feedback}*0.475[0,0.95]`]);
+    rack.update({ ...lfo([{ nodeId: "d", parameterId: "feedback" }]), generation: 2 });
+    expect(engine.of("route")).toHaveLength(1);
+    rack.update({ ...lfo([]), generation: 3 });
+    expect(engine.of("unroute")).toEqual([`unroute:${l}:0→${d}.${PARAM_INDICES["m.audio-delay"].feedback}`]);
+  });
+
+  it("forgets a route when the module it reaches is removed, which drops the route itself", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(lfo([{ nodeId: "d", parameterId: "feedback" }]));
+    const l = rack.moduleIdOf("l")!;
+    rack.update({ ...plan([], [], 2), modulators: [node("l", "m.lfo", { rate: 2, shape: 0, amount: 0.5, phase: 0 })] });
+    expect(rack.moduleIdOf("l")).toBe(l);
+    // The engine dropped it with the module; there is nothing left to unroute.
+    expect(engine.of("unroute")).toEqual([]);
+  });
+
+  it("meters every prism effect from the moment it is built, and no other module", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("t", "m.prism-tremolo"), node("g", "m.audio-gain")]));
+    expect(engine.of("meter")).toEqual([`meter:${rack.moduleIdOf("t")}=1`]);
+  });
+
+  it("reports each metered effect's input and output peaks, then starts the next interval", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("t", "m.prism-tremolo"), node("g", "m.audio-gain")]));
+    engine.level = [0.5, 0.25];
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.levels).toEqual({ t: [0.5, 0.25] });
+    expect(engine.of("clearlevels")).toEqual([`clearlevels:${rack.moduleIdOf("t")}`]);
+  });
+
+  it("sends no levels when nothing is metered", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("g", "m.audio-gain")]));
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.levels).toBeUndefined();
+  });
+
+  it("reports each LFO's phase and value", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(lfo());
+    engine.telemetry = 0.3;
+    engine.moduleOutput = -0.2;
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.lfos).toEqual({ l: [0.3, -0.2] });
+  });
+});
+
+describe("The grain engine in Rust", () => {
+  it("builds kind 21, takes notes, and puts each control at its index", () => {
+    expect(MODULE_KINDS["m.grain-engine"]).toBe(21);
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("g", "m.grain-engine", { engine: 0, stretch: 2, root: 48, "free-run": 1, level: 0.7 })]));
+    const g = rack.moduleIdOf("g")!;
+    expect(engine.modules.get(g)).toBe(21);
+    const at = (name: string) => engine.params.get(`${g}.${PARAM_INDICES["m.grain-engine"][name]}`);
+    expect([at("engine"), at("stretch"), at("root"), at("free-run"), at("level")]).toEqual([0, 2, 48, 1, 0.7]);
+    expect(PARAM_INDICES["m.grain-engine"].level).toBe(21);
+    expect(rack.instruments).toContain("g");
+  });
+});

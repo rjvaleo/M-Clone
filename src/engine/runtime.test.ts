@@ -2,8 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDefaultProject } from "./project";
 import { MRuntime } from "./runtime";
 import type { ClockDriver, SchedulerDriver } from "./scheduler";
-import { neutralTimeMap } from "./timemap";
-import type { Pattern, ProjectState, VoiceState } from "./types";
 
 class FakeAudioContext {
   currentTime = 0;
@@ -19,76 +17,6 @@ class FakeAudioContext {
     return { contextTime: this.currentTime, performanceTime: this.currentTime * 1000 };
   }
   resume = vi.fn(async () => undefined);
-}
-
-const PULSE_MS_240_BPM = 60_000 / (240 * 24);
-
-function quarterProject(): ProjectState {
-  const pattern: Pattern = {
-    id: "p",
-    steps: [{ pitches: [60] }, { pitches: [62] }, { pitches: [64] }, { pitches: [65] }],
-    scrambledSteps: [{ pitches: [60] }, { pitches: [62] }, { pitches: [64] }, { pitches: [65] }],
-    scrambleGeneration: 0,
-    outputLength: 4,
-    maxSize: 100,
-    chordMode: "single",
-    insertMode: "insert",
-    drumMachine: false,
-    timeBaseNumerator: 1,
-    timeBaseDenominator: 4,
-    phase: 0,
-  };
-  const voice: VoiceState = {
-    patternIndex: 0,
-    playEnabled: true,
-    transposition: 0,
-    noteOrderMix: { original: 100, cyclic: 0, utterly: 0 },
-    density: 1,
-    velocityRange: { low: 100, high: 100 },
-    timeBaseNumerator: 1,
-    timeBaseDenominator: 4,
-    phase: 0,
-    timeDistort: neutralTimeMap(),
-    legato: 0.9,
-    channel: 1,
-    outputChannels: [1],
-    program: 0,
-    sourceChannel: "all",
-    inputUse: "disabled",
-    echoInput: false,
-    mouseAdvance: false,
-  };
-  return {
-    tempo: 120,
-    patterns: [pattern],
-    voices: [voice],
-    root: 0,
-    scale: "chromatic",
-    scaleSnap: false,
-    seed: 1,
-    diatonicTranspose: false,
-    secondOrderTranspose: false,
-    chordTones: false,
-    midiAssignments: {
-      inputs: Array.from({ length: 16 }, (_, i) => ({ deviceId: null, channel: i + 1 })),
-      outputs: Array.from({ length: 16 }, (_, i) => ({ deviceId: null, channel: i + 1 })),
-      programBase: 0,
-      latencyMs: 0,
-      conductXController: 16,
-      conductYController: 17,
-    },
-    echoMapChannels: [],
-    cyclic: {
-      accent: [Array(16).fill(2)],
-      legato: [Array(16).fill(2)],
-      rhythm: [Array(16).fill(2)],
-    },
-    cyclicLengths: { accent: [16], legato: [16], rhythm: [16] },
-    cyclicValues: {
-      legato: [6, 25, 50, 75, 100],
-      rhythm: [0.5, 0.75, 1, 1.5, 2],
-    },
-  };
 }
 
 afterEach(() => {
@@ -230,111 +158,227 @@ describe("browser runtime transport", () => {
     wake!();
     expect(runtime.schedulingDiagnostics().recoveries).toBe(1);
   });
+});
 
-  it("drives transport and diagnostics from external MIDI clock input", async () => {
+describe("following an external transport", () => {
+  /** A runtime whose sync settings the test controls. */
+  const following = (over: Partial<{
+    externalClock: boolean; syncRatioDirection: "in" | "out";
+  }> = {}) => {
     vi.stubGlobal("AudioContext", FakeAudioContext);
-    let wake: (() => void) | null = null;
-    let now = 0;
-    let perfMs = 0;
-    const transport: string[] = [];
-    const diagnostics: Array<{ clockStatus: string; inferredBpm: number }> = [];
-    const scheduler: SchedulerDriver = {
-      repeat: (callback) => (wake = callback, callback),
-      once: (callback) => callback,
-      cancel: vi.fn(),
-    };
-    const runtime = new MRuntime(() => createDefaultProject(), null, {
-      scheduler,
-      clock: { nowSec: () => now },
-      performanceClockMs: () => perfMs,
+    return new MRuntime(() => createDefaultProject(), null, {
+      clock: { nowSec: () => 0 },
       getPerformanceSettings: () => ({
         useMetronome: false,
         sendClock: false,
+        externalClock: true,
         syncRatio: 4,
         syncRatioDirection: "in",
-        externalClockEnabled: true,
+        ...over,
       }),
-      onClockTransport: (event) => transport.push(event),
-      onClockDiagnostics: (snapshot) => diagnostics.push(snapshot),
     });
-    runtime.setSynthEnabled(false);
+  };
 
-    await runtime.onClockInput(0xfa, 0);
-    expect(transport).toEqual(["start"]);
-    await runtime.onClockInput(0xfa, 1);
-    expect(transport).toEqual(["start"]);
-
-    perfMs = PULSE_MS_240_BPM;
-    await runtime.onClockInput(0xf8, perfMs);
-    perfMs += PULSE_MS_240_BPM;
-    await runtime.onClockInput(0xf8, perfMs);
-    expect(diagnostics[diagnostics.length - 1]).toMatchObject({ clockStatus: "locked" });
-    expect(diagnostics[diagnostics.length - 1]?.inferredBpm).toBeCloseTo(240, 6);
-
-    now = 0.5;
-    perfMs = 500;
-    wake!();
-    expect(diagnostics[diagnostics.length - 1]).toMatchObject({ clockStatus: "lost" });
-
-    await runtime.onClockInput(0xfc, 510);
-    expect(transport[transport.length - 1]).toBe("stop");
-    await runtime.onClockInput(0xfb, 520);
-    expect(transport[transport.length - 1]).toBe("continue");
+  it("asks the host to roll on Start", () => {
+    expect(following().ingestClockMessage({ type: "start" }, 0)).toBe("start");
   });
 
-  it("applies external tempo changes at the next unscheduled boundary only", async () => {
+  it("asks the host to resume on Continue", () => {
+    // Distinct from Start so the host can choose not to rewind.
+    expect(following().ingestClockMessage({ type: "continue" }, 0)).toBe("continue");
+  });
+
+  it("asks the host to halt on Stop", () => {
+    expect(following().ingestClockMessage({ type: "stop" }, 0)).toBe("stop");
+  });
+
+  it("asks for nothing on a plain clock pulse", () => {
+    // Pulses set the tempo. Only the transport messages move the transport.
+    expect(following().ingestClockMessage({ type: "clock" }, 0)).toBeNull();
+  });
+
+  it("acts on Start even though no pulse has arrived yet", () => {
+    // Start precedes the first pulse, so a freshness check on the tick history
+    // would reject the very message that begins the run.
+    const runtime = following();
+    expect(runtime.ingestClockMessage({ type: "start" }, 0)).toBe("start");
+  });
+
+  it("stays silent when External Clock is off", () => {
+    // Still decoded and still tracked, so switching the option on mid-stream
+    // locks straight on — but it must not seize the transport unasked.
+    const runtime = following({ externalClock: false });
+    expect(runtime.ingestClockMessage({ type: "start" }, 0)).toBeNull();
+    expect(runtime.ingestClockMessage({ type: "stop" }, 0)).toBeNull();
+  });
+
+  it("stays silent while M is the master", () => {
+    const runtime = following({ syncRatioDirection: "out" });
+    expect(runtime.ingestClockMessage({ type: "start" }, 0)).toBeNull();
+  });
+
+  it("still tracks pulses while not following, so enabling it locks on at once", () => {
+    const runtime = following({ externalClock: false });
+    for (let i = 0; i < 24; i++) runtime.ingestClockMessage({ type: "clock" }, i * 0.0208333);
+    expect(runtime.followedTempo()).toBeCloseTo(120, 0);
+  });
+})
+
+describe("Tap Conduct gate", () => {
+  it("waits for a beat for nothing, releases one beat per tap, and runs free when frozen", async () => {
     vi.stubGlobal("AudioContext", FakeAudioContext);
     let wake: (() => void) | null = null;
-    let now = 0;
-    let perfMs = 0;
     const scheduler: SchedulerDriver = {
       repeat: (callback) => (wake = callback, callback),
       once: (callback) => callback,
       cancel: vi.fn(),
     };
-    const state = quarterProject();
-    const starts: number[] = [];
+    let now = 0;
+    const clock: ClockDriver = { nowSec: () => now };
+    const published: number[] = [];
+    const project = createDefaultProject();
+    project.cyclic.accent = project.cyclic.accent.map((cycle) => cycle.map(() => 2));
     const runtime = new MRuntime(
-      () => state,
-      (notes) => starts.push(...notes.filter((note) => note.voice === 0).map((note) => note.startSec)),
-      {
-        scheduler,
-        clock: { nowSec: () => now },
-        performanceClockMs: () => perfMs,
-        getPerformanceSettings: () => ({
-          useMetronome: false,
-          sendClock: false,
-          syncRatio: 4,
-          syncRatioDirection: "in",
-          externalClockEnabled: true,
-        }),
-      },
+      () => project,
+      (notes) => published.push(...notes.map((note) => note.startSec)),
+      { scheduler, clock },
     );
     runtime.setSynthEnabled(false);
-
-    await runtime.start();
-    wake!();
-
-    const pumpClock = async (untilMs: number) => {
-      if (perfMs === 0) await runtime.onClockInput(0xf8, perfMs);
-      while (perfMs + PULSE_MS_240_BPM <= untilMs) {
-        perfMs += PULSE_MS_240_BPM;
-        await runtime.onClockInput(0xf8, perfMs);
-      }
+    const run = (until: number) => {
+      for (; now < until; now = Math.round((now + 0.025) * 1000) / 1000) wake!();
     };
 
-    await pumpClock(440);
-    now = 0.45;
-    wake!();
-    await pumpClock(690);
-    now = 0.7;
-    wake!();
-    await pumpClock(940);
-    now = 0.95;
-    wake!();
+    runtime.beginTapConduct(true);
+    await runtime.start();
+    run(1);
+    expect(published).toEqual([]); // the first tap only starts the count
 
-    expect(starts[0]).toBeCloseTo(0.06, 9);
-    expect(starts[1]).toBeGreaterThanOrEqual(0.45);
-    expect(starts[2] - starts[1]).toBeCloseTo(0.25, 9);
+    runtime.tapConductBeat(0.5); // second tap at 1.0 s: one beat may play
+    run(2.2);
+    expect(published.length).toBeGreaterThan(0);
+    expect(published.every((at) => at >= 1 && at < 1.5)).toBe(true);
+
+    const heldCount = published.length;
+    runtime.tapConductBeat(0.5); // a late tap picks up where the music stopped
+    run(2.7);
+    const resumed = published.slice(heldCount);
+    expect(resumed.length).toBeGreaterThan(0);
+    expect(resumed.every((at) => at >= 2.2 && at < 2.7)).toBe(true);
+
+    runtime.freezeTapConduct();
+    run(4);
+    expect(Math.max(...published)).toBeGreaterThan(3.5);
+    runtime.stop();
+  });
+});
+
+describe("playing through a host's engine", () => {
+  const hostAudio = () => {
+    const context = new FakeAudioContext();
+    const output = { tag: "host output" } as unknown as AudioNode;
+    return { context: context as unknown as AudioContext, output };
+  };
+
+  it("uses the host's AudioContext and output instead of making its own", async () => {
+    const host = hostAudio();
+    const audio = vi.fn(() => host);
+    const runtime = new MRuntime(() => createDefaultProject(), null, { audio });
+    await runtime.start();
+    expect(runtime.context).toBe(host.context);
+    runtime.stop();
+  });
+
+  it("connects its master to the host's output, not to the speakers", async () => {
+    const host = hostAudio();
+    const connect = vi.fn();
+    (host.context as unknown as FakeAudioContext).createGain = () =>
+      ({ gain: { value: 0 }, connect } as unknown as GainNode);
+    const runtime = new MRuntime(() => createDefaultProject(), null, { audio: () => host });
+    await runtime.start();
+    expect(connect).toHaveBeenCalledWith(host.output);
+    expect(connect).not.toHaveBeenCalledWith(host.context.destination);
+    runtime.stop();
+  });
+
+  it("asks the host for audio only when it first needs it, and only once", async () => {
+    const audio = vi.fn(hostAudio);
+    const runtime = new MRuntime(() => createDefaultProject(), null, { audio });
+    expect(audio).not.toHaveBeenCalled();
+    await runtime.start();
+    runtime.stop();
+    await runtime.start();
+    runtime.stop();
+    expect(audio).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens MIDI through the host's access rather than asking the browser itself", async () => {
+    const access = {
+      inputs: new Map(), outputs: new Map(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    } as unknown as MIDIAccess;
+    const midiAccess = vi.fn(async () => access);
+    const runtime = new MRuntime(() => createDefaultProject(), null, { audio: hostAudio, midiAccess });
+    await runtime.midiPorts().enable();
+    expect(midiAccess).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("sending M's tracks to the canvas", () => {
+  const hostAudio = () => ({
+    context: new FakeAudioContext() as unknown as AudioContext,
+    output: {} as AudioNode,
+  });
+
+  it("hands every note to the canvas, voice by voice, at the time it was planned", async () => {
+    const sent: { type: string; voice: number; note: number; atSec: number }[] = [];
+    let now = 0;
+    const scheduler: SchedulerDriver = {
+      repeat: (fn) => { tick = fn; return 1 as unknown as ReturnType<SchedulerDriver["repeat"]>; },
+      once: () => 2 as unknown as ReturnType<SchedulerDriver["once"]>,
+      cancel: () => {},
+    };
+    let tick = () => {};
+    const runtime = new MRuntime(() => createDefaultProject(), null, {
+      audio: hostAudio,
+      clock: { nowSec: () => now },
+      scheduler,
+      canvas: {
+        send: (events) => {
+          for (const event of events) {
+            if (event.type === "note-on" || event.type === "note-off") {
+              sent.push({ type: event.type, voice: event.voice, note: event.note, atSec: event.atSec });
+            }
+          }
+        },
+        panic: () => {},
+        routedVoices: () => new Set([0, 1, 2, 3]),
+      },
+    });
+    await runtime.start();
+    for (let step = 0; step < 40; step++) { now += 0.025; tick(); }
+    runtime.stop();
+    const ons = sent.filter((event) => event.type === "note-on");
+    expect(ons.length).toBeGreaterThan(0);
+    expect(ons.every((event) => event.voice >= 0 && event.voice < 4)).toBe(true);
+  });
+
+  it("silences M's own synth on a routed track and leaves the others playing it", async () => {
+    const runtime = new MRuntime(() => createDefaultProject(), null, {
+      audio: hostAudio,
+      canvas: { send: () => {}, panic: () => {}, routedVoices: () => new Set([1]) },
+    });
+    expect(runtime.synthPlaysVoice(0)).toBe(true);
+    expect(runtime.synthPlaysVoice(1)).toBe(false);
+  });
+
+  it("silences the canvas players on stop", async () => {
+    const panic = vi.fn();
+    const runtime = new MRuntime(() => createDefaultProject(), null, {
+      audio: hostAudio,
+      canvas: { send: () => {}, panic, routedVoices: () => new Set() },
+    });
+    await runtime.start();
+    runtime.stop();
+    expect(panic).toHaveBeenCalled();
   });
 });

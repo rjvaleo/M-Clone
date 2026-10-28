@@ -6,6 +6,53 @@ All notable changes to M-Clone are recorded here. The format follows
 alpha: the interface, the audio rack, and the `.mclone` document may still
 change between minor versions.
 
+## [Unreleased] — idMLab, branch `modular`
+
+idMLab is a separate application on the `modular` branch: a node graph with its
+own document format (`.mmod`, plus the self-contained `.mmodpack`), not a mode of
+M Classic Web. It shares this repository and nothing else. Its state is recorded
+in [`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md).
+
+### Added
+
+- **Node graph runtime.** Integer ticks at 960 PPQN, counter-based deterministic
+  randomness, an AudioWorklet scheduling wake, tick-matched control values, and a
+  compiled plan with cycle rejection and per-node event budgets.
+- **Seventeen event modules**, including the Stream and Pattern Editor compounds,
+  which materialize into ordinary nodes at compile time rather than adding
+  runtime machinery.
+- **Audio rack.** Eight effects over one shell, a safety contract that forbids
+  topology changes on parameter edits and direct `AudioParam.value` writes, and
+  an always-on master limiter.
+- **Sound pool.** Content-addressed assets, waveform thumbnails, drag-and-drop,
+  audition, and a deterministic synthetic starter kit.
+- **Sample players.** Percussion, Looper, and Granular over a shared voice bank
+  with audio-clock choke groups and a lookahead grain scheduler.
+- **`.mmodpack`** — patch plus audio in one checksummed container.
+- **Shared preset pad.** Sixteen numbered slots, one component, every module.
+- **Tuning library.** 81 scales in true cents with stable ids, and the pure maths
+  that turns a scale degree into a frequency — ported from
+  `rjvaleo/scale-sequencer`, with its Raga Marwa data bug and its broken
+  below-the-root degrees fixed on the way in.
+- **PWM generator.** Fourier coefficients for a pulse of any duty cycle, the
+  first piece of the synth ([`MODULAR_SYNTH_PLAN.md`](MODULAR_SYNTH_PLAN.md)).
+- **A stereo rack.** Every source has a pan and Percussion pans per pad; the
+  feedback-delay reverbs tap alternate lines to alternate sides so their tails
+  decorrelate; a **Stereo Widener** does mid/side width with a mono bass band;
+  and a four-channel **Mixer** adds level, pan, mute and solo. Closes the Phase 6
+  deliverable "stereo audio ports … mixer/master output, mute/solo/pan/fader"
+  and tier 5's Stereo Widener. Before this the rack was mono on two wires: one
+  `createStereoPanner` caller in the whole codebase and no channel splitter or
+  merger anywhere.
+
+### Testing
+
+- Coverage measurement extended from Classic's engine and store to **all of
+  `src/modular`**, gated in `vitest.config.ts`: 100% of statements, lines and
+  functions, branches at 98.5. Writing those tests found four real defects,
+  including a runtime crash on a stale plan and voices started after dispose.
+- Work is test-first from 2026-08-03.
+
 ## [0.8.0-alpha] — 2026-08-02
 
 First public alpha build. M Classic Web is feature-complete against the M 2.7
@@ -86,7 +133,7 @@ hardware/browser MIDI certification.
   still works there.
 - Scheduling runs on the browser main thread with a bounded adaptive horizon.
   Background tabs, heavy pages, and system sleep can stall it; see
-  [`docs/MIDI_RELIABILITY_SPEC.md`](docs/MIDI_RELIABILITY_SPEC.md) for the exact
+  [`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md) §A.6 for the exact
   guarantees and recovery behavior.
 - Events more than 20 ms late are dropped; releases and state events are always
   retained.
