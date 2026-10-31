@@ -1,6 +1,8 @@
 # MultiGrainLive's sound, effects and synths in idMLab
 
-*23 October 2026. Agreed with RJ. Steps 1, 2 and 3's LFO built (branch `sound-port`).*
+*23 October 2026. Agreed with RJ. Updated 31 October 2026: steps 1–4 and 6
+built and merged; step 5's effects are in prism-fx and offered in idMLab,
+and MultiGrainLive has yet to switch to them (see step 5).*
 
 Bring MultiGrainLive's whole sound engine and every effect into idMLab, add
 modulators that can be mapped to any knob, port the scale-sequencer synth in
@@ -134,7 +136,7 @@ full, and add drum step programming. Automation is not ported.
      the engine allows. **Free run:** a switch that plays continuously, with
      notes ignored or only retuning.
    - Every control mappable by the modulators.
-   **Grain Engine parity built** (branch `grain-parity`, 31 Oct 2026).
+   **Grain Engine parity built** (#7, #9 and #10, merged 31 Oct 2026).
    - Every control of MultiGrainLive's granular tray, for all five engines,
      is a parameter with the tray's range, step, default and law
      (`grainEngineParity.test.ts` holds the inventory, from `app.js`, its
@@ -169,7 +171,8 @@ full, and add drum step programming. Automation is not ported.
      Extended as pages, each as tall as it needs, at one width (800).
    - Every number is mappable by the LFO. Switches and choices are not, by
      the plan's rule above.
-   - The pitch row's tuning menu (the 81 scales of `prism_grain::tuning`, or
+   - **The pitch row and the pad's grains** (#10). The tuning menu (the 81
+     scales of `prism_grain::tuning`, or
      a grid; `prism-gen` writes the table and the crate's `quantise` answers,
      which idMLab's own is held to) and Keys (the computer keyboard as a
      piano on the tuning, Z and X latching octaves). These fill the switch
@@ -179,9 +182,30 @@ full, and add drum step programming. Automation is not ported.
      `drawCloudPad` does, and counts them under the pad. The builder worker
      enumerates them too (`buildGrains`, `grain_jobs.rs`), from the samples
      it already holds, asked again only when what they are made from moves
-     (`grainJobs.ts`).
+     (`grainJobs.ts`). Pitch's column is wide enough for its reading.
+   - Left as they are, by RJ's choice: the layer cap is the crate's 64
+     (idMLab has no load governor to lower it); the page shown is not kept
+     between sessions; the pad's 8,000 grains span the whole file (it has no
+     zoom to spend them on); Keys plays while its window is open (idMLab has
+     no Edit mode to tie it to).
 5. **MultiGrainLive's other effects into prism-fx**, each against a render of
    the original, then offered in idMLab automatically.
+   **Effects moved and offered** (prism-fx `3bbfc1c`, `c7664b9`, `b45caa9`).
+   - The shaping and utility set: Invert, Swap, Width, DC, Ring mod, Rappify,
+     Boomerang, Amp fit, Gate, Utility, Maximizer and the rack's Gain (codes
+     65–76).
+   - The Dattorro family, every `ShapeKind` `dattorro.rs` builds, nineteen
+     effects (codes 77–95). The notch and resonator keep the gain control
+     they never read, marked inert so documents still open.
+   - Schroeder and Moorer reverbs, the phaser, the rack's EQ and compressor
+     (codes 97–101).
+   - Each is held to golden renders recorded from MultiGrainLive's `fx`
+     crate, bit for bit. idMLab's catalogue (`prismCatalog.generated.ts`)
+     carries 86 effects, and each has a panel.
+   **Not done:** MultiGrainLive switching to them. On `open-world` its `fx`
+   crate still runs its own `dattorro.rs`, `reverb.rs`, `phaser.rs`, `eq.rs`
+   and `comp.rs`; only `shape.rs` and `prism.rs` call into prism-fx. That
+   work is in MultiGrainLive's repository.
 6. **Synth parity and drums** (independent of 4–5; can run in parallel).
    - Synth: three LFOs with the original's targets, pulse width, filter
      envelope amount and key follow as the original, ping-pong delay with tape
@@ -349,7 +373,13 @@ full, and add drum step programming. Automation is not ported.
 
 - idMLab's Rust engine runs modules a sample at a time (`dsp-core` `Module`,
   one-sample cable delay); MultiGrainLive's engine is block-based (≤ 8192).
-- `m.granular` exists but ignores note pitch; `m.percussion` exists without a
-  step sequencer; `m.audio-mixer` is Web Audio only; no LFO module exists.
-- prism-fx is a local repo with no commits and no remote; MultiGrainLive
-  depends on it by path, and idMLab will too.
+- At the start (23 Oct): `m.granular` ignored note pitch; `m.percussion` had
+  no step sequencer; `m.audio-mixer` was Web Audio only; no LFO module
+  existed. All four are answered above: the Grain Engine, the drum
+  sequencer, the Rust mixer with sends, and the LFO, envelope follower and
+  gate ADSR.
+- prism-fx is RJ's `hyper-efx` repository on GitHub (the `prism-fx`
+  workspace: crates `prism-fx` and `prism-grain`). Both programs depend on
+  it by path: idMLab's `rust/dsp-core` at `../../../prism-fx`, so it is
+  cloned into a folder named `prism-fx` beside this one. The Grain Engine's
+  off-thread builds need its `7823250` or later.
