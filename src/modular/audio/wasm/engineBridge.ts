@@ -435,6 +435,44 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     root: 19,
     "free-run": 20,
     level: 21,
+    density: 22,
+    "size-range": 23,
+    wrap: 24,
+    "layer-spread": 25,
+    "layer-scatter": 26,
+    "layer-scatter-ms": 27,
+    "link-jitter": 28,
+    "drift-step": 29,
+    seed: 30,
+    "preserve-transients": 31,
+    detector: 32,
+    "search-ms": 33,
+    splice: 34,
+    stride: 35,
+    "window-shape": 36,
+    guard: 37,
+    floor: 38,
+    "analysis-ms": 39,
+    "phase-lock": 40,
+    "freq-trust": 41,
+    "phase-spread": 42,
+    "peak-width": 43,
+    "lock-width": 44,
+    freeze: 45,
+    blur: 46,
+    gate: 47,
+    "link-stereo": 48,
+    "re-anchor": 49,
+    "anchor-search-ms": 50,
+    blend: 51,
+    resolution: 52,
+    hold: 53,
+    spread: 54,
+    margin: 55,
+    "remake-noise": 56,
+    tone: 57,
+    hits: 58,
+    air: 59,
   },
   // `LfoModule`. Its targets are routes, not values; its colour is the face's.
   "m.lfo": { rate: 0, shape: 1, amount: 2, phase: 3 },
@@ -1076,6 +1114,11 @@ export class WasmRack {
       lfos[nodeId] = [this.engine.module_telemetry(built.moduleId), this.engine.module_output(built.moduleId, 0)];
     }
     if (Object.keys(lfos).length > 0) report.lfos = lfos;
+    const heads: Record<string, number> = {};
+    for (const [nodeId, built] of this.built) {
+      if (built.moduleType === "m.grain-engine") heads[nodeId] = this.engine.module_telemetry(built.moduleId);
+    }
+    if (Object.keys(heads).length > 0) report.heads = heads;
     const levels: Record<string, [number, number]> = {};
     for (const [nodeId, built] of this.built) {
       if (!isMetered(built.moduleType)) continue;

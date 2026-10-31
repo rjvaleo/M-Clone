@@ -7,26 +7,39 @@
 // far the pointer moves for it differs, which is what makes a faithful
 // SoundHack dial point where the original's did.
 
-export type Travel = "linear" | "log" | { skew: number };
+export type Travel = "linear" | "log" | { skew: number } | LogTicks;
+
+/**
+ * MultiGrainLive's logarithmic slider: a range input of `log` ticks, each
+ * tick the value `min·(max/min)^(tick/log)`, never snapped to the step
+ * (`param` in its `app.js`). `round` rounds the value, where its handler does.
+ */
+export type LogTicks = { log: number; round?: true };
+
+const isTicks = (travel: Travel): travel is LogTicks => typeof travel === "object" && "log" in travel;
 
 const clamp01 = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x);
 
 /** A logarithmic range must start above zero; one that does not is drawn straight. */
-const usesLog = (travel: Travel, min: number) => travel === "log" && min > 0;
+const usesLog = (travel: Travel, min: number) => (travel === "log" || isTicks(travel)) && min > 0;
 
 /** Where along its travel a value sits, 0 to 1. */
 export function toFraction(value: number, min: number, max: number, travel: Travel): number {
   if (max <= min) return 0;
   if (usesLog(travel, min)) return clamp01(Math.log(Math.max(value, min) / min) / Math.log(max / min));
   const straight = clamp01((value - min) / (max - min));
-  return typeof travel === "object" ? Math.pow(straight, travel.skew) : straight;
+  return typeof travel === "object" && "skew" in travel ? Math.pow(straight, travel.skew) : straight;
 }
 
 /** The value at a point along the travel. */
 export function fromFraction(fraction: number, min: number, max: number, travel: Travel): number {
   const f = clamp01(fraction);
+  if (isTicks(travel) && min > 0) {
+    const value = min * Math.pow(max / min, Math.round(f * travel.log) / travel.log);
+    return travel.round ? Math.round(value) : value;
+  }
   if (usesLog(travel, min)) return min * Math.pow(max / min, f);
-  const straight = typeof travel === "object" ? Math.pow(f, 1 / travel.skew) : f;
+  const straight = typeof travel === "object" && "skew" in travel ? Math.pow(f, 1 / travel.skew) : f;
   return min + straight * (max - min);
 }
 
@@ -45,9 +58,20 @@ export function dragValue(
 ): number {
   const from = toFraction(start, spec.min, spec.max, spec.travel);
   const moved = fromFraction(from + dy / (DRAG_PIXELS * (fine ? 10 : 1)), spec.min, spec.max, spec.travel);
+  // A tick of a logarithmic slider is its value already.
+  if (isTicks(spec.travel)) return moved;
   const step = spec.step && spec.step > 0 ? spec.step : 0;
-  const snapped = step ? Math.round(moved / step) * step : moved;
+  const snapped = step ? snapStep(moved, spec.min, step) : moved;
   return Number(Math.min(spec.max, Math.max(spec.min, snapped)).toPrecision(12));
+}
+
+/**
+ * The nearest step, counted from the bottom of the range as a range input
+ * counts it: from 3 in steps of 2 is 3, 5, 7. From a multiple of the step, as
+ * nearly every range starts, that is the plain grid.
+ */
+export function snapStep(value: number, min: number, step: number): number {
+  return min + Math.round((value - min) / step) * step;
 }
 
 /** A knob's pointer, in degrees from straight up: 270° of travel. */

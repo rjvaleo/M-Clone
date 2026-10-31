@@ -3010,36 +3010,84 @@ impl Module for LfoModule {
 
 /// `m.grain-engine` — MultiGrainLive's sound engine, from `prism-grain`: a
 /// sample from the bank played by any of its five engines (WSOLA, the phase
-/// vocoder, the grain cloud, PVSOLA, the hybrid), with the cloud's controls.
+/// vocoder, the grain cloud, PVSOLA, the hybrid), with every control of
+/// MultiGrainLive's granular tray.
 ///
-/// The engine renders blocks of `BLOCK` frames; this plays them out a sample
-/// at a time, one block behind. A note sets the pitch in semitones from
-/// `ROOT`. Gated, a note starts the file and its release fades it out; with
-/// `FREE_RUN` on it plays continuously, looping the file, and notes only
-/// retune it. The sample is resampled to the rack's rate when it arrives, and
-/// the hybrid's separation is made then too, if the hybrid is chosen: both
-/// allocate, once per sample, on the audio thread.
+/// Each voice renders blocks of `BLOCK` frames on its own `Stretcher` and
+/// plays them out a sample at a time, one block behind. A note sets the pitch
+/// in semitones from `ROOT`. Gated, every note is a voice of its own (up to
+/// `VOICES`, the oldest given up past that): it starts the file and its
+/// release fades it out. With `FREE_RUN` on one voice plays continuously,
+/// looping the file, and notes only retune it.
+///
+/// What MultiGrainLive builds off its audio thread is built here as it builds
+/// it, from the same functions with the same arguments (its `live.rs`): the
+/// WSOLA transient map (`map_for`), each engine's extra layers (`LayerBank`)
+/// and the hybrid's separation. The sample is resampled to the rack's rate
+/// when it arrives. All of these allocate, on the audio thread: at load, and
+/// when one of the controls they hang on has held still for `SETTLE_SECONDS`
+/// (MultiGrainLive waits for the control's release; a choice of engine is
+/// acted on at once there, and here).
 pub struct GrainEngineModule {
-    stretcher: prism_grain::Stretcher,
+    voices: Vec<GrainVoice>,
     source: Option<prism_grain::Source>,
-    /// The hybrid's separated source, made when the hybrid first needs it.
-    parts_ready: bool,
     sp: prism_grain::StreamParams,
+    /// The hybrid's separated source and the split it was made with.
+    parts: Option<prism_grain::decompose::Split>,
+    /// The transient map's inputs when it was last built.
+    map_key: Option<[f32; 9]>,
+    /// The engine and layer count the voices' banks were built for.
+    bank_key: Option<(prism_grain::stretch::Algorithm, u32)>,
+    /// Frames since a control a rebuild hangs on last moved.
+    still: usize,
     sample: Option<u32>,
     loaded: Option<u32>,
-    block: Vec<f32>,
-    read: usize,
     events: Vec<prism_grain::grain::GrainEvent>,
     seen: [f32; Self::PARAM_COUNT],
-    held: Option<u8>,
-    detune: f32,
     /// The last note played, which a free-running engine keeps the pitch of.
-    pitch_note: Option<u8>,
-    env: f32,
+    pitch_note: Option<(u8, f32)>,
+    /// Counts note-ons, so the oldest voice can be found.
+    clock: u64,
     attack: f32,
     release: f32,
     fade: Tracked,
     sample_rate: f32,
+}
+
+/// One note's engine: its own `Stretcher`, block and gate.
+struct GrainVoice {
+    stretcher: prism_grain::Stretcher,
+    block: Vec<f32>,
+    read: usize,
+    /// The note holding it open, while held.
+    held: Option<u8>,
+    /// The note it was started by, and its detune in cents.
+    note: Option<(u8, f32)>,
+    env: f32,
+    started: u64,
+}
+
+impl GrainVoice {
+    fn new(rate: f32) -> Self {
+        Self {
+            stretcher: prism_grain::Stretcher::new(GrainEngineModule::BLOCK, 2, rate as u32),
+            block: vec![0.0; GrainEngineModule::BLOCK * 2],
+            read: GrainEngineModule::BLOCK,
+            held: None,
+            note: None,
+            env: 0.0,
+            started: 0,
+        }
+    }
+
+    /// From the top, at the pitch it will play: the pitched engines size
+    /// their read-ahead from it.
+    fn restart(&mut self, sp: &prism_grain::StreamParams, semitones: f32) {
+        let mut sp = *sp;
+        sp.semitones = semitones;
+        self.stretcher.seek(0, &sp);
+        self.read = GrainEngineModule::BLOCK;
+    }
 }
 
 impl GrainEngineModule {
@@ -3065,31 +3113,77 @@ impl GrainEngineModule {
     pub const ROOT: usize = 19;
     pub const FREE_RUN: usize = 20;
     pub const FADE: usize = 21;
-    pub const PARAM_COUNT: usize = 22;
+    // The rest of the grain section.
+    pub const DENSITY: usize = 22;
+    pub const SIZE_RANGE: usize = 23;
+    pub const WRAP: usize = 24;
+    pub const LAYER_SPREAD: usize = 25;
+    pub const LAYER_SCATTER: usize = 26;
+    pub const LAYER_SCATTER_MS: usize = 27;
+    pub const LINK_JITTER: usize = 28;
+    pub const DRIFT_STEP: usize = 29;
+    pub const SEED: usize = 30;
+    // WSOLA's.
+    pub const PRESERVE: usize = 31;
+    pub const SENSITIVITY: usize = 32;
+    pub const SEARCH_MS: usize = 33;
+    pub const SPLICE: usize = 34;
+    pub const STRIDE: usize = 35;
+    pub const SHAPE: usize = 36;
+    pub const GUARD: usize = 37;
+    pub const FLOOR: usize = 38;
+    // The vocoder's.
+    pub const ANALYSIS_MS: usize = 39;
+    pub const PHASE_LOCK: usize = 40;
+    pub const FREQ_TRUST: usize = 41;
+    pub const PHASE_SPREAD: usize = 42;
+    pub const PEAK_WIDTH: usize = 43;
+    pub const LOCK_WIDTH: usize = 44;
+    pub const FREEZE: usize = 45;
+    pub const BLUR: usize = 46;
+    pub const GATE: usize = 47;
+    pub const STEREO_LINK: usize = 48;
+    // PVSOLA's.
+    pub const ANCHOR: usize = 49;
+    pub const ANCHOR_SEARCH_MS: usize = 50;
+    pub const BLEND: usize = 51;
+    // The hybrid's.
+    pub const RESOLUTION: usize = 52;
+    pub const HOLD: usize = 53;
+    pub const SPREAD: usize = 54;
+    pub const MARGIN: usize = 55;
+    pub const REMAKE_NOISE: usize = 56;
+    pub const TONE: usize = 57;
+    pub const HITS: usize = 58;
+    pub const AIR: usize = 59;
+    pub const PARAM_COUNT: usize = 60;
     /// The frames the engine renders at a time.
     pub const BLOCK: usize = 128;
+    /// The most notes sounding at once, gated.
+    pub const VOICES: usize = 4;
+    /// How long a control a rebuild hangs on must hold still first.
+    pub const SETTLE_SECONDS: f32 = 0.2;
     const ATTACK_SECONDS: f32 = 0.005;
     const RELEASE_SECONDS: f32 = 0.1;
 
     pub fn new(sample_rate: f32) -> Self {
         let rate = if sample_rate > 0.0 { sample_rate } else { 48_000.0 };
         Self {
-            stretcher: prism_grain::Stretcher::new(Self::BLOCK, 2, rate as u32),
+            voices: (0..Self::VOICES).map(|_| GrainVoice::new(rate)).collect(),
             source: None,
-            parts_ready: false,
             sp: prism_grain::StreamParams::new(0, rate as u32),
+            parts: None,
+            map_key: None,
+            bank_key: None,
+            still: 0,
             sample: None,
             loaded: None,
-            block: vec![0.0; Self::BLOCK * 2],
-            read: Self::BLOCK,
             // The engine reports grain starts for MultiGrainLive's visualiser;
             // there is none here, so it is given nowhere to put them.
             events: Vec::new(),
             seen: [f32::NAN; Self::PARAM_COUNT],
-            held: None,
-            detune: 0.0,
             pitch_note: None,
-            env: 0.0,
+            clock: 0,
             attack: 1.0 / (Self::ATTACK_SECONDS * rate),
             release: 1.0 / (Self::RELEASE_SECONDS * rate),
             fade: Tracked::new(0.0),
@@ -3109,17 +3203,25 @@ impl GrainEngineModule {
     }
 
     /// The controls into the engine's parameters, when any has moved.
+    ///
+    /// Each is held where MultiGrainLive's server holds it (`routes.rs`, the
+    /// `stretch` op), or where this module held it before, whichever is the
+    /// wider, so a patch saved then sounds as it did. Counts are cast as the
+    /// server casts them, by truncation.
     fn sync(&mut self, raw: &[f32; Self::PARAM_COUNT]) {
         if *raw == self.seen {
             return;
         }
         self.seen = *raw;
+        use prism_grain::stretch::{Splice, WinShape};
+        let on = |i: usize| raw[i] >= 0.5;
         let sp = &mut self.sp;
         sp.algorithm = Self::algorithm(raw[Self::ENGINE]);
         sp.ratio = clamp(raw[Self::STRETCH], 0.01, 100.0);
         sp.window_ms = clamp(raw[Self::WINDOW_MS], 5.0, 2_000.0);
         let g = &mut sp.grain;
-        g.rate_hz = clamp(raw[Self::RATE], 0.0, 1_000.0);
+        g.rate_hz = clamp(raw[Self::RATE], 0.0, 2_000.0);
+        g.density_hz = clamp(raw[Self::DENSITY], 0.0, 500.0);
         g.overlap = clamp(raw[Self::OVERLAP], 1.0, 16.0);
         g.size_jitter = clamp(raw[Self::SIZE_JITTER], 0.0, 1.0);
         g.position_jitter_ms = clamp(raw[Self::POSITION_JITTER], 0.0, 10_000.0);
@@ -3127,20 +3229,74 @@ impl GrainEngineModule {
         g.pitch_drift_semis = clamp(raw[Self::PITCH_DRIFT], 0.0, 48.0);
         g.drift_rate_hz = clamp(raw[Self::DRIFT_RATE], 0.01, 50.0);
         g.layers = clamp(raw[Self::LAYERS], 1.0, prism_grain::render::MAX_LAYERS as f32) as u32;
-        g.position = clamp(raw[Self::POSITION], 0.0, 1.0);
+        g.seed = raw[Self::SEED].max(0.0) as u32;
+        g.position = clamp(raw[Self::POSITION], -1.0, 1.0);
         g.scan = clamp(raw[Self::SCAN], -8.0, 8.0);
-        g.reverse = raw[Self::REVERSE] >= 0.5;
+        g.reverse = on(Self::REVERSE);
         g.envelope = clamp(raw[Self::ENVELOPE], 0.0, 1.0);
+        g.size_range = clamp(raw[Self::SIZE_RANGE], 1.0, 8.0);
+        g.wrap = on(Self::WRAP);
+        g.layer_spread = clamp(raw[Self::LAYER_SPREAD], 0.0, 4.0);
+        g.layer_scatter = clamp(raw[Self::LAYER_SCATTER], 0.0, 1.0);
+        g.layer_scatter_ms = clamp(raw[Self::LAYER_SCATTER_MS], 0.0, 5_000.0);
+        g.link_jitter = on(Self::LINK_JITTER);
+        g.drift_step = on(Self::DRIFT_STEP);
         g.pan_spread = clamp(raw[Self::PAN_SPREAD], 0.0, 1.0);
-        sp.cloud = raw[Self::CLOUD] >= 0.5;
+        let w = &mut sp.wsola;
+        w.preserve_transients = on(Self::PRESERVE);
+        w.sensitivity = clamp(raw[Self::SENSITIVITY], 0.0, 1.0);
+        w.search_ms = clamp(raw[Self::SEARCH_MS], 0.0, 200.0);
+        w.splice = match raw[Self::SPLICE].round() as i32 {
+            1 => Splice::Different,
+            2 => Splice::Loudest,
+            _ => Splice::Similar,
+        };
+        w.stride = clamp(raw[Self::STRIDE], 1.0, 256.0) as u32;
+        w.shape = match raw[Self::SHAPE].round() as i32 {
+            1 => WinShape::Triangle,
+            2 => WinShape::Rect,
+            _ => WinShape::Hann,
+        };
+        w.guard_hops = clamp(raw[Self::GUARD], 1.0, 16.0);
+        w.floor = clamp(raw[Self::FLOOR], 0.0, 2.0);
+        let v = &mut sp.vocoder;
+        v.window_ms = clamp(raw[Self::ANALYSIS_MS], 5.0, 500.0);
+        v.phase_lock = on(Self::PHASE_LOCK);
+        v.freq_trust = clamp(raw[Self::FREQ_TRUST], 0.0, 4.0);
+        v.phase_spread = clamp(raw[Self::PHASE_SPREAD], 0.0, 4.0);
+        v.peak_width = clamp(raw[Self::PEAK_WIDTH], 1.0, 32.0) as u32;
+        v.lock_width = clamp(raw[Self::LOCK_WIDTH], 0.0, 4.0);
+        v.mag_freeze = clamp(raw[Self::FREEZE], 0.0, 1.0);
+        v.mag_blur = clamp(raw[Self::BLUR], 0.0, 1.0);
+        v.mag_gate = clamp(raw[Self::GATE], 0.0, 1.0);
+        v.stereo_link = on(Self::STEREO_LINK);
+        let p = &mut sp.pvsola;
+        p.anchor_frames = clamp(raw[Self::ANCHOR], 1.0, 64.0) as u32;
+        p.search_ms = clamp(raw[Self::ANCHOR_SEARCH_MS], 0.0, 200.0);
+        p.blend = clamp(raw[Self::BLEND], 0.0, 1.0);
+        let h = &mut sp.hybrid;
+        h.fft_size = clamp(raw[Self::RESOLUTION], 256.0, 8_192.0) as u32;
+        h.time_span = clamp(raw[Self::HOLD], 3.0, 101.0) as u32;
+        h.freq_span = clamp(raw[Self::SPREAD], 3.0, 101.0) as u32;
+        h.margin = clamp(raw[Self::MARGIN], 1.0, 8.0);
+        h.morph_noise = on(Self::REMAKE_NOISE);
+        h.harmonic_level = clamp(raw[Self::TONE], 0.0, 4.0);
+        h.percussive_level = clamp(raw[Self::HITS], 0.0, 4.0);
+        h.residual_level = clamp(raw[Self::AIR], 0.0, 4.0);
+        sp.cloud = on(Self::CLOUD);
         sp.cloud_mix = clamp(raw[Self::CLOUD_MIX], 0.0, 1.0);
-        self.retune();
+        // A new engine needs its layers before its next block, as
+        // MultiGrainLive builds them at once for a switch of engine.
+        if self.bank_key.is_some_and(|(alg, _)| alg != self.sp.algorithm) {
+            self.build_banks();
+        }
+        self.still = 0;
     }
 
-    fn retune(&mut self) {
-        let offset = self.pitch_note.map(|n| n as f32 - self.seen[Self::ROOT] + self.detune / 100.0).unwrap_or(0.0);
-        let semitones = if self.seen[Self::SEMITONES].is_finite() { self.seen[Self::SEMITONES] } else { 0.0 };
-        self.sp.semitones = clamp(semitones + offset, -48.0, 48.0);
+    /// The pitch a voice renders at: Transpose, plus its note from the root.
+    fn semitones(&self, offset: f32) -> f32 {
+        let transpose = if self.seen[Self::SEMITONES].is_finite() { self.seen[Self::SEMITONES] } else { 0.0 };
+        clamp(transpose + offset, -48.0, 48.0)
     }
 
     /// The bank's sample, stereo and at the rack's rate.
@@ -3157,25 +3313,137 @@ impl GrainEngineModule {
         }
         self.sp.in_frames = frames;
         self.source = Some(prism_grain::Source { samples, channels: 2 });
-        self.parts_ready = false;
-        self.stretcher.seek(0, &self.sp);
-        self.read = Self::BLOCK;
+        self.parts = None;
+        self.map_key = None;
+        self.build_map();
+        self.build_parts();
+        self.build_banks();
+        self.restart_all();
     }
 
-    fn render_block(&mut self) {
+    fn restart_all(&mut self) {
+        for index in 0..self.voices.len() {
+            let semitones = self.semitones(self.offset(index));
+            let sp = self.sp;
+            self.voices[index].restart(&sp, semitones);
+        }
+    }
+
+    /// What the transient map is made from: `Rebuilds::decide`'s list.
+    fn map_inputs(&self) -> [f32; 9] {
+        let (w, g) = (&self.sp.wsola, &self.sp.grain);
+        [
+            if w.preserve_transients { 1.0 } else { 0.0 },
+            w.sensitivity, w.floor, w.guard_hops,
+            self.sp.ratio, self.sp.window_ms, g.overlap, g.density_hz,
+            self.sp.in_frames as f32,
+        ]
+    }
+
+    /// MultiGrainLive's `map_for`: the onset detector over the whole source,
+    /// when transients are preserved, and a straight line otherwise.
+    fn build_map(&mut self) {
+        let key = self.map_inputs();
+        if self.map_key == Some(key) {
+            return;
+        }
+        self.map_key = Some(key);
         let Some(source) = self.source.as_ref() else { return };
-        if self.sp.algorithm == prism_grain::stretch::Algorithm::Hybrid && !self.parts_ready {
-            let parts = prism_grain::hstream::Parts::separate(&source.samples, 2, self.sp.hybrid);
-            self.stretcher.set_parts(std::sync::Arc::new(parts));
-            self.parts_ready = true;
+        let map = Self::map_for(source, &self.sp);
+        for voice in &mut self.voices {
+            voice.stretcher.set_map(map.clone());
         }
+    }
+
+    fn map_for(source: &prism_grain::Source, sp: &prism_grain::StreamParams) -> Option<prism_grain::transient::TimeMap> {
+        if !sp.wsola.preserve_transients {
+            return None;
+        }
+        let hop = prism_grain::grain::plan(source.frames(), sp.sample_rate, sp.ratio, sp.window_ms, &sp.grain).hop.max(1);
+        prism_grain::stream::WsolaStream::build_map(&source.samples, source.channels, sp.sample_rate, sp.ratio, hop, &sp.wsola)
+    }
+
+    /// The hybrid's separation, while the hybrid is the engine.
+    fn build_parts(&mut self) {
+        if self.sp.algorithm != prism_grain::stretch::Algorithm::Hybrid {
+            return;
+        }
+        let split = self.sp.hybrid.split();
+        if self.parts == Some(split) {
+            return;
+        }
+        let Some(source) = self.source.as_ref() else { return };
+        let parts = std::sync::Arc::new(prism_grain::hstream::Parts::separate(&source.samples, source.channels, self.sp.hybrid));
+        for voice in &mut self.voices {
+            voice.stretcher.set_parts(std::sync::Arc::clone(&parts));
+        }
+        self.parts = Some(split);
+    }
+
+    /// Each voice's extra layers, for the engine and count chosen.
+    fn build_banks(&mut self) {
+        let key = (self.sp.algorithm, self.sp.grain.layers);
+        if self.bank_key == Some(key) {
+            return;
+        }
+        self.bank_key = Some(key);
+        for voice in &mut self.voices {
+            voice.stretcher.set_bank(prism_grain::stretcher::LayerBank::build(
+                key.0, key.1, Self::BLOCK, 2, self.sample_rate as u32,
+            ));
+        }
+    }
+
+    /// The rebuilds a settled control is waiting on.
+    fn settle(&mut self) {
+        if self.still < (Self::SETTLE_SECONDS * self.sample_rate) as usize {
+            self.still += 1;
+            return;
+        }
+        if self.still > (Self::SETTLE_SECONDS * self.sample_rate) as usize || self.source.is_none() {
+            return;
+        }
+        self.still += 1;
+        self.build_map();
+        self.build_parts();
+        self.build_banks();
+    }
+
+    fn render_block(&mut self, index: usize) {
+        if self.source.is_none() {
+            return;
+        }
+        // The hybrid chosen since the sample arrived: separated now, as
+        // MultiGrainLive starts separating the moment it is chosen.
+        if self.sp.algorithm == prism_grain::stretch::Algorithm::Hybrid && self.parts.is_none() {
+            self.build_parts();
+        }
+        let mut sp = self.sp;
+        sp.semitones = self.semitones(self.offset(index));
+        let (Some(source), voice) = (self.source.as_ref(), &mut self.voices[index]) else { return };
         // Round again from the top: the file loops.
-        let length = self.sp.in_frames as f64 * self.sp.ratio as f64;
-        if self.stretcher.position() as f64 >= length {
-            self.stretcher.seek(0, &self.sp);
+        let length = sp.in_frames as f64 * sp.ratio as f64;
+        if voice.stretcher.position() as f64 >= length {
+            voice.stretcher.seek(0, &sp);
         }
-        self.stretcher.render(&mut self.block, 2, source, &self.sp, &mut self.events);
-        self.read = 0;
+        voice.stretcher.render(&mut voice.block, 2, source, &sp, &mut self.events);
+        voice.read = 0;
+    }
+
+    /// A voice's semitones from the root: its note's, or free running the
+    /// last note played. Read at each block, so Root retunes what sounds.
+    fn offset(&self, index: usize) -> f32 {
+        let free = self.seen[Self::FREE_RUN] >= 0.5;
+        let note = if free { self.pitch_note } else { self.voices[index].note };
+        note.map(|(n, cents)| n as f32 - self.seen[Self::ROOT] + cents / 100.0).unwrap_or(0.0)
+    }
+
+    /// A voice for a new gated note: a silent one, else the oldest.
+    fn free_voice(&self) -> usize {
+        let silent = self.voices.iter().position(|v| v.held.is_none() && v.env == 0.0);
+        silent.unwrap_or_else(|| {
+            (0..self.voices.len()).min_by_key(|&i| self.voices[i].started).unwrap_or(0)
+        })
     }
 }
 
@@ -3192,26 +3460,34 @@ impl Module for GrainEngineModule {
                 self.loaded = self.sample;
             }
         }
+        self.settle();
         // The instrument's Level, which goes to 2 as the other players' does.
         let fade = self.fade.follow(clamp(ports.param(Self::FADE), 0.0, 2.0));
         if self.source.is_none() {
             output_stereo(ports, [0.0; 2]);
             return;
         }
-        let open = raw[Self::FREE_RUN] >= 0.5 || self.held.is_some();
-        self.env = if open { (self.env + self.attack).min(1.0) } else { (self.env - self.release).max(0.0) };
-        if self.env == 0.0 && !open {
-            // Gated and released: nothing plays, and the file does not move.
-            output_stereo(ports, [0.0; 2]);
-            return;
+        let free = raw[Self::FREE_RUN] >= 0.5;
+        let mut out = [0.0f32; 2];
+        for index in 0..self.voices.len() {
+            // Free running, the first voice plays and the others are let go.
+            let open = if free { index == 0 } else { self.voices[index].held.is_some() };
+            let voice = &mut self.voices[index];
+            voice.env = if open { (voice.env + self.attack).min(1.0) } else { (voice.env - self.release).max(0.0) };
+            if voice.env == 0.0 && !open {
+                // Released: nothing plays, and the file does not move.
+                continue;
+            }
+            if self.voices[index].read >= Self::BLOCK {
+                self.render_block(index);
+            }
+            let voice = &mut self.voices[index];
+            let at = voice.read.min(Self::BLOCK - 1) * 2;
+            voice.read += 1;
+            out[0] += voice.block[at] * voice.env;
+            out[1] += voice.block[at + 1] * voice.env;
         }
-        if self.read >= Self::BLOCK {
-            self.render_block();
-        }
-        let at = self.read.min(Self::BLOCK - 1) * 2;
-        self.read += 1;
-        let gain = self.env * fade;
-        output_stereo(ports, [self.block[at] * gain, self.block[at + 1] * gain]);
+        output_stereo(ports, [out[0] * fade, out[1] * fade]);
     }
 
     fn set_sample_slot(&mut self, _slot: u32, sample: u32) {
@@ -3219,26 +3495,52 @@ impl Module for GrainEngineModule {
     }
 
     fn note_on(&mut self, note: u8, _velocity: f32, detune_cents: f32) {
-        let gated = self.seen[Self::FREE_RUN] < 0.5;
-        // Gated, a note from silence starts the file again.
-        if gated && self.held.is_none() && self.env == 0.0 {
-            self.stretcher.seek(0, &self.sp);
-            self.read = Self::BLOCK;
+        self.clock += 1;
+        self.pitch_note = Some((note, detune_cents));
+        if self.seen[Self::FREE_RUN] >= 0.5 {
+            return;
         }
-        self.held = Some(note);
-        self.pitch_note = Some(note);
-        self.detune = detune_cents;
-        self.retune();
+        // Gated, a note is a voice of its own, and starts the file.
+        let index = self.free_voice();
+        let voice = &mut self.voices[index];
+        voice.held = Some(note);
+        voice.note = Some((note, detune_cents));
+        voice.started = self.clock;
+        voice.env = 0.0;
+        let (sp, semitones) = (self.sp, self.semitones(self.offset(index)));
+        self.voices[index].restart(&sp, semitones);
     }
 
     fn note_off(&mut self, note: u8) {
-        if self.held == Some(note) {
-            self.held = None;
+        for voice in &mut self.voices {
+            if voice.held == Some(note) {
+                voice.held = None;
+            }
         }
     }
 
     fn all_notes_off(&mut self) {
-        self.held = None;
+        for voice in &mut self.voices {
+            voice.held = None;
+        }
+    }
+
+    /// Where the newest sounding voice is reading, as a share of the file:
+    /// its output position mapped back through the stretch, as
+    /// MultiGrainLive's `sourceFrameNow`. NaN while nothing sounds.
+    fn telemetry(&self) -> f32 {
+        let free = self.seen[Self::FREE_RUN] >= 0.5;
+        let sounding = self.voices.iter().enumerate()
+            .filter(|(i, v)| if free { *i == 0 } else { v.env > 0.0 || v.held.is_some() })
+            .max_by_key(|(_, v)| v.started);
+        match (sounding, self.sp.in_frames) {
+            (Some((_, v)), frames) if frames > 0 => {
+                let ahead = (Self::BLOCK - v.read.min(Self::BLOCK)) as f64;
+                let out = (v.stretcher.position() as f64 - ahead).max(0.0);
+                ((out / self.sp.ratio as f64) / frames as f64) as f32
+            }
+            _ => f32::NAN,
+        }
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
@@ -3250,10 +3552,11 @@ impl Module for GrainEngineModule {
     }
 
     fn reset(&mut self) {
-        self.stretcher.seek(0, &self.sp);
-        self.read = Self::BLOCK;
-        self.held = None;
-        self.env = 0.0;
+        for voice in &mut self.voices {
+            voice.held = None;
+            voice.env = 0.0;
+        }
+        self.restart_all();
         self.fade.reset();
     }
 
@@ -3261,8 +3564,16 @@ impl Module for GrainEngineModule {
     fn output_count(&self) -> usize { 2 }
     fn param_count(&self) -> usize { Self::PARAM_COUNT }
 
+    /// The crate's own defaults, which are MultiGrainLive's (`GRAIN_DEFAULTS`
+    /// and the rest in `app.js` mirror them), so a patch saved before a control
+    /// existed plays exactly as it did.
     fn param_default(&self, index: usize) -> f32 {
         let g = prism_grain::Grain::default();
+        let w = prism_grain::stretch::WsolaParams::default();
+        let v = prism_grain::stretch::VocoderParams::default();
+        let p = prism_grain::pvsola::PvsolaParams::default();
+        let h = prism_grain::hybrid::HybridParams::default();
+        let flag = |b: bool| if b { 1.0 } else { 0.0 };
         match index {
             Self::ENGINE => 2.0,
             Self::STRETCH => 1.0,
@@ -3274,6 +3585,32 @@ impl Module for GrainEngineModule {
             Self::ENVELOPE => g.envelope,
             Self::CLOUD_MIX => 0.5,
             Self::ROOT => 60.0,
+            Self::SIZE_RANGE => g.size_range,
+            Self::LAYER_SPREAD => g.layer_spread,
+            Self::LAYER_SCATTER_MS => g.layer_scatter_ms,
+            Self::SEED => g.seed as f32,
+            Self::SENSITIVITY => w.sensitivity,
+            Self::SEARCH_MS => w.search_ms,
+            Self::STRIDE => w.stride as f32,
+            Self::GUARD => w.guard_hops,
+            Self::FLOOR => w.floor,
+            Self::ANALYSIS_MS => v.window_ms,
+            Self::PHASE_LOCK => flag(v.phase_lock),
+            Self::FREQ_TRUST => v.freq_trust,
+            Self::PHASE_SPREAD => v.phase_spread,
+            Self::PEAK_WIDTH => v.peak_width as f32,
+            Self::LOCK_WIDTH => v.lock_width,
+            Self::ANCHOR => p.anchor_frames as f32,
+            Self::ANCHOR_SEARCH_MS => p.search_ms,
+            Self::BLEND => p.blend,
+            Self::RESOLUTION => h.fft_size as f32,
+            Self::HOLD => h.time_span as f32,
+            Self::SPREAD => h.freq_span as f32,
+            Self::MARGIN => h.margin,
+            Self::REMAKE_NOISE => flag(h.morph_noise),
+            Self::TONE => h.harmonic_level,
+            Self::HITS => h.percussive_level,
+            Self::AIR => h.residual_level,
             _ => 0.0,
         }
     }
@@ -5166,6 +5503,287 @@ mod tests {
             engine.process();
             assert_eq!(engine.output_of(module, 0), 0.0);
         }
+    }
+
+    // ---- the grain engine against the crate run alone ---------------------------
+
+    /// A stereo test sound with something for every engine to work on: a tone
+    /// on each side, a click every 125 ms (transients for WSOLA's detector and
+    /// the hybrid's hits) and a little noise (the hybrid's air).
+    fn test_sound(frames: usize) -> [Vec<f32>; 2] {
+        let mut seed = 0x1234_5678u32;
+        let mut noise = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            (seed as f32 / u32::MAX as f32) * 2.0 - 1.0
+        };
+        let mut left = Vec::with_capacity(frames);
+        let mut right = Vec::with_capacity(frames);
+        for n in 0..frames {
+            let t = n as f32 / RATE;
+            // Of four strengths, so how eager the detector is decides which count.
+            let strength = [0.8, 0.12, 0.4, 0.05][(n / 6_000) % 4];
+            let click = if n % 6_000 < 48 { strength * (1.0 - (n % 6_000) as f32 / 48.0) } else { 0.0 };
+            let hiss = 0.05 * noise();
+            left.push(0.4 * (std::f32::consts::TAU * 220.0 * t).sin() + click + hiss);
+            right.push(0.3 * (std::f32::consts::TAU * 331.0 * t).sin() + click - hiss);
+        }
+        [left, right]
+    }
+
+    const SOUND_SECONDS: f32 = 0.5;
+
+    /// The grain engine free running on the test sound, with these controls.
+    fn grain_free(settings: &[(usize, f32)]) -> (Engine, u32) {
+        let mut engine = Engine::new(RATE);
+        let module = engine.add(ModuleKind::GrainEngine.build());
+        let [left, right] = test_sound((SOUND_SECONDS * RATE) as usize);
+        assert!(engine.samples_mut().allocate(5, 2, left.len(), RATE));
+        let data = engine.samples_mut().get_mut(5).unwrap().data_mut();
+        data[..left.len()].copy_from_slice(&left);
+        data[left.len()..].copy_from_slice(&right);
+        engine.set_sample_slot(module, 0, 5);
+        engine.set_param(module, GrainEngineModule::FADE, 1.0);
+        engine.set_param(module, GrainEngineModule::FREE_RUN, 1.0);
+        for &(index, value) in settings {
+            engine.set_param(module, index, value);
+        }
+        (engine, module)
+    }
+
+    fn module_render(settings: &[(usize, f32)], frames: usize) -> Vec<[f32; 2]> {
+        let (mut engine, module) = grain_free(settings);
+        (0..frames).map(|_| { engine.process(); [engine.output_of(module, 0), engine.output_of(module, 1)] }).collect()
+    }
+
+    /// The crate's `Stretcher` run on its own, set up as MultiGrainLive's
+    /// `live.rs` sets it up for a document: the parameters, the transient map
+    /// from `map_for`, the hybrid's separation, the layer bank, a seek to the
+    /// start; then blocks.
+    fn crate_render(set: impl Fn(&mut prism_grain::StreamParams), frames: usize) -> Vec<[f32; 2]> {
+        let [left, right] = test_sound((SOUND_SECONDS * RATE) as usize);
+        let samples: Vec<f32> = left.iter().zip(&right).flat_map(|(l, r)| [*l, *r]).collect();
+        let source = prism_grain::Source { samples, channels: 2 };
+        let mut sp = prism_grain::StreamParams::new(left.len(), RATE as u32);
+        set(&mut sp);
+        let block = GrainEngineModule::BLOCK;
+        let mut st = prism_grain::Stretcher::new(block, 2, RATE as u32);
+        let map = if sp.wsola.preserve_transients {
+            let hop = prism_grain::grain::plan(source.frames(), sp.sample_rate, sp.ratio, sp.window_ms, &sp.grain).hop.max(1);
+            prism_grain::stream::WsolaStream::build_map(&source.samples, 2, sp.sample_rate, sp.ratio, hop, &sp.wsola)
+        } else {
+            None
+        };
+        st.set_map(map);
+        if sp.algorithm == prism_grain::stretch::Algorithm::Hybrid {
+            st.set_parts(std::sync::Arc::new(prism_grain::hstream::Parts::separate(&source.samples, 2, sp.hybrid)));
+        }
+        st.set_bank(prism_grain::stretcher::LayerBank::build(sp.algorithm, sp.grain.layers, block, 2, RATE as u32));
+        st.seek(0, &sp);
+        let mut out = Vec::with_capacity(frames);
+        let mut buf = vec![0.0; block * 2];
+        let mut events = Vec::new();
+        let length = sp.in_frames as f64 * sp.ratio as f64;
+        while out.len() < frames {
+            if st.position() as f64 >= length {
+                st.seek(0, &sp);
+            }
+            st.render(&mut buf, 2, &source, &sp, &mut events);
+            for f in 0..block {
+                out.push([buf[f * 2], buf[f * 2 + 1]]);
+            }
+        }
+        out.truncate(frames);
+        out
+    }
+
+    /// Past the 5 ms attack and the fade's glide, the module's output is the
+    /// crate's, sample for sample.
+    fn assert_matches_crate(name: &str, settings: &[(usize, f32)], set: impl Fn(&mut prism_grain::StreamParams) + Copy) {
+        let frames = (0.6 * RATE) as usize;
+        let from = (0.02 * RATE) as usize;
+        let got = module_render(settings, frames);
+        let want = crate_render(set, frames);
+        for n in from..frames {
+            assert_eq!(got[n], want[n], "{name}: frame {n}");
+        }
+        assert!(want[from..].iter().any(|f| f[0].abs() > 1e-3), "{name}: the crate rendered silence");
+    }
+
+    use prism_grain::stretch::{Algorithm, Splice, WinShape};
+    type M = GrainEngineModule;
+    const GRAINS: f32 = 2.0;
+    const WSOLA: f32 = 0.0;
+    const VOCODER: f32 = 1.0;
+    const PVSOLA: f32 = 3.0;
+    const HYBRID: f32 = 4.0;
+
+    /// Every control, each on an engine it reaches: set on the module and on
+    /// the crate's own parameters, the two renders agree sample for sample,
+    /// and the control moves the render away from where it was without it.
+    #[test]
+    fn every_grain_engine_control_sounds_as_the_crate_does() {
+        type Case = (&'static str, Vec<(usize, f32)>, Vec<(usize, f32)>, fn(&mut prism_grain::StreamParams));
+        let cases: Vec<Case> = vec![
+            // The grain section, on the cloud.
+            ("density", vec![(M::ENGINE, GRAINS)], vec![(M::DENSITY, 30.0)], |sp| sp.grain.density_hz = 30.0),
+            ("size range", vec![(M::ENGINE, GRAINS), (M::SIZE_JITTER, 0.6)], vec![(M::SIZE_RANGE, 5.0)], |sp| { sp.grain.size_jitter = 0.6; sp.grain.size_range = 5.0; }),
+            ("wrap positions", vec![(M::ENGINE, GRAINS), (M::POSITION, 0.9), (M::POSITION_JITTER, 300.0)], vec![(M::WRAP, 1.0)], |sp| { sp.grain.position = 0.9; sp.grain.position_jitter_ms = 300.0; sp.grain.wrap = true; }),
+            ("layer spread", vec![(M::ENGINE, GRAINS), (M::LAYERS, 4.0)], vec![(M::LAYER_SPREAD, 0.0)], |sp| { sp.grain.layers = 4; sp.grain.layer_spread = 0.0; }),
+            ("scatter", vec![(M::ENGINE, GRAINS), (M::LAYERS, 4.0)], vec![(M::LAYER_SCATTER, 0.8)], |sp| { sp.grain.layers = 4; sp.grain.layer_scatter = 0.8; }),
+            ("scatter range", vec![(M::ENGINE, GRAINS), (M::LAYERS, 4.0), (M::LAYER_SCATTER, 0.8)], vec![(M::LAYER_SCATTER_MS, 900.0)], |sp| { sp.grain.layers = 4; sp.grain.layer_scatter = 0.8; sp.grain.layer_scatter_ms = 900.0; }),
+            ("link jitter", vec![(M::ENGINE, GRAINS), (M::SIZE_JITTER, 0.5), (M::PITCH_JITTER, 3.0), (M::POSITION_JITTER, 60.0)], vec![(M::LINK_JITTER, 1.0)], |sp| { sp.grain.size_jitter = 0.5; sp.grain.pitch_jitter_semis = 3.0; sp.grain.position_jitter_ms = 60.0; sp.grain.link_jitter = true; }),
+            ("step the drift", vec![(M::ENGINE, GRAINS), (M::PITCH_DRIFT, 3.0), (M::DRIFT_RATE, 4.0)], vec![(M::DRIFT_STEP, 1.0)], |sp| { sp.grain.pitch_drift_semis = 3.0; sp.grain.drift_rate_hz = 4.0; sp.grain.drift_step = true; }),
+            ("seed", vec![(M::ENGINE, GRAINS), (M::PITCH_JITTER, 3.0)], vec![(M::SEED, 1_013_904_223.0)], |sp| { sp.grain.pitch_jitter_semis = 3.0; sp.grain.seed = 1_013_904_223.0f32 as u32; }),
+            ("position below zero", vec![(M::ENGINE, GRAINS), (M::SCAN, -1.0)], vec![(M::POSITION, -0.5)], |sp| { sp.grain.scan = -1.0; sp.grain.position = -0.5; }),
+            // WSOLA's.
+            ("preserve transients", vec![(M::ENGINE, WSOLA), (M::STRETCH, 2.0)], vec![(M::PRESERVE, 1.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.ratio = 2.0; sp.wsola.preserve_transients = true; }),
+            ("detector", vec![(M::ENGINE, WSOLA), (M::STRETCH, 2.0), (M::PRESERVE, 1.0)], vec![(M::SENSITIVITY, 1.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.ratio = 2.0; sp.wsola.preserve_transients = true; sp.wsola.sensitivity = 1.0; }),
+            ("guard", vec![(M::ENGINE, WSOLA), (M::STRETCH, 2.0), (M::PRESERVE, 1.0)], vec![(M::GUARD, 9.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.ratio = 2.0; sp.wsola.preserve_transients = true; sp.wsola.guard_hops = 9.0; }),
+            ("floor", vec![(M::ENGINE, WSOLA), (M::STRETCH, 2.0), (M::PRESERVE, 1.0)], vec![(M::FLOOR, 0.1)], |sp| { sp.algorithm = Algorithm::Wsola; sp.ratio = 2.0; sp.wsola.preserve_transients = true; sp.wsola.floor = 0.1; }),
+            ("search", vec![(M::ENGINE, WSOLA), (M::STRETCH, 2.0)], vec![(M::SEARCH_MS, 0.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.ratio = 2.0; sp.wsola.search_ms = 0.0; }),
+            ("pick", vec![(M::ENGINE, WSOLA), (M::STRETCH, 2.0)], vec![(M::SPLICE, 1.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.ratio = 2.0; sp.wsola.splice = Splice::Different; }),
+            ("pick loud", vec![(M::ENGINE, WSOLA), (M::STRETCH, 2.0)], vec![(M::SPLICE, 2.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.ratio = 2.0; sp.wsola.splice = Splice::Loudest; }),
+            ("stride", vec![(M::ENGINE, WSOLA), (M::STRETCH, 2.0)], vec![(M::STRIDE, 37.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.ratio = 2.0; sp.wsola.stride = 37; }),
+            ("window shape", vec![(M::ENGINE, WSOLA), (M::STRETCH, 2.0)], vec![(M::SHAPE, 2.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.ratio = 2.0; sp.wsola.shape = WinShape::Rect; }),
+            ("window tri", vec![(M::ENGINE, WSOLA), (M::STRETCH, 2.0)], vec![(M::SHAPE, 1.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.ratio = 2.0; sp.wsola.shape = WinShape::Triangle; }),
+            ("layers on WSOLA", vec![(M::ENGINE, WSOLA), (M::STRETCH, 2.0)], vec![(M::LAYERS, 3.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.ratio = 2.0; sp.grain.layers = 3; }),
+            // The vocoder's.
+            ("analysis window", vec![(M::ENGINE, VOCODER), (M::STRETCH, 1.5)], vec![(M::ANALYSIS_MS, 120.0)], |sp| { sp.algorithm = Algorithm::Vocoder; sp.ratio = 1.5; sp.vocoder.window_ms = 120.0; }),
+            ("phase lock", vec![(M::ENGINE, VOCODER), (M::STRETCH, 1.5)], vec![(M::PHASE_LOCK, 0.0)], |sp| { sp.algorithm = Algorithm::Vocoder; sp.ratio = 1.5; sp.vocoder.phase_lock = false; }),
+            ("freq trust", vec![(M::ENGINE, VOCODER), (M::STRETCH, 1.5)], vec![(M::FREQ_TRUST, 0.0)], |sp| { sp.algorithm = Algorithm::Vocoder; sp.ratio = 1.5; sp.vocoder.freq_trust = 0.0; }),
+            ("phase spread", vec![(M::ENGINE, VOCODER), (M::STRETCH, 1.5)], vec![(M::PHASE_SPREAD, 3.0)], |sp| { sp.algorithm = Algorithm::Vocoder; sp.ratio = 1.5; sp.vocoder.phase_spread = 3.0; }),
+            ("peak width", vec![(M::ENGINE, VOCODER), (M::STRETCH, 1.5)], vec![(M::PEAK_WIDTH, 9.0)], |sp| { sp.algorithm = Algorithm::Vocoder; sp.ratio = 1.5; sp.vocoder.peak_width = 9; }),
+            ("lock width", vec![(M::ENGINE, VOCODER), (M::STRETCH, 1.5)], vec![(M::LOCK_WIDTH, 0.0)], |sp| { sp.algorithm = Algorithm::Vocoder; sp.ratio = 1.5; sp.vocoder.lock_width = 0.0; }),
+            ("freeze", vec![(M::ENGINE, VOCODER), (M::STRETCH, 1.5)], vec![(M::FREEZE, 0.8)], |sp| { sp.algorithm = Algorithm::Vocoder; sp.ratio = 1.5; sp.vocoder.mag_freeze = 0.8; }),
+            ("blur", vec![(M::ENGINE, VOCODER), (M::STRETCH, 1.5)], vec![(M::BLUR, 0.6)], |sp| { sp.algorithm = Algorithm::Vocoder; sp.ratio = 1.5; sp.vocoder.mag_blur = 0.6; }),
+            ("gate", vec![(M::ENGINE, VOCODER), (M::STRETCH, 1.5)], vec![(M::GATE, 0.3)], |sp| { sp.algorithm = Algorithm::Vocoder; sp.ratio = 1.5; sp.vocoder.mag_gate = 0.3; }),
+            ("link stereo", vec![(M::ENGINE, VOCODER), (M::STRETCH, 1.5)], vec![(M::STEREO_LINK, 1.0)], |sp| { sp.algorithm = Algorithm::Vocoder; sp.ratio = 1.5; sp.vocoder.stereo_link = true; }),
+            // PVSOLA's.
+            ("re-anchor", vec![(M::ENGINE, PVSOLA), (M::STRETCH, 1.5)], vec![(M::ANCHOR, 20.0)], |sp| { sp.algorithm = Algorithm::Pvsola; sp.ratio = 1.5; sp.pvsola.anchor_frames = 20; }),
+            ("anchor search", vec![(M::ENGINE, PVSOLA), (M::STRETCH, 1.5)], vec![(M::ANCHOR_SEARCH_MS, 0.0)], |sp| { sp.algorithm = Algorithm::Pvsola; sp.ratio = 1.5; sp.pvsola.search_ms = 0.0; }),
+            ("blend", vec![(M::ENGINE, PVSOLA), (M::STRETCH, 1.5)], vec![(M::BLEND, 0.0)], |sp| { sp.algorithm = Algorithm::Pvsola; sp.ratio = 1.5; sp.pvsola.blend = 0.0; }),
+            // The hybrid's.
+            ("tone", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::TONE, 0.3)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.harmonic_level = 0.3; }),
+            ("hits", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::HITS, 2.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.percussive_level = 2.0; }),
+            ("air", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::AIR, 0.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.residual_level = 0.0; }),
+            ("remake noise", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::REMAKE_NOISE, 0.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.morph_noise = false; }),
+            ("hold", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::HOLD, 31.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.time_span = 31; }),
+            ("spread", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::SPREAD, 31.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.freq_span = 31; }),
+            ("margin", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::MARGIN, 1.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.margin = 1.0; }),
+            ("resolution", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::RESOLUTION, 1024.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.fft_size = 1024; }),
+        ];
+        let frames = (0.6 * RATE) as usize;
+        let mut unheard = Vec::new();
+        for (name, base, control, set) in cases {
+            let mut settings = base.clone();
+            settings.extend(control.iter().copied());
+            assert_matches_crate(name, &settings, set);
+            // And the control is heard: without it, the module renders otherwise.
+            if module_render(&base, frames) == module_render(&settings, frames) {
+                unheard.push(name);
+            }
+        }
+        assert!(unheard.is_empty(), "these controls changed nothing: {unheard:?}");
+    }
+
+    #[test]
+    fn its_defaults_are_the_crates() {
+        // A patch saved before these controls existed is given their defaults,
+        // and the defaults are the crate's: it sounds exactly as it did.
+        let module = ModuleKind::GrainEngine.build();
+        let defaults: Vec<(usize, f32)> = (0..GrainEngineModule::PARAM_COUNT)
+            .filter(|&i| i != GrainEngineModule::FADE && i != GrainEngineModule::FREE_RUN)
+            .map(|i| (i, module.param_default(i)))
+            .collect();
+        assert_matches_crate("defaults", &defaults, |_| {});
+        for engine in [WSOLA, VOCODER, PVSOLA, HYBRID] {
+            let mut settings = defaults.clone();
+            settings.push((M::ENGINE, engine));
+            let alg = match engine as i32 { 0 => Algorithm::Wsola, 1 => Algorithm::Vocoder, 3 => Algorithm::Pvsola, _ => Algorithm::Hybrid };
+            let frames = (0.6 * RATE) as usize;
+            let got = module_render(&settings, frames);
+            let want = crate_render(|sp| sp.algorithm = alg, frames);
+            assert_eq!(got[(0.02 * RATE) as usize..], want[(0.02 * RATE) as usize..], "engine {engine}");
+        }
+    }
+
+    #[test]
+    fn a_rebuild_waits_for_its_control_to_settle() {
+        // Layers moved on WSOLA mid-play: the extra layers are built once the
+        // knob has held still for the settle time, not on every step.
+        use crate::engine::Frame;
+        let mut bank = crate::samples::SampleBank::new();
+        let [left, right] = test_sound((SOUND_SECONDS * RATE) as usize);
+        assert!(bank.allocate(5, 2, left.len(), RATE));
+        let data = bank.get_mut(5).unwrap().data_mut();
+        data[..left.len()].copy_from_slice(&left);
+        data[left.len()..].copy_from_slice(&right);
+        let mut module = GrainEngineModule::new(RATE);
+        module.set_sample_slot(0, 5);
+        let mut params: Vec<f32> = (0..M::PARAM_COUNT).map(|i| module.param_default(i)).collect();
+        params[M::FADE] = 1.0;
+        params[M::FREE_RUN] = 1.0;
+        params[M::ENGINE] = WSOLA;
+        let run = |module: &mut GrainEngineModule, params: &[f32], frames: usize| {
+            for _ in 0..frames {
+                let ctx = ProcessContext { samples: &bank, sample_rate: RATE, sample_time: 1.0 / RATE, frame: 0 };
+                let mut outputs = [Frame::default(); 2];
+                let mut ports = Ports { inputs: &[], outputs: &mut outputs, params };
+                module.process(&ctx, &mut ports);
+            }
+        };
+        run(&mut module, &params, 4_800);
+        params[M::LAYERS] = 4.0;
+        let settle = (M::SETTLE_SECONDS * RATE) as usize;
+        run(&mut module, &params, settle / 2);
+        assert_eq!(module.voices[0].stretcher.live_layers(&module.sp), 1, "built before the knob settled");
+        run(&mut module, &params, settle);
+        assert_eq!(module.voices[0].stretcher.live_layers(&module.sp), 4, "never built");
+        // A change of engine is not waited for.
+        params[M::ENGINE] = VOCODER;
+        run(&mut module, &params, 1);
+        assert_eq!(module.voices[0].stretcher.live_layers(&module.sp), 4, "the new engine had no layers");
+    }
+
+    #[test]
+    fn gated_notes_play_as_voices_of_their_own() {
+        // Two notes held together are two voices: the sum of the crate's
+        // render at each note's pitch, each started from the top on its note.
+        let (mut free, module) = grain_free(&[(M::ENGINE, WSOLA)]);
+        free.set_param(module, M::FREE_RUN, 0.0);
+        free.process();
+        free.note_on(module, 60, 1.0, 0.0);
+        let lead = 2_000;
+        let mut got = Vec::new();
+        for n in 0..24_000 {
+            if n == lead { free.note_on(module, 67, 1.0, 0.0); }
+            free.process();
+            got.push(free.output_of(module, 0));
+        }
+        let a = crate_render(|sp| sp.algorithm = Algorithm::Wsola, 24_000);
+        let b = crate_render(|sp| { sp.algorithm = Algorithm::Wsola; sp.semitones = 7.0; }, 24_000);
+        let from = lead + (0.02 * RATE) as usize;
+        for n in from..24_000 {
+            assert_eq!(got[n], a[n][0] + b[n - lead][0], "frame {n}");
+        }
+        free.note_off(module, 60);
+        free.note_off(module, 67);
+        let tail: Vec<f32> = (0..12_000).map(|_| { free.process(); free.output_of(module, 0) }).collect();
+        assert!(tail[6_000..].iter().all(|v| *v == 0.0), "a voice kept sounding after its release");
+    }
+
+    #[test]
+    fn it_reports_where_it_reads() {
+        let (mut engine, module) = grain_free(&[(M::ENGINE, GRAINS)]);
+        for _ in 0..12_000 { engine.process(); }
+        let at = engine.telemetry_of(module);
+        // A quarter second into the half-second file at a stretch of one.
+        assert!((at - 0.5).abs() < 0.02, "{at}");
+        engine.set_param(module, M::FREE_RUN, 0.0);
+        for _ in 0..12_000 { engine.process(); }
+        assert!(engine.telemetry_of(module).is_nan(), "silent, it still reported a place");
     }
 }
 
