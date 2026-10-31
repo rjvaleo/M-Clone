@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { isMappable } from "./modulationTargets";
 import {
+  ADSR_TYPE,
+  ENV_FOLLOWER_TYPE,
+  isModulator,
+  lfoRateHz,
   lfoStates,
+  SYNC_NOTES,
   liveLfoValue,
   LFO_COLORS,
   LFO_SHAPES,
@@ -30,10 +35,10 @@ const graphWith = (nodes: { id: string; type: string; parameters?: Record<string
 };
 
 describe("An LFO's mappings", () => {
-  it("is a control module with rate, shape, amount, phase, colour and its targets", () => {
+  it("is a control module with rate, shape, amount, phase, colour, its targets, and sync", () => {
     const lfo = moduleRegistry.get(LFO_TYPE)!;
     expect(lfo.family).toBe("control");
-    expect(lfo.parameters.map((p) => p.id)).toEqual(["rate", "shape", "amount", "phase", "color", "targets"]);
+    expect(lfo.parameters.map((p) => p.id)).toEqual(["rate", "shape", "amount", "phase", "color", "targets", "sync", "note"]);
     expect(lfo.parameters.find((p) => p.id === "shape")?.options).toEqual(LFO_SHAPES);
   });
 
@@ -130,5 +135,88 @@ describe("An LFO as a face draws it", () => {
   it("reads its rate, shape and amount from the document", () => {
     const graph = graphWith([{ id: "l", type: LFO_TYPE, parameters: { rate: 3, shape: "Saw down", amount: 0.2 } }]);
     expect(lfoStates(graph).get("l")).toEqual({ rate: 3, shape: 3, amount: 0.2 });
+  });
+});
+
+describe("Tempo sync", () => {
+  it("offers every note value from a whole note to a thirty-second, straight, dotted and triplet", () => {
+    expect(SYNC_NOTES.map((n) => n.label)).toEqual([
+      "1/32T", "1/32", "D 1/32", "1/16T", "1/16", "D 1/16", "1/8T", "1/8", "D 1/8",
+      "1/4T", "1/4", "D 1/4", "1/2T", "1/2", "D 1/2", "1/1T", "1/1", "D 1/1",
+    ]);
+    const beats = (label: string) => SYNC_NOTES.find((n) => n.label === label)!.beats;
+    expect(beats("1/4")).toBe(1);
+    expect(beats("1/1")).toBe(4);
+    expect(beats("1/32")).toBe(0.125);
+    expect(beats("D 1/8")).toBe(0.75);
+    // A triplet is two thirds of the straight note, exactly.
+    expect(beats("1/8T")).toBe(0.5 * 2 / 3);
+    expect(beats("1/4T")).toBe(2 / 3);
+  });
+
+  it("keeps the names and lengths the synth's delay already uses", async () => {
+    const { DELAY_NOTES } = await import("./audio/synthLaws");
+    for (const note of DELAY_NOTES) {
+      const same = SYNC_NOTES.find((n) => n.label === note.label);
+      // The delay's "1/4T" is 1.333 beats, a half-note triplet's length; a
+      // quarter-note triplet is two thirds of a beat. Sync keeps the true one.
+      if (!same || note.label === "1/4T") continue;
+      expect(same.beats).toBeCloseTo(note.beats, 4);
+    }
+  });
+
+  it("plays the rate knob unsynced, and the note at the tempo synced", () => {
+    expect(lfoRateHz({ rate: 3, sync: false, note: "1/8" }, 140)).toBe(3);
+    // An eighth at 120 BPM is a quarter of a second.
+    expect(lfoRateHz({ rate: 3, sync: true, note: "1/8" }, 120)).toBe(4);
+    expect(lfoRateHz({ rate: 3, sync: true, note: "D 1/4" }, 90)).toBe(90 / 60 / 1.5);
+  });
+
+  it("draws a synced LFO at the tempo's rate", () => {
+    const graph = graphWith([{ id: "l", type: LFO_TYPE, parameters: { rate: 3, sync: true, note: "1/16", amount: 1 } }]);
+    expect(lfoStates(graph, 120).get("l")?.rate).toBe(8);
+    expect(lfoStates(graph, 60).get("l")?.rate).toBe(4);
+  });
+
+  it("leaves a patch saved before sync on its own rate", () => {
+    const graph = graphWith([{ id: "l", type: LFO_TYPE, parameters: { rate: 3 } }]);
+    delete graph.nodes.l.parameters.sync;
+    delete graph.nodes.l.parameters.note;
+    expect(lfoStates(graph, 200).get("l")?.rate).toBe(3);
+  });
+});
+
+describe("The envelope follower and the gate ADSR as modulators", () => {
+  const graph = () => graphWith([
+    { id: "d", type: "m.audio-delay" },
+    { id: "l", type: LFO_TYPE, parameters: { color: "Amber", targets: [{ nodeId: "d", parameterId: "feedback" }] } },
+    { id: "e", type: ENV_FOLLOWER_TYPE, parameters: { color: "Cyan", targets: [{ nodeId: "d", parameterId: "feedback" }] } },
+    { id: "a", type: ADSR_TYPE, parameters: { color: "Magenta", targets: [{ nodeId: "d", parameterId: "delay-seconds" }] } },
+  ]);
+
+  it("are modulators, and nothing else is", () => {
+    expect([LFO_TYPE, ENV_FOLLOWER_TYPE, ADSR_TYPE].every(isModulator)).toBe(true);
+    expect(isModulator("m.audio-delay")).toBe(false);
+  });
+
+  it("ring the knobs they move in their own colours, beside the LFO's", () => {
+    const map = mappingsByTarget(graph());
+    expect(map.get("d|feedback")).toEqual([
+      { lfoNodeId: "l", color: LFO_COLORS[0].value },
+      { lfoNodeId: "e", color: LFO_COLORS[1].value },
+    ]);
+    expect(map.get("d|delay-seconds")).toEqual([{ lfoNodeId: "a", color: LFO_COLORS[2].value }]);
+  });
+
+  it("take a colour no other modulator wears", () => {
+    expect(nextLfoColor(graph())).toBe(LFO_COLORS[3].name);
+  });
+
+  it("are drawn from what the rack reports, held between reports", () => {
+    const states = lfoStates(graph(), 120);
+    for (const id of ["e", "a"]) {
+      const state = states.get(id)!;
+      expect(liveLfoValue({ phase: Number.NaN, value: 0.42, at: 10 }, state, 10.2)).toBe(0.42);
+    }
   });
 });

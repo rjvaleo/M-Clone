@@ -55,6 +55,12 @@ export type AudioPlan = {
    */
   modulators?: readonly AudioNodeSpec[];
   modulations?: readonly AudioModulation[];
+  /**
+   * Audio cables into a modulator — what an envelope follower listens to.
+   * Apart from `connections` for the same reason the modulators are apart
+   * from `nodes`.
+   */
+  modulatorConnections?: readonly AudioConnection[];
 };
 
 export type ParameterChange = { nodeId: string; parameterId: string; value: number };
