@@ -114,7 +114,16 @@ full, and add drum step programming. Automation is not ported.
      Synced, it runs at `Lfo::set_rate_synced` from the transport's tempo; the
      plan carries the note as `beats` and the tempo as `bpm`. Sync is off by
      default, so a saved LFO keeps its rate.
-   - Not built yet: more mixer channels or sends.
+   **Mixer channels and sends built.**
+   - `m.audio-mixer` has eight stereo channels (the docs leave the count
+     open), on both backends.
+   - Two aux sends, A and B: a level per channel, a pre/post-fader switch per
+     send, a send output to patch into an effect and a return input with its
+     own level. Post-fader is the channel after its level, mute, solo and pan;
+     pre-fader is its input before level and pan, still silenced by mute and
+     solo. The Rust and Web Audio mixers are held to the same numbers.
+   - The first four channels and the fade keep their Rust indices; a patch
+     saved with four channels renders sample for sample as before.
 4. **The sound engine, hooked to M.**
    - The shared crate, with MultiGrainLive moved onto it first and its tests
      kept passing (Echo-style parity on renders).

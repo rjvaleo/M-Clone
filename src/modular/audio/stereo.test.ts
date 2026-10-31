@@ -399,14 +399,10 @@ describe("The mixer", () => {
     return { context, core };
   };
 
-  it("gives every channel its own input, so four sources stay four sources", () => {
+  it("gives every channel its own input, so eight sources stay eight sources", () => {
     const { core } = mixer();
-    const seen = new Set([
-      core.inputFor("audio-in-1"),
-      core.inputFor("audio-in-2"),
-      core.inputFor("audio-in-3"),
-      core.inputFor("audio-in-4"),
-    ]);
+    expect(MIXER_CHANNELS).toBe(8);
+    const seen = new Set(Array.from({ length: MIXER_CHANNELS }, (_, i) => core.inputFor(mixerInputPortId(i))));
     expect(seen.size).toBe(MIXER_CHANNELS);
   });
 
@@ -484,12 +480,12 @@ describe("The mixer", () => {
     expect(mixerInputPortId(3)).toBe("audio-in-4");
   });
 
-  it("declares four inputs and one output in the registry", () => {
+  it("declares eight channel inputs and two returns, the main out and two sends, in the registry", () => {
     const descriptor = moduleRegistry.get("m.audio-mixer");
-    const inputs = descriptor?.ports.filter((port) => port.direction === "input") ?? [];
-    const outputs = descriptor?.ports.filter((port) => port.direction === "output") ?? [];
-    expect(inputs).toHaveLength(MIXER_CHANNELS);
-    expect(outputs).toHaveLength(1);
+    const inputs = descriptor?.ports.filter((port) => port.direction === "input").map((p) => p.id) ?? [];
+    const outputs = descriptor?.ports.filter((port) => port.direction === "output").map((p) => p.id) ?? [];
+    expect(inputs).toEqual([...Array.from({ length: 8 }, (_, i) => `audio-in-${i + 1}`), "return-a-in", "return-b-in"]);
+    expect(outputs).toEqual(["audio-out", "send-a-out", "send-b-out"]);
   });
 
   it("is wired into the rack with per-port inputs", () => {
@@ -498,5 +494,107 @@ describe("The mixer", () => {
     expect(built.parallel).toBe(false);
     expect(built.inputFor?.("audio-in-2")).not.toBe(built.inputFor?.("audio-in-1"));
     built.setParameter?.("level-1", 0.2, 1);
+  });
+});
+
+/**
+ * Where a fake graph settles: the 2×2 matrix from `from` to `to`, summed over
+ * every path, each gain at its last target and each StereoPanner by Web Audio's
+ * law for a stereo input. The same law `Mixer` in dsp-core restates, so the two
+ * backends can be held to the same numbers.
+ */
+type Matrix = [[number, number], [number, number]];
+const IDENTITY: Matrix = [[1, 0], [0, 1]];
+const times = (a: Matrix, b: Matrix): Matrix => [
+  [a[0][0] * b[0][0] + a[0][1] * b[1][0], a[0][0] * b[0][1] + a[0][1] * b[1][1]],
+  [a[1][0] * b[0][0] + a[1][1] * b[1][0], a[1][0] * b[0][1] + a[1][1] * b[1][1]],
+];
+const plus = (a: Matrix, b: Matrix): Matrix => [[a[0][0] + b[0][0], a[0][1] + b[0][1]], [a[1][0] + b[1][0], a[1][1] + b[1][1]]];
+const own = (node: unknown): Matrix => {
+  if (node instanceof FakeStereoPanner) {
+    const pan = node.pan.value;
+    const x = (pan <= 0 ? pan + 1 : pan) * Math.PI / 2;
+    return pan <= 0 ? [[1, Math.cos(x)], [0, Math.sin(x)]] : [[Math.cos(x), 0], [Math.sin(x), 1]];
+  }
+  const gain = (node as { gain?: { value: number } }).gain;
+  return gain ? [[gain.value, 0], [0, gain.value]] : IDENTITY;
+};
+function transfer(from: unknown, to: unknown): Matrix {
+  const walk = (node: unknown): Matrix => {
+    const here = own(node);
+    if (node === to) return here;
+    let sum: Matrix = [[0, 0], [0, 0]];
+    for (const next of (node as { outgoing: Set<unknown> }).outgoing) sum = plus(sum, walk(next));
+    return times(sum, here);
+  };
+  return walk(from);
+}
+const apply = (m: Matrix, [l, r]: [number, number]): [number, number] => [m[0][0] * l + m[0][1] * r, m[1][0] * l + m[1][1] * r];
+const near = (got: [number, number], want: [number, number]) => {
+  expect(got[0]).toBeCloseTo(want[0], 6);
+  expect(got[1]).toBeCloseTo(want[1], 6);
+};
+
+describe("The mixer's sends and returns, as the Rust mixer has them", () => {
+  const mixer = (parameters: Record<string, number> = {}) => {
+    const context = new FakeAudioContext();
+    const core = createMixer(context, spec("m.audio-mixer", { parameters }), 0);
+    return { context, core };
+  };
+  const into = (core: ReturnType<typeof createMixer>, port: string, sendPort: string, input: [number, number]) =>
+    apply(transfer(core.inputFor(port), core.outputFor(sendPort)), input);
+
+  it("sends nothing by default", () => {
+    const { core } = mixer({ "level-1": 1 });
+    near(into(core, "audio-in-1", "send-a-out", [0.4, 0.4]), [0, 0]);
+    near(into(core, "audio-in-1", "send-b-out", [0.4, 0.4]), [0, 0]);
+  });
+
+  it("sends post-fader: after the channel's level and pan", () => {
+    // `a_post_fader_send_hears_the_channel_after_its_level_and_pan` in dsp-core.
+    const { core } = mixer({ "level-1": 0.5, "pan-1": -1, "send-a-1": 0.5 });
+    near(into(core, "audio-in-1", "send-a-out", [0.4, 0.4]), [0.2, 0]);
+    core.setParameter("mute-1", 1, 1);
+    near(into(core, "audio-in-1", "send-a-out", [0.4, 0.4]), [0, 0]);
+  });
+
+  it("sends pre-fader: before level and pan, but silenced with the channel", () => {
+    // `a_pre_fader_send_ignores_the_level_and_pan_but_not_mute` in dsp-core.
+    const { core } = mixer({ "send-b-pre": 1, "send-b-1": 0.5, "send-b-2": 1, "level-1": 0, "pan-1": 1, "level-2": 1 });
+    const sum = (): [number, number] => {
+      const a = into(core, "audio-in-1", "send-b-out", [0.4, 0.2]);
+      const b = into(core, "audio-in-2", "send-b-out", [0.1, 0]);
+      return [a[0] + b[0], a[1] + b[1]];
+    };
+    near(sum(), [0.3, 0.1]);
+    core.setParameter("solo-2", 1, 1);
+    near(sum(), [0.1, 0]);
+  });
+
+  it("switches a send between pre and post without building anything", () => {
+    const { context, core } = mixer({ "send-a-3": 1, "level-3": 0.5 });
+    const before = context.created.length;
+    near(into(core, "audio-in-3", "send-a-out", [0.4, 0.4]), [0.2, 0.2]);
+    core.setParameter("send-a-pre", 1, 1);
+    near(into(core, "audio-in-3", "send-a-out", [0.4, 0.4]), [0.4, 0.4]);
+    expect(context.created.length).toBe(before);
+  });
+
+  it("adds a return to the main mix at its level, unity by default", () => {
+    // `a_return_joins_the_main_mix_at_its_level` in dsp-core.
+    const { core } = mixer();
+    near(apply(transfer(core.inputFor("return-b-in"), core.output), [0.3, 0.3]), [0.3, 0.3]);
+    core.setParameter("return-b", 0.5, 1);
+    near(apply(transfer(core.inputFor("return-b-in"), core.output), [0.3, 0.3]), [0.15, 0.15]);
+  });
+
+  it("sums channels five to eight like the first four", () => {
+    // `channels_five_to_eight_sum_like_the_first_four` in dsp-core.
+    const { core } = mixer({ "level-6": 1, "level-8": 0.5 });
+    const main = (port: string, input: [number, number]) => apply(transfer(core.inputFor(port), core.output), input);
+    near(main("audio-in-6", [0.1, 0]), [0.1, 0]);
+    near(main("audio-in-8", [0, 0.4]), [0, 0.2]);
+    core.setParameter("solo-8", 1, 1);
+    near(main("audio-in-6", [0.1, 0]), [0, 0]);
   });
 });

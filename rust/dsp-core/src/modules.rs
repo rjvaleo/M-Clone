@@ -2386,41 +2386,94 @@ impl Module for GranularModule {
     }
 }
 
-/// `m.audio-mixer` — four stereo channels, each with a level, a pan, a mute
-/// and a solo, summed to one stereo out.
+/// `m.audio-mixer` — eight stereo channels, each with a level, a pan, a mute
+/// and a solo, summed to one stereo out; two aux sends, A and B, each with an
+/// output to patch into an effect and a return that joins the main mix.
 ///
-/// Inputs are pairs: channel `c` is ports `2c` (left) and `2c + 1` (right). The
-/// pan is Web Audio's StereoPanner on a stereo input — a balance, unity at the
-/// centre, folding the far side in as it turns — so a patch sounds the same on
-/// both backends. Solo belongs to the whole strip: any channel soloed silences
-/// every channel that is not, and un-soloing restores the levels exactly.
+/// Inputs are pairs: channel `c` is ports `2c` (left) and `2c + 1` (right), so
+/// channels take ports 0–15, then return A 16–17 and return B 18–19. Outputs:
+/// the main mix on 0–1, send A on 2–3, send B on 4–5. The pan is Web Audio's
+/// StereoPanner on a stereo input — a balance, unity at the centre, folding the
+/// far side in as it turns — so a patch sounds the same on both backends. Solo
+/// belongs to the whole strip: any channel soloed silences every channel that
+/// is not, and un-soloing restores the levels exactly.
+///
+/// A send is post-fader by default: the channel as it reaches the main mix,
+/// after its level, mute, solo and pan, times its send level. Switched to
+/// pre-fader, it takes the channel's input before level and pan — still
+/// silenced by mute and solo, as a silenced channel sends nothing. A return is
+/// added to the main mix at its own level, unpanned, before the fade.
+///
+/// The first four channels and the fade keep the indices they had when this
+/// was a four-channel mixer; everything since is appended after them.
 pub struct Mixer {
     gains: [Tracked; Self::CHANNELS],
     pans: [Tracked; Self::CHANNELS],
+    /// Per channel: 1 when it plays, 0 when muted or soloed out. Gates the pre-fader sends.
+    gates: [Tracked; Self::CHANNELS],
+    /// Per bus and channel: the post-fader and pre-fader send gains. One of
+    /// the pair is always heading to zero, so switching pre and post glides.
+    post_sends: [[Tracked; Self::CHANNELS]; Self::SENDS],
+    pre_sends: [[Tracked; Self::CHANNELS]; Self::SENDS],
+    returns: [Tracked; Self::SENDS],
     fade: Tracked,
 }
 
 impl Mixer {
-    pub const CHANNELS: usize = 4;
+    pub const CHANNELS: usize = 8;
+    pub const SENDS: usize = 2;
     const STRIDE: usize = 4;
-    /// The rack's fade handle, after the sixteen channel controls.
-    pub const FADE: usize = Self::CHANNELS * Self::STRIDE;
-    pub const PARAM_COUNT: usize = Self::FADE + 1;
+    /// The channels that were there before the mixer grew.
+    const FIRST: usize = 4;
+    /// The rack's fade handle, after the first four channels' controls.
+    pub const FADE: usize = Self::FIRST * Self::STRIDE;
+    const SEND_BASE: usize = Self::CHANNELS * Self::STRIDE + 1;
+    const PRE_BASE: usize = Self::SEND_BASE + Self::SENDS * Self::CHANNELS;
+    const RETURN_BASE: usize = Self::PRE_BASE + Self::SENDS;
+    pub const PARAM_COUNT: usize = Self::RETURN_BASE + Self::SENDS;
     pub const DEFAULT_LEVEL: f32 = 0.8;
+    /// The first input port of the returns, after the eight channels.
+    pub const RETURN_PORT: usize = 2 * Self::CHANNELS;
 
-    pub const fn level(channel: usize) -> usize { channel * Self::STRIDE }
-    pub const fn pan(channel: usize) -> usize { channel * Self::STRIDE + 1 }
-    pub const fn mute(channel: usize) -> usize { channel * Self::STRIDE + 2 }
-    pub const fn solo(channel: usize) -> usize { channel * Self::STRIDE + 3 }
+    const fn base(channel: usize) -> usize {
+        if channel < Self::FIRST { channel * Self::STRIDE } else { channel * Self::STRIDE + 1 }
+    }
+    pub const fn level(channel: usize) -> usize { Self::base(channel) }
+    pub const fn pan(channel: usize) -> usize { Self::base(channel) + 1 }
+    pub const fn mute(channel: usize) -> usize { Self::base(channel) + 2 }
+    pub const fn solo(channel: usize) -> usize { Self::base(channel) + 3 }
+    /// Channel `channel`'s level into send `bus` (0 = A, 1 = B).
+    pub const fn send(bus: usize, channel: usize) -> usize { Self::SEND_BASE + bus * Self::CHANNELS + channel }
+    /// Send `bus` taken before the fader (1) or after it (0).
+    pub const fn pre(bus: usize) -> usize { Self::PRE_BASE + bus }
+    /// Send `bus`'s return, into the main mix.
+    pub const fn return_level(bus: usize) -> usize { Self::RETURN_BASE + bus }
 }
 
 impl Default for Mixer {
     fn default() -> Self {
+        let channels = |v: f32| [(); Self::CHANNELS].map(|_| Tracked::new(v));
         Self {
-            gains: [(); Self::CHANNELS].map(|_| Tracked::new(Self::DEFAULT_LEVEL)),
-            pans: [(); Self::CHANNELS].map(|_| Tracked::new(0.0)),
+            gains: channels(Self::DEFAULT_LEVEL),
+            pans: channels(0.0),
+            gates: channels(1.0),
+            post_sends: [(); Self::SENDS].map(|_| channels(0.0)),
+            pre_sends: [(); Self::SENDS].map(|_| channels(0.0)),
+            returns: [(); Self::SENDS].map(|_| Tracked::new(1.0)),
             fade: Tracked::new(0.0),
         }
+    }
+}
+
+impl Mixer {
+    fn trackers(&mut self) -> impl Iterator<Item = &mut Tracked> {
+        self.gains.iter_mut()
+            .chain(self.pans.iter_mut())
+            .chain(self.gates.iter_mut())
+            .chain(self.post_sends.iter_mut().flatten())
+            .chain(self.pre_sends.iter_mut().flatten())
+            .chain(self.returns.iter_mut())
+            .chain(core::iter::once(&mut self.fade))
     }
 }
 
@@ -2428,47 +2481,72 @@ impl Module for Mixer {
     fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
         let soloed = |c: usize| ports.param(Self::solo(c)) >= 0.5;
         let any_solo = (0..Self::CHANNELS).any(soloed);
+        let pre = [0, 1].map(|bus| ports.param(Self::pre(bus)) >= 0.5);
         let mut out = [0.0f32; 2];
+        let mut sends = [[0.0f32; 2]; Self::SENDS];
         for c in 0..Self::CHANNELS {
             let silent = ports.param(Self::mute(c)) >= 0.5 || (any_solo && !soloed(c));
             let level = if silent { 0.0 } else { clamp(ports.param(Self::level(c)), 0.0, 2.0) };
             let gain = self.gains[c].follow(level);
             let pan = self.pans[c].follow(clamp(ports.param(Self::pan(c)), -1.0, 1.0));
-            let (l, r) = (ports.input(2 * c) * gain, ports.input(2 * c + 1) * gain);
+            let gate = self.gates[c].follow(if silent { 0.0 } else { 1.0 });
+            let dry = (ports.input(2 * c), ports.input(2 * c + 1));
+            let (l, r) = (dry.0 * gain, dry.1 * gain);
             let x = if pan <= 0.0 { pan + 1.0 } else { pan } * core::f32::consts::FRAC_PI_2;
             let (towards_left, towards_right) = (x.cos(), x.sin());
-            if pan <= 0.0 {
-                out[0] += l + r * towards_left;
-                out[1] += r * towards_right;
+            let panned = if pan <= 0.0 {
+                [l + r * towards_left, r * towards_right]
             } else {
-                out[0] += l * towards_left;
-                out[1] += r + l * towards_right;
+                [l * towards_left, r + l * towards_right]
+            };
+            out[0] += panned[0];
+            out[1] += panned[1];
+            for bus in 0..Self::SENDS {
+                let amount = clamp(ports.param(Self::send(bus, c)), 0.0, 1.0);
+                let post = self.post_sends[bus][c].follow(if pre[bus] { 0.0 } else { amount });
+                let early = self.pre_sends[bus][c].follow(if pre[bus] { amount } else { 0.0 });
+                sends[bus][0] += panned[0] * post + dry.0 * gate * early;
+                sends[bus][1] += panned[1] * post + dry.1 * gate * early;
             }
+        }
+        for bus in 0..Self::SENDS {
+            let back = self.returns[bus].follow(clamp(ports.param(Self::return_level(bus)), 0.0, 2.0));
+            let port = Self::RETURN_PORT + 2 * bus;
+            out[0] += ports.input(port) * back;
+            out[1] += ports.input(port + 1) * back;
         }
         let fade = self.fade.follow(clamp(ports.param(Self::FADE), 0.0, 1.0));
         output_stereo(ports, out.map(|v| v * fade));
+        for (bus, send) in sends.iter().enumerate() {
+            ports.output(2 + 2 * bus, send[0] * fade);
+            ports.output(3 + 2 * bus, send[1] * fade);
+        }
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
-        for t in self.gains.iter_mut().chain(self.pans.iter_mut()) {
+        for t in self.trackers() {
             t.set_sample_rate(sample_rate);
         }
-        self.fade.set_sample_rate(sample_rate);
     }
 
     fn reset(&mut self) {
-        for t in self.gains.iter_mut().chain(self.pans.iter_mut()) {
+        for t in self.trackers() {
             t.reset();
         }
-        self.fade.reset();
     }
 
-    fn input_count(&self) -> usize { 2 * Self::CHANNELS }
-    fn output_count(&self) -> usize { 2 }
+    fn input_count(&self) -> usize { 2 * Self::CHANNELS + 2 * Self::SENDS }
+    fn output_count(&self) -> usize { 2 + 2 * Self::SENDS }
     fn param_count(&self) -> usize { Self::PARAM_COUNT }
 
     fn param_default(&self, index: usize) -> f32 {
-        if index < Self::FADE && index.is_multiple_of(Self::STRIDE) { Self::DEFAULT_LEVEL } else { 0.0 }
+        if (0..Self::CHANNELS).any(|c| index == Self::level(c)) {
+            Self::DEFAULT_LEVEL
+        } else if (0..Self::SENDS).any(|bus| index == Self::return_level(bus)) {
+            1.0
+        } else {
+            0.0
+        }
     }
 }
 
@@ -4875,7 +4953,8 @@ mod tests {
         assert_eq!(ModuleKind::from_u32(16), Some(ModuleKind::Mixer));
         assert_eq!(ModuleKind::from_u32(17), Some(ModuleKind::Widener));
         let mixer = ModuleKind::Mixer.build();
-        assert_eq!((mixer.input_count(), mixer.output_count()), (8, 2));
+        // Eight stereo channels and two stereo returns in; main and two sends out.
+        assert_eq!((mixer.input_count(), mixer.output_count()), (20, 6));
         let widener = ModuleKind::Widener.build();
         assert_eq!((widener.input_count(), widener.output_count()), (2, 2));
     }
@@ -4924,6 +5003,190 @@ mod tests {
         assert!((hold(&mut engine, &inputs, output, &[0.1, 0.1, 0.2, 0.2]).0 - 0.2).abs() < 1e-4);
         engine.set_param(mixer, Mixer::solo(1), 0.0);
         assert!((hold(&mut engine, &inputs, output, &[0.1, 0.1, 0.2, 0.2]).0 - 0.3).abs() < 1e-4);
+    }
+
+    /// The mixer as it was before it grew to eight channels and two sends,
+    /// verbatim, so a four-channel patch can be held to it sample for sample.
+    struct FourChannelMixer {
+        gains: [Tracked; 4],
+        pans: [Tracked; 4],
+        fade: Tracked,
+    }
+
+    impl FourChannelMixer {
+        fn new() -> Self {
+            let mut mixer = Self {
+                gains: [(); 4].map(|_| Tracked::new(0.8)),
+                pans: [(); 4].map(|_| Tracked::new(0.0)),
+                fade: Tracked::new(0.0),
+            };
+            // As `set_sample_rate` did, which the engine calls on `add`.
+            for t in mixer.gains.iter_mut().chain(mixer.pans.iter_mut()) {
+                t.set_sample_rate(RATE);
+            }
+            mixer.fade.set_sample_rate(RATE);
+            mixer
+        }
+
+        /// `param(i)` reads the old layout: channel `c`'s controls at `4c..4c+4`, the fade at 16.
+        fn process(&mut self, param: impl Fn(usize) -> f32, input: impl Fn(usize) -> f32) -> [f32; 2] {
+            let soloed = |c: usize| param(c * 4 + 3) >= 0.5;
+            let any_solo = (0..4).any(soloed);
+            let mut out = [0.0f32; 2];
+            for c in 0..4 {
+                let silent = param(c * 4 + 2) >= 0.5 || (any_solo && !soloed(c));
+                let level = if silent { 0.0 } else { clamp(param(c * 4), 0.0, 2.0) };
+                let gain = self.gains[c].follow(level);
+                let pan = self.pans[c].follow(clamp(param(c * 4 + 1), -1.0, 1.0));
+                let (l, r) = (input(2 * c) * gain, input(2 * c + 1) * gain);
+                let x = if pan <= 0.0 { pan + 1.0 } else { pan } * core::f32::consts::FRAC_PI_2;
+                let (towards_left, towards_right) = (x.cos(), x.sin());
+                if pan <= 0.0 {
+                    out[0] += l + r * towards_left;
+                    out[1] += r * towards_right;
+                } else {
+                    out[0] += l * towards_left;
+                    out[1] += r + l * towards_right;
+                }
+            }
+            let fade = self.fade.follow(clamp(param(16), 0.0, 1.0));
+            out.map(|v| v * fade)
+        }
+    }
+
+    #[test]
+    fn the_mixer_has_eight_channels_two_sends_and_two_returns() {
+        let mixer = ModuleKind::Mixer.build();
+        assert_eq!(Mixer::CHANNELS, 8);
+        assert_eq!(Mixer::SENDS, 2);
+        // Eight stereo channels, then the two returns; the main out, then the two sends.
+        assert_eq!((mixer.input_count(), mixer.output_count()), (20, 6));
+        assert_eq!(mixer.param_count(), Mixer::PARAM_COUNT);
+        // The first four channels and the fade keep the indices they had.
+        assert_eq!((Mixer::level(0), Mixer::pan(1), Mixer::mute(2), Mixer::solo(3), Mixer::FADE), (0, 5, 10, 15, 16));
+        assert_eq!((Mixer::level(4), Mixer::solo(7)), (17, 32));
+        assert_eq!((Mixer::send(0, 0), Mixer::send(1, 7), Mixer::pre(0), Mixer::pre(1)), (33, 48, 49, 50));
+        assert_eq!((Mixer::return_level(0), Mixer::return_level(1), Mixer::PARAM_COUNT), (51, 52, 53));
+        assert_eq!(mixer.param_default(Mixer::level(6)), Mixer::DEFAULT_LEVEL);
+        assert_eq!(mixer.param_default(Mixer::send(1, 3)), 0.0);
+        assert_eq!(mixer.param_default(Mixer::pre(0)), 0.0);
+        assert_eq!(mixer.param_default(Mixer::return_level(1)), 1.0);
+    }
+
+    #[test]
+    fn a_four_channel_patch_renders_exactly_as_it_did() {
+        let (mut engine, inputs, mixer, _output) = wide_chain(ModuleKind::Mixer, 4, Mixer::FADE);
+        let mut old = FourChannelMixer::new();
+        let mut params = [0.0f32; 17];
+        for c in 0..4 {
+            params[c * 4] = 0.8;
+        }
+        params[16] = 1.0;
+        let tone = |n: usize, port: usize| 0.3 * (std::f32::consts::TAU * (110.0 + 55.0 * port as f32) * n as f32 / RATE).sin();
+        for n in 0..48_000 {
+            // Moves mid-render: levels, pans, a mute and a solo, then letting go.
+            let moves: &[(usize, usize, f32)] = &[
+                (1_000, 0, 1.5), (2_000, 5, -0.7), (6_000, 9, 0.4), (9_000, 10, 1.0),
+                (14_000, 15, 1.0), (20_000, 15, 0.0), (24_000, 10, 0.0), (30_000, 13, 0.9), (36_000, 4, 0.2),
+            ];
+            for &(at, index, value) in moves {
+                if n == at {
+                    params[index] = value;
+                    engine.set_param(mixer, index, value);
+                }
+            }
+            for (port, input) in inputs.iter().enumerate() {
+                engine.set_param(*input, HostInput::SAMPLE, tone(n, port));
+            }
+            engine.process();
+            // The mixer hears the host a sample late; the master hears the mixer a sample later.
+            let heard = |port: usize| if n >= 1 { tone(n - 1, port) } else { 0.0 };
+            let want = old.process(|i| params[i], heard);
+            let got = [engine.output_of(mixer, 0), engine.output_of(mixer, 1)];
+            assert_eq!(got, want, "sample {n}");
+        }
+    }
+
+    #[test]
+    fn channels_five_to_eight_sum_like_the_first_four() {
+        let (mut engine, inputs, mixer, output) = wide_chain(ModuleKind::Mixer, 8, Mixer::FADE);
+        for channel in 0..8 {
+            engine.set_param(mixer, Mixer::level(channel), 1.0);
+        }
+        engine.set_param(mixer, Mixer::level(7), 0.5);
+        engine.set_param(mixer, Mixer::solo(5), 0.0);
+        let mut values = [0.0f32; 16];
+        values[10] = 0.1; // channel 6, left
+        values[15] = 0.4; // channel 8, right
+        let (l, r) = hold(&mut engine, &inputs, output, &values);
+        assert!((l - 0.1).abs() < 1e-4 && (r - 0.2).abs() < 1e-4, "{l} {r}");
+        engine.set_param(mixer, Mixer::solo(7), 1.0);
+        let (l, r) = hold(&mut engine, &inputs, output, &values);
+        assert!(l.abs() < 1e-4 && (r - 0.2).abs() < 1e-4, "a solo on channel 8 silences channel 6: {l} {r}");
+    }
+
+    /// A mixer whose send outputs are what the master hears: send `bus` on the master.
+    fn send_chain(channels: usize, bus: usize) -> (Engine, Vec<u32>, u32, u32) {
+        let (mut engine, inputs, mixer, output) = wide_chain(ModuleKind::Mixer, channels, Mixer::FADE);
+        for port in 0..2u8 {
+            engine.disconnect(PortRef { module: mixer, port }, PortRef { module: output, port });
+            engine.connect(PortRef { module: mixer, port: 2 + 2 * bus as u8 + port }, PortRef { module: output, port });
+        }
+        for channel in 0..channels {
+            engine.set_param(mixer, Mixer::level(channel), 1.0);
+        }
+        (engine, inputs, mixer, output)
+    }
+
+    #[test]
+    fn a_post_fader_send_hears_the_channel_after_its_level_and_pan() {
+        let (mut engine, inputs, mixer, output) = send_chain(1, 0);
+        assert_eq!(hold(&mut engine, &inputs, output, &[0.4, 0.4]), (0.0, 0.0), "nothing sent by default");
+        engine.set_param(mixer, Mixer::send(0, 0), 0.5);
+        engine.set_param(mixer, Mixer::level(0), 0.5);
+        engine.set_param(mixer, Mixer::pan(0), -1.0);
+        // 0.4 × level 0.5 = 0.2 a side, hard left = 0.4 on the left, × send 0.5.
+        let (l, r) = hold(&mut engine, &inputs, output, &[0.4, 0.4]);
+        assert!((l - 0.2).abs() < 1e-3 && r.abs() < 1e-4, "{l} {r}");
+        engine.set_param(mixer, Mixer::mute(0), 1.0);
+        let muted = hold(&mut engine, &inputs, output, &[0.4, 0.4]);
+        assert!(muted.0.abs() < 1e-5 && muted.1.abs() < 1e-5, "a muted channel sends nothing: {muted:?}");
+    }
+
+    #[test]
+    fn a_pre_fader_send_ignores_the_level_and_pan_but_not_mute() {
+        let (mut engine, inputs, mixer, output) = send_chain(2, 1);
+        engine.set_param(mixer, Mixer::pre(1), 1.0);
+        engine.set_param(mixer, Mixer::send(1, 0), 0.5);
+        engine.set_param(mixer, Mixer::send(1, 1), 1.0);
+        engine.set_param(mixer, Mixer::level(0), 0.0);
+        engine.set_param(mixer, Mixer::pan(0), 1.0);
+        let (l, r) = hold(&mut engine, &inputs, output, &[0.4, 0.2, 0.1, 0.0]);
+        assert!((l - (0.2 + 0.1)).abs() < 1e-4 && (r - 0.1).abs() < 1e-4, "{l} {r}");
+        // Soloing channel 2 silences channel 1, and its pre-fader send with it.
+        engine.set_param(mixer, Mixer::solo(1), 1.0);
+        let (l, r) = hold(&mut engine, &inputs, output, &[0.4, 0.2, 0.1, 0.0]);
+        assert!((l - 0.1).abs() < 1e-4 && r.abs() < 1e-4, "{l} {r}");
+    }
+
+    #[test]
+    fn a_return_joins_the_main_mix_at_its_level() {
+        let mut engine = Engine::new(RATE);
+        let fx = engine.add(ModuleKind::HostInput.build());
+        let mixer = engine.add(ModuleKind::Mixer.build());
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        // Return B's two sides, ports 18 and 19.
+        engine.connect(PortRef { module: fx, port: 0 }, PortRef { module: mixer, port: 18 });
+        engine.connect(PortRef { module: fx, port: 0 }, PortRef { module: mixer, port: 19 });
+        for port in 0..2 {
+            engine.connect(PortRef { module: mixer, port }, PortRef { module: output, port });
+        }
+        engine.set_param(mixer, Mixer::FADE, 1.0);
+        let (l, r) = hold(&mut engine, &[fx], output, &[0.3]);
+        assert!((l - 0.3).abs() < 1e-4 && (r - 0.3).abs() < 1e-4, "unity by default: {l} {r}");
+        engine.set_param(mixer, Mixer::return_level(1), 0.5);
+        let (l, _) = hold(&mut engine, &[fx], output, &[0.3]);
+        assert!((l - 0.15).abs() < 1e-4, "{l}");
     }
 
     #[test]
