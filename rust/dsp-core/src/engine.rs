@@ -207,17 +207,6 @@ pub trait Module: Send {
     /// most modules are not samplers.
     fn set_sample_slot(&mut self, _slot: u32, _sample: u32) {}
 
-    /// Room for the result of work done off the audio thread (the Grain
-    /// Engine's separation and transient onsets, `grain_jobs`), which the host
-    /// fills a piece at a time between quanta and then commits. None for a
-    /// module that takes no such work.
-    fn job_buffer(&mut self, _kind: u32, _len: usize) -> Option<&mut [f32]> {
-        None
-    }
-
-    /// The job buffer is full: adopt it, if it is still current.
-    fn job_commit(&mut self, _kind: u32) {}
-
     /// A kit pad's gain, pan and choke group. Default no-op: only a kit has pads.
     fn set_slot_shape(&mut self, _slot: u32, _gain: f32, _pan: f32, _choke_group: i32) {}
 
@@ -252,6 +241,52 @@ pub trait Module: Send {
     fn param_default(&self, _index: usize) -> f32 {
         0.0
     }
+
+    /// Ask for slow builds rather than making them here. A module whose
+    /// analysis takes seconds (the Grain Engine's transient map and the
+    /// hybrid's separation) must not run it on the audio thread, so a host
+    /// with another thread to spare turns this on, makes the build there from
+    /// `build_request_params`, and hands it back with `accept_map` and
+    /// `accept_parts`. Default no-op: nothing else builds anything slow.
+    fn set_deferred_builds(&mut self, _on: bool) {}
+
+    /// The build this module is waiting for, if any.
+    fn build_request(&self) -> Option<BuildRequest> {
+        None
+    }
+
+    /// The settings the waiting build is for, as the module's parameters.
+    fn build_request_params(&self) -> &[f32] {
+        &[]
+    }
+
+    /// The transient map this module made in place, for a host to hand on.
+    fn built_map(&self) -> Option<&prism_grain::transient::TimeMap> {
+        None
+    }
+
+    /// The separation this module made in place, for a host to hand on.
+    fn built_parts(&self) -> Option<&prism_grain::hstream::Parts> {
+        None
+    }
+
+    /// The map for request `seq`: `None` is a straight line. Ignored when
+    /// `seq` is not the request still waiting.
+    fn accept_map(&mut self, _seq: u32, _map: Option<prism_grain::transient::TimeMap>) {}
+
+    /// The separation for request `seq`. Ignored when `seq` is not the
+    /// request still waiting.
+    fn accept_parts(&mut self, _seq: u32, _parts: prism_grain::hstream::Parts) {}
+}
+
+/// A slow build a module is waiting for: which one, and what it needs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuildRequest {
+    pub seq: u32,
+    /// The transient map.
+    pub map: bool,
+    /// The hybrid's separation.
+    pub parts: bool,
 }
 
 /// The loudest input and output sample a metered module has seen since the
@@ -484,17 +519,6 @@ impl Engine {
         }
     }
 
-    /// A module's room for a job's result, `len` floats, or None.
-    pub fn job_buffer(&mut self, id: ModuleId, kind: u32, len: usize) -> Option<&mut [f32]> {
-        self.slot_mut(id).and_then(|target| target.module.job_buffer(kind, len))
-    }
-
-    pub fn job_commit(&mut self, id: ModuleId, kind: u32) {
-        if let Some(target) = self.slot_mut(id) {
-            target.module.job_commit(kind);
-        }
-    }
-
     /// Give a kit pad its gain, pan and choke group. Ignored by modules with no
     /// pads, and by ids that no longer exist.
     pub fn set_slot_shape(&mut self, id: ModuleId, slot: u32, gain: f32, pan: f32, choke_group: i32) {
@@ -680,6 +704,42 @@ impl Engine {
         }
 
         self.frame = self.frame.wrapping_add(1);
+    }
+
+    /// Turn a module's slow builds over to the host (`Module::set_deferred_builds`).
+    pub fn set_deferred_builds(&mut self, id: ModuleId, on: bool) {
+        if let Some(target) = self.slot_mut(id) {
+            target.module.set_deferred_builds(on);
+        }
+    }
+
+    pub fn build_request(&self, id: ModuleId) -> Option<BuildRequest> {
+        self.slot(id).and_then(|s| s.module.build_request())
+    }
+
+    pub fn build_request_params(&self, id: ModuleId) -> &[f32] {
+        self.slot(id).map(|s| s.module.build_request_params()).unwrap_or(&[])
+    }
+
+    pub fn built_map(&self, id: ModuleId) -> Option<&prism_grain::transient::TimeMap> {
+        self.slot(id).and_then(|s| s.module.built_map())
+    }
+
+    pub fn built_parts(&self, id: ModuleId) -> Option<&prism_grain::hstream::Parts> {
+        self.slot(id).and_then(|s| s.module.built_parts())
+    }
+
+    /// A map made elsewhere, as its anchors; `None` is a straight line.
+    pub fn accept_map(&mut self, id: ModuleId, seq: u32, anchors: Option<Vec<(f64, f64)>>) {
+        if let Some(target) = self.slot_mut(id) {
+            target.module.accept_map(seq, anchors.map(prism_grain::transient::TimeMap::from_anchors));
+        }
+    }
+
+    pub fn accept_parts(&mut self, id: ModuleId, seq: u32, parts: prism_grain::hstream::Parts) {
+        if let Some(target) = self.slot_mut(id) {
+            target.module.accept_parts(seq, parts);
+        }
     }
 
     fn slot(&self, id: ModuleId) -> Option<&Slot> {

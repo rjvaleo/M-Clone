@@ -22,3 +22,13 @@ await build({
   outfile: "public/idmlab-rack.js",
   logLevel: "info",
 });
+
+// The Grain Engine's build worker, self-contained for the same reason.
+await build({
+  entryPoints: ["src/modular/audio/wasm/grainWorker.ts"],
+  bundle: true,
+  format: "esm",
+  target: "es2022",
+  outfile: "public/idmlab-grain-worker.js",
+  logLevel: "info",
+});

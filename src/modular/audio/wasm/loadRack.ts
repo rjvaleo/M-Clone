@@ -17,7 +17,7 @@
  */
 
 import { RACK_PROCESSOR_NAME } from "./rackProtocol";
-import { WasmRackNode, type RackNodeLike } from "./rackNode";
+import { WasmRackNode, type BuilderWorkerLike, type RackNodeLike } from "./rackNode";
 // The project's own narrowed node type rather than the DOM's `AudioNode`, so
 // the master chain's input — which is an `AudioNodeLike` — can be a
 // destination without a cast at the one call site that matters.
@@ -29,9 +29,14 @@ export const DEFAULT_WASM_URL = "/idmlab-engine.wasm";
 /** Where `npm run build:worklet` puts the processor bundle. */
 export const DEFAULT_WORKLET_URL = "/idmlab-rack.js";
 
+/** Where `npm run build:worklet` puts the Grain Engine's build worker. */
+export const DEFAULT_BUILDER_URL = "/idmlab-grain-worker.js";
+
 /** The part of an `AudioContext` this needs. Narrow, so tests need no context. */
 export interface RackWorkletHost {
   readonly audioWorklet?: { addModule(url: string): Promise<void> };
+  /** The rack's rate, which the build worker must start at. */
+  readonly sampleRate?: number;
 }
 
 /** A node this can connect and hand to `WasmRackNode`. */
@@ -46,6 +51,8 @@ export interface RackLoadOptions {
   compileModule?: (url: string) => Promise<WebAssembly.Module>;
   /** Injected by tests; defaults to the real `AudioWorkletNode`. */
   createNode?: (module: WebAssembly.Module) => ConnectableRackNode | null;
+  /** Injected by tests; defaults to a `Worker` running `grainWorker.ts`. */
+  createBuilder?: () => BuilderWorkerLike | null;
 }
 
 /* v8 ignore start -- fetch and WebAssembly.compile against a real URL; the
@@ -82,6 +89,14 @@ const createWorkletNode =
   };
 /* v8 ignore stop */
 
+/* v8 ignore start -- constructs a real Worker, which Node does not have; the
+   wiring around it is covered by tests that inject a stub. */
+const createBuilderWorker = (): BuilderWorkerLike | null => {
+  if (typeof Worker === "undefined") return null;
+  return new Worker(DEFAULT_BUILDER_URL, { type: "module" }) as unknown as BuilderWorkerLike;
+};
+/* v8 ignore stop */
+
 /**
  * Load the rack and connect it to `destination`, or return `null` if any part
  * of that is unavailable.
@@ -103,7 +118,16 @@ export async function loadRackNode(
     const node = (options.createNode ?? createWorkletNode(context))(module);
     if (!node) return null;
     node.connect(destination);
-    return new WasmRackNode(node);
+    // The Grain Engine's slow builds, made off the audio thread. A browser
+    // with no Worker still plays; its Grain Engines just go without them.
+    let builder: BuilderWorkerLike | null = null;
+    try {
+      builder = (options.createBuilder ?? createBuilderWorker)();
+    } catch {
+      builder = null;
+    }
+    if (builder && context.sampleRate) builder.postMessage({ type: "init", module, sampleRate: context.sampleRate });
+    return new WasmRackNode(node, builder && context.sampleRate ? builder : undefined);
   } catch {
     return null;
   }

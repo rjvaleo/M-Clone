@@ -454,15 +454,156 @@ pub extern "C" fn sample_count() -> u32 {
     samples().map_or(0, |bank| bank.len() as u32)
 }
 
-// ---- the Grain Engine's jobs ---------------------------------------------------
+// ---- slow builds, made off the audio thread --------------------------------
 //
-// Two sides of one hand-over. In a Web Worker, a second instance of this
-// engine runs the heavy work MultiGrainLive keeps off its audio thread
-// (`dsp_core::grain_jobs`): it holds the sample in its own bank, takes the
-// module's controls in `job_params`, and leaves the result in `job_output`.
-// In the worklet, the result is written into the module's own buffer
-// (`job_begin`) a piece per quantum, so no quantum carries the whole copy,
-// and `job_commit` hands it over.
+// The Grain Engine's transient map and the hybrid's separation take seconds on
+// a long file. In the worklet they are asked for (`set_deferred_builds`), made
+// by a second instance of this module in a worker, and handed back here. The
+// worker uses the reading half; the worklet the asking and accepting halves.
+
+static mut MAP_SCRATCH: Vec<f64> = Vec::new();
+static mut PARTS_SCRATCH: [Vec<f32>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+
+#[allow(static_mut_refs)]
+fn map_scratch() -> &'static mut Vec<f64> {
+    unsafe { &mut MAP_SCRATCH }
+}
+
+#[allow(static_mut_refs)]
+fn parts_scratch(which: u32) -> Option<&'static mut Vec<f32>> {
+    unsafe { PARTS_SCRATCH.get_mut(which as usize) }
+}
+
+/// Ask for this module's slow builds rather than making them on this thread.
+#[no_mangle]
+pub extern "C" fn set_deferred_builds(module: u32, on: u32) {
+    if let Some(engine) = engine() {
+        engine.set_deferred_builds(module, on != 0);
+    }
+}
+
+/// The waiting build's number, or 0 when nothing is waiting.
+#[no_mangle]
+pub extern "C" fn build_request_seq(module: u32) -> u32 {
+    engine().and_then(|e| e.build_request(module)).map_or(0, |r| r.seq)
+}
+
+/// What the waiting build needs: 1 the transient map, 2 the separation.
+#[no_mangle]
+pub extern "C" fn build_request_flags(module: u32) -> u32 {
+    engine().and_then(|e| e.build_request(module)).map_or(0, |r| u32::from(r.map) | (u32::from(r.parts) << 1))
+}
+
+/// The settings the waiting build is for, as the module's parameters.
+#[no_mangle]
+pub extern "C" fn build_request_params_ptr(module: u32) -> *const f32 {
+    engine().map_or(core::ptr::null(), |e| e.build_request_params(module).as_ptr())
+}
+
+#[no_mangle]
+pub extern "C" fn build_request_params_len(module: u32) -> u32 {
+    engine().map_or(0, |e| e.build_request_params(module).len() as u32)
+}
+
+/// The anchors of the map this module made, or u32::MAX for none (a straight
+/// line). Copies them where `built_map_ptr` points, input then output each.
+#[no_mangle]
+pub extern "C" fn built_map_len(module: u32) -> u32 {
+    let Some(map) = engine().and_then(|e| e.built_map(module)) else { return u32::MAX };
+    let scratch = map_scratch();
+    scratch.clear();
+    for &(input, output) in map.anchors() {
+        scratch.push(input);
+        scratch.push(output);
+    }
+    map.anchor_count() as u32
+}
+
+#[no_mangle]
+pub extern "C" fn built_map_ptr() -> *const f64 {
+    map_scratch().as_ptr()
+}
+
+/// The frames of the separation this module made, or 0 for none.
+#[no_mangle]
+pub extern "C" fn built_parts_frames(module: u32) -> u32 {
+    engine().and_then(|e| e.built_parts(module)).map_or(0, |p| p.frames() as u32)
+}
+
+#[no_mangle]
+pub extern "C" fn built_parts_channels(module: u32) -> u32 {
+    engine().and_then(|e| e.built_parts(module)).map_or(0, |p| p.channels as u32)
+}
+
+/// One part, interleaved: 0 harmonic, 1 percussive, 2 residual.
+#[no_mangle]
+pub extern "C" fn built_parts_ptr(module: u32, which: u32) -> *const f32 {
+    match engine().and_then(|e| e.built_parts(module)) {
+        Some(p) => match which {
+            0 => p.harmonic.as_ptr(),
+            1 => p.percussive.as_ptr(),
+            2 => p.residual.as_ptr(),
+            _ => core::ptr::null(),
+        },
+        None => core::ptr::null(),
+    }
+}
+
+/// Room for `anchors` pairs of a map on its way in.
+#[no_mangle]
+pub extern "C" fn accept_map_alloc(anchors: u32) -> *mut f64 {
+    let scratch = map_scratch();
+    scratch.clear();
+    scratch.resize(anchors as usize * 2, 0.0);
+    scratch.as_mut_ptr()
+}
+
+/// The map for request `seq`, from `accept_map_alloc`'s room; `present` 0 is
+/// a straight line.
+#[no_mangle]
+pub extern "C" fn accept_map(module: u32, seq: u32, anchors: u32, present: u32) {
+    let Some(engine) = engine() else { return };
+    let map = (present != 0).then(|| {
+        map_scratch()[..anchors as usize * 2].chunks_exact(2).map(|p| (p[0], p[1])).collect()
+    });
+    engine.accept_map(module, seq, map);
+}
+
+/// Room for one part of a separation on its way in (0 harmonic, 1
+/// percussive, 2 residual), `len` floats interleaved.
+#[no_mangle]
+pub extern "C" fn accept_parts_alloc(which: u32, len: u32) -> *mut f32 {
+    match parts_scratch(which) {
+        Some(scratch) => {
+            scratch.clear();
+            scratch.resize(len as usize, 0.0);
+            scratch.as_mut_ptr()
+        }
+        None => core::ptr::null_mut(),
+    }
+}
+
+/// The separation for request `seq`, from `accept_parts_alloc`'s room.
+#[no_mangle]
+pub extern "C" fn accept_parts(module: u32, seq: u32, channels: u32) {
+    let Some(engine) = engine() else { return };
+    let take = |which| parts_scratch(which).map(core::mem::take).unwrap_or_default();
+    let parts = dsp_core::modules::Parts {
+        harmonic: take(0),
+        percussive: take(1),
+        residual: take(2),
+        channels: channels as usize,
+        split: None,
+    };
+    engine.accept_parts(module, seq, parts);
+}
+
+// ---- the cloud pad's grains ------------------------------------------------------
+//
+// Run by the Grain Engine's builder worker on its own instance, which holds the
+// same samples as the rack: the module's controls go in `job_params`, and
+// `grains_sampled` with the file's own rate and length comes out in
+// `job_output` (`dsp_core::grain_jobs::grains_job`).
 
 static mut JOB_PARAMS: [f32; dsp_core::modules::GrainEngineModule::PARAM_COUNT] =
     [0.0; dsp_core::modules::GrainEngineModule::PARAM_COUNT];
@@ -475,30 +616,18 @@ pub extern "C" fn job_params_ptr() -> *mut f32 {
     unsafe { JOB_PARAMS.as_mut_ptr() }
 }
 
-/// Run one job on the sample `sample` in this instance's bank, for a rack at
-/// `rack_rate`. Returns how many floats `job_output_ptr` points at.
+/// The grains of the sample `sample` in this instance's bank, at most `cap`.
+/// Returns how many floats `job_output_ptr` points at.
 #[no_mangle]
 #[allow(static_mut_refs)]
-pub extern "C" fn job_run(kind: u32, sample: u32, rack_rate: f32, cap: u32) -> u32 {
-    use dsp_core::grain_jobs as jobs;
+pub extern "C" fn job_grains(sample: u32, cap: u32) -> u32 {
     use dsp_core::modules::GrainEngineModule;
-    let Some(source_sample) = samples().and_then(|bank| bank.get(sample)) else { return 0 };
+    let Some(source) = samples().and_then(|bank| bank.get(sample)) else { return 0 };
     let raw = unsafe { JOB_PARAMS };
-    let out = match kind {
-        jobs::PARTS | jobs::ONSETS => {
-            let source = jobs::source_of(source_sample, rack_rate);
-            let mut sp = dsp_core::prism_grain::StreamParams::new(source.frames(), rack_rate as u32);
-            GrainEngineModule::stream_params(&raw, &mut sp);
-            if kind == jobs::PARTS { jobs::parts_job(&source, &sp, sample) } else { jobs::onsets_job(&source, &sp, sample) }
-        }
-        jobs::GRAINS => {
-            let mut sp = dsp_core::prism_grain::StreamParams::new(source_sample.frames(), source_sample.sample_rate() as u32);
-            GrainEngineModule::stream_params(&raw, &mut sp);
-            sp.semitones = GrainEngineModule::transposed(&raw);
-            jobs::grains_job(source_sample, &sp, (cap as usize).max(1))
-        }
-        _ => Vec::new(),
-    };
+    let mut sp = dsp_core::prism_grain::StreamParams::new(source.frames(), source.sample_rate() as u32);
+    GrainEngineModule::stream_params(&raw, &mut sp);
+    sp.semitones = GrainEngineModule::transposed(&raw);
+    let out = dsp_core::grain_jobs::grains_job(source, &sp, (cap as usize).max(1));
     unsafe {
         JOB_OUTPUT = out;
         JOB_OUTPUT.len() as u32
@@ -509,23 +638,4 @@ pub extern "C" fn job_run(kind: u32, sample: u32, rack_rate: f32, cap: u32) -> u
 #[allow(static_mut_refs)]
 pub extern "C" fn job_output_ptr() -> *const f32 {
     unsafe { JOB_OUTPUT.as_ptr() }
-}
-
-/// Room in a module for a job's result, `len` floats. Null if the module
-/// takes no such job. Allocating can grow memory: re-read `memory.buffer`
-/// after this returns, as after `sample_alloc`.
-#[no_mangle]
-pub extern "C" fn job_begin(module: u32, kind: u32, len: u32) -> *mut f32 {
-    match engine().and_then(|engine| engine.job_buffer(module, kind, len as usize)) {
-        Some(buffer) => buffer.as_mut_ptr(),
-        None => core::ptr::null_mut(),
-    }
-}
-
-/// The buffer `job_begin` gave is full: the module adopts it if it is current.
-#[no_mangle]
-pub extern "C" fn job_commit(module: u32, kind: u32) {
-    if let Some(engine) = engine() {
-        engine.job_commit(module, kind);
-    }
 }
