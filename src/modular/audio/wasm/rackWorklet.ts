@@ -8,8 +8,9 @@
 // and routing those through a message port would put the main thread back in
 // the audio path, which is the whole thing this migration exists to end.
 //
-// What crosses the port is only what has to: a compiled plan going in, and
-// later the telemetry stream going out.
+// What crosses the port is only what has to: a compiled plan going in, the
+// telemetry stream going out, and a Grain Engine's slow builds, asked for going
+// out and made by a worker coming back in.
 //
 // This file cannot be unit tested — there is no `AudioWorkletGlobalScope` in
 // Node and no way to construct one. It is kept as thin as the shim in
@@ -53,7 +54,8 @@ class RackProcessor extends AudioWorkletProcessor {
     const instance = compiled ? new WebAssembly.Instance(compiled, {}) : null;
     this.broken = instance === null;
     this.rack = instance
-      ? new WasmRack(instance.exports as unknown as EngineExports, sampleRate)
+      // The Grain Engine's slow builds go to a worker, never this thread.
+      ? new WasmRack(instance.exports as unknown as EngineExports, sampleRate, { deferBuilds: true })
       : (null as unknown as WasmRack);
 
     this.port.onmessage = (event: MessageEvent<RackMessage>) => {
@@ -92,8 +94,8 @@ class RackProcessor extends AudioWorkletProcessor {
         case "modulation":
           this.rack.setModulation(message.nodeId, message.source, message.dest, message.amount);
           break;
-        case "grain-job":
-          this.rack.grainJob(message.nodeId, message.kind, message.data);
+        case "grain-built":
+          this.rack.acceptBuild(message);
           break;
       }
     };
@@ -129,6 +131,8 @@ class RackProcessor extends AudioWorkletProcessor {
     // tested, rather than as a counter in this untestable file.
     const report = this.rack.takeReport();
     if (report) this.port.postMessage(report);
+    // And a Grain Engine's slow build, the moment it is asked for.
+    for (const request of this.rack.takeBuildRequests()) this.port.postMessage(request);
     return true;
   }
 }

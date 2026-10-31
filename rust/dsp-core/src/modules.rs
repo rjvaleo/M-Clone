@@ -21,7 +21,9 @@
 //! remembers to call the right setter.
 
 use crate::bank::{VoiceBank, DEFAULT_POLYPHONY, MAX_POLYPHONY};
-use crate::engine::{Module, Ports, ProcessContext};
+use crate::engine::{Module, Ports, ProcessContext, BuildRequest};
+/// The hybrid's separation, which a host carries between engines (see `Module::accept_parts`).
+pub use prism_grain::hstream::Parts;
 use crate::lfo::{Lfo, LfoShape, LfoTrigger};
 use crate::modmatrix::{ModDest, ModSource};
 use crate::osc::Wave;
@@ -3298,37 +3300,39 @@ impl Module for GateAdsrModule {
 /// release fades it out. With `FREE_RUN` on one voice plays continuously,
 /// looping the file, and notes only retune it.
 ///
-/// What MultiGrainLive does off its audio thread is done off this one too.
-/// The hybrid's separation and WSOLA's transient onsets are jobs
-/// (`grain_jobs`), run in a worker on a second instance of this engine and
-/// handed in a piece at a time (`job_buffer`, `job_commit`); a result made
-/// from controls that have since moved is dropped. Until one arrives the
-/// hybrid plays with nothing separated, as MultiGrainLive's does while its
-/// separation runs, and WSOLA keeps the map it had. The anchors placed around
-/// the onsets (`map_from`) are cheap and made here, at once. Each engine's
-/// extra layers (`LayerBank`) are only allocation, and are built here: at
-/// load, at once for a change of engine, and for a change of layer count once
-/// it has held still for `SETTLE_SECONDS` (MultiGrainLive waits for the
-/// control's release). The sample is resampled to the rack's rate when it
-/// arrives.
+/// What MultiGrainLive builds off its audio thread is built here as it builds
+/// it, from the same functions with the same arguments (its `live.rs`): the
+/// WSOLA transient map (`map_for`), each engine's extra layers (`LayerBank`)
+/// and the hybrid's separation. The sample is resampled to the rack's rate
+/// when it arrives. All of these allocate, on the audio thread: at load, and
+/// when one of the controls they hang on has held still for `SETTLE_SECONDS`
+/// (MultiGrainLive waits for the control's release; a choice of engine is
+/// acted on at once there, and here).
 pub struct GrainEngineModule {
     voices: Vec<GrainVoice>,
     source: Option<prism_grain::Source>,
     sp: prism_grain::StreamParams,
     /// Transpose, snapped to the tuning chosen (`prism_grain::tuning::quantise`).
     transpose: f32,
-    /// What the separation the voices hold was made from.
-    parts_key: Option<[f32; 6]>,
-    /// The onsets found, and what they were found with.
-    hits: Option<([f32; 5], Vec<usize>)>,
-    /// What the transient map the voices hold was made from.
+    /// The hybrid's separated source and the split it was made with.
+    parts: Option<prism_grain::decompose::Split>,
+    /// The transient map's inputs when it was last built.
     map_key: Option<[f32; 9]>,
-    /// A job's result arriving, a piece at a time.
-    job: Option<(u32, Vec<f32>)>,
     /// The engine and layer count the voices' banks were built for.
     bank_key: Option<(prism_grain::stretch::Algorithm, u32)>,
     /// Frames since a control a rebuild hangs on last moved.
     still: usize,
+    /// The transient map and separation, kept as made, for a host to hand on.
+    map: Option<prism_grain::transient::TimeMap>,
+    shared_parts: Option<std::sync::Arc<prism_grain::hstream::Parts>>,
+    /// Asking for the map and separation rather than making them here.
+    deferred: bool,
+    /// The build waiting for an answer, the settings it was asked under, and
+    /// what it is for, so an answer is taken only while it is still wanted.
+    request: Option<BuildRequest>,
+    request_params: [f32; Self::PARAM_COUNT],
+    request_keys: (Option<[f32; 9]>, Option<prism_grain::decompose::Split>),
+    asked: u32,
     sample: Option<u32>,
     loaded: Option<u32>,
     events: Vec<prism_grain::grain::GrainEvent>,
@@ -3466,12 +3470,17 @@ impl GrainEngineModule {
             source: None,
             sp: prism_grain::StreamParams::new(0, rate as u32),
             transpose: 0.0,
-            parts_key: None,
-            hits: None,
+            parts: None,
             map_key: None,
-            job: None,
             bank_key: None,
             still: 0,
+            map: None,
+            shared_parts: None,
+            deferred: false,
+            request: None,
+            request_params: [f32::NAN; Self::PARAM_COUNT],
+            request_keys: (None, None),
+            asked: 0,
             sample: None,
             loaded: None,
             // The engine reports grain starts for MultiGrainLive's visualiser;
@@ -3516,7 +3525,6 @@ impl GrainEngineModule {
         if self.bank_key.is_some_and(|(alg, _)| alg != self.sp.algorithm) {
             self.build_banks();
         }
-        self.place_anchors();
         self.still = 0;
     }
 
@@ -3610,20 +3618,27 @@ impl GrainEngineModule {
         clamp(self.transpose + offset, -48.0, 48.0)
     }
 
-    /// The bank's sample, stereo and at the rack's rate. What was separated
-    /// or found in the last one goes with it.
+    /// The bank's sample, stereo and at the rack's rate.
     fn load(&mut self, sample: &crate::samples::Sample) {
-        let source = crate::grain_jobs::source_of(sample, self.sample_rate);
-        self.sp.in_frames = source.frames();
-        self.source = Some(source);
-        self.parts_key = None;
-        self.hits = None;
-        self.map_key = None;
-        let empty = std::sync::Arc::new(prism_grain::hstream::Parts::default());
-        for voice in &mut self.voices {
-            voice.stretcher.set_parts(std::sync::Arc::clone(&empty));
-            voice.stretcher.set_map(None);
+        let ratio = sample.sample_rate() / self.sample_rate;
+        let frames = ((sample.frames() as f32) / ratio).floor().max(0.0) as usize;
+        let mut samples = Vec::with_capacity(frames * 2);
+        for frame in 0..frames {
+            let at = frame as f32 * ratio;
+            let left = sample.read(0, at);
+            let right = if sample.channels() > 1 { sample.read(1, at) } else { left };
+            samples.push(left);
+            samples.push(right);
         }
+        self.sp.in_frames = frames;
+        self.source = Some(prism_grain::Source { samples, channels: 2 });
+        self.parts = None;
+        self.map_key = None;
+        // Anything asked for the last file is for the last file.
+        self.request = None;
+        self.request_keys = (None, None);
+        self.build_map();
+        self.build_parts();
         self.build_banks();
         self.restart_all();
     }
@@ -3636,8 +3651,7 @@ impl GrainEngineModule {
         }
     }
 
-    /// What the transient map is made from: the onsets, and `map_for`'s
-    /// inputs (`Rebuilds::decide`'s list).
+    /// What the transient map is made from: `Rebuilds::decide`'s list.
     fn map_inputs(&self) -> [f32; 9] {
         let (w, g) = (&self.sp.wsola, &self.sp.grain);
         [
@@ -3648,28 +3662,92 @@ impl GrainEngineModule {
         ]
     }
 
-    /// The anchors around the onsets in hand, when they or what places them
-    /// has moved: `map_for` from its detector's result. A straight line while
-    /// transients are not preserved.
-    fn place_anchors(&mut self) {
+    /// MultiGrainLive's `map_for`: the onset detector over the whole source,
+    /// when transients are preserved, and a straight line otherwise.
+    fn build_map(&mut self) {
         let key = self.map_inputs();
         if self.map_key == Some(key) {
             return;
         }
-        let current = crate::grain_jobs::onsets_key(&self.sp, self.loaded.unwrap_or(u32::MAX));
-        let map = if !self.sp.wsola.preserve_transients {
-            None
-        } else {
-            match &self.hits {
-                Some((found, hits)) if *found == current => crate::grain_jobs::map_from(&self.sp, hits),
-                // Not found yet for these settings: the map held stays, as
-                // MultiGrainLive's does until its detector is done.
-                _ => return,
-            }
-        };
+        if self.deferred && self.sp.wsola.preserve_transients {
+            self.ask(true, false);
+            return;
+        }
         self.map_key = Some(key);
+        let Some(source) = self.source.as_ref() else { return };
+        let map = Self::map_for(source, &self.sp);
+        self.set_map(map);
+    }
+
+    fn set_map(&mut self, map: Option<prism_grain::transient::TimeMap>) {
         for voice in &mut self.voices {
             voice.stretcher.set_map(map.clone());
+        }
+        self.map = map;
+    }
+
+    fn map_for(source: &prism_grain::Source, sp: &prism_grain::StreamParams) -> Option<prism_grain::transient::TimeMap> {
+        if !sp.wsola.preserve_transients {
+            return None;
+        }
+        let hop = prism_grain::grain::plan(source.frames(), sp.sample_rate, sp.ratio, sp.window_ms, &sp.grain).hop.max(1);
+        prism_grain::stream::WsolaStream::build_map(&source.samples, source.channels, sp.sample_rate, sp.ratio, hop, &sp.wsola)
+    }
+
+    /// The hybrid's separation, while the hybrid is the engine.
+    fn build_parts(&mut self) {
+        if self.sp.algorithm != prism_grain::stretch::Algorithm::Hybrid {
+            return;
+        }
+        let split = self.sp.hybrid.split();
+        if self.parts == Some(split) {
+            return;
+        }
+        if self.deferred {
+            self.ask(false, true);
+            return;
+        }
+        let Some(source) = self.source.as_ref() else { return };
+        let parts = std::sync::Arc::new(prism_grain::hstream::Parts::separate(&source.samples, source.channels, self.sp.hybrid));
+        self.set_parts(parts, split);
+    }
+
+    fn set_parts(&mut self, parts: std::sync::Arc<prism_grain::hstream::Parts>, split: prism_grain::decompose::Split) {
+        for voice in &mut self.voices {
+            voice.stretcher.set_parts(std::sync::Arc::clone(&parts));
+        }
+        self.shared_parts = Some(parts);
+        self.parts = Some(split);
+    }
+
+    /// Ask the host for the map, the separation, or both, under the settings
+    /// as they are now. A request already waiting for exactly these is left to
+    /// run; anything else takes its place, and the old answer will be refused.
+    fn ask(&mut self, map: bool, parts: bool) {
+        if self.source.is_none() {
+            return;
+        }
+        let keys = (
+            if map { Some(self.map_inputs()) } else { self.request_keys.0.filter(|_| self.request.is_some_and(|r| r.map)) },
+            if parts { Some(self.sp.hybrid.split()) } else { self.request_keys.1.filter(|_| self.request.is_some_and(|r| r.parts)) },
+        );
+        let want = (keys.0.is_some(), keys.1.is_some());
+        if self.request.is_some() && self.request_keys == keys {
+            return;
+        }
+        self.asked = self.asked.wrapping_add(1).max(1);
+        self.request = Some(BuildRequest { seq: self.asked, map: want.0, parts: want.1 });
+        self.request_params = self.seen;
+        self.request_keys = keys;
+    }
+
+    /// One half of a request answered: the request is done once both are.
+    fn answered(&mut self, map: bool) {
+        if let Some(request) = self.request.as_mut() {
+            if map { request.map = false } else { request.parts = false }
+            if !request.map && !request.parts {
+                self.request = None;
+            }
         }
     }
 
@@ -3697,12 +3775,19 @@ impl GrainEngineModule {
             return;
         }
         self.still += 1;
+        self.build_map();
+        self.build_parts();
         self.build_banks();
     }
 
     fn render_block(&mut self, index: usize) {
         if self.source.is_none() {
             return;
+        }
+        // The hybrid chosen since the sample arrived: separated now, as
+        // MultiGrainLive starts separating the moment it is chosen.
+        if self.sp.algorithm == prism_grain::stretch::Algorithm::Hybrid && self.parts.is_none() {
+            self.build_parts();
         }
         let mut sp = self.sp;
         sp.semitones = self.semitones(self.offset(index));
@@ -3780,35 +3865,43 @@ impl Module for GrainEngineModule {
         self.sample = Some(sample);
     }
 
-    fn job_buffer(&mut self, kind: u32, len: usize) -> Option<&mut [f32]> {
-        if kind != crate::grain_jobs::PARTS && kind != crate::grain_jobs::ONSETS {
-            return None;
-        }
-        // One at a time: a new one replaces one half arrived.
-        self.job = Some((kind, vec![0.0; len]));
-        self.job.as_mut().map(|(_, data)| data.as_mut_slice())
+    fn set_deferred_builds(&mut self, on: bool) {
+        self.deferred = on;
     }
 
-    fn job_commit(&mut self, kind: u32) {
-        let Some((pending, data)) = self.job.take() else { return };
-        let sample = self.loaded.unwrap_or(u32::MAX);
-        let Some((key, payload)) = crate::grain_jobs::split_key(&data) else { return };
-        if pending != kind {
+    fn build_request(&self) -> Option<BuildRequest> {
+        self.request
+    }
+
+    fn build_request_params(&self) -> &[f32] {
+        if self.request.is_some() { &self.request_params } else { &[] }
+    }
+
+    fn built_map(&self) -> Option<&prism_grain::transient::TimeMap> {
+        self.map.as_ref()
+    }
+
+    fn built_parts(&self) -> Option<&prism_grain::hstream::Parts> {
+        self.shared_parts.as_deref()
+    }
+
+    fn accept_map(&mut self, seq: u32, map: Option<prism_grain::transient::TimeMap>) {
+        if !self.request.is_some_and(|r| r.seq == seq && r.map) {
             return;
         }
-        if kind == crate::grain_jobs::PARTS && key == crate::grain_jobs::parts_key(&self.sp, sample) {
-            let parts = std::sync::Arc::new(crate::grain_jobs::parts_from(payload, &self.sp));
-            for voice in &mut self.voices {
-                voice.stretcher.set_parts(std::sync::Arc::clone(&parts));
-            }
-            self.parts_key = Some(crate::grain_jobs::parts_key(&self.sp, sample));
-        } else if kind == crate::grain_jobs::ONSETS && key == crate::grain_jobs::onsets_key(&self.sp, sample) {
-            let mut found = [0.0; 5];
-            found.copy_from_slice(key);
-            self.hits = Some((found, crate::grain_jobs::onsets_from(payload)));
-            self.map_key = None;
-            self.place_anchors();
+        self.map_key = self.request_keys.0;
+        self.set_map(map);
+        self.answered(true);
+    }
+
+    fn accept_parts(&mut self, seq: u32, parts: prism_grain::hstream::Parts) {
+        let Some(split) = self.request_keys.1 else { return };
+        if !self.request.is_some_and(|r| r.seq == seq && r.parts) {
+            return;
         }
+        let parts = prism_grain::hstream::Parts { split: Some(split), ..parts };
+        self.set_parts(std::sync::Arc::new(parts), split);
+        self.answered(false);
     }
 
     fn note_on(&mut self, note: u8, _velocity: f32, detune_cents: f32) {
@@ -3861,9 +3954,10 @@ impl Module for GrainEngineModule {
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
-        let (sample, seen) = (self.sample, self.seen);
+        let (sample, seen, deferred) = (self.sample, self.seen, self.deferred);
         *self = Self::new(sample_rate);
         self.sample = sample;
+        self.deferred = deferred;
         self.sync(&seen);
         self.fade.set_sample_rate(sample_rate);
     }
@@ -6263,6 +6357,86 @@ mod tests {
         (engine, module, output)
     }
 
+    // ---- builds off the audio thread ---------------------------------------
+
+    /// A grain engine that only asks for its map and separation, as the rack's is.
+    fn deferred_grain_engine(settings: &[(usize, f32)]) -> (Engine, u32, u32) {
+        let (mut engine, module, output) = grain_engine(220.0, 1.0, settings);
+        engine.set_deferred_builds(module, true);
+        (engine, module, output)
+    }
+
+    #[test]
+    fn a_deferred_grain_engine_asks_for_its_builds_instead_of_making_them() {
+        use GrainEngineModule as M;
+        let (mut engine, module, _) = deferred_grain_engine(&[(M::FREE_RUN, 1.0), (M::ENGINE, 4.0), (M::PRESERVE, 1.0)]);
+        assert!(engine.build_request(module).is_none(), "nothing asked before the sample arrives");
+        engine.process();
+        let asked = engine.build_request(module).expect("the sample's arrival asks for both");
+        assert!(asked.map && asked.parts);
+        assert!(engine.built_map(module).is_none() && engine.built_parts(module).is_none(), "and builds neither itself");
+        assert_eq!(engine.build_request_params(module)[M::ENGINE], 4.0, "with the settings it asked under");
+        // Playing on while it waits asks nothing new.
+        for _ in 0..20_000 { engine.process() }
+        assert_eq!(engine.build_request(module).map(|r| r.seq), Some(asked.seq));
+    }
+
+    #[test]
+    fn a_build_made_on_another_engine_plays_as_one_made_in_place() {
+        use GrainEngineModule as M;
+        for settings in [
+            vec![(M::FREE_RUN, 1.0), (M::ENGINE, 0.0), (M::STRETCH, 2.0), (M::PRESERVE, 1.0)],
+            vec![(M::FREE_RUN, 1.0), (M::ENGINE, 4.0), (M::STRETCH, 1.5)],
+        ] {
+            let (mut in_place, _, out_a) = grain_engine(220.0, 1.0, &settings);
+            let (mut deferred, module, out_b) = deferred_grain_engine(&settings);
+            deferred.process();
+            in_place.process();
+            let asked = deferred.build_request(module).unwrap();
+            // The worker: an engine of its own with the settings asked under, built in place.
+            let (mut worker, built, _) = grain_engine(220.0, 1.0, &[]);
+            for (index, &value) in deferred.build_request_params(module).to_vec().iter().enumerate() {
+                worker.set_param(built, index, value);
+            }
+            worker.process();
+            let map = worker.built_map(built).map(|m| m.anchors().to_vec());
+            assert_eq!(map.is_some(), asked.map && settings.contains(&(M::PRESERVE, 1.0)));
+            deferred.accept_map(module, asked.seq, map);
+            if asked.parts {
+                let parts = worker.built_parts(built).expect("the hybrid's separation");
+                deferred.accept_parts(module, asked.seq, prism_grain::hstream::Parts {
+                    harmonic: parts.harmonic.clone(),
+                    percussive: parts.percussive.clone(),
+                    residual: parts.residual.clone(),
+                    channels: parts.channels,
+                    split: parts.split,
+                });
+            }
+            assert!(deferred.build_request(module).is_none(), "both answered");
+            in_place.reset();
+            deferred.reset();
+            assert_eq!(render_left(&mut deferred, out_b, 30_000), render_left(&mut in_place, out_a, 30_000), "{settings:?}");
+        }
+    }
+
+    #[test]
+    fn a_build_for_settings_since_moved_on_is_thrown_away() {
+        use GrainEngineModule as M;
+        let (mut engine, module, _) = deferred_grain_engine(&[(M::FREE_RUN, 1.0), (M::PRESERVE, 1.0), (M::STRETCH, 2.0)]);
+        engine.process();
+        let first = engine.build_request(module).unwrap();
+        engine.set_param(module, M::SENSITIVITY, 0.9);
+        for _ in 0..(RATE as usize / 4) { engine.process() }
+        let second = engine.build_request(module).expect("the settled change asks again");
+        assert!(second.seq > first.seq);
+        engine.accept_map(module, first.seq, Some(vec![(0.0, 0.0), (10.0, 20.0)]));
+        assert_eq!(engine.build_request(module).map(|r| r.seq), Some(second.seq), "the late answer is not taken");
+        assert!(engine.built_map(module).is_none());
+        engine.accept_map(module, second.seq, Some(vec![(0.0, 0.0), (10.0, 20.0)]));
+        assert!(engine.build_request(module).is_none());
+        assert_eq!(engine.built_map(module).map(|m| m.anchor_count()), Some(2));
+    }
+
     fn render_left(engine: &mut Engine, output: u32, samples: usize) -> Vec<f32> {
         (0..samples).map(|_| { engine.process(); engine.output_of(output, 0) }).collect()
     }
@@ -6383,36 +6557,7 @@ mod tests {
         for &(index, value) in settings {
             engine.set_param(module, index, value);
         }
-        // Loaded, then given what the worker would make of it, then back to
-        // the top: the crate's render has its separation and onsets from the
-        // first frame.
-        engine.process();
-        hand_jobs(&mut engine, module, settings);
-        engine.reset();
         (engine, module)
-    }
-
-    /// The hybrid's separation and the onsets, made by `grain_jobs` from the
-    /// module's own source and handed in as the worklet hands them, in pieces.
-    fn hand_jobs(engine: &mut Engine, module: u32, settings: &[(usize, f32)]) {
-        let defaults = ModuleKind::GrainEngine.build();
-        let mut raw: Vec<f32> = (0..M::PARAM_COUNT).map(|i| defaults.param_default(i)).collect();
-        for &(index, value) in settings {
-            raw[index] = value;
-        }
-        let source = crate::grain_jobs::source_of(engine.samples_mut().get(5).unwrap(), RATE);
-        let mut sp = prism_grain::StreamParams::new(source.frames(), RATE as u32);
-        GrainEngineModule::stream_params(&raw, &mut sp);
-        for (kind, job) in [
-            (crate::grain_jobs::PARTS, crate::grain_jobs::parts_job(&source, &sp, 5)),
-            (crate::grain_jobs::ONSETS, crate::grain_jobs::onsets_job(&source, &sp, 5)),
-        ] {
-            let buffer = engine.job_buffer(module, kind, job.len()).unwrap();
-            for (at, piece) in job.chunks(4_096).enumerate() {
-                buffer[at * 4_096..at * 4_096 + piece.len()].copy_from_slice(piece);
-            }
-            engine.job_commit(module, kind);
-        }
     }
 
     fn module_render(settings: &[(usize, f32)], frames: usize) -> Vec<[f32; 2]> {

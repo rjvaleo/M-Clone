@@ -868,5 +868,92 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   check(`return B joins the main mix at its level (${back.map((v) => v.toFixed(4))})`, near(back[0], 0.2, 1e-4) && near(back[1], 0.2, 1e-4));
 }
 
+// ---- the Grain Engine's slow builds, made on another instance ---------------
+// The worklet's rack asks for the transient map and the hybrid separation
+// instead of making them on the audio thread; a second instance of this same
+// .wasm (the worker's) makes them, and they are handed back. A third instance
+// builds in place, as before, for the answer to be held against: after a
+// reset, both play the same samples exactly.
+{
+  const GRAIN_ENGINE = 21;
+  const P = { ENGINE: 0, STRETCH: 1, FREE_RUN: 20, FADE: 21, PRESERVE: 31 };
+  const FRAMES = SAMPLE_RATE;
+  const bytes = await readFile(WASM);
+  const fresh = async () => (await WebAssembly.instantiate(bytes, {})).instance.exports;
+  const setUp = (e, settings, deferred) => {
+    e.init(SAMPLE_RATE);
+    e.sample_alloc(7, 2, FRAMES, SAMPLE_RATE);
+    const b = new Float32Array(e.memory.buffer, e.sample_ptr(7), 2 * FRAMES);
+    for (let i = 0; i < FRAMES; i++) {
+      // A sine with a click every quarter second, so there are transients to keep.
+      const click = i % (SAMPLE_RATE / 4) < 40 ? 0.8 : 0;
+      b[i] = b[FRAMES + i] = 0.4 * Math.sin((2 * Math.PI * 220 * i) / SAMPLE_RATE) + click;
+    }
+    const grain = u32(e.add_module(GRAIN_ENGINE));
+    const out = u32(e.add_module(KIND.AUDIO_OUTPUT));
+    e.connect(grain, 0, out, 0);
+    e.connect(grain, 1, out, 1);
+    e.set_io(NO_MODULE, out);
+    if (deferred) e.set_deferred_builds(grain, 1);
+    e.set_sample_slot(grain, 0, 7);
+    e.set_param(grain, P.FADE, 1.0);
+    e.set_param(grain, P.FREE_RUN, 1);
+    for (const [index, value] of settings) e.set_param(grain, index, value);
+    return grain;
+  };
+  const render = (e, quanta) => {
+    const got = [];
+    for (let q = 0; q < quanta; q++) {
+      e.process_quantum();
+      got.push(...new Float32Array(e.memory.buffer, e.output_ptr(), QUANTUM * 2));
+    }
+    return got;
+  };
+  for (const [name, settings] of [
+    ["WSOLA keeping its transients", [[P.ENGINE, 0], [P.STRETCH, 2], [P.PRESERVE, 1]]],
+    ["the hybrid", [[P.ENGINE, 4], [P.STRETCH, 1.5]]],
+  ]) {
+    const [rack, worker, inPlace] = [await fresh(), await fresh(), await fresh()];
+    const grain = setUp(rack, settings, true);
+    rack.process_quantum();
+    const seq = rack.build_request_seq(grain) >>> 0;
+    const flags = rack.build_request_flags(grain);
+    check(`${name}: the rack asks rather than building`, seq > 0 && flags !== 0, `seq ${seq} flags ${flags}`);
+    const params = new Float32Array(rack.memory.buffer, rack.build_request_params_ptr(grain), rack.build_request_params_len(grain)).slice();
+    // The worker: the same settings, built in place.
+    const built = setUp(worker, [], false);
+    params.forEach((value, index) => worker.set_param(built, index, value));
+    worker.process_quantum();
+    if (flags & 1) {
+      const anchors = worker.built_map_len(built) >>> 0;
+      const present = anchors !== 0xffffffff;
+      const map = present ? new Float64Array(worker.memory.buffer, worker.built_map_ptr(), anchors * 2).slice() : null;
+      const at = rack.accept_map_alloc(present ? anchors : 0);
+      if (map) new Float64Array(rack.memory.buffer, at, map.length).set(map);
+      rack.accept_map(grain, seq, present ? anchors : 0, present ? 1 : 0);
+      check(`${name}: the worker's map has the transients' anchors`, present && anchors > 2, `${anchors}`);
+    }
+    if (flags & 2) {
+      const frames = worker.built_parts_frames(built) >>> 0;
+      const channels = worker.built_parts_channels(built) >>> 0;
+      for (let which = 0; which < 3; which++) {
+        const part = new Float32Array(worker.memory.buffer, worker.built_parts_ptr(built, which), frames * channels).slice();
+        const at = rack.accept_parts_alloc(which, part.length);
+        new Float32Array(rack.memory.buffer, at, part.length).set(part);
+      }
+      rack.accept_parts(grain, seq, channels);
+      check(`${name}: the worker separated the whole file`, frames === FRAMES, `${frames}`);
+    }
+    check(`${name}: the answer is taken`, (rack.build_request_seq(grain) >>> 0) === 0);
+    setUp(inPlace, settings, false);
+    inPlace.process_quantum();
+    rack.reset();
+    inPlace.reset();
+    const [a, b] = [render(rack, 200), render(inPlace, 200)];
+    const differ = a.findIndex((v, i) => v !== b[i]);
+    check(`${name}: built elsewhere, it plays exactly as built in place`, differ === -1 && a.some((v) => v !== 0), differ === -1 ? "" : `first difference at ${differ}`);
+  }
+}
+
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

@@ -58,6 +58,41 @@ export interface RackReport {
 }
 
 /**
+ * A slow build the audio thread is waiting for: a Grain Engine's transient map
+ * or its hybrid separation, which take seconds on a long file and so are made
+ * by a worker (`grainBuilder.ts`) rather than on the audio thread.
+ *
+ * Carries everything the worker needs to make exactly what the module would
+ * have made in place: the module's parameters as they were when it asked, the
+ * bank slot of its sample, and the rack's rate, which the sample is resampled
+ * to before anything is built from it.
+ */
+export interface GrainBuildRequest {
+  type: "grain-build";
+  nodeId: string;
+  /** The module's number for this request; an answer to an older one is refused. */
+  seq: number;
+  map: boolean;
+  parts: boolean;
+  params: Float32Array;
+  sample: number;
+  sampleRate: number;
+}
+
+/** A build made by the worker, on its way back to the module that asked. */
+export interface GrainBuildResult {
+  type: "grain-built";
+  nodeId: string;
+  seq: number;
+  /** Asked for, the map's anchors (input, output, …), or null for a straight line. */
+  map?: Float64Array | null;
+  parts?: { channels: number; harmonic: Float32Array; percussive: Float32Array; residual: Float32Array };
+}
+
+/** Everything the audio thread says back. */
+export type RackReply = RackReport | GrainBuildRequest;
+
+/**
  * How many quanta between reports.
  *
  * At 48 kHz a quantum is 2.7 ms, so 16 is about 170 ms — fast enough that a
@@ -134,8 +169,4 @@ export type RackMessage =
    */
   | { type: "schedule"; nodeId: string; atSec: number; events: ScheduledEvent[] }
   | { type: "modulation"; nodeId: string; source: number; dest: number; amount: number }
-  /**
-   * A Grain Engine job's result from the worker (`grainJobs.ts`): the hybrid's
-   * separation or the transient onsets. Transferred, not copied.
-   */
-  | { type: "grain-job"; nodeId: string; kind: number; data: Float32Array };
+  | GrainBuildResult;

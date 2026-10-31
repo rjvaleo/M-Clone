@@ -1,54 +1,44 @@
-// The Grain Engine's heavy work, off both the audio thread and the page's.
+// The worker that makes the Grain Engine's slow builds.
 //
-// A Web Worker holding a second instance of the engine, which runs the jobs
-// `rust/dsp-core/src/grain_jobs.rs` defines: the hybrid's separation, WSOLA's
-// transient onsets and the grains the cloud pad draws. MultiGrainLive keeps
-// all three off its audio thread (`live.rs`, `/api/grains`); here they also
-// keep off the page, so a long file's separation stalls neither.
-//
-// Like the worklet, this file is a shell: what to compute and when is decided
-// in `grainJobs.ts`, which is tested; the computing is the engine's, which is
-// tested in Rust.
+// Bundled separately (`npm run build:worklet`), as the rack worklet is, and as
+// thin: everything with a decision in it is `GrainBuilder`, next door, which
+// is tested against a fake engine. This only wires it to the port. It also
+// enumerates the cloud pad's grains (`buildGrains`). Requests
+// are answered one at a time, in order; the module refuses any answer it has
+// stopped waiting for, so a slow one landing late does no harm.
 
-import type { GrainWorkerReply, GrainWorkerRequest } from "./grainJobs";
+import { GrainBuilder, resultTransfers, type BuildExports, type BuilderMessage } from "./grainBuilder";
+import type { EngineExports } from "./engineBridge";
 
-type JobExports = {
-  init(sampleRate: number): void;
-  sample_alloc(id: number, channels: number, frames: number, sampleRate: number): number;
-  sample_ptr(id: number): number;
-  job_params_ptr(): number;
-  job_run(kind: number, sample: number, rackRate: number, cap: number): number;
-  job_output_ptr(): number;
-  readonly memory: WebAssembly.Memory;
+declare const self: {
+  onmessage: ((event: MessageEvent<BuilderMessage>) => void) | null;
+  postMessage(message: unknown, transfer: Transferable[]): void;
 };
 
-let engine: JobExports | null = null;
-let rackRate = 48_000;
+let builder: GrainBuilder | null = null;
 
-const scope = self as unknown as {
-  onmessage: ((event: MessageEvent<GrainWorkerRequest>) => void) | null;
-  postMessage(message: GrainWorkerReply, transfer?: Transferable[]): void;
-};
-
-scope.onmessage = (event) => {
+self.onmessage = (event) => {
   const message = event.data;
-  if (message.type === "init") {
-    rackRate = message.rackRate;
-    engine = new WebAssembly.Instance(message.module, {}).exports as unknown as JobExports;
-    engine.init(rackRate);
-    return;
+  switch (message.type) {
+    case "init": {
+      const instance = new WebAssembly.Instance(message.module, {});
+      builder = new GrainBuilder(instance.exports as unknown as EngineExports & BuildExports, message.sampleRate);
+      break;
+    }
+    case "sample":
+      builder?.loadSample(message.slot, { channels: message.channels, sampleRate: message.sampleRate });
+      break;
+    case "grains": {
+      if (!builder) break;
+      const result = builder.grains(message);
+      self.postMessage(result, [result.data.buffer]);
+      break;
+    }
+    case "build": {
+      if (!builder) break;
+      const result = builder.build(message.request);
+      self.postMessage(result, resultTransfers(result));
+      break;
+    }
   }
-  if (!engine) return;
-  if (message.type === "sample") {
-    const frames = message.channels[0]?.length ?? 0;
-    if (!engine.sample_alloc(message.slot, message.channels.length, frames, message.sampleRate)) return;
-    // After the allocation, which may have grown memory.
-    const into = new Float32Array(engine.memory.buffer, engine.sample_ptr(message.slot), frames * message.channels.length);
-    message.channels.forEach((channel, i) => into.set(channel, i * frames));
-    return;
-  }
-  new Float32Array(engine.memory.buffer, engine.job_params_ptr(), message.params.length).set(message.params);
-  const len = engine.job_run(message.kind, message.slot, rackRate, message.cap);
-  const data = new Float32Array(new Float32Array(engine.memory.buffer, engine.job_output_ptr(), len));
-  scope.postMessage({ type: "result", id: message.id, nodeId: message.nodeId, kind: message.kind, data }, [data.buffer]);
 };

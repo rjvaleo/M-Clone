@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { WasmRackNode, preferredEngine, type RackNodeLike } from "./rackNode";
+import { WasmRackNode, preferredEngine, type BuilderWorkerLike, type RackNodeLike } from "./rackNode";
 import type { RackMessage } from "./rackWorklet";
-import type { RackReport } from "./rackProtocol";
+import type { GrainBuildRequest, GrainBuildResult, RackReply, RackReport } from "./rackProtocol";
+import type { BuilderMessage, GrainsResult } from "./grainBuilder";
 import type { AudioPlan } from "../audioPlan";
 
 /**
@@ -17,7 +18,7 @@ import type { AudioPlan } from "../audioPlan";
 class FakePort {
   readonly sent: RackMessage[] = [];
   readonly transferred: Transferable[][] = [];
-  onmessage: ((event: { data: RackReport }) => void) | null = null;
+  onmessage: ((event: { data: RackReply }) => void) | null = null;
   postMessage(message: RackMessage, transfer?: Transferable[]): void {
     this.sent.push(message);
     if (transfer) this.transferred.push(transfer);
@@ -29,6 +30,20 @@ class FakeNode implements RackNodeLike {
   disconnected = 0;
   disconnect(): void {
     this.disconnected += 1;
+  }
+}
+
+class FakeBuilder implements BuilderWorkerLike {
+  readonly sent: BuilderMessage[] = [];
+  readonly transferred: Transferable[][] = [];
+  onmessage: ((event: { data: GrainBuildResult | GrainsResult }) => void) | null = null;
+  terminated = 0;
+  postMessage(message: BuilderMessage, transfer?: Transferable[]): void {
+    this.sent.push(message);
+    if (transfer) this.transferred.push(transfer);
+  }
+  terminate(): void {
+    this.terminated += 1;
   }
 }
 
@@ -288,5 +303,78 @@ describe("Loading samples", () => {
     rack.loadSample(0, { channels: [Float32Array.from([1])], sampleRate: 48000 });
     rack.setSampleMap({ kick: 0 });
     expect(node.port.sent).toHaveLength(0);
+  });
+});
+
+describe("The Grain Engine's slow builds", () => {
+  const request: GrainBuildRequest = {
+    type: "grain-build", nodeId: "g", seq: 3, map: true, parts: true,
+    params: new Float32Array([4, 1.5]), sample: 7, sampleRate: 48_000,
+  };
+
+  it("passes a request from the audio thread to the builder", () => {
+    const node = new FakeNode();
+    const builder = new FakeBuilder();
+    new WasmRackNode(node, builder);
+    node.port.onmessage!({ data: request });
+    expect(builder.sent).toEqual([{ type: "build", request }]);
+  });
+
+  it("hands the builder's answer back down, its arrays transferred", () => {
+    const node = new FakeNode();
+    const builder = new FakeBuilder();
+    new WasmRackNode(node, builder);
+    const parts = { channels: 2, harmonic: new Float32Array(4), percussive: new Float32Array(4), residual: new Float32Array(4) };
+    const result: GrainBuildResult = { type: "grain-built", nodeId: "g", seq: 3, map: new Float64Array([0, 0, 1, 2]), parts };
+    builder.onmessage!({ data: result });
+    expect(node.port.sent).toEqual([result]);
+    expect(node.port.transferred[0]).toEqual([
+      result.map!.buffer, parts.harmonic.buffer, parts.percussive.buffer, parts.residual.buffer,
+    ]);
+  });
+
+  it("gives the builder its own copy of each sample, before the worklet's transfer detaches it", () => {
+    const node = new FakeNode();
+    const builder = new FakeBuilder();
+    const rack = new WasmRackNode(node, builder);
+    const left = new Float32Array([0.25, -0.5]);
+    rack.loadSample(7, { channels: [left], sampleRate: 44_100 });
+    const sent = builder.sent[0] as Extract<BuilderMessage, { type: "sample" }>;
+    expect(sent.type).toBe("sample");
+    expect(sent.slot).toBe(7);
+    expect([...sent.channels[0]]).toEqual([0.25, -0.5]);
+    expect(sent.channels[0].buffer).not.toBe(left.buffer);
+    expect(builder.transferred[0]).toEqual([sent.channels[0].buffer]);
+  });
+
+  it("ignores a request with no builder, and stops the builder with the rack", () => {
+    const lonely = new FakeNode();
+    new WasmRackNode(lonely);
+    expect(() => lonely.port.onmessage!({ data: request })).not.toThrow();
+    const node = new FakeNode();
+    const builder = new FakeBuilder();
+    const rack = new WasmRackNode(node, builder);
+    rack.dispose();
+    builder.onmessage!({ data: { type: "grain-built", nodeId: "g", seq: 3 } });
+    expect(node.port.sent).toEqual([]);
+    expect(builder.terminated).toBe(1);
+  });
+});
+
+describe("The cloud pad's grains", () => {
+  it("are asked of the builder, and come back up rather than down to the worklet", () => {
+    const node = new FakeNode();
+    const builder = new FakeBuilder();
+    const rack = new WasmRackNode(node, builder);
+    expect(rack.canBuildGrains).toBe(true);
+    const got: GrainsResult[] = [];
+    rack.onGrains((result) => got.push(result));
+    rack.requestGrains({ type: "grains", id: 1, nodeId: "g", slot: 0, params: new Float32Array(62), cap: 8_000 });
+    expect(builder.sent[builder.sent.length - 1]?.type).toBe("grains");
+    const before = node.port.sent.length;
+    builder.onmessage?.({ data: { type: "grains", id: 1, nodeId: "g", data: new Float32Array([0, 3, 0]) } });
+    expect(got.map((r) => r.id)).toEqual([1]);
+    expect(node.port.sent.length).toBe(before);
+    expect(new WasmRackNode(new FakeNode()).canBuildGrains).toBe(false);
   });
 });
