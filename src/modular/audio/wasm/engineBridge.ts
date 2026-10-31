@@ -445,7 +445,7 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
   "m.lfo": { rate: 0, shape: 1, amount: 2, phase: 3, sync: 4, beats: 5, bpm: 6 },
   // `EnvelopeFollowerModule` and `GateAdsrModule`.
   "m.env-follower": { "attack-seconds": 0, "release-seconds": 1, amount: 2 },
-  "m.adsr": { "attack-ms": 0, "decay-ms": 1, sustain: 2, "release-ms": 3, amount: 4 },
+  "m.adsr": { "attack-ms": 0, "decay-ms": 1, sustain: 2, "release-ms": 3, amount: 4, polarity: 5, velocity: 6 },
   "m.granular": {
     "grain-size": 0,
     "grain-spacing": 1,

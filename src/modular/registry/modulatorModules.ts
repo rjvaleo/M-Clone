@@ -75,7 +75,8 @@ const ENV_FOLLOWER = defineModule({
   ports: [input("audio-in", "Audio", audioSignal(), { merge: "sum" })],
   parameters: [
     numberParam("attack-seconds", "Attack", 0.003, 0, 1, 0.001, "s"),
-    numberParam("release-seconds", "Release", 0.25, 0, 1, 0.005, "s"),
+    // Up to four seconds, past the compressor's one, for slow swells.
+    numberParam("release-seconds", "Release", 0.25, 0, 4, 0.005, "s"),
     numberParam("amount", "Amount", 0.5, 0, 1, 0.01),
     ...mapping(),
   ],
@@ -105,6 +106,10 @@ const ADSR = defineModule({
     numberParam("sustain", "Sustain", 0.7, 0, 1, 0.01),
     numberParam("release-ms", "Release", 250, 0, 8000, 1, "ms"),
     numberParam("amount", "Amount", 0.5, 0, 1, 0.01),
+    // Up: the envelope. Down: its negative. Both: centred, −amount at rest to +amount at the top.
+    enumParam("polarity", "Polarity", ["Up", "Down", "Both"], "Up"),
+    // How much velocity sets the peak, by the synth's squared law; 0 ignores it.
+    numberParam("velocity", "Velocity", 0, 0, 1, 0.01),
     ...mapping(),
   ],
   face: [
@@ -115,6 +120,8 @@ const ADSR = defineModule({
       param("sustain"),
       param("release-ms"),
       param("amount"),
+      param("polarity"),
+      param("velocity"),
     ]),
   ],
 });
