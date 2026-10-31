@@ -1,4 +1,5 @@
-// The LFO's own controls beyond its knobs: its colour, the Map button, and the
+// A modulator's own controls beyond its knobs (the LFO's, the envelope
+// follower's and the ADSR's): its colour, the Map button, and the
 // knobs it moves, each with a way to let it go.
 
 import type { JsonValue, NodeInstance } from "../model/graph";
@@ -23,7 +24,7 @@ export function LfoMapFace({ node, setParameter }: {
     </div>
     <button type="button" className={`mm-lfo__map${waiting ? " is-on" : ""}`}
       aria-pressed={waiting}
-      title={waiting ? "Click a knob to map it — Esc to stop" : "Map: then click the knob this LFO should move"}
+      title={waiting ? "Click a knob to map it — Esc to stop" : "Map: then click the knob this should move"}
       onClick={() => (waiting ? modulation.cancelMap() : modulation.startMap(node.id))}>
       {waiting ? "Click a knob…" : "Map"}
     </button>
