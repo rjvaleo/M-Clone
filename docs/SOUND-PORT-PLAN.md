@@ -95,8 +95,22 @@ full, and add drum step programming. Automation is not ported.
      the reported phase carried forward. Esc stops mapping; Alt-click on a
      knob lets its last LFO go. Works on standard faces and the synth's.
    - Web Audio does not modulate: the routes exist only in Rust.
-   - Not built yet: the envelope follower and the ADSR on a gate (S&H and
-     smooth random are LFO shapes), tempo sync, more mixer channels or sends.
+   **Envelope follower, gate ADSR and tempo sync built.**
+   - `m.env-follower` (kind 22) is the compressor's detector — its
+     `EnvelopeFollower` on the louder side, its attack and release, ranges and
+     defaults — times an amount. Its audio input travels in the plan's
+     `modulatorConnections`, so Web Audio never sees it.
+   - `m.adsr` (kind 23) is `Adsr` opened by notes, times in milliseconds with
+     the synth amp envelope's ranges and defaults: each note-on starts the
+     attack, the release plays out when the last held note lets go. Notes reach
+     it as they reach an instrument.
+   - Both are routed, ringed and drawn as the LFO is; the face holds their
+     last reported value, since neither can be predicted.
+   - The LFO has Sync and a Note (1/32 to 1/1, straight, dotted and triplet).
+     Synced, it runs at `Lfo::set_rate_synced` from the transport's tempo; the
+     plan carries the note as `beats` and the tempo as `bpm`. Sync is off by
+     default, so a saved LFO keeps its rate.
+   - Not built yet: more mixer channels or sends.
 4. **The sound engine, hooked to M.**
    - The shared crate, with MultiGrainLive moved onto it first and its tests
      kept passing (Echo-style parity on renders).

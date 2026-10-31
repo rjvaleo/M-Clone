@@ -7,6 +7,7 @@ import {
   CyclicRhythmProcessor,
   LegatoProcessor,
   MidiOutputProcessor,
+  PROCESSOR_FACTORIES,
   NoteDensityProcessor,
   NoteOrderProcessor,
   ParameterBag,
@@ -1200,6 +1201,25 @@ describe("MIDI Output processor", () => {
     });
     return { bus, scheduled, processor };
   };
+
+  it("schedules the gate ADSR's notes as an instrument's, addressed to it", () => {
+    const bus = new MessageBus();
+    const pool = new EventPool();
+    const scheduled: RuntimeEvent[] = [];
+    const processor = PROCESSOR_FACTORIES["m.adsr"]({
+      ...build("adsr", bus, {}),
+      sink: { acquire: () => pool.acquire(), submit: (event) => scheduled.push(event) },
+    });
+    feed(bus, "adsr", "notes-in", [
+      { kind: "note-event", atTick: 0, durationTicks: 240, note: 64, velocity: 100, channel: 1 },
+    ]);
+    bus.beginNode("adsr", 64);
+    processor.process(window(0, 960));
+    expect(scheduled.map((e) => [e.type, e.portId, e.atTick, e.note])).toEqual([
+      ["note-on", "adsr", 0, 64],
+      ["note-off", "adsr", 240, 64],
+    ]);
+  });
 
   it("schedules a note-on and its note-off", () => {
     const { bus, scheduled, processor } = midiOutput();
