@@ -6,12 +6,14 @@ All notable changes to M-Clone are recorded here. The format follows
 alpha: the interface, the audio rack, and the `.mclone` document may still
 change between minor versions.
 
-## [Unreleased] — idMLab, branch `modular`
+## [Unreleased] — idMLab, on `master`
 
-idMLab is a separate application on the `modular` branch: a node graph with its
-own document format (`.mmod`, plus the self-contained `.mmodpack`), not a mode of
-M Classic Web. It shares this repository and nothing else. Its state is recorded
-in [`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md).
+idMLab is a separate application, begun on the `modular` branch and since
+merged into `master`: a node graph with its own document format (`.mmod`, plus
+the self-contained `.mmodpack`), not a mode of M Classic Web. It shares this
+repository and nothing else. Its state is recorded in
+[`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md) and, for the audio work since
+October, [`docs/SOUND-PORT-PLAN.md`](docs/SOUND-PORT-PLAN.md).
 
 ### Added
 
@@ -35,21 +37,38 @@ in [`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md).
   `rjvaleo/scale-sequencer`, with its Raga Marwa data bug and its broken
   below-the-root degrees fixed on the way in.
 - **PWM generator.** Fourier coefficients for a pulse of any duty cycle, the
-  first piece of the synth ([`MODULAR_SYNTH_PLAN.md`](MODULAR_SYNTH_PLAN.md)).
+  first piece of the synth (`MODULAR_SYNTH_PLAN.md`, now in git history).
 - **A stereo rack.** Every source has a pan and Percussion pans per pad; the
   feedback-delay reverbs tap alternate lines to alternate sides so their tails
   decorrelate; a **Stereo Widener** does mid/side width with a mono bass band;
-  and a four-channel **Mixer** adds level, pan, mute and solo. Closes the Phase 6
+  and a four-channel **Mixer** adds level, pan, mute and solo (eight channels
+  and two aux sends since). Closes the Phase 6
   deliverable "stereo audio ports … mixer/master output, mute/solo/pan/fader"
   and tier 5's Stereo Widener. Before this the rack was mono on two wires: one
   `createStereoPanner` caller in the whole codebase and no channel splitter or
   merger anywhere.
+- **The Rust engine** (`rust/dsp-core`, compiled to WebAssembly and run in one
+  AudioWorklet) is the default backend; `?engine=web-audio` keeps the Web
+  Audio one as a fallback. Every audio module runs on it, in stereo.
+- **The prism effects.** 86 effects shared with MultiGrainLive through
+  RJ's `prism-fx` crate, as `m.prism-*` modules, each with a panel.
+- **The Grain Engine** (`m.grain-engine`), MultiGrainLive's sound engine via
+  `prism-grain`: its five engines, every control of its granular tray, and
+  notes in.
+- **Synth parity** with the scale sequencer: three LFOs, filter envelope and
+  key follow, the classic shared filter, tape delay, the twenty presets and
+  morph.
+- **Modulators.** LFO, envelope follower and gate ADSR, mapped to any knob by
+  clicking.
+- **Drum Sequencer** (`m.drum-seq`) and a 909 kit manifest for Percussion.
+- **M on the canvas.** M as one node (`m.m`) and the M Lab modules.
 
 ### Testing
 
 - Coverage measurement extended from Classic's engine and store to **all of
   `src/modular`**, gated in `vitest.config.ts`: 100% of statements, lines and
-  functions, branches at 98.5. Writing those tests found four real defects,
+  functions, branches at 98.5 (99 since). On 31 October 2026 the gate fails:
+  99.25% of lines and statements, 96.72% of functions, 96.83% of branches. Writing those tests found four real defects,
   including a runtime crash on a stale plan and voices started after dispose.
 - Work is test-first from 2026-08-03.
 

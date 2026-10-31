@@ -7,6 +7,11 @@ This is the single plan. It replaces every roadmap, status file, next-steps list
 and staged refactor note that came before it — those are deleted, and their
 content is folded in below. Nothing else in this repository says what to build.
 
+*Status, 31 October 2026:* two things here no longer hold. `docs/SOUND-PORT-PLAN.md`
+(23 October, agreed with RJ, now built) is a second plan, and it kept Web Audio:
+the Rust engine is the default and `?engine=web-audio` is the fallback, against
+§0.1, Wave 0 and §6. Rows marked ✅ are built; the rest are as written.
+
 It is written to be followed as a mandate. Where it names a decision, that
 decision is made. Where it names a gate, the gate is binding. Where it defers
 something, the deferral has a reason attached and a wave to come back in.
@@ -39,6 +44,12 @@ Web Audio remains in use for exactly three things it is genuinely best at, none
 of which are DSP: `AudioContext` lifecycle and device management,
 `decodeAudioData` for compressed formats, and the single output node the
 worklet writes into.
+
+*Not so today (decided 23 October 2026, `docs/SOUND-PORT-PLAN.md`):* Rust is the
+default and Web Audio stays as a fallback for the modules it has —
+`?engine=web-audio` asks for it (`preferredEngine` in
+`src/modular/audio/wasm/rackNode.ts`), and a build whose rack cannot load falls
+back by itself.
 
 ### 0.2 The engine is deterministic by construction
 
@@ -286,14 +297,14 @@ the same engine with a different entry point.
 |---|---|---|
 | Gain, Delay, Reverb (FDN), EQ, Compressor, Limiter, Bit Crusher | ✅ done | in Rust |
 | Blackhole, DP/4 Reverb (5 algorithms), DP/4 Non Lin (3 variants) | ✅ done | in Rust |
-| **DP/4+ four-unit** with source config and A/B/C/D routing matrix | 1 | needs P1+P2; the one audio module with no engine kind |
-| **Mixer** — per-channel level, pan, mute, solo, HPF, sends | 1 | needs P3 |
+| **DP/4+ four-unit** with source config and A/B/C/D routing matrix | ✅ done | in Rust (`Dp4Machine`, kind 18); units run the five reverb algorithms only (§16) |
+| **Mixer** — per-channel level, pan, mute, solo, HPF, sends | 1 | built: eight channels with level, pan, mute and solo, two aux sends (pre/post) with returns, both backends. No HPF |
 | **Send / Return / Bus** | 1 | needs P3 |
 | **Utility** — gain, phase invert, mono/stereo, mid/side, width | 1 | needs P1 |
 | **Feedback module** — the only legal way to close an audio cycle, bounded | 1 | §9.3 requires it |
 | **Saturation** — Tube / Tape / Clip / Fold character, dynamic bias, hysteresis | 4 | impossible in Web Audio; trivial in Rust |
 | **Smooth Crusher** — bit + rate reduction, pre/post filter, dither, soft saturation, stereo link, transient preservation, mid/side | 4 | supersedes the current Bit Crusher |
-| **Chorus / Flanger / Phaser** | 4 | one modulated-delay core, three faces |
+| **Chorus / Flanger / Phaser** | 4 | one modulated-delay core, three faces. Offered meanwhile as prism effects (`m.prism-hp-chorus`, `m.prism-hp-flanger`, `m.prism-phaser` and others) |
 | **Stereo Widener** — decorrelation, microshift, frequency-dependent width, mono-safe low end | 4 | |
 | **Gate / Ducker / Sidechain compressor** | 4 | reuses `GainComputer` + P2 sidechain input |
 | **De-esser** | 4 | `GainComputer` + `Biquad` detector |
@@ -304,7 +315,7 @@ the same engine with a different entry point.
 | **Granular Stutter / Glitch** — stutter, repeat, freeze, scatter, reverse, scrub, cloud, tape stop, gate, buffer jump; free or sync'd, bar→1/64, dotted/triplet, quantised trigger, probability | 4 | needs P8; the signature effect |
 | **Spectral Freeze / Shimmer** — per-bin manipulation, blur | 4 | needs P9 |
 | **Spectrum Analyzer** — passes audio unchanged | 5 | needs P9 + P7 |
-| **Convolution reverb** | 4 | needs P9. *Previously withdrawn; back in scope for the complete build* |
+| **Convolution reverb** | 4 | needs P9. *Previously withdrawn; back in scope for the complete build.* Offered meanwhile as a prism effect (`m.prism-convolution`) |
 
 Parameter detail the funcspec pins down and the plan must honour:
 
@@ -416,7 +427,7 @@ Bohlen-Pierce · Makam Ussak · Chahargah · Segah · 22-Shruti · Pelog Selisir
 Insen · Chinese Gong/Yu · Mongolian pentatonic · Thai Ranat · Gamelan Degung ·
 Sanfen Sunyi.
 
-### 3.3 Event modules — the 29 that render and do nothing
+### 3.3 Event modules — the 28 that render and do nothing
 
 Every one has a face and a menu entry today; none has a processor. Grouped by
 what they need.
@@ -567,7 +578,7 @@ modules here, and what it drew as views are two modes over one layout.
 | **Searchable module menu**; filtered creation from a pending connection | 3 |
 | **Compatible-port highlighting** | 3 |
 | **Keyboard patching, and a keyboard path for every pointer gesture** | 3 |
-| Non-interactive threshold below 0.6 zoom | 3 |
+| Non-interactive threshold below 0.6 zoom | ✅ done, at 0.35 (`INTERACTION_ZOOM_FLOOR`) |
 | Full a11y pass — labels, focus order, roles, reduced motion | standing track |
 | Themes: light/dark, six palettes, Theme Studio, kit system | ✅ done |
 
@@ -609,6 +620,9 @@ gate that is a demonstration, not a checkbox.
 ### Wave 0 — Rust only
 
 Delete the second audio engine.
+
+*Not done, by decision (23 October 2026, `docs/SOUND-PORT-PLAN.md` step 1):*
+Rust became the default and the Web Audio engine stays as the fallback.
 
 1. Make Rust the only path. Remove `preferredEngine`, the `?engine=` parameter
    and every branch that asks which backend is running.
@@ -691,7 +705,7 @@ taken in either order**:
 
 - **3A — the performance model.** P12, P13, P14, P15, banks, the sequencer, the
   scales. This is what the funcspec is mostly about, and none of it exists.
-- **3B — the event side and the canvas.** The 29 inert modules, the canvas
+- **3B — the event side and the canvas.** The 28 inert modules, the canvas
   interaction work, persistence, and the tracker module.
 
 Splitting them is allowed. Skipping the gate is not. **If the wave has to shed
@@ -842,8 +856,9 @@ Continuous, not scheduled. Every wave carries them.
 - **Browser verification.** Nothing is done until it has been seen working.
 - **Migration fixtures.** Every released schema version keeps a fixture.
 - **The DOM test harness.** Faces carry real behaviour now; they need coverage.
-- **Documentation.** This file is the only plan. Update it in the same commit
-  as the work — never a separate cleanup pass.
+- **Documentation.** This file is the only plan (but see the status note at the
+  top). Update it in the same commit as the work — never a separate cleanup
+  pass.
 
 ---
 
@@ -854,7 +869,7 @@ cheap now and expensive after something depends on it.
 
 | # | The spec says | The build has | Call |
 |---|---|---|---|
-| D1 | **16 global choke groups**, cross-column | **Nothing.** Choke lived in `voices.ts` (Web Audio) and Wave 0 deletes it; `sampler.rs` has no choke at all | Wave 0 must not ship a choke regression. Build P15 in Wave 3, or hold the deletion of that one behaviour |
+| D1 | **16 global choke groups**, cross-column | Choke inside one Percussion module only: `voices.ts` (Web Audio) and, since, `sampler.rs` (a kit pad's choke group, via `set_slot_shape`). No cross-module bus | Wave 0 must not ship a choke regression. Build P15 in Wave 3, or hold the deletion of that one behaviour |
 | D2 | Mod sources: LFO 1/2, Filter Env, Amp Env, Velocity, **Key Follow**, Mod Wheel, **Aftertouch** | LFO 1/2, Amp Env, Filter Env, Velocity, **Note**, Mod Wheel, **Random** | `Note` *is* key follow under another name — rename. `Random` is ours and worth keeping. Aftertouch needs MIDI in, so the matrix goes to 9 sources or Random yields |
 | D3 | Mod destinations include **OSC 1 PWM, OSC 2 PWM, Amp Level** | Has **LFO 1 Rate, LFO 2 Rate, Volume** instead | PWM destinations are the bigger musical win — PWM is the reason the Fourier generator exists. Widen to 15 destinations rather than trade |
 | D4 | **108 scales** in 8 named categories | 81 | Add the 27 named in §3.2b |
@@ -870,7 +885,8 @@ cheap now and expensive after something depends on it.
 
 Settled. Do not reopen without a stated reason.
 
-- **Rust only.** No fallback, no flag. §0.1.
+- **Rust only.** No fallback, no flag. §0.1. *Reversed 23 October 2026: Rust is
+  the default, `?engine=web-audio` the fallback (`docs/SOUND-PORT-PLAN.md`).*
 - **The free-form canvas is the shell**, and there is no second layout. The
   mixer and the tracker are modules on it. §1.1.
 - **Two modes, not two layouts.** Edit shows everything; Performance shows what
@@ -896,7 +912,10 @@ Settled. Do not reopen without a stated reason.
 - **Structure rebuilds, parameters ramp.** The split is declared in the
   descriptor, not inferred.
 - **Fonts are catalogued, not shipped** — licensing. Only the stacks are wired;
-  DSEG and Silkscreen are the OFL replacements if this ever ships.
+  DSEG and Silkscreen are the OFL replacements if this ever ships. *Since:* the
+  app loads Home Video, Barlow Condensed and IBM Plex Sans Condensed from
+  `public/fonts/` with their licences, and BitPap from
+  `src/modular/ui/n4/fonts/`.
 - **AIFF is decoded in-app** because Chromium has no decoder and a real library
   is mostly AIFF.
 - **No `SharedArrayBuffer`.** §0.6.
@@ -1064,6 +1083,9 @@ recoverable from git history; their content is folded in above.
 · `docs/VISUAL_AUDIT_AND_THEMING.md` · `docs/FONT_SIZE_INVENTORY.md`
 · `docs/WORKSPACE_SCALING.md` · `docs/TECH_STACK.md`
 · `.github/agents/modular-next-steps.agent.md`
+
+`MODULAR_STATUS.md` and `MODULAR_AV_SALVAGE_PLAN.md` came back in a later merge
+and are in the tree again, as dated records.
 
 Kept, because they are data rather than plans: `README.md`, `CHANGELOG.md`,
 `reference/**` (panel images and their catalogue), `fonts/CATALOG.md` (per-file
