@@ -97,13 +97,17 @@ full, and add drum step programming. Automation is not ported.
    - Web Audio does not modulate: the routes exist only in Rust.
    **Envelope follower, gate ADSR and tempo sync built.**
    - `m.env-follower` (kind 22) is the compressor's detector — its
-     `EnvelopeFollower` on the louder side, its attack and release, ranges and
-     defaults — times an amount. Its audio input travels in the plan's
+     `EnvelopeFollower` on the louder side, its attack and release and their
+     defaults — times an amount. Release reaches 4 s (the compressor's stops at
+     1 s), for slow swells (RJ, 31 Oct 2026). Its audio input travels in the plan's
      `modulatorConnections`, so Web Audio never sees it.
-   - `m.adsr` (kind 23) is `Adsr` opened by notes, times in milliseconds with
-     the synth amp envelope's ranges and defaults: each note-on starts the
-     attack, the release plays out when the last held note lets go. Notes reach
-     it as they reach an instrument.
+   - `m.adsr` (kind 23) is the synth's straight-line envelope
+     (`LinearEnvelope`) opened by notes, times in milliseconds with the synth
+     amp envelope's ranges and defaults: each note-on starts the attack from
+     where the envelope is, the release plays out when the last held note lets
+     go. Notes reach it as they reach an instrument. *Polarity* Up / Down /
+     Both (centred, −amount at rest); *Velocity* 0–1 sets the peak by the
+     synth's velocity² law, off by default (RJ, 31 Oct 2026).
    - Both are routed, ringed and drawn as the LFO is; the face holds their
      last reported value, since neither can be predicted.
    - The LFO has Sync and a Note (1/32 to 1/1, straight, dotted and triplet).
@@ -150,7 +154,8 @@ full, and add drum step programming. Automation is not ported.
        each leg, spread panning, dry `1 − wet`, then `volume` (the master; the
        original's `volume·0.3`). Synced to `tempo` (the synth's own until the
        transport reaches the audio plan) at the original's eleven note values,
-       its "1/4T" = 1.33333 beats included. Retiming glides on tape — six
+       but "1/4T": the original's 1.33333 beats (a half-note triplet) is a
+       true quarter-note triplet, 0.66667, by RJ's correction (31 Oct 2026). Retiming glides on tape — six
        speeds, `|Δv|/12` s, overrun cap — as the browser's half-millisecond
        curve, which the Rust line reads point for point. Wet starts at zero.
      - **Presets and morph** (`audio/synthPresets.ts`): the twenty presets
