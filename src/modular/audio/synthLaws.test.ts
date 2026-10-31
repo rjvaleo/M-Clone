@@ -124,15 +124,17 @@ describe("Pulse width", () => {
 describe("The delay's time", () => {
   it("is each note value's beats at the tempo", () => {
     const at120 = DELAY_NOTES.map((note) => delaySeconds(120, note.beats));
-    expect(at120).toEqual([0.0625, 0.125, 0.166665, 0.25, 0.375, 0.5, 0.666665, 0.75, 1, 1.5, 2]);
+    expect(at120).toEqual([0.0625, 0.125, 0.166665, 0.25, 0.333335, 0.375, 0.5, 0.75, 1, 1.5, 2]);
     expect(delaySeconds(90, 1)).toBeCloseTo(2 / 3, 12);
   });
 
-  it("keeps the original's eleven note values, its 1/4T included", () => {
+  it("keeps the original's eleven note values, with 1/4T a true quarter-note triplet", () => {
+    // The original played 1.33333 beats under "1/4T", a half-note triplet's length;
+    // RJ had it corrected (31 Oct 2026). It sits in length order, between 1/8 and D 1/8.
     expect(DELAY_NOTES.map((note) => note.label)).toEqual([
-      "1/32", "1/16", "1/8T", "1/8", "D 1/8", "1/4", "1/4T", "D 1/4", "1/2", "D 1/2", "1 bar",
+      "1/32", "1/16", "1/8T", "1/8", "1/4T", "D 1/8", "1/4", "D 1/4", "1/2", "D 1/2", "1 bar",
     ]);
-    expect(DELAY_NOTES[6].beats).toBe(1.33333);
+    expect(DELAY_NOTES[4].beats).toBe(0.66667);
   });
 
   it("is held to the line's four seconds and five milliseconds", () => {
