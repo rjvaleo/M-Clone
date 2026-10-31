@@ -207,6 +207,17 @@ pub trait Module: Send {
     /// most modules are not samplers.
     fn set_sample_slot(&mut self, _slot: u32, _sample: u32) {}
 
+    /// Room for the result of work done off the audio thread (the Grain
+    /// Engine's separation and transient onsets, `grain_jobs`), which the host
+    /// fills a piece at a time between quanta and then commits. None for a
+    /// module that takes no such work.
+    fn job_buffer(&mut self, _kind: u32, _len: usize) -> Option<&mut [f32]> {
+        None
+    }
+
+    /// The job buffer is full: adopt it, if it is still current.
+    fn job_commit(&mut self, _kind: u32) {}
+
     /// A kit pad's gain, pan and choke group. Default no-op: only a kit has pads.
     fn set_slot_shape(&mut self, _slot: u32, _gain: f32, _pan: f32, _choke_group: i32) {}
 
@@ -470,6 +481,17 @@ impl Engine {
     pub fn set_sample_slot(&mut self, id: ModuleId, slot: u32, sample: u32) {
         if let Some(target) = self.slot_mut(id) {
             target.module.set_sample_slot(slot, sample);
+        }
+    }
+
+    /// A module's room for a job's result, `len` floats, or None.
+    pub fn job_buffer(&mut self, id: ModuleId, kind: u32, len: usize) -> Option<&mut [f32]> {
+        self.slot_mut(id).and_then(|target| target.module.job_buffer(kind, len))
+    }
+
+    pub fn job_commit(&mut self, id: ModuleId, kind: u32) {
+        if let Some(target) = self.slot_mut(id) {
+            target.module.job_commit(kind);
         }
     }
 

@@ -453,3 +453,79 @@ pub extern "C" fn sample_free(id: u32) {
 pub extern "C" fn sample_count() -> u32 {
     samples().map_or(0, |bank| bank.len() as u32)
 }
+
+// ---- the Grain Engine's jobs ---------------------------------------------------
+//
+// Two sides of one hand-over. In a Web Worker, a second instance of this
+// engine runs the heavy work MultiGrainLive keeps off its audio thread
+// (`dsp_core::grain_jobs`): it holds the sample in its own bank, takes the
+// module's controls in `job_params`, and leaves the result in `job_output`.
+// In the worklet, the result is written into the module's own buffer
+// (`job_begin`) a piece per quantum, so no quantum carries the whole copy,
+// and `job_commit` hands it over.
+
+static mut JOB_PARAMS: [f32; dsp_core::modules::GrainEngineModule::PARAM_COUNT] =
+    [0.0; dsp_core::modules::GrainEngineModule::PARAM_COUNT];
+static mut JOB_OUTPUT: Vec<f32> = Vec::new();
+
+/// Where the worker writes the module's controls, in its parameter order.
+#[no_mangle]
+#[allow(static_mut_refs)]
+pub extern "C" fn job_params_ptr() -> *mut f32 {
+    unsafe { JOB_PARAMS.as_mut_ptr() }
+}
+
+/// Run one job on the sample `sample` in this instance's bank, for a rack at
+/// `rack_rate`. Returns how many floats `job_output_ptr` points at.
+#[no_mangle]
+#[allow(static_mut_refs)]
+pub extern "C" fn job_run(kind: u32, sample: u32, rack_rate: f32, cap: u32) -> u32 {
+    use dsp_core::grain_jobs as jobs;
+    use dsp_core::modules::GrainEngineModule;
+    let Some(source_sample) = samples().and_then(|bank| bank.get(sample)) else { return 0 };
+    let raw = unsafe { JOB_PARAMS };
+    let out = match kind {
+        jobs::PARTS | jobs::ONSETS => {
+            let source = jobs::source_of(source_sample, rack_rate);
+            let mut sp = dsp_core::prism_grain::StreamParams::new(source.frames(), rack_rate as u32);
+            GrainEngineModule::stream_params(&raw, &mut sp);
+            if kind == jobs::PARTS { jobs::parts_job(&source, &sp, sample) } else { jobs::onsets_job(&source, &sp, sample) }
+        }
+        jobs::GRAINS => {
+            let mut sp = dsp_core::prism_grain::StreamParams::new(source_sample.frames(), source_sample.sample_rate() as u32);
+            GrainEngineModule::stream_params(&raw, &mut sp);
+            sp.semitones = GrainEngineModule::transposed(&raw);
+            jobs::grains_job(source_sample, &sp, (cap as usize).max(1))
+        }
+        _ => Vec::new(),
+    };
+    unsafe {
+        JOB_OUTPUT = out;
+        JOB_OUTPUT.len() as u32
+    }
+}
+
+#[no_mangle]
+#[allow(static_mut_refs)]
+pub extern "C" fn job_output_ptr() -> *const f32 {
+    unsafe { JOB_OUTPUT.as_ptr() }
+}
+
+/// Room in a module for a job's result, `len` floats. Null if the module
+/// takes no such job. Allocating can grow memory: re-read `memory.buffer`
+/// after this returns, as after `sample_alloc`.
+#[no_mangle]
+pub extern "C" fn job_begin(module: u32, kind: u32, len: u32) -> *mut f32 {
+    match engine().and_then(|engine| engine.job_buffer(module, kind, len as usize)) {
+        Some(buffer) => buffer.as_mut_ptr(),
+        None => core::ptr::null_mut(),
+    }
+}
+
+/// The buffer `job_begin` gave is full: the module adopts it if it is current.
+#[no_mangle]
+pub extern "C" fn job_commit(module: u32, kind: u32) {
+    if let Some(engine) = engine() {
+        engine.job_commit(module, kind);
+    }
+}

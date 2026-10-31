@@ -19,6 +19,7 @@
 
 import type { JsonValue } from "../../../model/graph";
 import type { PanelControl, PanelDisplay, PanelGroup, PanelLayout, PanelPage } from "../layout";
+import { pitchText, quantise, scaleOf } from "../../../registry/grainTuning";
 
 export const GRAIN_FACE_WIDTH = 800;
 export const GRAIN_PAGES: PanelPage[] = [{ id: "all", label: "All" }, { id: "std", label: "Standard" }, { id: "ext", label: "Extended" }];
@@ -37,16 +38,16 @@ const KNOB_W = 60;
 const SWITCH_W = 92;
 const CHOICE_W = 126;
 const SEED_W = 76;
+/** Pitch's reading is the longest ("+12.00 st · +1200¢"), so its column is wider. */
+const PITCH_W = 124;
 
 // ---- how each value reads: MultiGrainLive's own format functions ------------
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const times = (x: number) => `${x.toFixed(2)}×`;
-const signed = (v: number) => (v >= 0 ? "+" : "");
 
 const TEXT: Record<string, (v: number) => string> = {
   stretch: (v) => (v >= 10 ? `${v.toFixed(0)}×` : v >= 1 ? `${v.toFixed(2)}×` : `${v.toFixed(3)}×`),
-  semitones: (v) => `${signed(v)}${v.toFixed(2)} st · ${signed(v)}${Math.round(v * 100)}¢`,
   "window-ms": (v) => `${Math.round(v)} ms`,
   position: (v) => `${(v * 100).toFixed(1)}%`,
   "grain-rate": (v) => (v <= 0 ? "off" : `${Math.round(v)}/s`),
@@ -178,7 +179,8 @@ function columns(items: Item[]): Column[] {
       out.push({ w: item.kind === "switch" ? SWITCH_W : CHOICE_W, items: [item, next] });
       i += 1;
     } else {
-      out.push({ w: item.kind === "knob" ? KNOB_W : item.kind === "seed" ? SEED_W : item.kind === "switch" ? SWITCH_W : CHOICE_W, items: [item] });
+      const knobW = item.param === "semitones" ? PITCH_W : KNOB_W;
+      out.push({ w: item.kind === "knob" ? knobW : item.kind === "seed" ? SEED_W : item.kind === "switch" ? SWITCH_W : CHOICE_W, items: [item] });
     }
   }
   return out;
@@ -207,7 +209,11 @@ function pack(banks: Bank[]): Bank[][] {
 }
 
 /** One page's banks, placed: its groups and controls, and the height it takes. */
-function placeBanks(banks: Bank[], page: string, alias: boolean, height: (h: number) => number) {
+function placeBanks(banks: Bank[], page: string, alias: boolean, height: (h: number) => number, values: Record<string, JsonValue>) {
+  // Pitch reads and snaps to the tuning chosen, as MultiGrainLive's server snaps it.
+  const scale = scaleOf(values.scale);
+  const step = typeof values["pitch-step"] === "number" ? values["pitch-step"] : 0;
+  const pitch: Partial<PanelControl> = { text: (v) => pitchText(v, scale, step), snap: (v) => quantise(v, scale, step) };
   const groups: PanelGroup[] = [];
   const controls: PanelControl[] = [];
   const lines = pack(banks);
@@ -239,6 +245,7 @@ function placeBanks(banks: Bank[], page: string, alias: boolean, height: (h: num
           if (item.kind === "knob") {
             controls.push({ ...base, kind: "knob", x: left, y: top, w: col.w, h: cellH,
               ...(TEXT[item.param] ? { text: TEXT[item.param] } : {}),
+              ...(item.param === "semitones" ? pitch : {}),
               ...(LOG[item.param] ? { travel: LOG[item.param] } : {}),
               ...(item.param === "envelope" ? { detent: 0.5 } : {}) });
           } else if (item.kind === "seed") {
@@ -260,7 +267,7 @@ function placeBanks(banks: Bank[], page: string, alias: boolean, height: (h: num
 // ---- the cloud column -----------------------------------------------------------
 
 /** The column's height above and below the pad, which takes what the page leaves. */
-const COLUMN_FIXED = 296;
+const COLUMN_FIXED = 326;
 const PAD_MIN = 132;
 const COLUMN_H = COLUMN_FIXED + PAD_MIN;
 
@@ -269,28 +276,35 @@ function cloudColumn(page: string, height: number) {
   const padH = height - COLUMN_FIXED;
   const groups: PanelGroup[] = [
     { id: `sample-${page}`, label: "Sample", x, y: 0, w: LEFT_W, h: 72, page },
-    { id: `engine-${page}`, label: "Engine", x, y: 72, w: LEFT_W, h: 78, page },
-    { id: `cloud-${page}`, label: "Cloud", x, y: 150, w: LEFT_W, h: 86 + padH, page },
-    { id: `play-${page}`, label: "Play", x, y: 236 + padH, w: LEFT_W, h: height - 236 - padH, page },
+    { id: `engine-${page}`, label: "Engine", x, y: 72, w: LEFT_W, h: 108, page },
+    { id: `cloud-${page}`, label: "Cloud", x, y: 180, w: LEFT_W, h: 86 + padH, page },
+    { id: `play-${page}`, label: "Play", x, y: 266 + padH, w: LEFT_W, h: height - 266 - padH, page },
   ];
   const displays: PanelDisplay[] = [
-    { kind: "cloud-pad", x: x + 6, y: 168, w: LEFT_W - 12, h: padH, page },
-    { kind: "cloud-readout", x: x + 6, y: 170 + padH, w: LEFT_W - 12, h: 14, page },
-    { kind: "cloud-presets", x: x + 6, y: 186 + padH, w: LEFT_W - 12, h: 22, page },
-    { kind: "page-nav", x: x + 6, y: 210 + padH, w: LEFT_W - 12, h: 22, page },
+    // Slot 4: Keys, which opens a window rather than setting a value.
+    { kind: "keys", x: x + 114, y: 150, w: 104, h: 26, page },
+    { kind: "cloud-pad", x: x + 6, y: 198, w: LEFT_W - 12, h: padH, page },
+    { kind: "cloud-readout", x: x + 6, y: 200 + padH, w: LEFT_W - 12, h: 14, page },
+    { kind: "cloud-presets", x: x + 6, y: 216 + padH, w: LEFT_W - 12, h: 22, page },
+    { kind: "page-nav", x: x + 6, y: 240 + padH, w: LEFT_W - 12, h: 22, page },
   ];
   // Play sits under the pad, which grows with the page, so it is placed on
   // each page; the rest of the column is where it is on every page.
   const own = page === "all" ? {} : { alias: true };
   const play: PanelControl[] = [
-    { param: "root", kind: "readout", label: "Root", x: x + 6, y: 256 + padH, w: 94, h: 34, page, ...own },
-    { param: "free-run", kind: "switch", label: "Free run", x: x + 104, y: 256 + padH, w: 64, h: 34, page, ...own },
-    { param: "mute", kind: "switch", label: "Mute", x: x + 172, y: 256 + padH, w: 46, h: 34, page, ...own },
+    { param: "root", kind: "readout", label: "Root", x: x + 6, y: 286 + padH, w: 94, h: 34, page, ...own },
+    { param: "free-run", kind: "switch", label: "Free run", x: x + 104, y: 286 + padH, w: 64, h: 34, page, ...own },
+    { param: "mute", kind: "switch", label: "Mute", x: x + 172, y: 286 + padH, w: 46, h: 34, page, ...own },
   ];
   return { groups, displays, play };
 }
 
-/** The top of the column: the sample, the engine picker and its two switch places. */
+/**
+ * The top of the column: the sample, the engine picker and its row of four
+ * fixed places, as the tray's — 1 the engine's own switch, 2 the grain cloud,
+ * 3 the tuning, 4 Keys. An engine with nothing for a place leaves it empty, so
+ * nothing moves when the engine changes.
+ */
 function columnHead(values: Record<string, JsonValue>): PanelControl[] {
   const x = LEFT_X;
   const [slot1, slot2] = switchRow(values);
@@ -300,6 +314,7 @@ function columnHead(values: Record<string, JsonValue>): PanelControl[] {
     { param: "engine", kind: "select", label: "Engine", x: x + 6, y: 92, w: LEFT_W - 12, h: 24 },
     ...(slot1 ? [{ param: slot1, kind: "switch" as const, x: x + 6, y: 120, w: 104, h: 26 }] : []),
     ...(slot2 ? [{ param: slot2, kind: "switch" as const, x: x + 114, y: 120, w: 104, h: 26 }] : []),
+    { param: "scale", kind: "tuning", also: ["pitch-step"], label: "Tuning", x: x + 6, y: 150, w: 104, h: 26 },
   ];
 }
 
@@ -316,7 +331,7 @@ export function grainFace(values: Record<string, JsonValue>): PanelLayout {
   const displays: PanelDisplay[] = [];
   const pages: PanelPage[] = [];
   for (const page of GRAIN_PAGES) {
-    const placed = placeBanks(sides[page.id], page.id, page.id !== "all", (h) => Math.max(h, COLUMN_H));
+    const placed = placeBanks(sides[page.id], page.id, page.id !== "all", (h) => Math.max(h, COLUMN_H), values);
     const column = cloudColumn(page.id, placed.height);
     groups.push(...column.groups, ...placed.groups);
     controls.push(...placed.controls, ...column.play);

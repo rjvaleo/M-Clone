@@ -26,6 +26,7 @@ name = "prism-gen"
 version = "0.1.0"
 dependencies = [
  "prism-fx",
+ "prism-grain",
 ]
 
 [[package]]

@@ -141,6 +141,12 @@ export class WasmRackNode {
     this.node.port.postMessage({ type: "modulation", nodeId, source, dest, amount });
   }
 
+  /** A Grain Engine job's result, for the worklet to copy into its module. */
+  grainJob(nodeId: string, kind: number, data: Float32Array): void {
+    if (this.disposed) return;
+    this.node.port.postMessage({ type: "grain-job", nodeId, kind, data }, [data.buffer]);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

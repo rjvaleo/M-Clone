@@ -133,4 +133,9 @@ export type RackMessage =
    * from playing every part on every note.
    */
   | { type: "schedule"; nodeId: string; atSec: number; events: ScheduledEvent[] }
-  | { type: "modulation"; nodeId: string; source: number; dest: number; amount: number };
+  | { type: "modulation"; nodeId: string; source: number; dest: number; amount: number }
+  /**
+   * A Grain Engine job's result from the worker (`grainJobs.ts`): the hybrid's
+   * separation or the transient onsets. Transferred, not copied.
+   */
+  | { type: "grain-job"; nodeId: string; kind: number; data: Float32Array };

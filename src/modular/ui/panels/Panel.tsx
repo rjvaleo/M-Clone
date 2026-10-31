@@ -15,6 +15,8 @@ import { formatValue } from "../n4/format";
 import { peaksToPath } from "../../audio/waveform";
 import { groupOf, heightOf, type InertControl, type PanelControl, type PanelDisplay, type PanelLayout } from "./layout";
 import { arcPath, dragValue, fromFraction, knobAngle, padPoint, padValues, snapStep, toFraction, travelFor, type Travel } from "./travel";
+import { KeysButton, TuningButton } from "./grainKeys";
+import { quantise, scaleOf } from "../../registry/grainTuning";
 import { cloudGeometry, deleteCloud, insideBox, listClouds, moveTo, recallCloud, saveCloud, spreadTo } from "./grainCloud";
 import { readoutText, type Readout } from "./readout";
 import { compressorCurve, filterBankResponse, grainWindow, plateEnvelope, PLATE_HIGH_HZ, type FilterBank } from "./displays";
@@ -90,6 +92,8 @@ function Control({ control, parameter, node, setParameter, tint, readout }: {
       return <Field control={placed} parameter={parameter} value={value} label={label} onChange={onChange} />;
     case "pad":
       return <Pad control={placed} node={node} setParameter={setParameter} />;
+    case "tuning":
+      return <TuningButton node={node} setParameter={setParameter} style={box(control)} />;
     case "reroll":
       return <ModTarget nodeId={node.id} moduleType={node.moduleType} parameterId={control.param} value={num(value)}>
         {() => <Reroll control={placed} parameter={parameter} value={value} label={label} onChange={onChange} />}
@@ -157,7 +161,8 @@ function Knob({ control, parameter, value, label, onChange, modulated = false }:
   const angle = knobAngle(fraction);
   // A detent catches the value within 6 % of the range (MultiGrainLive's `DETENT_FRAC`).
   const caught = (next: number) => control.detent !== undefined && Math.abs(next - control.detent) <= (max - min) * 0.06 ? control.detent : next;
-  const set = (next: number) => onChange(choice ? options[Math.round(next)] ?? options[0] : caught(next));
+  const landed = (next: number) => (control.snap ? control.snap(next) : next);
+  const set = (next: number) => onChange(choice ? options[Math.round(next)] ?? options[0] : landed(caught(next)));
   const drag = useDrag((_dx, dy, fine, start) =>
     set(dragValue(start, dy, { min, max, travel, step: choice ? 1 : parameter.step }, fine)));
   const pointer = { x: 20 + 11 * Math.sin((angle * Math.PI) / 180), y: 20 - 11 * Math.cos((angle * Math.PI) / 180) };
@@ -419,6 +424,7 @@ function Display({ display, node, pages, label, setParameter }: { display: Panel
     case "cloud-pad": return <CloudPad display={display} node={node} setParameter={setParameter} />;
     case "cloud-readout": return <CloudReadout node={node} />;
     case "cloud-presets": return <CloudPresets node={node} setParameter={setParameter} />;
+    case "keys": return <KeysButton node={node} setParameter={setParameter} />;
     case "page-nav": return <PageNav pages={pages} />;
     case "page-title": return <span className="pnl-pagetitle">{pages.list.find((page) => page.id === pages.current)?.label ?? ""}</span>;
     case "lxp-logo": return <span className="pnl-lxp-logo">lexicon</span>;
@@ -561,6 +567,10 @@ function CloudPad({ display, node, setParameter }: { display: PanelDisplay; node
         <line className="pnl-cloud__line" x1="0" y1="0" x2="0" y2={h} />
       </g>
     </svg>
+    {/* The grains, over the source and the box, drawn at frame rate by CloudAnimator from the worker's enumeration. */}
+    <canvas className="pnl-cloud__grains" data-cloud-canvas={node.id} width={w} height={h}
+      data-cloud-pitch={quantise(num(node.parameters.semitones), scaleOf(node.parameters.scale), num(node.parameters["pitch-step"]))}
+      data-cloud-semis={geo.semis} data-cloud-ratio={num(node.parameters.stretch, 1)} />
   </div>;
 }
 

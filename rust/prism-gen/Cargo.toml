@@ -7,3 +7,4 @@ publish = false
 
 [dependencies]
 prism-fx = { path = "../../../prism-fx/crates/prism-fx" }
+prism-grain = { path = "../../../prism-fx/crates/prism-grain" }

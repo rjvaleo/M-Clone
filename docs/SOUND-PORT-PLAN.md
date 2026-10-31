@@ -143,11 +143,18 @@ full, and add drum step programming. Automation is not ported.
      limit, if wider, so older patches sound as they did), and a render test
      checks each one against `prism_grain`'s `Stretcher` run alone, sample
      for sample.
-   - The transient map, each engine's layer bank and the hybrid's separation
-     are built as MultiGrainLive's `live.rs` builds them: at load, and once
-     the control they hang on has held still for 200 ms (a change of engine
-     at once). Before this, Layers did nothing past one on WSOLA, the vocoder,
-     PVSOLA and the hybrid, and Preserve transients did nothing at all.
+   - The heavy work stays off the audio thread, as MultiGrainLive keeps it
+     off its own: the hybrid's separation, WSOLA's transient onsets and the
+     pad's grains run in a Web Worker on a second instance of the engine
+     (`grain_jobs.rs`, `grainWorker.ts`, `grainJobs.ts`). Results are keyed
+     to what they were made from, so a stale one is dropped. They are copied
+     into the module a quarter-megabyte per quantum, so a long file's
+     separation never lands in one quantum. The anchors around the onsets
+     are cheap and placed at once. The layer banks are allocation only and
+     are built in the worklet: a change of engine at once, a change of
+     layer count once it has held still for 200 ms. Before this, Layers did
+     nothing past one on WSOLA, the vocoder, PVSOLA and the hybrid, and
+     Preserve transients did nothing at all.
    - Gated notes are voices of their own, up to four; free running, one voice
      plays and notes retune it. Each voice seeks at its own pitch.
    - The face: the cloud pad leads (drag inside the box to move the head,
@@ -157,9 +164,14 @@ full, and add drum step programming. Automation is not ported.
      Extended as pages, each as tall as it needs, at one width (800).
    - Every number is mappable by the LFO. Switches and choices are not, by
      the plan's rule above.
-   - Not ported: the tuning menu and Keys (MultiGrainLive's pitch row), the
-     grain count on the pad's readout and the grains drawn on it (idMLab has
-     no grain enumeration on the UI side).
+   - The pitch row's tuning menu (the 81 scales of `prism_grain::tuning`, or
+     a grid; `prism-gen` writes the table and the crate's `quantise` answers,
+     which idMLab's own is held to) and Keys (the computer keyboard as a
+     piano on the tuning, Z and X latching octaves). These fill the switch
+     row's places 3 and 4, so none of its places is ever empty.
+   - The pad draws every grain `grains_sampled` enumerates (capped at 8,000,
+     as MultiGrainLive's server caps it), coloured and brightened as its
+     `drawCloudPad` does, and counts them under the pad.
 5. **MultiGrainLive's other effects into prism-fx**, each against a render of
    the original, then offered in idMLab automatically.
 6. **Synth parity and drums** (independent of 4–5; can run in parallel).

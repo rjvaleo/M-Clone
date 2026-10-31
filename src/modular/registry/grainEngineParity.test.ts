@@ -17,10 +17,9 @@
 // `PvsolaParams`, `HybridParams`) give the same defaults, and the Rust tests
 // hold the module to the crate.
 //
-// Left out on purpose, and said in the PR: the tuning menu ("free ▾", the 81
-// scales of `prism_grain::tuning`) and Keys (the computer keyboard as a
-// keyboard). Both belong to MultiGrainLive's pitch row, not to its granular
-// banks, and idMLab plays this module from notes.
+// And the pitch row's last two places: the tuning menu ("free ▾": the 81
+// scales of `prism_grain::tuning`, or a grid) and Keys (`openScaleMenu`,
+// `pickScale`, `NOTE_KEYS`, `noteSemitones`).
 
 import { describe, expect, it } from "vitest";
 import { moduleRegistry } from "./registry";
@@ -29,6 +28,7 @@ import { PARAM_INDICES } from "../audio/wasm/engineBridge";
 import { grainFace, GRAIN_FACE_WIDTH, GRAIN_PAGES } from "../ui/panels/layouts/grainCabinet";
 import { validateLayout, type PanelLayout } from "../ui/panels/layout";
 import type { JsonValue } from "../model/graph";
+import { GRAIN_SCALES } from "./grainTuning.generated";
 
 type Knob = { kind: "knob"; id: string; label: string; min: number; max: number; step: number; def: number; log?: true; round?: true; detent?: number };
 type Switch = { kind: "switch"; id: string; label: string; def: boolean };
@@ -240,12 +240,38 @@ describe("The Grain Engine has every control of MultiGrainLive's granular tray",
   it("and every face passes the panel checks, holding only what its engine uses", () => {
     for (const view of VIEWS) {
       const face = faceFor(view);
-      const used = new Set(face.controls.map((c) => c.param));
+      const used = new Set(face.controls.flatMap((c) => [c.param, ...(c.also ?? [])]));
       const shown = { ...module, parameters: module.parameters.filter((p) => used.has(p.id)) };
       expect(validateLayout(face, shown), view.engine).toEqual([]);
     }
     // Across the engines, every parameter is somewhere.
-    const anywhere = new Set(VIEWS.flatMap((view) => faceFor(view).controls.map((c) => c.param)));
+    const anywhere = new Set(VIEWS.flatMap((view) => faceFor(view).controls.flatMap((c) => [c.param, ...(c.also ?? [])])));
     expect(module.parameters.map((p) => p.id).filter((id) => !anywhere.has(id))).toEqual([]);
+  });
+
+  it("with the pitch row's tuning menu and Keys in the switch row's last two places", () => {
+    // Every scale of the crate, in its order, after "free": the order is the wire value.
+    expect(parameter("scale")?.options).toEqual(["free", ...GRAIN_SCALES.map((s) => s.name)]);
+    expect(parameter("scale")?.defaultValue).toBe("free");
+    // MultiGrainLive's server holds the grid to 0–12; the menu offers 0, 1 and ½.
+    expect([parameter("pitch-step")?.minimum, parameter("pitch-step")?.maximum, parameter("pitch-step")?.defaultValue]).toEqual([0, 12, 0]);
+    for (const view of VIEWS) {
+      const face = faceFor(view);
+      const tuning = face.controls.find((c) => c.kind === "tuning")!;
+      expect(tuning.param, view.engine).toBe("scale");
+      expect(tuning.also).toEqual(["pitch-step"]);
+      expect(tuning.page).toBeUndefined();
+      // Slot 4, beside it, on every page.
+      for (const page of GRAIN_PAGES) {
+        const keys = face.displays.find((d) => d.kind === "keys" && d.page === page.id)!;
+        expect(keys.y).toBe(tuning.y);
+        expect(keys.x).toBeGreaterThan(tuning.x);
+      }
+      // Pitch reads and snaps to the tuning.
+      const pitch = grainFace({ ...Object.fromEntries(module.parameters.map((p) => [p.id, p.defaultValue])), engine: view.engine, scale: "Major Pentatonic" })
+        .controls.find((c) => c.param === "semitones" && c.page === "all")!;
+      expect(pitch.snap?.(3.3)).toBe(4);
+      expect(pitch.text?.(4)).toBe("+4.00 st · +400¢");
+    }
   });
 });
