@@ -816,5 +816,57 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   check(`and the last note-off releases it (${closed})`, Math.abs(closed) < 1e-4);
 }
 
+// ---- the mixer: eight channels, two sends, two returns -------------------------
+{
+  const MIXER = 16;
+  const M = { LEVEL_8: 29, PAN_8: 30, FADE: 16, SEND_A_8: 40, SEND_B_8: 48, PRE_A: 49, RETURN_B: 52 };
+  api.init(SAMPLE_RATE);
+  const host = u32(api.add_module(KIND.HOST_INPUT));
+  const mixer = u32(api.add_module(MIXER));
+  const out = u32(api.add_module(KIND.AUDIO_OUTPUT));
+  const inBuf = new Float32Array(api.memory.buffer, api.input_ptr(), QUANTUM);
+  const outL = new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM);
+  const outR = new Float32Array(api.memory.buffer, api.output_ptr() + QUANTUM * 4, QUANTUM);
+  check("the host reaches channel 8, on ports 14 and 15",
+    api.connect(host, 0, mixer, 14) === 1 && api.connect(host, 0, mixer, 15) === 1);
+  check("there is no port past the returns", api.connect(host, 0, mixer, 20) === 0);
+  api.set_io(host, out);
+  api.set_param(mixer, M.FADE, 1);
+  api.set_param(mixer, M.LEVEL_8, 0.5);
+  const wire = (from) => {
+    for (const port of [0, 1, 2, 3, 4, 5]) api.disconnect(mixer, port, out, port & 1);
+    api.connect(mixer, from, out, 0);
+    api.connect(mixer, from + 1, out, 1);
+  };
+  const steady = (value) => {
+    for (let q = 0; q < 40; q++) {
+      inBuf.fill(value);
+      api.process_quantum();
+    }
+    return [outL[QUANTUM - 1], outR[QUANTUM - 1]];
+  };
+  wire(0);
+  const main = steady(0.4);
+  check(`channel 8 reaches the main mix at its level (${main.map((v) => v.toFixed(4))})`, near(main[0], 0.2, 1e-4) && near(main[1], 0.2, 1e-4));
+  wire(2);
+  check("send A is silent until it is turned up", steady(0.4).every((v) => v === 0));
+  api.set_param(mixer, M.SEND_A_8, 0.5);
+  api.set_param(mixer, M.PAN_8, -1);
+  const post = steady(0.4);
+  check(`send A, post-fader, after level and pan (${post.map((v) => v.toFixed(4))})`, near(post[0], 0.2, 1e-4) && near(post[1], 0, 1e-4));
+  api.set_param(mixer, M.PRE_A, 1);
+  const pre = steady(0.4);
+  check(`send A, pre-fader, before level and pan (${pre.map((v) => v.toFixed(4))})`, near(pre[0], 0.2, 1e-4) && near(pre[1], 0.2, 1e-4));
+  // Return B: the host on ports 18 and 19, into the main mix at its level.
+  api.disconnect(host, 0, mixer, 14);
+  api.disconnect(host, 0, mixer, 15);
+  api.connect(host, 0, mixer, 18);
+  api.connect(host, 0, mixer, 19);
+  wire(0);
+  api.set_param(mixer, M.RETURN_B, 0.5);
+  const back = steady(0.4);
+  check(`return B joins the main mix at its level (${back.map((v) => v.toFixed(4))})`, near(back[0], 0.2, 1e-4) && near(back[1], 0.2, 1e-4));
+}
+
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

@@ -304,3 +304,26 @@ describe("A patch saved before the new modulators", () => {
     expect(plan.modulatorConnections).toBeUndefined();
   });
 });
+
+describe("A mixer saved with four channels", () => {
+  it("loads with nothing sent, the returns at unity, and its four channels as they were", async () => {
+    const { createModularDocument, decodeModularDocument, encodeModularDocument } = await import("../document/document");
+    const graph = graphWith([{ id: "m", type: "m.audio-mixer", parameters: { "level-2": 1.5, "pan-2": -0.5, "solo-3": true } }]);
+    // As it was saved then: four channels, no sends, no returns.
+    const node = graph.nodes.m.parameters;
+    for (const id of Object.keys(node)) {
+      if (/^(level|pan|mute|solo)-[5-8]$|^send-|^return-/.test(id)) delete node[id];
+    }
+    const saved = JSON.parse(JSON.stringify(encodeModularDocument(createModularDocument(graph))));
+    const loaded = decodeModularDocument(saved);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const parameters = compileAudioPlan(loaded.document.graph, moduleRegistry).nodes.m.parameters;
+    expect(parameters).toMatchObject({ "level-2": 1.5, "pan-2": -0.5, "solo-3": 1, "level-1": 0.8 });
+    for (let channel = 1; channel <= 8; channel += 1) {
+      expect(parameters[`send-a-${channel}`]).toBe(0);
+      expect(parameters[`send-b-${channel}`]).toBe(0);
+    }
+    expect(parameters).toMatchObject({ "send-a-pre": 0, "send-b-pre": 0, "return-a": 1, "return-b": 1 });
+  });
+});

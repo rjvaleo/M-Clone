@@ -576,11 +576,16 @@ const AUDIO_WIDENER = defineModule({
   ],
 });
 
+/** The mixer's channels, 1-based as its ports and faces are. */
+const MIXER_CHANNEL_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8];
+
 /**
  * Mixer — `MODULAR_IMPLEMENTATION_PLAN.md` §12 Phase 6, `AUDIO_ENGINE_SPEC.md` §15.
  *
- * Four independent inputs like the DP/4, and for the same reason: summing them
- * at one port would make the four faders decorative.
+ * Eight independent inputs like the DP/4, and for the same reason: summing them
+ * at one port would make the eight faders decorative. Two aux sends, A and B,
+ * each leaving by its own output and coming back by its own return; see
+ * `audio/mixer.ts` and `Mixer` in dsp-core, which agree.
  */
 const AUDIO_MIXER = defineModule({
   type: "m.audio-mixer",
@@ -589,30 +594,43 @@ const AUDIO_MIXER = defineModule({
   colorToken: "audio",
   layout: "editor",
   ports: [
-    input("audio-in-1", "In 1", audioSignal(), { merge: "sum" }),
-    input("audio-in-2", "In 2", audioSignal(), { merge: "sum" }),
-    input("audio-in-3", "In 3", audioSignal(), { merge: "sum" }),
-    input("audio-in-4", "In 4", audioSignal(), { merge: "sum" }),
+    ...MIXER_CHANNEL_NUMBERS.map((channel) => input(`audio-in-${channel}`, `In ${channel}`, audioSignal(), { merge: "sum" })),
+    // Each send's return: what comes back from the effect it feeds.
+    input("return-a-in", "Return A", audioSignal(), { merge: "sum" }),
+    input("return-b-in", "Return B", audioSignal(), { merge: "sum" }),
     audioOut(),
+    output("send-a-out", "Send A", audioSignal()),
+    output("send-b-out", "Send B", audioSignal()),
   ],
   parameters: [
-    ...[1, 2, 3, 4].flatMap((channel) => [
+    ...MIXER_CHANNEL_NUMBERS.flatMap((channel) => [
       numberParam(`level-${channel}`, `${channel} level`, 0.8, 0, 2, 0.01),
       numberParam(`pan-${channel}`, `${channel} pan`, 0, -1, 1, 0.01),
       boolParam(`mute-${channel}`, `${channel} mute`),
       boolParam(`solo-${channel}`, `${channel} solo`),
     ]),
+    // Nothing is sent until a send is turned up, so a patch saved before the
+    // sends sounds as it did.
+    ...(["a", "b"] as const).flatMap((bus) => MIXER_CHANNEL_NUMBERS.map((channel) =>
+      numberParam(`send-${bus}-${channel}`, `${channel} send ${bus.toUpperCase()}`, 0, 0, 1, 0.01))),
+    boolParam("send-a-pre", "Send A pre-fader"),
+    boolParam("send-b-pre", "Send B pre-fader"),
+    numberParam("return-a", "Return A", 1, 0, 2, 0.01),
+    numberParam("return-b", "Return B", 1, 0, 2, 0.01),
     muteParam(),
   ],
   face: [
-    ...[1, 2, 3, 4].map((channel) =>
+    ...MIXER_CHANNEL_NUMBERS.map((channel) =>
       section(`channel-${channel}`, `Channel ${channel}`, [
         param(`level-${channel}`),
         param(`pan-${channel}`),
         param(`mute-${channel}`),
         param(`solo-${channel}`),
+        param(`send-a-${channel}`),
+        param(`send-b-${channel}`),
       ]),
     ),
+    section("sends", "Sends", [param("send-a-pre"), param("return-a"), param("send-b-pre"), param("return-b")]),
     section("state", "State", [param(AUDIO_MUTE_PARAM)]),
   ],
 });
