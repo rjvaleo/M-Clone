@@ -357,10 +357,17 @@ export const PLAYER_STRUCTURE_PARAMS: Readonly<Record<string, readonly string[]>
 
 /**
  * MultiGrainLive's sound engine — the `prism-grain` crate both programs share
- * — as an instrument: a sample played by any of its five engines, with the
- * grain cloud's controls. A note sets the pitch in semitones from Root; gated,
- * it also starts the file and its release fades it out, and with Free run on
- * it plays continuously, looping, and notes only retune it.
+ * — as an instrument: a sample played by any of its five engines, with every
+ * control of MultiGrainLive's granular tray. A note sets the pitch in
+ * semitones from Root; gated, each note is a voice that starts the file and
+ * fades out on its release, and with Free run on it plays continuously,
+ * looping, and notes only retune it.
+ *
+ * Ranges, steps and defaults are the tray's own (`ui/app.js`
+ * `renderStretchParams` and `renderGrainParams`, and its `*_DEFAULTS`
+ * tables), which are the crate's defaults; a patch saved before a control was
+ * here is given that default and sounds as it did. Labels are the tray's.
+ * `grainEngineParity.test.ts` holds the inventory.
  *
  * It runs on the Rust engine. On Web Audio the simpler Granular player stands
  * in, reading the same sample and the same Free run.
@@ -376,39 +383,106 @@ const GRAIN_ENGINE = defineModule({
     levelParam(),
     // In the order of `prism_grain::stretch::Algorithm`, which is the wire value.
     enumParam("engine", "Engine", ["WSOLA", "Vocoder", "Grains", "PVSOLA", "Hybrid"], "Grains"),
+    // Time and pitch.
     numberParam("stretch", "Stretch", 1, 0.01, 100, 0.01, "×"),
-    numberParam("semitones", "Transpose", 0, -48, 48, 0.1, "st"),
+    // Continuous, as the tray's is with no tuning chosen.
+    numberParam("semitones", "Pitch", 0, -48, 48, 0.001, "st"),
     numberParam("window-ms", "Window", 40, 5, 2000, 1, "ms"),
+    // Grain shape.
+    numberParam("position", "Position", 0, -1, 1, 0.001),
     // Zero takes the rate from the window and the overlap, as MultiGrainLive does.
-    numberParam("grain-rate", "Grain rate", 0, 0, 200, 0.1, "Hz"),
-    numberParam("overlap", "Overlap", 2, 1, 16, 0.1, "×"),
+    numberParam("grain-rate", "Rate", 0, 0, 500, 1, "/s"),
+    numberParam("density", "Density", 0, 0, 500, 1, "/s"),
+    numberParam("layers", "Layers", 1, 1, 64, 1, "×"),
+    numberParam("overlap", "Overlap", 2, 1, 8, 0.1, "×"),
     numberParam("size-jitter", "Size jitter", 0, 0, 1, 0.01),
-    numberParam("position-jitter", "Spray", 0, 0, 2000, 1, "ms"),
+    numberParam("position-jitter", "Position jitter", 0, 0, 500, 1, "ms"),
+    // Pitch movement.
     numberParam("pitch-jitter", "Pitch jitter", 0, 0, 24, 0.1, "st"),
-    numberParam("pitch-drift", "Drift", 0, 0, 24, 0.1, "st"),
-    numberParam("drift-rate", "Drift rate", 0.5, 0.01, 20, 0.01, "Hz"),
-    numberParam("layers", "Layers", 1, 1, 64, 1),
-    numberParam("position", "Position", 0, 0, 1, 0.001),
-    numberParam("scan", "Scan", 1, -4, 4, 0.01, "×"),
-    boolParam("reverse", "Reverse"),
+    numberParam("pitch-drift", "Pitch drift", 0, 0, 24, 0.1, "st"),
+    numberParam("drift-rate", "Drift rate", 0.5, 0.01, 10, 0.01, "Hz"),
+    // Scan.
+    numberParam("scan", "Scan", 1, -2, 2, 0.01, "×"),
+    boolParam("reverse", "Reverse grains"),
+    boolParam("wrap", "Wrap positions"),
+    // Shape.
     numberParam("envelope", "Envelope", 0.5, 0, 1, 0.01),
-    numberParam("pan-spread", "Spread", 0, 0, 1, 0.01),
-    boolParam("cloud", "Cloud"),
-    numberParam("cloud-mix", "Cloud mix", 0.5, 0, 1, 0.01),
+    numberParam("size-range", "Size range", 1, 1, 8, 0.05, "×"),
+    numberParam("layer-spread", "Layer spread", 1, 0, 4, 0.01, "×"),
+    numberParam("pan-spread", "Pan spread", 0, 0, 1, 0.01),
+    // Layer scatter.
+    numberParam("layer-scatter", "Scatter", 0, 0, 1, 0.01),
+    numberParam("layer-scatter-ms", "Range", 120, 1, 2000, 1, "ms"),
+    // Randomness. The seed is what Re-roll deals: `(seed·1664525 + 1013904223) % 2147483647`.
+    boolParam("link-jitter", "Link jitter"),
+    boolParam("drift-step", "Step the drift"),
+    numberParam("seed", "Seed", 1, 0, 2147483646, 1),
+    // WSOLA: its switch, its detector, Splice and Transients.
+    boolParam("preserve-transients", "Preserve transients"),
+    numberParam("detector", "Detector", 0.5, 0, 1, 0.01),
+    numberParam("search-ms", "Search", 10, 0, 200, 0.5, "ms"),
+    // The tray's own words for similar, different and loudest.
+    enumParam("splice", "Pick", ["best", "worst", "loud"], "best"),
+    enumParam("window-shape", "Window", ["hann", "tri", "rect"], "hann"),
+    numberParam("stride", "Stride", 4, 1, 128, 1, "fr"),
+    numberParam("floor", "Floor", 1, 0, 2, 0.01, "×"),
+    numberParam("guard", "Guard", 3, 1, 16, 0.1, "hop"),
+    // The vocoder: its window and switch, Spectrum and Phase. PVSOLA and the
+    // hybrid run it too.
+    numberParam("analysis-ms", "Analysis window", 46, 5, 500, 1, "ms"),
+    boolParam("phase-lock", "Phase lock", true),
+    numberParam("freeze", "Freeze", 0, 0, 1, 0.01),
+    numberParam("blur", "Blur", 0, 0, 1, 0.01),
+    numberParam("gate", "Gate", 0, 0, 1, 0.01),
+    numberParam("freq-trust", "Freq trust", 1, 0, 4, 0.01, "×"),
+    numberParam("phase-spread", "Phase spread", 1, 0, 4, 0.01, "×"),
+    numberParam("peak-width", "Peak width", 2, 1, 16, 1, "bin"),
+    numberParam("lock-width", "Lock width", 1, 0, 4, 0.01, "×"),
+    boolParam("link-stereo", "Link stereo"),
+    // PVSOLA: Re-anchor and Anchor.
+    numberParam("re-anchor", "Re-anchor", 6, 1, 64, 1, "fr"),
+    numberParam("anchor-search-ms", "Search", 10, 0, 200, 0.5, "ms"),
+    numberParam("blend", "Blend", 0.5, 0, 1, 0.01),
+    // The hybrid: its three levels, Remake noise and Separation.
+    numberParam("tone", "Tone", 1, 0, 2, 0.01, "×"),
+    numberParam("hits", "Hits", 1, 0, 2, 0.01, "×"),
+    numberParam("air", "Air", 1, 0, 2, 0.01, "×"),
+    boolParam("remake-noise", "Remake noise", true),
+    numberParam("hold", "Hold", 17, 3, 101, 2, "fr"),
+    numberParam("spread", "Spread", 17, 3, 101, 2, "bin"),
+    numberParam("margin", "Margin", 2, 1, 8, 0.05, "×"),
+    numberParam("resolution", "Resolution", 2048, 256, 8192, 256),
+    // The grain cloud over another engine.
+    boolParam("cloud", "Grain cloud"),
+    numberParam("cloud-mix", "Cloud", 0.5, 0, 1, 0.01),
     numberParam("root", "Root", 60, 0, 127, 1),
     boolParam("free-run", "Free run"),
     muteParam(),
   ],
   face: [
     section("sample", "Sample", [custom("asset-slot", "Sample", ["asset-id"]), param("level")]),
-    section("engine", "Engine", [param("engine"), param("stretch"), param("semitones"), param("window-ms")]),
-    section("grains", "Grains", [
-      param("grain-rate"), param("overlap"), param("size-jitter"), param("position-jitter"),
-      param("layers"), param("envelope"),
+    section("time", "Time and pitch", [param("engine"), param("stretch"), param("semitones"), param("window-ms")]),
+    section("grain-shape", "Grain shape", [
+      param("position"), param("grain-rate"), param("density"), param("layers"), param("overlap"),
+      param("size-jitter"), param("position-jitter"),
     ]),
-    section("motion", "Motion", [
-      param("position"), param("scan"), param("reverse"), param("pitch-jitter"),
-      param("pitch-drift"), param("drift-rate"), param("pan-spread"),
+    section("pitch", "Pitch movement", [param("pitch-jitter"), param("pitch-drift"), param("drift-rate")]),
+    section("scan", "Scan", [param("scan"), param("reverse"), param("wrap")]),
+    section("shape", "Shape", [param("envelope"), param("size-range"), param("layer-spread"), param("pan-spread")]),
+    section("scatter", "Layer scatter", [param("layer-scatter"), param("layer-scatter-ms")]),
+    section("random", "Randomness", [param("link-jitter"), param("drift-step"), param("seed")]),
+    section("wsola", "WSOLA", [
+      param("preserve-transients"), param("detector"), param("search-ms"), param("splice"), param("window-shape"),
+      param("stride"), param("floor"), param("guard"),
+    ]),
+    section("vocoder", "Vocoder", [
+      param("analysis-ms"), param("phase-lock"), param("freeze"), param("blur"), param("gate"),
+      param("freq-trust"), param("phase-spread"), param("peak-width"), param("lock-width"), param("link-stereo"),
+    ]),
+    section("pvsola", "PVSOLA", [param("re-anchor"), param("anchor-search-ms"), param("blend")]),
+    section("hybrid", "Hybrid", [
+      param("tone"), param("hits"), param("air"), param("remake-noise"),
+      param("hold"), param("spread"), param("margin"), param("resolution"),
     ]),
     section("cloud", "Cloud", [param("cloud"), param("cloud-mix")]),
     section("play", "Play", [param("root"), param("free-run"), param("mute")]),

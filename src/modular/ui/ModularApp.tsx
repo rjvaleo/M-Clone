@@ -70,7 +70,7 @@ import { DrumSeqFace } from "./mlab/DrumSeqFace";
 import type { MLabHost } from "./mlab/common";
 import { N4Header } from "./n4/N4Header";
 import { Panel } from "./panels/Panel";
-import { panelFor } from "./panels/layouts";
+import { panelForNode } from "./panels/layouts";
 import "./panels/panels.css";
 import { N4Button, N4Knob, N4Spinner, N4Stepper } from "./n4/kit";
 import { formatValue } from "./n4/format";
@@ -85,6 +85,7 @@ import { ModulationContext, type ModulationApi } from "./modulationContext";
 import { ModTarget } from "./ModTarget";
 import { ModulationAnimator } from "./modulationAnimator";
 import { MeterAnimator } from "./panels/meters";
+import { CloudAnimator } from "./panels/cloudHeads";
 import {
   isModulator,
   lfoStates,
@@ -1074,7 +1075,7 @@ function NodeFace({
   const stored = "collapsed" in node.parameters;
   const collapsed = stored ? node.parameters.collapsed === true : folded;
   // A module with a panel layout is drawn as that panel, at its one width.
-  const panel = panelFor(node.moduleType);
+  const panel = panelForNode(node);
   return <article className={`mm-node mm-node--n4 mm-node--${descriptor.family} mm-node--layout-${descriptor.layout}${panel ? " mm-node--panel" : ""}${selected ? " is-selected" : ""}${node.enabled ? "" : " is-bypassed"}`}
     aria-label={`${node.label} module`}
     // Lets the stylesheet make an exception for one module without inventing a
@@ -2159,8 +2160,10 @@ export function ModularApp() {
   // The panels' level meters, from the same reports.
   useEffect(() => {
     const meters = new MeterAnimator(() => viewportRef.current, () => ({ report: audioRef.current?.rackReport ?? null }));
+    const clouds = new CloudAnimator(() => viewportRef.current, () => ({ report: audioRef.current?.rackReport ?? null }));
     meters.start();
-    return () => meters.stop();
+    clouds.start();
+    return () => { meters.stop(); clouds.stop(); };
   }, []);
   const startAudioRef = useRef(startAudio);
   startAudioRef.current = startAudio;

@@ -13,8 +13,9 @@ import { ModTarget } from "../ModTarget";
 import { AssetSlot, noteName, useSoundPool } from "../PercussionSlots";
 import { formatValue } from "../n4/format";
 import { peaksToPath } from "../../audio/waveform";
-import { groupOf, type InertControl, type PanelControl, type PanelDisplay, type PanelLayout } from "./layout";
-import { arcPath, dragValue, fromFraction, knobAngle, padPoint, padValues, toFraction, travelFor, type Travel } from "./travel";
+import { groupOf, heightOf, type InertControl, type PanelControl, type PanelDisplay, type PanelLayout } from "./layout";
+import { arcPath, dragValue, fromFraction, knobAngle, padPoint, padValues, snapStep, toFraction, travelFor, type Travel } from "./travel";
+import { cloudGeometry, deleteCloud, insideBox, listClouds, moveTo, recallCloud, saveCloud, spreadTo } from "./grainCloud";
 import { readoutText, type Readout } from "./readout";
 import { compressorCurve, filterBankResponse, grainWindow, plateEnvelope, PLATE_HIGH_HZ, type FilterBank } from "./displays";
 import { DISPLAY_RATE, PLOT_KINDS, kernelValues, place, plotFor, type Pane, type Plot } from "./plots";
@@ -40,29 +41,29 @@ export function Panel({ layout, node, setParameter }: { layout: PanelLayout; nod
   const [page, setPage] = useState(layout.pages?.[0]?.id);
   const shows = (on?: string) => on === undefined || on === page;
   const style = {
-    width: layout.width, height: layout.height,
+    width: layout.width, height: heightOf(layout, page),
     ...(layout.accent ? { "--pnl-badge": layout.accent, "--pnl-accent": layout.accent } : {}),
     ...(layout.accentInk ? { "--pnl-badge-ink": layout.accentInk } : {}),
   } as CSSProperties;
   return (
     <div className={`pnl pnl--${layout.style}`} style={style}
       role="group" aria-label={`${module?.label ?? node.moduleType} panel`}>
-      {layout.groups.map((group) => (
+      {layout.groups.filter((group) => shows(group.page)).map((group) => (
         <div key={group.id} className="pnl-group" data-tint={group.tint} style={box(group)}>
           {group.label && <span className="pnl-group__label">{group.label}</span>}
         </div>
       ))}
-      {layout.displays.map((display, index) => (
+      {layout.displays.map((display, index) => shows(display.page) && (
         <div key={`${display.kind}-${index}`} className={`pnl-display pnl-display--${display.kind}${PLOT_KINDS.includes(display.kind) ? " pnl-display--plotted" : ""}`} style={box(display)}>
           <Display display={display} node={node} pages={{ list: layout.pages ?? [], current: page, show: setPage }}
-            label={module?.label ?? node.moduleType} />
+            label={module?.label ?? node.moduleType} setParameter={setParameter} />
         </div>
       ))}
       {layout.controls.filter((control) => shows(control.page)).map((control) => {
         const parameter = parameters.get(control.param);
         if (!parameter) return null;
         return <Control key={`${control.param}-${control.page ?? ""}`} control={control} parameter={parameter} node={node} setParameter={setParameter}
-          tint={groupOf(layout, control)?.tint} readout={control.readout ?? layout.readout} />;
+          tint={groupOf(layout, { ...control, page })?.tint} readout={control.readout ?? layout.readout} />;
       })}
       {(layout.inert ?? []).filter((inert) => shows(inert.page)).map((inert) => <Inert key={inert.label} inert={inert} />)}
     </div>
@@ -89,6 +90,10 @@ function Control({ control, parameter, node, setParameter, tint, readout }: {
       return <Field control={placed} parameter={parameter} value={value} label={label} onChange={onChange} />;
     case "pad":
       return <Pad control={placed} node={node} setParameter={setParameter} />;
+    case "reroll":
+      return <ModTarget nodeId={node.id} moduleType={node.moduleType} parameterId={control.param} value={num(value)}>
+        {() => <Reroll control={placed} parameter={parameter} value={value} label={label} onChange={onChange} />}
+      </ModTarget>;
     case "asset":
       return <div className="pnl-control pnl-asset" style={box(control)}>
         <AssetSlot node={node} parameterId={control.param} setParameter={setParameter} />
@@ -127,8 +132,9 @@ function useDrag(onMove: (dx: number, dy: number, fine: boolean, start: number) 
 }
 
 /** The value shown for a parameter: a choice's name, or the number in its unit. */
-function shown(parameter: ParameterDescriptor, value: JsonValue | undefined, zero?: string, readout?: Readout): string {
+function shown(parameter: ParameterDescriptor, value: JsonValue | undefined, zero?: string, readout?: Readout, text?: (v: number) => string): string {
   if (parameter.kind === "enum") return String(value ?? parameter.defaultValue);
+  if (text) return text(num(value, num(parameter.defaultValue)));
   if (zero !== undefined && num(value, num(parameter.defaultValue)) === 0) return zero;
   if (readout) {
     // A whole-number control (a step of exactly 1) prints no places. A
@@ -149,12 +155,14 @@ function Knob({ control, parameter, value, label, onChange, modulated = false }:
   const current = choice ? Math.max(0, options.indexOf(String(value))) : num(value, num(parameter.defaultValue));
   const fraction = toFraction(current, min, max, travel);
   const angle = knobAngle(fraction);
-  const set = (next: number) => onChange(choice ? options[Math.round(next)] ?? options[0] : next);
+  // A detent catches the value within 6 % of the range (MultiGrainLive's `DETENT_FRAC`).
+  const caught = (next: number) => control.detent !== undefined && Math.abs(next - control.detent) <= (max - min) * 0.06 ? control.detent : next;
+  const set = (next: number) => onChange(choice ? options[Math.round(next)] ?? options[0] : caught(next));
   const drag = useDrag((_dx, dy, fine, start) =>
     set(dragValue(start, dy, { min, max, travel, step: choice ? 1 : parameter.step }, fine)));
   const pointer = { x: 20 + 11 * Math.sin((angle * Math.PI) / 180), y: 20 - 11 * Math.cos((angle * Math.PI) / 180) };
   const label_ = <span className="pnl-knob__label">{label}</span>;
-  const text = shown(parameter, value, control.zero, control.readout);
+  const text = shown(parameter, value, control.zero, control.readout, control.text);
   return (
     <div {...tinted(control)} className={`pnl-control pnl-knob${control.size ? ` pnl-knob--${control.size}` : ""}`} style={box(control)}
       title={`${parameter.label}: ${text}`}>
@@ -199,7 +207,7 @@ function Slider({ control, parameter, value, label, onChange, modulated = false 
     const f = vertical ? 1 - (clientY - rect.top) / rect.height : (clientX - rect.left) / rect.width;
     const raw = fromFraction(f, min, max, travel);
     const step = parameter.step ?? 0;
-    onChange(Number((step > 0 ? Math.round(raw / step) * step : raw).toPrecision(12)));
+    onChange(Number((step > 0 ? snapStep(raw, min, step) : raw).toPrecision(12)));
   };
   const dragging = useRef(false);
   return (
@@ -272,7 +280,8 @@ function Select({ control, parameter, value, label, onChange }: ControlProps) {
   const options = parameter.options ?? [];
   const current = String(value ?? parameter.defaultValue);
   return (
-    <div {...tinted(control)} className="pnl-control pnl-select" style={box(control)} role="radiogroup" aria-label={label}>
+    <div {...tinted(control)} className={`pnl-control pnl-select${control.caption ? " pnl-select--captioned" : ""}`} style={box(control)} role="radiogroup" aria-label={label}>
+      {control.caption && <span className="pnl-select__caption">{label}</span>}
       {options.map((option) => (
         <button type="button" key={option} role="radio" aria-checked={option === current}
           className={option === current ? "is-on" : ""}
@@ -324,6 +333,30 @@ function Field({ control, parameter, value, label, onChange }: ControlProps) {
         onBlur={commit}
         onKeyDown={(event) => { if (event.key === "Enter") (event.currentTarget as HTMLInputElement).blur(); if (event.key === "Escape") setDraft(null); }} />
     </label>
+  );
+}
+
+/**
+ * MultiGrainLive's Seed row: the number every random choice is drawn from, and
+ * Re-roll, which deals a new one as its button does —
+ * `(seed · 1664525 + 1013904223) % 2147483647` — so every jitter changes at
+ * once and no other setting does.
+ */
+export const reroll = (seed: number): number => (seed * 1664525 + 1013904223) % 2147483647;
+
+function Reroll({ control, parameter, value, label, onChange }: ControlProps) {
+  const current = num(value, num(parameter.defaultValue));
+  return (
+    <div {...tinted(control)} className="pnl-control pnl-reroll" style={box(control)}
+      title="The number every random choice here is drawn from. Re-roll re-deals the whole cloud without moving a single setting.">
+      <span className="pnl-knob__label">{label}</span>
+      <button type="button" className="pnl-switch pnl-reroll__button"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => { event.stopPropagation(); onChange(reroll(current)); }}>
+        <span className="pnl-switch__text">Re-roll</span>
+      </button>
+      <span className="pnl-knob__value">{String(current)}</span>
+    </div>
   );
 }
 
@@ -380,9 +413,12 @@ function Inert({ inert }: { inert: InertControl }) {
 
 type Pages = { list: readonly { id: string; label: string }[]; current?: string; show: (id: string) => void };
 
-function Display({ display, node, pages, label }: { display: PanelDisplay; node: NodeInstance; pages: Pages; label: string }) {
+function Display({ display, node, pages, label, setParameter }: { display: PanelDisplay; node: NodeInstance; pages: Pages; label: string; setParameter: Setter }) {
   const p = node.parameters;
   switch (display.kind) {
+    case "cloud-pad": return <CloudPad display={display} node={node} setParameter={setParameter} />;
+    case "cloud-readout": return <CloudReadout node={node} />;
+    case "cloud-presets": return <CloudPresets node={node} setParameter={setParameter} />;
     case "page-nav": return <PageNav pages={pages} />;
     case "page-title": return <span className="pnl-pagetitle">{pages.list.find((page) => page.id === pages.current)?.label ?? ""}</span>;
     case "lxp-logo": return <span className="pnl-lxp-logo">lexicon</span>;
@@ -466,6 +502,122 @@ function GrainScreen({ display, node }: { display: PanelDisplay; node: NodeInsta
     </svg>
     <span className="pnl-screen__bottom">POS {num(node.parameters.position).toFixed(3)} · SPRAY {Math.round(num(node.parameters["position-jitter"]))}MS</span>
   </>;
+}
+
+/** The sample's length in seconds, from the sound pool. */
+function useSeconds(node: NodeInstance): number {
+  const { assets } = useSoundPool();
+  const id = typeof node.parameters["asset-id"] === "string" ? (node.parameters["asset-id"] as string) : "";
+  return assets.find((entry) => entry.id === id)?.durationSec ?? 0;
+}
+
+/**
+ * MultiGrainLive's cloud pad: the source across with its waveform behind, pitch
+ * offset up and down, and the box that is the read head. Drag inside the box
+ * to move the head; drag outside it to spray it in time and pitch. The head
+ * follows where the engine is reading (`data-cloud-played`, written from the
+ * rack's report by `CloudAnimator`).
+ */
+function CloudPad({ display, node, setParameter }: { display: PanelDisplay; node: NodeInstance; setParameter: Setter }) {
+  const { assets } = useSoundPool();
+  const id = typeof node.parameters["asset-id"] === "string" ? (node.parameters["asset-id"] as string) : "";
+  const asset = assets.find((entry) => entry.id === id);
+  const seconds = asset?.durationSec ?? 0;
+  const area = useRef<HTMLDivElement>(null);
+  const mode = useRef<"move" | "spread" | null>(null);
+  const { w, h } = display;
+  const played = () => Number(area.current?.dataset.cloudPlayed ?? 0);
+  const geo = cloudGeometry(node.parameters, seconds, w, h);
+  const apply = (clientX: number, clientY: number) => {
+    const rect = area.current?.getBoundingClientRect();
+    if (!rect || !seconds) return;
+    const now = cloudGeometry(node.parameters, seconds, w, h, played());
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    const next = mode.current === "move" ? moveTo(now, px) : spreadTo(now, px, py, seconds);
+    for (const [key, v] of Object.entries(next)) setParameter(key, v);
+  };
+  return <div ref={area} className="pnl-cloud" data-cloud-node={node.id} data-cloud-start={geo.home + num(node.parameters.position)}
+    data-cloud-scan={num(node.parameters.scan, 1)} data-cloud-w={w}
+    style={{ "--cloud-head": `${geo.head * w}px` } as CSSProperties}
+    title="The grain cloud over the source. Drag the box to move the read head; drag outside it to widen the spray or the pitch scatter."
+    onPointerDown={(event) => {
+      event.stopPropagation();
+      const rect = area.current?.getBoundingClientRect();
+      if (!rect) return;
+      const now = cloudGeometry(node.parameters, seconds, w, h, played());
+      mode.current = insideBox(now, event.clientX - rect.left, event.clientY - rect.top) ? "move" : "spread";
+      event.currentTarget.setPointerCapture(event.pointerId);
+      apply(event.clientX, event.clientY);
+    }}
+    onPointerMove={(event) => { if (mode.current) apply(event.clientX, event.clientY); }}
+    onPointerUp={() => { mode.current = null; }}>
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      {asset && <path className="pnl-screen__trace" d={peaksToPath(asset.peaks, w, h)} />}
+      <line className="pnl-cloud__centre" x1="0" y1={h / 2} x2={w} y2={h / 2} />
+      {/* Drawn about x = 0 and carried to the head by the animator's --cloud-head. */}
+      <g className="pnl-cloud__head">
+        <rect className="pnl-cloud__box" x={-geo.halfW} y={h / 2 - geo.halfH} width={geo.halfW * 2} height={geo.halfH * 2} />
+        <line className="pnl-cloud__line" x1="0" y1="0" x2="0" y2={h} />
+      </g>
+    </svg>
+  </div>;
+}
+
+/** What the pad is reading: the head, in seconds into the file. */
+function CloudReadout({ node }: { node: NodeInstance }) {
+  const seconds = useSeconds(node);
+  if (!seconds) return <span className="pnl-cloud-read">no sample</span>;
+  const geo = cloudGeometry(node.parameters, seconds, 1, 1);
+  return <span className="pnl-cloud-read" data-cloud-read={node.id} data-cloud-seconds={seconds}
+    data-cloud-start={geo.home + num(node.parameters.position)} data-cloud-scan={num(node.parameters.scan, 1)}>
+    {`head ${(geo.head * seconds).toFixed(2)}s`}
+  </span>;
+}
+
+/** Storage for the Cloud presets; none in a private window, and the row then keeps none. */
+const cloudStore = (): Storage | null => {
+  try { return window.localStorage; } catch { return null; }
+};
+
+/**
+ * Cloud presets: a picker, Save as… and Delete, as MultiGrainLive's row. A
+ * cloud is the grain section alone, put back over the defaults; the sample,
+ * the seed and the rest of the engine are left as they are.
+ */
+function CloudPresets({ node, setParameter }: { node: NodeInstance; setParameter: Setter }) {
+  const [, redraw] = useState(0);
+  const [picked, setPicked] = useState("");
+  const store = cloudStore();
+  const names = store ? listClouds(store) : [];
+  const defaults = Object.fromEntries((moduleRegistry.get(node.moduleType)?.parameters ?? []).map((p) => [p.id, p.defaultValue]));
+  return <div className="pnl-cloud-presets" onPointerDown={(event) => event.stopPropagation()}>
+    <span className="pnl-cloud-presets__tag">CLOUD</span>
+    <select value={names.includes(picked) ? picked : ""} title="A saved cloud: every grain control, and nothing else. The sound and the seed stay as they are."
+      onChange={(event) => {
+        const name = event.currentTarget.value;
+        setPicked(name);
+        const values = store && name ? recallCloud(store, name, defaults) : null;
+        if (values) for (const [key, v] of Object.entries(values)) setParameter(key, v);
+      }}>
+      <option value="">— none —</option>
+      {names.map((name) => <option key={name} value={name}>{name}</option>)}
+    </select>
+    <button type="button" title="Keep the grain controls as they are now, under a name." onClick={() => {
+      if (!store) return;
+      const name = window.prompt("Save this cloud as:", picked || `Cloud ${names.length + 1}`);
+      if (name === null) return;
+      const stored = saveCloud(store, name, node.parameters);
+      if (stored) { setPicked(stored); redraw((n) => n + 1); }
+    }}>Save as…</button>
+    <button type="button" title="Forget the cloud named in the picker. The sound is not touched." onClick={() => {
+      if (!store || !picked) return;
+      if (!window.confirm(`Delete the cloud “${picked}”? The sound is left as it is.`)) return;
+      deleteCloud(store, picked);
+      setPicked("");
+      redraw((n) => n + 1);
+    }}>Delete</button>
+  </div>;
 }
 
 function RootKeys({ display, root }: { display: PanelDisplay; root: number }) {

@@ -12,7 +12,7 @@ import type { Readout } from "./readout";
 /** The looks a panel can wear: four new ones and the originals' own. */
 export type PanelStyle = "cabinet" | "night" | "graph" | "strip" | "soundhack" | "lexicon" | "platinum";
 
-export type ControlKind = "knob" | "hslider" | "vslider" | "switch" | "select" | "asset" | "readout" | "field" | "pad";
+export type ControlKind = "knob" | "hslider" | "vslider" | "switch" | "select" | "asset" | "readout" | "field" | "pad" | "reroll";
 
 type Box = { x: number; y: number; w: number; h: number };
 
@@ -42,17 +42,27 @@ export type PanelControl = Box & {
   paramY?: string;
   /** A choice drawn as a pop-up menu rather than a row of buttons. */
   menu?: boolean;
+  /** A row of buttons with its name in front, as MultiGrainLive's segment rows. */
+  caption?: boolean;
+  /** A value it snaps to within 6 % of its range, as MultiGrainLive's Envelope. */
+  detent?: number;
+  /** How its value reads, where the original printed it in words ("off", "frozen"). */
+  text?: (value: number) => string;
 };
 
-export type PanelGroup = Box & { id: string; label: string; tint?: string };
+/** A group or display with a page is drawn on that page only; on every page otherwise. */
+export type PanelGroup = Box & { id: string; label: string; tint?: string; page?: string };
 
-export type PanelDisplay = Box & { kind: string };
+export type PanelDisplay = Box & { kind: string; page?: string };
 
 /** A control the original drew that this port has no parameter for. Drawn, dimmed. */
 export type InertControl = Box & { label: string; kind: ControlKind; why: string; page?: string };
 
-/** One page of a panel whose controls take turns in the same place. */
-export type PanelPage = { id: string; label: string };
+/**
+ * One page of a panel whose controls take turns in the same place. A page
+ * with a height of its own is that tall while it shows; the width never moves.
+ */
+export type PanelPage = { id: string; label: string; height?: number };
 
 export type PanelLayout = {
   moduleType: string;
@@ -74,9 +84,16 @@ export type PanelLayout = {
 };
 
 /** The group a control sits in, which gives it its colour. */
-export function groupOf(layout: PanelLayout, control: Box): PanelGroup | undefined {
-  return layout.groups.find((group) => inside(control, group));
+export function groupOf(layout: PanelLayout, control: Box & { page?: string }): PanelGroup | undefined {
+  return layout.groups.find((group) => together(group.page, control.page) && inside(control, group));
 }
+
+/** How tall a panel is while a page shows. */
+export const heightOf = (layout: PanelLayout, page?: string): number =>
+  layout.pages?.find((p) => p.id === page)?.height ?? layout.height;
+
+/** Two things meet only when they can be seen together: on one page, or either on every page. */
+const together = (a?: string, b?: string) => a === undefined || b === undefined || a === b;
 
 /** The parameters a panel never draws: a module's view state, not its sound. */
 const NOT_ON_PANELS = new Set(["collapsed", "comment", "presets"]);
@@ -97,16 +114,16 @@ function allowed(parameter: ParameterDescriptor): { kinds: ControlKind[]; needs:
     case "string":
       return { kinds: ["asset"], needs: "a sample needs an asset slot" };
     default:
-      return { kinds: ["knob", "hslider", "vslider", "readout", "field", "pad"], needs: "a number needs a knob, slider, field or readout" };
+      return { kinds: ["knob", "hslider", "vslider", "readout", "field", "pad", "reroll"], needs: "a number needs a knob, slider, field or readout" };
   }
 }
 
-/** The share of the panel the groups and displays cover, sampled every 2 px. */
-export function coverage(layout: PanelLayout): number {
-  const boxes: Box[] = [...layout.groups, ...layout.displays];
+/** The share of the panel the groups and displays cover, sampled every 2 px; on one page, if given. */
+export function coverage(layout: PanelLayout, page?: string): number {
+  const boxes: Box[] = [...layout.groups, ...layout.displays].filter((b) => together(b.page, page));
   let covered = 0;
   let total = 0;
-  for (let y = 1; y < layout.height; y += 2) {
+  for (let y = 1; y < heightOf(layout, page); y += 2) {
     for (let x = 1; x < layout.width; x += 2) {
       total += 1;
       if (boxes.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h)) covered += 1;
@@ -153,29 +170,34 @@ export function validateLayout(layout: PanelLayout, module: ModuleDescriptor): s
     if (!NOT_ON_PANELS.has(parameter.id) && !seen.has(parameter.id)) errors.push(`${parameter.id}: not on the panel`);
   }
 
-  const panel = { x: 0, y: 0, w: layout.width, h: layout.height };
+  // Each page is checked as it is seen: its own height, its own groups.
+  const views = layout.pages?.length ? layout.pages.map((p) => p.id) : [undefined];
   const placed = [
     ...layout.controls.map((c) => ({ box: c, name: c.param, page: c.page })),
     ...(layout.inert ?? []).map((c) => ({ box: c, name: `${c.label} (inert)`, page: c.page })),
   ];
-  // Two controls collide only when they can be seen together: on one page,
-  // or either of them on every page.
-  const together = (a?: string, b?: string) => a === undefined || b === undefined || a === b;
-  placed.forEach(({ box, name, page }, index) => {
-    if (!inside(box, panel)) errors.push(`${name}: runs off the panel`);
-    if (layout.groups.filter((group) => inside(box, group)).length !== 1) errors.push(`${name}: not inside one group`);
-    for (const other of placed.slice(0, index)) {
-      if (together(page, other.page) && overlaps(box, other.box)) errors.push(`${name}: overlaps ${other.name}`);
+  const told = new Set<string>();
+  const say = (error: string) => { if (!told.has(error)) { told.add(error); errors.push(error); } };
+  for (const view of views) {
+    const panel = { x: 0, y: 0, w: layout.width, h: heightOf(layout, view) };
+    const shown = placed.filter(({ page }) => together(page, view));
+    const groups = layout.groups.filter((group) => together(group.page, view));
+    const displays = layout.displays.filter((display) => together(display.page, view));
+    shown.forEach(({ box, name }, index) => {
+      if (!inside(box, panel)) say(`${name}: runs off the panel`);
+      if (groups.filter((group) => inside(box, group)).length !== 1) say(`${name}: not inside one group`);
+      for (const other of shown.slice(0, index)) {
+        if (overlaps(box, other.box)) say(`${name}: overlaps ${other.name}`);
+      }
+    });
+    for (const display of displays) {
+      if (!inside(display, panel)) say(`${display.kind} display: runs off the panel`);
+      for (const { box, name } of shown) {
+        if (overlaps(display, box)) say(`${display.kind} display: overlaps ${name}`);
+      }
     }
-  });
-  for (const display of layout.displays) {
-    if (!inside(display, panel)) errors.push(`${display.kind} display: runs off the panel`);
-    for (const { box, name } of placed) {
-      if (overlaps(display, box)) errors.push(`${display.kind} display: overlaps ${name}`);
-    }
+    const used = coverage(layout, view);
+    if (used < MIN_COVERAGE) say(`only ${Math.round(used * 100)}% of the panel is used${view ? ` on ${view}` : ""}; leave no blank space`);
   }
-
-  const used = coverage(layout);
-  if (used < MIN_COVERAGE) errors.push(`only ${Math.round(used * 100)}% of the panel is used; leave no blank space`);
   return errors;
 }
