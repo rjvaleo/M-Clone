@@ -50,6 +50,11 @@ export interface RackReport {
    * report, by node id, for its panel's meters.
    */
   levels?: Record<string, [input: number, output: number]>;
+  /**
+   * Where each Grain Engine is reading, as a share of its file (NaN while it
+   * is silent), by node id, for its cloud pad's head.
+   */
+  heads?: Record<string, number>;
 }
 
 /**
