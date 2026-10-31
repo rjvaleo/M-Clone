@@ -134,6 +134,32 @@ full, and add drum step programming. Automation is not ported.
      the engine allows. **Free run:** a switch that plays continuously, with
      notes ignored or only retuning.
    - Every control mappable by the modulators.
+   **Grain Engine parity built** (branch `grain-parity`, 31 Oct 2026).
+   - Every control of MultiGrainLive's granular tray, for all five engines,
+     is a parameter with the tray's range, step, default and law
+     (`grainEngineParity.test.ts` holds the inventory, from `app.js`, its
+     `*_DEFAULTS`, `DESIGN-CRITIQUE.md` and `controls-baseline.json`). In Rust
+     each is held where MultiGrainLive's server holds it (or the module's old
+     limit, if wider, so older patches sound as they did), and a render test
+     checks each one against `prism_grain`'s `Stretcher` run alone, sample
+     for sample.
+   - The transient map, each engine's layer bank and the hybrid's separation
+     are built as MultiGrainLive's `live.rs` builds them: at load, and once
+     the control they hang on has held still for 200 ms (a change of engine
+     at once). Before this, Layers did nothing past one on WSOLA, the vocoder,
+     PVSOLA and the hybrid, and Preserve transients did nothing at all.
+   - Gated notes are voices of their own, up to four; free running, one voice
+     plays and notes retune it. Each voice seeks at its own pitch.
+   - The face: the cloud pad leads (drag inside the box to move the head,
+     outside to spray it; the head follows the engine's report), with its
+     readout, the Cloud presets and the engine picker and its switches; the
+     engine's own banks, extended ones in amber; Show: All / Standard /
+     Extended as pages, each as tall as it needs, at one width (800).
+   - Every number is mappable by the LFO. Switches and choices are not, by
+     the plan's rule above.
+   - Not ported: the tuning menu and Keys (MultiGrainLive's pitch row), the
+     grain count on the pad's readout and the grains drawn on it (idMLab has
+     no grain enumeration on the UI side).
 5. **MultiGrainLive's other effects into prism-fx**, each against a render of
    the original, then offered in idMLab automatically.
 6. **Synth parity and drums** (independent of 4–5; can run in parallel).

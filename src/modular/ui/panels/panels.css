@@ -442,3 +442,37 @@
 .pnl-meter__bar[data-clip="on"] { box-shadow: inset 0 2px 0 var(--pnl-meter-clip, #ff4d4d); }
 .pnl--graph { --pnl-meter-track: rgba(20, 20, 20, 0.08); --pnl-meter-clip: #c4321c; }
 .pnl-plot__live { fill: var(--pnl-tone-b); stroke: var(--pnl-plot-bg, #000); stroke-width: 1.5; }
+
+/* ---- the Grain Engine: MultiGrainLive's granular tray in the cabinet ---------- */
+/* Extended banks in amber, the colour their headings carried in MultiGrainLive. */
+.pnl--cabinet .pnl-group[data-tint="extended"] .pnl-group__label { color: #f3a43a; }
+.pnl--cabinet .pnl-group[data-tint="extended"] .pnl-group__label::before,
+.pnl--cabinet .pnl-group[data-tint="extended"] .pnl-group__label::after { background: #f3a43a; }
+.pnl--cabinet .pnl-control[data-tint="extended"] .pnl-knob__track { stroke: #f3a43a; }
+.pnl--cabinet .pnl-control[data-tint="extended"] .pnl-knob__pointer { stroke: #f3a43a; }
+.pnl--cabinet .pnl-control[data-tint="extended"] .pnl-knob__label { color: #f3a43a; }
+.pnl--cabinet .pnl-control[data-tint="extended"].pnl-switch { border-color: #8a5a22; }
+.pnl[aria-label="Grain Engine panel"] .pnl-knob__label { font-size: 9px; letter-spacing: 0; }
+.pnl[aria-label="Grain Engine panel"] .pnl-knob__value { font-size: 10px; }
+.pnl-select--captioned { grid-auto-flow: column; grid-template-columns: auto; align-items: stretch; }
+.pnl-select__caption { display: flex; align-items: center; padding-right: 4px; font-size: 9px; letter-spacing: 0.04em; }
+.pnl--cabinet .pnl-select--captioned .pnl-select__caption { color: #f3a43a; }
+.pnl-reroll { display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 2px 0; }
+.pnl-reroll__button { width: 100%; height: 24px; }
+.pnl--cabinet .pnl-reroll__button { background: #222326; border-color: #8a5a22; color: #e9e1cc; }
+.pnl--cabinet .pnl-display--cloud-pad { background: #0b0a08; border: 2px solid #3a332a; border-radius: 4px; }
+.pnl-cloud { position: relative; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+.pnl-cloud svg { position: absolute; inset: -2px; }
+.pnl-cloud__head { transform: translateX(var(--cloud-head, 0px)); }
+.pnl-cloud__centre { stroke: rgba(255, 255, 255, 0.07); }
+.pnl-cloud__box { fill: rgba(243, 164, 58, 0.09); stroke: rgba(243, 164, 58, 0.7); stroke-width: 1; }
+.pnl-cloud__line { stroke: rgba(243, 164, 58, 0.9); stroke-width: 1; }
+.pnl-cloud-read { display: block; font: 10px var(--pnl-screen-font); color: #a59d88; text-align: center; line-height: 14px; }
+.pnl-cloud-presets { display: flex; gap: 4px; align-items: center; height: 100%; font-size: 10px; }
+.pnl-cloud-presets__tag { letter-spacing: 0.12em; color: #a59d88; }
+.pnl-cloud-presets select { flex: 1; min-width: 0; height: 20px; background: #222326; color: #e9e1cc; border: 1px solid #4a463d; font: inherit; }
+.pnl-cloud-presets button { height: 20px; padding: 0 5px; background: #222326; color: #e9e1cc; border: 1px solid #4a463d; border-radius: 3px; font: inherit; cursor: pointer; }
+.pnl--cabinet .pnl-display--page-nav .pnl-pages { background: #222326; }
+.pnl--cabinet .pnl-display--page-nav .pnl-pages button { background: #141517; border-color: #4a463d; color: #a59d88; font-size: 10px; }
+.pnl--cabinet .pnl-display--page-nav .pnl-pages button.is-on { color: #fff4dc; }
+.pnl--cabinet .pnl-display--page-nav .pnl-pages button.is-on::after { background: #f3a43a; }
