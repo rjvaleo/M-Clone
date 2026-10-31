@@ -80,7 +80,8 @@ type EffectCore = {
 
   /** Per-port wiring for multi-port modules. See `ManagedAudioNode`. */
   inputFor?(portId: string): AudioNodeLike;
-  outputFor?(portId: string): AudioNodeLike;
+  /** Nothing for a port that is the shell's own output. */
+  outputFor?(portId: string): AudioNodeLike | undefined;
 };
 
 type CoreBuilder = (context: EffectContext, spec: AudioNodeSpec) => EffectCore;
@@ -549,7 +550,8 @@ const buildWidener: CoreBuilder = (context, spec) => {
  * The mixer, wrapped.
  *
  * Series for the same reason the DP/4 is: there is no single dry signal to
- * balance against four independent inputs.
+ * balance against eight independent inputs. The send buses leave by
+ * `outputFor`, past the shell, as the DP/4's outputs do.
  */
 const buildMixer: CoreBuilder = (context, spec) => {
   const core = createMixer(context, spec, context.currentTime);
@@ -560,6 +562,7 @@ const buildMixer: CoreBuilder = (context, spec) => {
     parallel: false,
     owned: core.owned,
     inputFor: (portId) => core.inputFor(portId),
+    outputFor: (portId) => core.outputFor(portId),
     setParameter: (parameterId, value, atSec) => core.setParameter(parameterId, value, atSec),
   };
 };
