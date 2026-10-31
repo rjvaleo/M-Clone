@@ -494,6 +494,8 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     tone: 57,
     hits: 58,
     air: 59,
+    scale: 60,
+    "pitch-step": 61,
   },
   // `LfoModule`. Its targets are routes, not values; its colour is the face's.
   // `LfoModule`. Sync, beats and bpm follow the original four, so a patch
@@ -825,6 +827,7 @@ export interface EngineExports {
   accept_parts?(module: number, seq: number, channels: number): void;
 }
 
+
 /** Reinterpret an ABI return as a module id, or `undefined` if it was refused. */
 const asModuleId = (raw: number): number | undefined => {
   const id = raw >>> 0;
@@ -1140,6 +1143,8 @@ export class WasmRack {
     }
     this.observe();
   }
+
+
 
   /** Loudest sample seen since the last report, and how many quanta ago. */
   private peak = 0;

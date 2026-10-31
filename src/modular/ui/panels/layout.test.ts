@@ -227,7 +227,7 @@ describe("Every panel in the app", () => {
       if (!module) continue;
       // The Grain Engine's face holds its engine's controls only; across its
       // engines every control is placed (grainEngineParity.test.ts).
-      const used = new Set(layout.controls.map((c) => c.param));
+      const used = new Set(layout.controls.flatMap((c) => [c.param, ...(c.also ?? [])]));
       const shown = layout.moduleType === "m.grain-engine" ? { ...module, parameters: module.parameters.filter((p) => used.has(p.id)) } : module;
       expect(validateLayout(layout, shown), layout.moduleType).toEqual([]);
     }
@@ -269,7 +269,7 @@ describe("Every panel in the app", () => {
 
   it("draws every display a panel names", () => {
     const known = new Set([...PLOT_KINDS, "cheek", "grain-screen", "root-keys", "plate-tail", "transfer", "levels", "bank-response",
-      "page-nav", "page-title", "cloud-pad", "cloud-readout", "cloud-presets", "lxp-logo", "lxp-title", "lxp-meters", "lxp-rtv", "hp-x-axis", "hp-y-axis", "hp-values"]);
+      "page-nav", "page-title", "cloud-pad", "cloud-readout", "cloud-presets", "keys", "lxp-logo", "lxp-title", "lxp-meters", "lxp-rtv", "hp-x-axis", "hp-y-axis", "hp-values"]);
     for (const layout of PANEL_LAYOUTS) {
       for (const display of layout.displays) expect(known.has(display.kind), `${layout.moduleType}: ${display.kind}`).toBe(true);
     }

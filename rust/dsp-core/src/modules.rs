@@ -3312,6 +3312,8 @@ pub struct GrainEngineModule {
     voices: Vec<GrainVoice>,
     source: Option<prism_grain::Source>,
     sp: prism_grain::StreamParams,
+    /// Transpose, snapped to the tuning chosen (`prism_grain::tuning::quantise`).
+    transpose: f32,
     /// The hybrid's separated source and the split it was made with.
     parts: Option<prism_grain::decompose::Split>,
     /// The transient map's inputs when it was last built.
@@ -3447,7 +3449,11 @@ impl GrainEngineModule {
     pub const TONE: usize = 57;
     pub const HITS: usize = 58;
     pub const AIR: usize = 59;
-    pub const PARAM_COUNT: usize = 60;
+    // The tuning Pitch snaps to: a scale of `prism_grain::tuning::SCALES` (0
+    // for none), or with none a grid in semitones (0 for none).
+    pub const SCALE: usize = 60;
+    pub const PITCH_STEP: usize = 61;
+    pub const PARAM_COUNT: usize = 62;
     /// The frames the engine renders at a time.
     pub const BLOCK: usize = 128;
     /// The most notes sounding at once, gated.
@@ -3463,6 +3469,7 @@ impl GrainEngineModule {
             voices: (0..Self::VOICES).map(|_| GrainVoice::new(rate)).collect(),
             source: None,
             sp: prism_grain::StreamParams::new(0, rate as u32),
+            transpose: 0.0,
             parts: None,
             map_key: None,
             bank_key: None,
@@ -3511,9 +3518,30 @@ impl GrainEngineModule {
             return;
         }
         self.seen = *raw;
+        Self::stream_params(raw, &mut self.sp);
+        self.transpose = Self::transposed(raw);
+        // A new engine needs its layers before its next block, as
+        // MultiGrainLive builds them at once for a switch of engine.
+        if self.bank_key.is_some_and(|(alg, _)| alg != self.sp.algorithm) {
+            self.build_banks();
+        }
+        self.still = 0;
+    }
+
+    /// Transpose, snapped as MultiGrainLive's server snaps the pitch it is
+    /// sent: to the scale's nearest degree, or to the grid.
+    pub fn transposed(raw: &[f32]) -> f32 {
+        let semitones = if raw[Self::SEMITONES].is_finite() { raw[Self::SEMITONES] } else { 0.0 };
+        let index = raw[Self::SCALE].round();
+        let scale = if index >= 1.0 { prism_grain::tuning::SCALES.get(index as usize - 1).map(|s| s.name) } else { None };
+        prism_grain::tuning::quantise(semitones, scale, clamp(raw[Self::PITCH_STEP], 0.0, 12.0))
+    }
+
+    /// The controls into the crate's parameters: everything but the source's
+    /// length and rate, and the pitch, which is each voice's.
+    pub fn stream_params(raw: &[f32], sp: &mut prism_grain::StreamParams) {
         use prism_grain::stretch::{Splice, WinShape};
         let on = |i: usize| raw[i] >= 0.5;
-        let sp = &mut self.sp;
         sp.algorithm = Self::algorithm(raw[Self::ENGINE]);
         sp.ratio = clamp(raw[Self::STRETCH], 0.01, 100.0);
         sp.window_ms = clamp(raw[Self::WINDOW_MS], 5.0, 2_000.0);
@@ -3583,18 +3611,11 @@ impl GrainEngineModule {
         h.residual_level = clamp(raw[Self::AIR], 0.0, 4.0);
         sp.cloud = on(Self::CLOUD);
         sp.cloud_mix = clamp(raw[Self::CLOUD_MIX], 0.0, 1.0);
-        // A new engine needs its layers before its next block, as
-        // MultiGrainLive builds them at once for a switch of engine.
-        if self.bank_key.is_some_and(|(alg, _)| alg != self.sp.algorithm) {
-            self.build_banks();
-        }
-        self.still = 0;
     }
 
     /// The pitch a voice renders at: Transpose, plus its note from the root.
     fn semitones(&self, offset: f32) -> f32 {
-        let transpose = if self.seen[Self::SEMITONES].is_finite() { self.seen[Self::SEMITONES] } else { 0.0 };
-        clamp(transpose + offset, -48.0, 48.0)
+        clamp(self.transpose + offset, -48.0, 48.0)
     }
 
     /// The bank's sample, stereo and at the rack's rate.
@@ -6660,6 +6681,10 @@ mod tests {
             ("spread", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::SPREAD, 31.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.freq_span = 31; }),
             ("margin", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::MARGIN, 1.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.margin = 1.0; }),
             ("resolution", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::RESOLUTION, 1024.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.fft_size = 1024; }),
+            // The tuning: Pitch snapped to a scale's nearest degree, or to a grid.
+            ("scale", vec![(M::ENGINE, WSOLA), (M::SEMITONES, 3.3)], vec![(M::SCALE, 1.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.semitones = prism_grain::tuning::quantise(3.3, Some("Ionian (Major)"), 0.0); }),
+            ("scale of 53", vec![(M::ENGINE, WSOLA), (M::SEMITONES, 3.3)], vec![(M::SCALE, 41.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.semitones = prism_grain::tuning::quantise(3.3, Some(prism_grain::tuning::SCALES[40].name), 0.0); }),
+            ("pitch grid", vec![(M::ENGINE, WSOLA), (M::SEMITONES, 3.3)], vec![(M::PITCH_STEP, 1.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.semitones = 3.0; }),
         ];
         let frames = (0.6 * RATE) as usize;
         let mut unheard = Vec::new();

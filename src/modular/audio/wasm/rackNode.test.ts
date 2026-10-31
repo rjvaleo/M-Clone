@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { WasmRackNode, preferredEngine, type BuilderWorkerLike, type RackNodeLike } from "./rackNode";
 import type { RackMessage } from "./rackWorklet";
 import type { GrainBuildRequest, GrainBuildResult, RackReply, RackReport } from "./rackProtocol";
-import type { BuilderMessage } from "./grainBuilder";
+import type { BuilderMessage, GrainsResult } from "./grainBuilder";
 import type { AudioPlan } from "../audioPlan";
 
 /**
@@ -36,7 +36,7 @@ class FakeNode implements RackNodeLike {
 class FakeBuilder implements BuilderWorkerLike {
   readonly sent: BuilderMessage[] = [];
   readonly transferred: Transferable[][] = [];
-  onmessage: ((event: { data: GrainBuildResult }) => void) | null = null;
+  onmessage: ((event: { data: GrainBuildResult | GrainsResult }) => void) | null = null;
   terminated = 0;
   postMessage(message: BuilderMessage, transfer?: Transferable[]): void {
     this.sent.push(message);
@@ -358,5 +358,23 @@ describe("The Grain Engine's slow builds", () => {
     builder.onmessage!({ data: { type: "grain-built", nodeId: "g", seq: 3 } });
     expect(node.port.sent).toEqual([]);
     expect(builder.terminated).toBe(1);
+  });
+});
+
+describe("The cloud pad's grains", () => {
+  it("are asked of the builder, and come back up rather than down to the worklet", () => {
+    const node = new FakeNode();
+    const builder = new FakeBuilder();
+    const rack = new WasmRackNode(node, builder);
+    expect(rack.canBuildGrains).toBe(true);
+    const got: GrainsResult[] = [];
+    rack.onGrains((result) => got.push(result));
+    rack.requestGrains({ type: "grains", id: 1, nodeId: "g", slot: 0, params: new Float32Array(62), cap: 8_000 });
+    expect(builder.sent[builder.sent.length - 1]?.type).toBe("grains");
+    const before = node.port.sent.length;
+    builder.onmessage?.({ data: { type: "grains", id: 1, nodeId: "g", data: new Float32Array([0, 3, 0]) } });
+    expect(got.map((r) => r.id)).toEqual([1]);
+    expect(node.port.sent.length).toBe(before);
+    expect(new WasmRackNode(new FakeNode()).canBuildGrains).toBe(false);
   });
 });
