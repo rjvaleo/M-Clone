@@ -13,9 +13,10 @@ import { NIGHT_PANELS } from "./nightPorts";
 import { STRIP_PANELS } from "./stripPorts";
 import { GRAPH_PANELS } from "./graphPorts";
 import { CABINET_PANELS } from "./cabinetPorts";
+import { MIXER_STRIP } from "./mixerStrip";
 
 export const PANEL_LAYOUTS: readonly PanelLayout[] = [GRAIN_CABINET, PLATE_NIGHT, COMP_GRAPH, BANK_STRIP, SH_DELAY, ...SOUNDHACK_PANELS, ...LEXICON_PANELS, ...HYPERPRISM_PANELS,
-  ...NIGHT_PANELS, ...STRIP_PANELS, ...GRAPH_PANELS, ...CABINET_PANELS];
+  ...NIGHT_PANELS, ...STRIP_PANELS, ...GRAPH_PANELS, ...CABINET_PANELS, MIXER_STRIP];
 
 const BY_TYPE = new Map(PANEL_LAYOUTS.map((layout) => [layout.moduleType, layout]));
 

@@ -391,9 +391,12 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     pan: 10,
   },
   // `Mixer` in Rust: four controls per channel, then the fade.
+  // `Mixer`: the first four channels' controls and the fade where they were
+  // when it had four, then channels five to eight, the sends' levels (A then
+  // B, a channel each), the sends' pre-fader switches and their returns.
   "m.audio-mixer": {
-    ...Object.fromEntries([1, 2, 3, 4].flatMap((channel) => {
-      const base = (channel - 1) * 4;
+    ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].flatMap((channel) => {
+      const base = (channel - 1) * 4 + (channel > 4 ? 1 : 0);
       return [
         [`level-${channel}`, base],
         [`pan-${channel}`, base + 1],
@@ -402,6 +405,12 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
       ];
     })),
     level: 16,
+    ...Object.fromEntries((["a", "b"] as const).flatMap((bus, b) =>
+      [1, 2, 3, 4, 5, 6, 7, 8].map((channel) => [`send-${bus}-${channel}`, 33 + b * 8 + channel - 1]))),
+    "send-a-pre": 49,
+    "send-b-pre": 50,
+    "return-a": 51,
+    "return-b": 52,
   },
   "m.audio-widener": { width: 0, crossover: 1, level: 2 },
   // `Dp4Machine`: six controls per unit, then the fade.
@@ -661,12 +670,19 @@ export type PortSpan = { readonly base: number; readonly channels: 1 | 2 };
 /** Every module's audio is a stereo pair on engine ports 0 and 1… */
 const STEREO_PAIR: PortSpan = { base: 0, channels: 2 };
 
-/** …except the two with several inputs of their own. */
+/** …except the two with several ports of their own. */
 const MULTI_PORT: Readonly<Record<string, Readonly<Record<string, PortSpan>>>> = {
-  // Four stereo channels, on ports 0–1, 2–3, 4–5 and 6–7.
-  "m.audio-mixer": Object.fromEntries(
-    [1, 2, 3, 4].map((n) => [`audio-in-${n}`, { base: (n - 1) * 2, channels: 2 } as PortSpan]),
-  ),
+  // Eight stereo channels on ports 0–15, then the returns on 16–17 and
+  // 18–19; the main out on 0–1, then the sends on 2–3 and 4–5.
+  "m.audio-mixer": {
+    ...Object.fromEntries(
+      [1, 2, 3, 4, 5, 6, 7, 8].map((n) => [`audio-in-${n}`, { base: (n - 1) * 2, channels: 2 } as PortSpan]),
+    ),
+    "return-a-in": { base: 16, channels: 2 },
+    "return-b-in": { base: 18, channels: 2 },
+    "send-a-out": { base: 2, channels: 2 },
+    "send-b-out": { base: 4, channels: 2 },
+  },
   // Four mono ins and four mono outs: the machine's paths are independent.
   "m.audio-dp4": Object.fromEntries(
     [1, 2, 3, 4].flatMap((n) => [

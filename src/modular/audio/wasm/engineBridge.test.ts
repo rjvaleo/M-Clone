@@ -1193,6 +1193,28 @@ describe("The modules ported for the Rust default", () => {
     expect(engine.params.get(`${m}.16`)).toBe(1);
   });
 
+  it("keeps the first four channels and the fade where they were, and appends the rest as dsp-core's Mixer has them", () => {
+    const at = PARAM_INDICES["m.audio-mixer"];
+    expect([at["level-1"], at["pan-2"], at["mute-3"], at["solo-4"], at.level]).toEqual([0, 5, 10, 15, 16]);
+    expect([at["level-5"], at["pan-5"], at["mute-8"], at["solo-8"]]).toEqual([17, 18, 31, 32]);
+    expect([at["send-a-1"], at["send-a-8"], at["send-b-1"], at["send-b-8"]]).toEqual([33, 40, 41, 48]);
+    expect([at["send-a-pre"], at["send-b-pre"], at["return-a"], at["return-b"]]).toEqual([49, 50, 51, 52]);
+  });
+
+  it("lands channels five to eight, the sends and the returns on their engine ports", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("s", "m.synth"), node("m", "m.audio-mixer"), node("r", "m.audio-reverb")], [
+      { from: { nodeId: "s", portId: "audio-out" }, to: { nodeId: "m", portId: "audio-in-8" } },
+      { from: { nodeId: "m", portId: "send-b-out" }, to: { nodeId: "r", portId: "audio-in" } },
+      { from: { nodeId: "r", portId: "audio-out" }, to: { nodeId: "m", portId: "return-b-in" } },
+    ]));
+    const [s, m, r] = ["s", "m", "r"].map((id) => rack.moduleIdOf(id));
+    for (const cable of [`${s}:0→${m}:14`, `${s}:1→${m}:15`, `${m}:4→${r}:0`, `${m}:5→${r}:1`, `${r}:0→${m}:18`, `${r}:1→${m}:19`]) {
+      expect(engine.cables.has(cable), cable).toBe(true);
+    }
+  });
+
   it("packs the DP/4's configuration into its build variant", () => {
     // The layout of `Dp4Machine::variant` in Rust: config − 1, AB, CD, AB↔CD,
     // then each unit's algorithm in three bits.
