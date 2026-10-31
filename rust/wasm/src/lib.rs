@@ -597,3 +597,45 @@ pub extern "C" fn accept_parts(module: u32, seq: u32, channels: u32) {
     };
     engine.accept_parts(module, seq, parts);
 }
+
+// ---- the cloud pad's grains ------------------------------------------------------
+//
+// Run by the Grain Engine's builder worker on its own instance, which holds the
+// same samples as the rack: the module's controls go in `job_params`, and
+// `grains_sampled` with the file's own rate and length comes out in
+// `job_output` (`dsp_core::grain_jobs::grains_job`).
+
+static mut JOB_PARAMS: [f32; dsp_core::modules::GrainEngineModule::PARAM_COUNT] =
+    [0.0; dsp_core::modules::GrainEngineModule::PARAM_COUNT];
+static mut JOB_OUTPUT: Vec<f32> = Vec::new();
+
+/// Where the worker writes the module's controls, in its parameter order.
+#[no_mangle]
+#[allow(static_mut_refs)]
+pub extern "C" fn job_params_ptr() -> *mut f32 {
+    unsafe { JOB_PARAMS.as_mut_ptr() }
+}
+
+/// The grains of the sample `sample` in this instance's bank, at most `cap`.
+/// Returns how many floats `job_output_ptr` points at.
+#[no_mangle]
+#[allow(static_mut_refs)]
+pub extern "C" fn job_grains(sample: u32, cap: u32) -> u32 {
+    use dsp_core::modules::GrainEngineModule;
+    let Some(source) = samples().and_then(|bank| bank.get(sample)) else { return 0 };
+    let raw = unsafe { JOB_PARAMS };
+    let mut sp = dsp_core::prism_grain::StreamParams::new(source.frames(), source.sample_rate() as u32);
+    GrainEngineModule::stream_params(&raw, &mut sp);
+    sp.semitones = GrainEngineModule::transposed(&raw);
+    let out = dsp_core::grain_jobs::grains_job(source, &sp, (cap as usize).max(1));
+    unsafe {
+        JOB_OUTPUT = out;
+        JOB_OUTPUT.len() as u32
+    }
+}
+
+#[no_mangle]
+#[allow(static_mut_refs)]
+pub extern "C" fn job_output_ptr() -> *const f32 {
+    unsafe { JOB_OUTPUT.as_ptr() }
+}

@@ -12,7 +12,7 @@
 
 import type { AudioPlan } from "../audioPlan";
 import type { GrainBuildResult, RackMessage, RackReply, RackReport, ScheduledEvent } from "./rackProtocol";
-import { resultTransfers, type BuilderMessage } from "./grainBuilder";
+import { resultTransfers, type BuilderMessage, type GrainsRequest, type GrainsResult } from "./grainBuilder";
 import type { SampleSource } from "./sampleTransfer";
 
 /** Which audio backend a session runs on. */
@@ -44,7 +44,7 @@ export interface RackNodeLike {
 /** Just enough of a `Worker` running `grainWorker.ts`. */
 export interface BuilderWorkerLike {
   postMessage(message: BuilderMessage, transfer?: Transferable[]): void;
-  onmessage?: ((event: { data: GrainBuildResult }) => void) | null;
+  onmessage?: ((event: { data: GrainBuildResult | GrainsResult }) => void) | null;
   terminate(): void;
 }
 
@@ -87,7 +87,10 @@ export class WasmRackNode {
     if (builder) {
       builder.onmessage = (event) => {
         if (this.disposed) return;
-        this.node.port.postMessage(event.data, resultTransfers(event.data));
+        const data = event.data;
+        // The pad's grains stay up here; a build goes down to the module.
+        if (data.type === "grains") this.grainsListener?.(data);
+        else this.node.port.postMessage(data, resultTransfers(data));
       };
     }
   }
@@ -175,6 +178,23 @@ export class WasmRackNode {
     if (this.disposed) return;
     this.node.port.postMessage({ type: "modulation", nodeId, source, dest, amount });
   }
+
+  /** Whether there is a builder to ask for the cloud pad's grains. */
+  get canBuildGrains(): boolean {
+    return this.builder !== undefined && !this.disposed;
+  }
+
+  /** Ask the builder for a cloud pad's grains (`grainJobs.ts`). */
+  requestGrains(request: GrainsRequest): void {
+    if (this.disposed || !this.builder) return;
+    this.builder.postMessage(request);
+  }
+
+  /** Where the builder's grains go. */
+  onGrains(listener: (result: GrainsResult) => void): void {
+    this.grainsListener = listener;
+  }
+  private grainsListener: ((result: GrainsResult) => void) | null = null;
 
   dispose(): void {
     if (this.disposed) return;

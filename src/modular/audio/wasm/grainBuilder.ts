@@ -26,6 +26,10 @@ import { transferSample, type SampleSource } from "./sampleTransfer";
 
 /** What the builder needs beyond the rack's half of the ABI. */
 export interface BuildExports {
+  // The cloud pad's grains (`dsp_core::grain_jobs::grains_job`).
+  job_params_ptr(): number;
+  job_grains(sample: number, cap: number): number;
+  job_output_ptr(): number;
   built_map_len(module: number): number;
   built_map_ptr(): number;
   built_parts_frames(module: number): number;
@@ -46,6 +50,11 @@ export class GrainBuilder {
     private readonly sampleRate: number,
   ) {
     engine.init(sampleRate);
+  }
+
+  /** The cloud pad's grains; see `buildGrains`. */
+  grains(request: GrainsRequest): GrainsResult {
+    return buildGrains(this.engine, request);
   }
 
   /** A sample into this engine's bank, under the slot the rack gave it. */
@@ -90,6 +99,24 @@ export class GrainBuilder {
   }
 }
 
+/**
+ * The cloud pad's grains for these settings, from the sample in `slot`: what
+ * MultiGrainLive's `/api/grains` sends its pad (`grains_sampled` at the file's
+ * own rate and length, capped at `cap`, each grain measured). A copy out of
+ * this engine's memory, to transfer.
+ */
+export function buildGrains(engine: EngineExports & BuildExports, request: GrainsRequest): GrainsResult {
+  new Float32Array(engine.memory.buffer, engine.job_params_ptr(), request.params.length).set(request.params);
+  const len = engine.job_grains(request.slot, request.cap);
+  const data = new Float32Array(engine.memory.buffer, engine.job_output_ptr(), len).slice();
+  return { type: "grains", id: request.id, nodeId: request.nodeId, data };
+}
+
+/** The pad's grains asked for (`grainJobs.ts`). */
+export type GrainsRequest = { type: "grains"; id: number; nodeId: string; slot: number; params: Float32Array; cap: number };
+/** And the answer: `grain_jobs::grains_job`'s output. */
+export type GrainsResult = { type: "grains"; id: number; nodeId: string; data: Float32Array };
+
 /** The arrays in a result, to transfer rather than copy across a port. */
 export const resultTransfers = (result: GrainBuildResult): ArrayBuffer[] => {
   const buffers: ArrayBuffer[] = [];
@@ -108,4 +135,5 @@ export const resultTransfers = (result: GrainBuildResult): ArrayBuffer[] => {
 export type BuilderMessage =
   | { type: "init"; module: WebAssembly.Module; sampleRate: number }
   | { type: "sample"; slot: number; channels: Float32Array[]; sampleRate: number }
-  | { type: "build"; request: GrainBuildRequest };
+  | { type: "build"; request: GrainBuildRequest }
+  | GrainsRequest;

@@ -2,7 +2,8 @@
 //
 // Bundled separately (`npm run build:worklet`), as the rack worklet is, and as
 // thin: everything with a decision in it is `GrainBuilder`, next door, which
-// is tested against a fake engine. This only wires it to the port. Requests
+// is tested against a fake engine. This only wires it to the port. It also
+// enumerates the cloud pad's grains (`buildGrains`). Requests
 // are answered one at a time, in order; the module refuses any answer it has
 // stopped waiting for, so a slow one landing late does no harm.
 
@@ -27,6 +28,12 @@ self.onmessage = (event) => {
     case "sample":
       builder?.loadSample(message.slot, { channels: message.channels, sampleRate: message.sampleRate });
       break;
+    case "grains": {
+      if (!builder) break;
+      const result = builder.grains(message);
+      self.postMessage(result, [result.data.buffer]);
+      break;
+    }
     case "build": {
       if (!builder) break;
       const result = builder.build(message.request);
