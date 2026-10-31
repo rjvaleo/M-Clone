@@ -114,3 +114,26 @@ describe("M Variables: writing positions into the other modules", () => {
     ]);
   });
 });
+
+describe("M Variables: arrows, snapshot slots and unset parameters", () => {
+  it("an arrow clicked again disarms; another direction re-aims it", () => {
+    const armed = toggleArrow(defaultVariables(), "density", "up");
+    expect(armed.arrows.density).toEqual({ on: true, dir: "up" });
+    expect(toggleArrow(armed, "density", "up").arrows.density).toEqual({ on: false, dir: "up" });
+    expect(toggleArrow(armed, "density", "left").arrows.density).toEqual({ on: true, dir: "left" });
+  });
+
+  it("stores a snapshot only in slots A–Z", () => {
+    const state = defaultVariables();
+    expect(storeSnapshot(state, -1)).toBe(state);
+    expect(storeSnapshot(state, 26)).toBe(state);
+  });
+
+  it("a NoteSeq with no Voice is voice 1, and one never on a slot recalls it", () => {
+    const state = activate(activate(defaultVariables(), "transposition", 3), "patternGroup", 1);
+    const presets = storePreset([], 1, "B", { octave: 2 });
+    const [update] = resolveTargets(state, [{ kind: "noteSeq", nodeId: "ns", parameters: { presets } as never }]);
+    expect(update.values.transposition).toBe(makePresetPositions().transposition.slots[3][0]);
+    expect(update.values).toMatchObject({ octave: 2, "preset-slot": 1 });
+  });
+});

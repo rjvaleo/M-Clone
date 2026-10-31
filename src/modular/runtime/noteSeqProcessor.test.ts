@@ -218,3 +218,70 @@ describe("Run Mode, Sync and Warp In", () => {
       .map((tick) => Math.round(distortClockTicks(map, tick))).filter((tick) => tick < 4000));
   });
 });
+
+describe("M NoteSeq at its edges", () => {
+  /** One NoteSeq run in a single window the bus allows only `budget` messages. */
+  const starvedSeq = (values: Record<string, unknown>, budget: number, end: number, feeds: Fed[] = []) => {
+    const bus = new MessageBus();
+    const processor = new MNoteSeqProcessor({ nodeId: "ns", bus, parameters: new ParameterBag(values as never), budget, seed: 7 });
+    const notes = collector(bus, "ns", "notes-out");
+    const gate = collector(bus, "ns", "gate-out");
+    for (const port of ["sync-in", "trig-in", "interval-in"]) bus.connect("up", `up-${port}`, "ns", port);
+    bus.beginNode("up", 1024);
+    for (const { port, ...fields } of feeds) {
+      const message = bus.acquire()!;
+      Object.assign(message, fields);
+      bus.publish(`up-${port}`, message);
+    }
+    bus.beginNode("ns", budget);
+    processor.process(window(0, end));
+    return { notes: notes().filter((m) => m.kind === "note-event"), gate: gate(), processor };
+  };
+  const plain = () => noteSeq().run(STEP * 4).map((n) => [n.atTick, n.note, n.velocity]);
+
+  it("ignores an H.Sync it does not know", () => {
+    expect(noteSeq({ "h-sync": "3" }).run(STEP * 4).map((n) => [n.atTick, n.note, n.velocity])).toEqual(plain());
+  });
+
+  it("plays nothing at a rate of nothing, in time or on a gate", () => {
+    expect(noteSeq({ "rate-num": 0 }).run(STEP * 4)).toEqual([]);
+    const gate: Fed = { port: "trig-in", kind: "control", atTick: 100, controlValue: 1 };
+    expect(noteSeq({ "run-mode": "cv-step", "rate-den": 0 }).run(STEP * 2, [gate])).toEqual([]);
+  });
+
+  it("stops at the budget: no note, a note without its outputs, a gate step, a change still waiting", () => {
+    expect(starvedSeq({}, 0, STEP * 2).notes).toEqual([]);
+    const half = starvedSeq({}, 2, STEP * 2);
+    expect(half.notes.map((n) => n.note)).toEqual([60]);
+    expect(half.gate).toHaveLength(1);
+    const interval: Fed = { port: "interval-in", kind: "control", atTick: STEP * 2, controlValue: 7 };
+    expect(starvedSeq({}, 4, STEP * 3, [interval]).notes.map((n) => n.note)).toEqual([60]);
+    const trig: Fed = { port: "trig-in", kind: "control", atTick: 100, controlValue: 1 };
+    const stepped = starvedSeq({ "run-mode": "cv-step" }, 0, STEP, [trig]);
+    expect(stepped.notes).toEqual([]);
+    expect(stepped.processor.status().steps).toBe("0");
+  });
+
+  it("takes a Sync before a control that lands on the same tick", () => {
+    const at = STEP * 2;
+    const notes = noteSeq().run(STEP * 3, [
+      { port: "interval-in", kind: "control", atTick: at, controlValue: 12 },
+      { port: "sync-in", kind: "reset", atTick: at },
+    ]);
+    expect(notes.map((n) => [n.atTick, n.note])).toEqual([[0, 60], [STEP, 62], [at, 72]]);
+  });
+
+  it("falls back to M's own pattern, cells and positions when the document's are missing", () => {
+    expect(noteSeq({ patterns: [] }).run(STEP * 4).map((n) => [n.atTick, n.note, n.velocity])).toEqual(plain());
+    const sparse = { cells: {}, "cycle-lengths": {}, "cycle-positions": {} };
+    expect(noteSeq(sparse).run(STEP * 4).map((n) => [n.atTick, n.note, n.velocity])).toEqual(plain());
+    const beyond = { "cycle-positions": { accent: 99, legato: 99, rhythm: 99 } };
+    expect(noteSeq(beyond).run(STEP * 4).map((n) => [n.atTick, n.note, n.velocity])).toEqual(plain());
+  });
+
+  it("is silent with every step skipped, and plays a step past its notes as a rest", () => {
+    expect(noteSeq({ skip: Array(8).fill(true) }).run(STEP * 4)).toEqual([]);
+    const short = Array.from({ length: 6 }, () => ({ steps: [[60], [62]], scrambled: [[60]], length: 4 }));
+    expect(noteSeq({ patterns: short }).run(STEP * 5).map((n) => [n.atTick, n.note])).toEqual([[0, 60], [STEP, 62], [STEP * 4, 60]]);
+  });
+});

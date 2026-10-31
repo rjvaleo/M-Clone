@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VoiceBank, CHOKE_SEC } from "./voices";
+import { VoiceBank, CHOKE_SEC, clampPan, envelopeValueAt } from "./voices";
 import { createPlayer } from "./players";
 import { FakeBuffer, FakeBufferSource, FakeNode, FakeStereoPanner } from "./testing/fakeContext";
 import { SpecContext, specGain } from "./testing/specParam";
@@ -124,5 +124,40 @@ describe("Percussion's hit, as the audio thread plays it", () => {
     expect((panner as unknown as { channelCount: number }).channelCount).toBe(2);
     expect((panner as unknown as { channelCountMode: string }).channelCountMode).toBe("explicit");
     expect((panner as unknown as { channelInterpretation: string }).channelInterpretation).toBe("speakers");
+  });
+});
+
+describe("A voice bank's edges", () => {
+  it("steals the voice that started first, wherever it sits in the bank", () => {
+    const context = new SpecContext();
+    const bank = new VoiceBank(context, new FakeNode("out"), 2);
+    bank.play(buffer(), { atSec: 5, level: 0.5 });
+    bank.play(buffer(), { atSec: 1, level: 0.5 });
+    bank.play(buffer(), { atSec: 6, level: 0.5 });
+    const sources = context.created.filter((node): node is FakeBufferSource => node instanceof FakeBufferSource);
+    expect(sources[0].stops).toEqual([]);
+    expect(sources[1].stops).toEqual([6 + CHOKE_SEC * 2]);
+  });
+
+  it("lets go of a voice's panner when the voice ends", () => {
+    const context = new SpecContext();
+    const out = new FakeNode("out");
+    const bank = new VoiceBank(context, out);
+    bank.play(buffer(), { atSec: 0, level: 0.5, pan: -0.5 });
+    const panner = context.created.find((node): node is FakeStereoPanner => node instanceof FakeStereoPanner)!;
+    expect(panner.outgoing.has(out)).toBe(true);
+    context.created.find((node): node is FakeBufferSource => node instanceof FakeBufferSource)!.finish();
+    expect(panner.outgoing.size).toBe(0);
+  });
+
+  it("centres a pan that is not a number", () => {
+    expect(clampPan(Number.NaN)).toBe(0);
+    expect(clampPan(3)).toBe(1);
+  });
+
+  it("is silent before an attack begins, and at full level until a decay's release", () => {
+    expect(envelopeValueAt({ atSec: 1, level: 0.8, attackSec: 0.1 }, 0.5)).toBe(0);
+    expect(envelopeValueAt({ atSec: 1, level: 0.8, decaySec: 0.5 }, 1)).toBe(0.8);
+    expect(envelopeValueAt({ atSec: 1, level: 0.8, holdSec: 0.2, decaySec: 0.5 }, 1.1)).toBe(0.8);
   });
 });

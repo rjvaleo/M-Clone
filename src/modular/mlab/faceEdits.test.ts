@@ -98,3 +98,67 @@ describe("the Triple XY's baton", () => {
     expect(conductUpdates(pads, { "tempo-arrow": "off" }, null, 0.5, 0.5).conductor.tempo).toBeUndefined();
   });
 });
+
+describe("pattern editing: the rest of M's Pattern menu", () => {
+  const pattern = { steps: [[60], [62, 65], [64]], scrambled: [[64], [60], [62, 65]], length: 3 };
+
+  it("transposes by a semitone or an octave either way", () => {
+    expect(runPatternCommand(pattern, "transpose-up-half").steps).toEqual([[61], [63, 66], [65]]);
+    expect(runPatternCommand(pattern, "transpose-down-half").steps).toEqual([[59], [61, 64], [63]]);
+    expect(runPatternCommand(pattern, "transpose-down-octave").steps).toEqual([[48], [50, 53], [52]]);
+  });
+
+  it("rotates the played steps either way", () => {
+    expect(runPatternCommand(pattern, "rotate-forward").steps).toEqual([[62, 65], [64], [60]]);
+    expect(runPatternCommand(pattern, "rotate-backward").steps).toEqual([[64], [60], [62, 65]]);
+  });
+
+  it("Triple puts two rests after every step; No chords splits each chord into steps", () => {
+    expect(runPatternCommand(pattern, "triple")).toMatchObject({ steps: [[60], [], [], [62, 65], [], [], [64], [], []], length: 9 });
+    expect(runPatternCommand(pattern, "eliminate-chords")).toMatchObject({ steps: [[60], [62], [65], [64]], length: 4 });
+  });
+
+  it("Original → Scrambled copies the played steps over the scrambled ones", () => {
+    const copied = runPatternCommand(pattern, "original-to-scrambled");
+    expect(copied.scrambled).toEqual(pattern.steps);
+    expect(copied.steps).toEqual(pattern.steps);
+  });
+
+  it("a note past the end grows the pattern with rests up to it", () => {
+    const grown = toggleNote({ steps: [[60]], scrambled: [[60]], length: 1 }, 3, 70);
+    expect(grown.steps).toEqual([[60], [], [], [70]]);
+    expect(grown.length).toBe(4);
+  });
+
+  it("an empty pattern centres its rows on middle C", () => {
+    const empty = { steps: [[]], scrambled: [[]], length: 1 };
+    expect(pitchRows(empty)).toEqual(Array.from({ length: 24 }, (_, i) => 72 - i));
+    expect(fitPitchRows(empty)).toEqual(Array.from({ length: 12 }, (_, i) => 66 - i));
+  });
+});
+
+describe("orchestra editing: edges", () => {
+  it("adds a channel to a voice the matrix has no entry for yet", () => {
+    expect(toggleChannel([[[1]]], 0, 3, 9)[0][3]).toEqual([9]);
+  });
+
+  it("shows and reads 0–127 numbering as stored", () => {
+    expect(shownProgram(5, "0-127")).toBe("5");
+    expect(parseProgram("5", "0-127")).toBe(5);
+  });
+
+  it("sends nothing for a program that is not a number or out of range", () => {
+    expect(parseProgram("abc", "1-128")).toBeNull();
+    expect(parseProgram("0", "1-128")).toBeNull();
+    expect(parseProgram("129", "1-128")).toBeNull();
+    expect(parseProgram("128", "1-128")).toBe(127);
+  });
+});
+
+describe("the Triple XY's baton: a tempo range not yet set", () => {
+  it("sweeps M's own 110–130 when the Conductor holds no range", () => {
+    const pads = [{ x: 0, y: 0, glide: 0 }];
+    expect(conductUpdates(pads, { "tempo-arrow": "right" }, null, 1, 0).conductor.tempo).toBe(130);
+    expect(conductUpdates(pads, { "tempo-arrow": "right" }, null, -1, 0).conductor.tempo).toBe(110);
+  });
+});

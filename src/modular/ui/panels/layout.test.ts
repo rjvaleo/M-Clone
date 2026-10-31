@@ -304,3 +304,33 @@ describe("The mixer's panel", () => {
     }
   });
 });
+
+describe("A control that also sets others, a doubled pad Y, and a paged panel's blank space", () => {
+  it("finds an unknown or doubled control among those a control also sets", () => {
+    const layout = good();
+    // Gain is placed before the switch that also sets it.
+    layout.controls[1] = { ...layout.controls[1], also: ["nope", "gain"] };
+    const errors = validateLayout(layout, descriptor);
+    expect(errors).toContain("nope: not a parameter of test.module");
+    expect(errors).toContain("gain: placed twice");
+  });
+
+  it("finds a pad whose Y is placed already", () => {
+    const layout = good();
+    layout.controls[0] = { ...layout.controls[0], kind: "pad", paramY: "gain" };
+    expect(validateLayout(layout, descriptor)).toContain("gain: placed twice");
+  });
+
+  it("names the page that leaves blank space", () => {
+    const layout: PanelLayout = {
+      ...good(),
+      pages: [{ id: "one", label: "One" }],
+      groups: [
+        { id: "a", label: "A", x: 0, y: 0, w: 100, h: 100 },
+        { id: "b", label: "B", x: 100, y: 0, w: 100, h: 100, page: "two" },
+      ],
+      controls: [{ param: "gain", kind: "knob", x: 10, y: 10, w: 40, h: 40 }],
+    };
+    expect(validateLayout(layout, descriptor)).toContain("only 50% of the panel is used on one; leave no blank space");
+  });
+});

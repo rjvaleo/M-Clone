@@ -33,6 +33,7 @@ import {
   dampingHz,
   dp4InputRouting,
   dp4PairsAreLinked,
+  dp4SourceConfig,
   lfDecayScale,
   NONLIN_TAPS,
   NONLIN_VARIANTS,
@@ -560,5 +561,14 @@ describe("A Blackhole control it does not have", () => {
   it("is ignored rather than throwing", () => {
     const { module } = build("m.audio-blackhole");
     expect(() => module.setParameter("nonsense", 1, 1)).not.toThrow();
+  });
+});
+
+describe("The DP/4's input configuration", () => {
+  it("reads one of the four configurations, and the first for anything else", () => {
+    expect(dp4SourceConfig(3)).toBe(3);
+    expect(dp4SourceConfig(2.4)).toBe(2);
+    expect(dp4SourceConfig(7)).toBe(1);
+    expect(dp4SourceConfig("four")).toBe(1);
   });
 });

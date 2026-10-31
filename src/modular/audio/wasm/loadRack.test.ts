@@ -139,3 +139,23 @@ describe("The Grain Engine's build worker, started with the rack", () => {
     expect(worker.postMessage).not.toHaveBeenCalled();
   });
 });
+
+describe("loadRackNode with nothing injected", () => {
+  it("fetches the engine itself, and gives up when the fetch fails", async () => {
+    const fetch = vi.fn().mockRejectedValue(new Error("offline"));
+    vi.stubGlobal("fetch", fetch);
+    try {
+      expect(await loadRackNode(host(), {} as never)).toBeNull();
+      expect(fetch).toHaveBeenCalledWith(DEFAULT_WASM_URL);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("builds a real worklet node, which a context without AudioWorkletNode cannot", async () => {
+    const addModule = vi.fn().mockResolvedValue(undefined);
+    const rack = await loadRackNode(host(addModule), {} as never, { compileModule: vi.fn().mockResolvedValue(fakeModule) });
+    expect(addModule).toHaveBeenCalledWith(DEFAULT_WORKLET_URL);
+    expect(rack).toBeNull();
+  });
+});

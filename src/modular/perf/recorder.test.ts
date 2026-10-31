@@ -38,3 +38,34 @@ describe("the performance recorder", () => {
     expect(perf.report()).toEqual([]);
   });
 });
+
+describe("the performance recorder's edges", () => {
+  it("reads the page clock when none is given", () => {
+    const perf = new PerfRecorder();
+    const before = performance.now();
+    perf.time("default clock", () => 0);
+    const [row] = perf.report();
+    expect(row.name).toBe("default clock");
+    expect(row.totalMs).toBeGreaterThanOrEqual(0);
+    expect(row.totalMs).toBeLessThanOrEqual(performance.now() - before);
+  });
+
+  it("reports no frames as zeros, and ignores frames while switched off", () => {
+    const perf = new PerfRecorder({ clock: () => 0 });
+    expect(perf.frames()).toEqual({ count: 0, slow: 0, p95Ms: 0, fps: 0 });
+    perf.enabled = false;
+    perf.frame(40);
+    expect(perf.frames().count).toBe(0);
+    expect(perf.time("off", () => 7)).toBe(7);
+    expect(perf.report()).toEqual([]);
+  });
+
+  it("clear forgets every timing and every frame", () => {
+    const perf = new PerfRecorder({ clock: () => 0 });
+    perf.record("render", 3);
+    perf.frame(16);
+    perf.clear();
+    expect(perf.report()).toEqual([]);
+    expect(perf.frames().count).toBe(0);
+  });
+});

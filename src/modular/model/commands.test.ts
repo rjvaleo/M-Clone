@@ -168,3 +168,15 @@ describe("Modular graph commands", () => {
       .toThrow("Unknown node");
   });
 });
+
+describe("Node details, one at a time", () => {
+  it("keeps the label when only the bypass changes, and the bypass when only the label does", () => {
+    let graph = emptyGraph();
+    graph = executeGraphCommand(graph, { type: "add-node", node: createNode("m.transport-clock", "clock", { x: 0, y: 0 }) }).graph;
+    const label = graph.nodes.clock.label;
+    const bypassed = executeGraphCommand(graph, { type: "set-node-details", nodeId: "clock", enabled: false }).graph;
+    expect(bypassed.nodes.clock).toMatchObject({ enabled: false, label });
+    const renamed = executeGraphCommand(bypassed, { type: "set-node-details", nodeId: "clock", label: "Master" }).graph;
+    expect(renamed.nodes.clock).toMatchObject({ enabled: false, label: "Master" });
+  });
+});

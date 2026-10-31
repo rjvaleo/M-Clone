@@ -1,5 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import { StatusStore } from "./statusStore";
+import { StatusStore, useNodeStatus } from "./statusStore";
+
+// The hooks run outside a renderer: the face's context is whatever the test
+// provides, and the external store is read once and subscribed to as React would.
+const hooks = vi.hoisted(() => ({ provided: undefined as unknown, heard: 0 }));
+vi.mock("react", async (original) => ({
+  ...(await original<typeof import("react")>()),
+  useContext: () => hooks.provided,
+  useMemo: <T,>(make: () => T) => make(),
+  useSyncExternalStore: <T,>(subscribe: (listener: () => void) => () => void, read: () => T) => {
+    subscribe(() => { hooks.heard += 1; });
+    return read();
+  },
+}));
 
 describe("the module status store", () => {
   it("tells only the modules whose status changed, and keeps an unchanged status the same object", () => {
@@ -34,5 +47,19 @@ describe("the module status store", () => {
     off();
     store.set({ a: { index: "1" } });
     expect(a).not.toHaveBeenCalled();
+  });
+});
+
+describe("a module's status in its face", () => {
+  it("reads its own module's status, and hears only that module's changes", () => {
+    const store = new StatusStore();
+    store.set({ a: { index: "3" }, b: { bar: "1" } });
+    hooks.provided = store;
+    hooks.heard = 0;
+    expect(useNodeStatus("a")).toEqual({ index: "3" });
+    store.set({ a: { index: "3" }, b: { bar: "2" } });
+    expect(hooks.heard).toBe(0);
+    store.set({ a: { index: "4" }, b: { bar: "2" } });
+    expect(hooks.heard).toBe(1);
   });
 });

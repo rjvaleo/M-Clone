@@ -198,3 +198,99 @@ describe("M Conductor's pads: the baton and two more", () => {
     expect(glided).toBeLessThan(1);
   });
 });
+
+/** A processor run once in a window where the bus allows it only `budget` messages. */
+const starved = <P extends { process(window: ProcessWindow): void }>(make: (bus: MessageBus) => P, ports: string[], nodeId: string) => {
+  const bus = new MessageBus();
+  const processor = make(bus);
+  const outs = Object.fromEntries(ports.map((port) => [port, collector(bus, nodeId, port)]));
+  const run = (start: number, end: number, budget: number) => {
+    bus.beginNode(nodeId, budget);
+    processor.process(window(start, end));
+    const out = Object.fromEntries(ports.map((port) => [port, outs[port]()]));
+    bus.endWindow();
+    return out;
+  };
+  return { bus, processor, run };
+};
+
+describe("M Conductor at its edges", () => {
+  const make = (values: Record<string, unknown>) => (bus: MessageBus) =>
+    new MConductorProcessor({ nodeId: "ck", bus, parameters: new ParameterBag(values as never), budget: 256, seed: 7 });
+
+  it("knows only Sync and Tap", () => {
+    const { processor } = clock();
+    expect(processor.command("rewind")).toBe(false);
+  });
+
+  it("sends Sync at once when no quantize is set", () => {
+    const { processor, run } = clock();
+    run(0, 100);
+    processor.command("sync");
+    expect(run(100, 200).sync.map((m) => m.atTick)).toEqual([100]);
+  });
+
+  it("says whether it is waiting for a tap", () => {
+    const { processor, run } = clock({ "tap-conduct": "held" });
+    run(0, 100);
+    expect(processor.status().run).toBe("Waiting for a tap");
+    processor.command("tap");
+    run(100, 200);
+    expect(processor.status().run).toBe("Running");
+  });
+
+  it("holds Run and Sync back while the bus is spent, and sends them when it is not", () => {
+    const { processor, run } = starved(make({ "tap-conduct": "held" }), ["run-out", "sync-out"], "ck");
+    processor.command("sync");
+    expect(run(0, 100, 0)).toEqual({ "run-out": [], "sync-out": [] });
+    // Room for Run only: Sync waits for the next window.
+    expect(run(100, 200, 1)["sync-out"]).toEqual([]);
+    const later = run(200, 300, 4);
+    expect(later["sync-out"].map((m) => [m.kind, m.atTick])).toEqual([["reset", 0]]);
+  });
+
+  it("sends the pads it is not given as at rest, and holds a pad back while the bus is spent", () => {
+    const pads = ["x1-out", "y1-out", "x2-out", "y2-out", "x3-out", "y3-out"];
+    const { run } = starved(make({ pads: [{ x: 0.5, y: -0.5, glide: 0 }] }), pads, "co");
+    const value = (out: Record<string, StreamMessage[]>) => pads.map((port) => out[port].map((m) => m.controlValue));
+    // Run takes the one message there is room for.
+    expect(value(run(0, 100, 1))).toEqual([[], [], [], [], [], []]);
+    expect(value(run(100, 200, 16))).toEqual([[0.5], [-0.5], [0], [0], [0], [0]]);
+  });
+});
+
+describe("M Orchestra at its edges", () => {
+  const make = (values: Record<string, unknown>) => (bus: MessageBus) =>
+    new MOrchestraProcessor({ nodeId: "or", bus, parameters: new ParameterBag(values as never), budget: 1024, seed: 7 });
+  const channels = Array.from({ length: 16 }, (_, i) => `channel-${i + 1}-out`);
+
+  it("passes over what is not a note, and sends a voice it has no orchestration for on its own channel", () => {
+    const { bus, run } = starved(make({ orchestration: [] }), channels, "or");
+    feed(bus, "or", "notes-in", [
+      { kind: "control", atTick: 0, controlValue: 1, voice: 0 },
+      { kind: "note-event", atTick: 0, note: 60, voice: 1 },
+      { kind: "note-event", atTick: 0, note: 62, voice: 12 },
+    ]);
+    const out = run(0, PPQN, 64);
+    expect(out["channel-2-out"].map((m) => [m.kind, m.note])).toEqual([["note-event", 60]]);
+    expect(out["channel-13-out"].map((m) => [m.kind, m.note])).toEqual([["note-event", 62]]);
+    expect(out["channel-1-out"]).toEqual([]);
+  });
+
+  it("stops copying when the bus is spent", () => {
+    const orchestration = [[[1, 2]]];
+    const { bus, run } = starved(make({ orchestration }), channels, "or");
+    feed(bus, "or", "notes-in", [{ kind: "note-event", atTick: 0, note: 60, voice: 0 }]);
+    const out = run(0, PPQN, 1);
+    expect([out["channel-1-out"].length, out["channel-2-out"].length]).toEqual([1, 0]);
+  });
+
+  it("sends no notes until every Sound Choice has gone ahead of them", () => {
+    const programs = [Array.from({ length: 16 }, (_, i) => (i < 2 ? 10 + i : null))];
+    const { bus, run } = starved(make({ programs }), channels, "or");
+    feed(bus, "or", "notes-in", [{ kind: "note-event", atTick: 0, note: 60, voice: 0 }]);
+    const out = run(0, PPQN, 1);
+    expect(out["channel-1-out"].map((m) => [m.kind, m.controlValue])).toEqual([["program-change", 10]]);
+    expect(out["channel-2-out"]).toEqual([]);
+  });
+});

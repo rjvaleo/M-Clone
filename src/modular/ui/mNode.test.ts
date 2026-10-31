@@ -54,3 +54,12 @@ describe("the M node", () => {
     expect([...routedTracks(graph, "m")]).toEqual([3]);
   });
 });
+
+describe("the M node's cables that are not tracks", () => {
+  it("ignores a cable from a port that is no track's output", () => {
+    const graph = patch();
+    cable(graph, "e1", "m", "not-a-track", "a");
+    cable(graph, "e2", "m", trackPort(1), "c");
+    expect([...trackTargets(graph, "m")]).toEqual([[1, ["c"]]]);
+  });
+});

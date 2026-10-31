@@ -140,3 +140,9 @@ describe("every registered parameter maps to a control", () => {
     expect(kinds).toContain("stepper");
   });
 });
+
+describe("parameterControlKind without a step", () => {
+  it("reads a missing step as continuous: a knob, however short the range", () => {
+    expect(parameterControlKind(param({ minimum: 0, maximum: 4 }))).toBe("knob");
+  });
+});

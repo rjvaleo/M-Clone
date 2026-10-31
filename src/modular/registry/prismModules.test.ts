@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PRISM_CATALOG } from "./prismCatalog.generated";
 import {
   PRISM_FADE_KEY,
@@ -9,6 +9,7 @@ import {
   prismType,
 } from "./prismModules";
 import { moduleRegistry } from "./registry";
+import type { PrismEffect, PrismParam } from "./prismTypes";
 
 /**
  * The shared effects as idMLab modules.
@@ -113,5 +114,43 @@ describe("The grain engine", () => {
     expect(engine.parameters.find((p) => p.id === "engine")?.defaultValue).toBe("Grains");
     expect(engine.parameters.find((p) => p.id === "root")?.defaultValue).toBe(60);
     expect(engine.parameters.find((p) => p.id === "free-run")?.defaultValue).toBe(false);
+  });
+});
+
+describe("The prism modules, from a catalogue the crate could write", () => {
+  const knob = (key: string, extra: Partial<PrismParam> = {}): PrismParam => ({
+    key, label: key, min: 0, max: 1, default: 0, log: false, unit: "", kind: "continuous",
+    choices: null, when: null, inert: false, ...extra,
+  });
+  const effect = (id: string, params: PrismParam[], groups: PrismEffect["groups"]): PrismEffect => ({
+    id, code: 1, label: id, category: "test", source: "test", sound: null, params, groups, primary: [],
+  });
+
+  /** `prismModules.ts` built afresh from `catalog` in place of the generated one. */
+  const buildFrom = async (catalog: PrismEffect[]) => {
+    vi.resetModules();
+    vi.doMock("./prismCatalog.generated", () => ({ PRISM_CATALOG: catalog }));
+    try {
+      return await import("./prismModules");
+    } finally {
+      vi.doUnmock("./prismCatalog.generated");
+      vi.resetModules();
+    }
+  };
+
+  it("gives a choice with no names an empty list rather than failing", async () => {
+    const { PRISM_MODULES: modules } = await buildFrom([effect("x", [knob("mode", { kind: "choice" })], [{ label: "Main", keys: ["mode"] }])]);
+    expect(modules[0].parameters.find((p) => p.id === "mode")).toMatchObject({ kind: "enum", options: [], defaultValue: undefined });
+  });
+
+  it("adds a More section only for controls no group holds", async () => {
+    const { PRISM_MODULES: modules } = await buildFrom([
+      effect("grouped", [knob("a")], [{ label: "Main", keys: ["a"] }]),
+      effect("loose", [knob("a"), knob("b")], [{ label: "Main", keys: ["a"] }]),
+    ]);
+    expect(modules.map((m) => m.face.map((section) => section.id))).toEqual([
+      ["group-1", "state"],
+      ["group-1", "more", "state"],
+    ]);
   });
 });

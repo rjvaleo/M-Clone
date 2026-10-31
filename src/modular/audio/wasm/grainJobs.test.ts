@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { GRAIN_CAP, GrainJobs, engineParams, grainsSignature, readGrains } from "./grainJobs";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { GRAIN_CAP, GrainJobs, JOB_THROTTLE_MS, engineParams, grainsSignature, readGrains } from "./grainJobs";
 import { buildGrains, type GrainsRequest } from "./grainBuilder";
 import { PARAM_INDICES } from "./engineBridge";
 import type { AudioPlan } from "../audioPlan";
@@ -92,5 +92,69 @@ describe("The builder's grains", () => {
     expect(result).toMatchObject({ type: "grains", id: 4, nodeId: "g" });
     out[1] = 1;
     expect(Array.from(result.data)).toEqual([0, 9, 0]);
+  });
+});
+
+describe("The cloud pad's grain jobs, at their edges", () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("reads an empty answer as no grains", () => {
+    const cloud = readGrains(new Float32Array(0), 48_000, 0);
+    expect(cloud).toMatchObject({ total: 0, count: 0, sampleRate: 48_000, frames: 0 });
+    expect(cloud.grains).toHaveLength(0);
+  });
+
+  it("asks nothing for modules that are not Grain Engines, or that hold no sample the bank knows", () => {
+    const { jobs, asked, flush } = rig();
+    const nodes: AudioPlan["nodes"] = {
+      d: { nodeId: "d", moduleType: "m.delay", structure: {}, parameters: {}, bypass: false, wet: 1 },
+      e: { nodeId: "e", moduleType: "m.grain-engine", structure: { "asset-id": "" }, parameters: {}, bypass: false, wet: 1 },
+      n: { nodeId: "n", moduleType: "m.grain-engine", structure: { "asset-id": 4 as unknown as string }, parameters: {}, bypass: false, wet: 1 },
+    };
+    const looked: string[] = [];
+    jobs.update({ generation: 1, nodes, connections: [] }, (id) => { looked.push(id); return sample(); });
+    jobs.update(plan({}, "missing"), (id) => { looked.push(id); return undefined; });
+    flush();
+    expect(looked).toEqual(["missing"]);
+    expect(asked).toEqual([]);
+  });
+
+  it("ignores an answer nobody is waiting for, and one superseded by a newer request", () => {
+    const { jobs, asked, grains, flush } = rig();
+    jobs.receive({ type: "grains", id: 1, nodeId: "nobody", data: new Float32Array([0, 1, 0]) });
+    jobs.update(plan({ stretch: 1 }), sample);
+    flush();
+    jobs.receive({ type: "grains", id: asked[0].id + 100, nodeId: "g", data: new Float32Array([0, 1, 0]) });
+    expect(grains).toEqual([]);
+  });
+
+  it("waits for the running job before asking again, and never asks twice for the same grains", () => {
+    const { jobs, asked, grains, flush } = rig();
+    jobs.update(plan({ stretch: 1 }), sample);
+    flush();
+    jobs.update(plan({ stretch: 2 }), sample);
+    flush();
+    expect(asked).toHaveLength(1);
+    jobs.receive({ type: "grains", id: asked[0].id, nodeId: "g", data: new Float32Array([0, 3, 0]) });
+    expect(grains).toEqual([]);
+    flush();
+    expect(asked).toHaveLength(2);
+    jobs.receive({ type: "grains", id: asked[1].id, nodeId: "g", data: new Float32Array([0, 4, 0]) });
+    expect(grains).toEqual([["g", 4]]);
+    // Nothing moved: the same grains are not asked for again.
+    jobs.update(plan({ stretch: 2 }), sample);
+    flush();
+    expect(asked).toHaveLength(2);
+  });
+
+  it("throttles on a timer when no scheduler is given", () => {
+    vi.useFakeTimers();
+    const asked: GrainsRequest[] = [];
+    const jobs = new GrainJobs({ request: (request) => asked.push(request), grains: () => undefined });
+    jobs.update(plan({ stretch: 1 }), sample);
+    vi.advanceTimersByTime(JOB_THROTTLE_MS - 1);
+    expect(asked).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(asked).toHaveLength(1);
   });
 });

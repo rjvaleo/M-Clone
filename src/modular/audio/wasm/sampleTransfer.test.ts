@@ -138,3 +138,14 @@ describe("transferSample", () => {
     expect(bad).not.toHaveBeenCalled();
   });
 });
+
+describe("transferSample, refused by the engine", () => {
+  it("writes nothing when the engine declines a well-formed allocation", () => {
+    const engine = new FakeEngine();
+    engine.sample_alloc = (id, channels, frames, rate) => (engine.allocCalls.push([id, channels, frames, rate]), 0);
+    const ptr = vi.spyOn(engine, "sample_ptr");
+    expect(transferSample(engine, 2, { channels: [channel([1, 2])], sampleRate: 48000 })).toBe(false);
+    expect(engine.allocCalls).toEqual([[2, 1, 2, 48000]]);
+    expect(ptr).not.toHaveBeenCalled();
+  });
+});

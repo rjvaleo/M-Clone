@@ -137,3 +137,12 @@ describe("Master chain", () => {
     expect(context.compressors[0].disconnected).toBe(1);
   });
 });
+
+describe("Master chain on a limiter that reports nothing", () => {
+  it("reads no gain reduction rather than a missing number", () => {
+    const context = new FakeContext();
+    const chain = new MasterChain(context);
+    (context.compressors[0] as { reduction?: number }).reduction = undefined;
+    expect(chain.reductionDb).toBe(0);
+  });
+});

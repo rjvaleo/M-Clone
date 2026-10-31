@@ -465,3 +465,20 @@ describe("Assets in the document", () => {
     expect(decodeModularDocument(raw).ok).toBe(false);
   });
 });
+
+describe("Audition's retired voices", () => {
+  it("ignores a replaced voice ending during its fade-out", () => {
+    // The first voice's `onended` is still wired until its fade's cleanup
+    // runs; ending in that window must leave the new preview alone.
+    const context = new FakeAudioContext();
+    const player = new AuditionPlayer(context, new FakeNode("master"));
+    let firstEnded = 0;
+    player.play("a", new FakeBuffer(1, 100, 48000), () => { firstEnded += 1; });
+    const first = context.created.find((node): node is FakeBufferSource => node instanceof FakeBufferSource)!;
+    player.play("b", new FakeBuffer(1, 100, 48000));
+    first.onended?.();
+    expect(firstEnded).toBe(0);
+    expect(player.playingAssetId).toBe("b");
+    player.dispose();
+  });
+});

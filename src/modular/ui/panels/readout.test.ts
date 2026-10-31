@@ -45,3 +45,9 @@ describe("A readout the original's way", () => {
     expect(readoutText(1500, three)).toBe("1500");
   });
 });
+
+describe("A readout with no places given", () => {
+  it("prints two places", () => {
+    expect(readoutText(1.5, {})).toBe("1.50");
+  });
+});

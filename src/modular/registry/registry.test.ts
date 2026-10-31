@@ -346,3 +346,14 @@ describe("A synth's starting LFOs and echo", () => {
     expect(loaded["delay-wet"]).toBe(0);
   });
 });
+
+describe("withDeclaredParameters, where there is nothing to add", () => {
+  it("leaves a node of an unknown module, and a node already complete, exactly as they were", () => {
+    const stranger = { ...createNode("m.synth", "x", { x: 0, y: 0 }), moduleType: "m.not-a-module" };
+    const complete = createNode("m.synth", "s", { x: 0, y: 0 });
+    const graph = withDeclaredParameters({ nodes: { x: stranger, s: complete }, connections: {} } as never);
+    const nodes = (graph as unknown as { nodes: Record<string, unknown> }).nodes;
+    expect(nodes.x).toBe(stranger);
+    expect(nodes.s).toBe(complete);
+  });
+});

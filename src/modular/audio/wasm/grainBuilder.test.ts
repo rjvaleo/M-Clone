@@ -111,3 +111,22 @@ describe("The Grain Engine's build worker", () => {
     expect(resultTransfers({ type: "grain-built", nodeId: "g", seq: 1, map: null })).toEqual([]);
   });
 });
+
+describe("The Grain Engine's build worker, for the cloud pad", () => {
+  it("enumerates grains on its own engine, as buildGrains does", () => {
+    const { engine } = fakeEngine({});
+    const memory = (engine as unknown as { memory: { buffer: ArrayBuffer } }).memory;
+    new Float32Array(memory.buffer, 1024, 3).set([0, 2, 0]);
+    let ran: [number, number] | null = null;
+    Object.assign(engine, {
+      job_params_ptr: () => 0,
+      job_grains: (slot: number, cap: number) => { ran = [slot, cap]; return 3; },
+      job_output_ptr: () => 1024,
+    });
+    const result = new GrainBuilder(engine, 48000).grains({ type: "grains", id: 9, nodeId: "g", slot: 1, params: Float32Array.of(0.25), cap: 50 });
+    expect(ran).toEqual([1, 50]);
+    expect(new Float32Array(memory.buffer, 0, 1)[0]).toBe(0.25);
+    expect(result).toMatchObject({ type: "grains", id: 9, nodeId: "g" });
+    expect([...result.data]).toEqual([0, 2, 0]);
+  });
+});

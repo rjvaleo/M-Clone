@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createNode, moduleRegistry, validateModuleDescriptor, withDeclaredParameters } from "./registry";
 import { M_LAB_TYPES } from "./mLabModules";
 import { canAddModule, moduleLimit } from "../model/limits";
@@ -105,5 +105,32 @@ describe("opening a document saved before a module gained a setting", () => {
     expect(filled.nodes.ns.parameters["preset-slot"]).toBe(-1);
     expect(filled.nodes.ns.parameters.octave).toBe(2);
     expect(graph.nodes.ns.parameters.presets).toBeUndefined();
+  });
+});
+
+describe("the Note Seq's defaults, from a project saved before diatonic transpose and chord tones", () => {
+  it("start with both off", async () => {
+    vi.resetModules();
+    vi.doMock("../../engine/project", async (importOriginal) => {
+      const real = await importOriginal<typeof import("../../engine/project")>();
+      return {
+        ...real,
+        createDefaultProject: () => {
+          const project = real.createDefaultProject();
+          delete (project as { diatonicTranspose?: boolean }).diatonicTranspose;
+          delete (project as { chordTones?: boolean }).chordTones;
+          return project;
+        },
+      };
+    });
+    try {
+      const fresh = await import("./mLabModules");
+      const seq = fresh.M_LAB_MODULES.find((m) => m.type === fresh.M_LAB_TYPES.noteSeq)!;
+      const value = (id: string) => seq.parameters.find((p) => p.id === id)?.defaultValue;
+      expect([value("diatonic"), value("chord-tones")]).toEqual([false, false]);
+    } finally {
+      vi.doUnmock("../../engine/project");
+      vi.resetModules();
+    }
   });
 });

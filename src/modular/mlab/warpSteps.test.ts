@@ -31,3 +31,15 @@ describe("M Time Warp as a CV Sequencer: one offset per step", () => {
     expect(invertWarp(bank).offsets).toEqual([0, -0.2, 0.1]);
   });
 });
+
+describe("M Time Warp: short banks and odd denominators", () => {
+  it("reads missing offsets as on time and a non-positive denominator as sixteenths", () => {
+    const map = warpToTimeMap({ offsets: [0], length: 3, denominator: 0 });
+    expect(map.denominator).toBe(16);
+    expect(map.points).toEqual([{ x: 1 / 3, y: 1 / 3 }, { x: 2 / 3, y: 2 / 3 }]);
+  });
+
+  it("grows the offsets out to a step past the end", () => {
+    expect(setWarpOffset({ offsets: [0], length: 4, denominator: 16 }, 3, -0.2).offsets).toEqual([0, 0, 0, -0.2]);
+  });
+});

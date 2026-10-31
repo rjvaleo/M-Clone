@@ -249,3 +249,45 @@ describe("Decoding an AIFF", () => {
     expect(decoded.channels[0][0]).toBeCloseTo(1000 / 32768, 4);
   });
 });
+
+describe("Decoding an AIFF's edge cases", () => {
+  // The COMM body starts after FORM, its size, the form type, and COMM's own
+  // id and size; the extended rate is eight bytes into it.
+  const RATE_AT = 20 + 8;
+  const withRate = (bytes: number[]): Uint8Array => {
+    const file = buildAiff({ data: be16([1000]) });
+    file.set(bytes, RATE_AT);
+    return file;
+  };
+
+  it("rejects a twelve-byte header that is not a FORM", () => {
+    expect(looksLikeAiff(new Uint8Array([..."RIFF0000WAVE"].map((c) => c.charCodeAt(0))))).toBe(false);
+  });
+
+  it("falls back to 44.1 kHz for a rate of zero", () => {
+    expect(decodeAiff(buildAiff({ rate: 0, data: be16([1000]) }))!.sampleRate).toBe(44100);
+  });
+
+  it("reads a denormal rate as next to nothing, and falls back from it", () => {
+    // Exponent zero with a mantissa is not the all-zero shortcut: it is a real,
+    // vanishingly small number, which no file can play at.
+    expect(decodeAiff(withRate([0, 0, 0x80, 0, 0, 0, 0, 0, 0, 0]))!.sampleRate).toBe(44100);
+    expect(decodeAiff(withRate([0, 0, 0, 0, 0, 0, 0, 0, 0, 1]))!.sampleRate).toBe(44100);
+  });
+
+  it("falls back from a negative rate rather than playing backwards in time", () => {
+    const negative = extended(44100);
+    negative[0] |= 0x80;
+    expect(decodeAiff(withRate(negative))!.sampleRate).toBe(44100);
+  });
+
+  it("returns null for a sound chunk with no samples in it", () => {
+    expect(decodeAiff(buildAiff({ frames: 4, data: [] }))).toBeNull();
+  });
+
+  it("returns null for a sound chunk cut off inside its offset", () => {
+    const head = buildAiff({ omitSsnd: true });
+    const file = new Uint8Array([...head, ...[..."SSND"].map((c) => c.charCodeAt(0)), 0, 0, 0, 4, 0, 0]);
+    expect(decodeAiff(file)).toBeNull();
+  });
+});

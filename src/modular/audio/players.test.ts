@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AudioClockBridge, SNAP_THRESHOLD_SEC } from "./clockBridge";
 import { VoiceBank, CHOKE_SEC, envelopeLifeSec } from "./voices";
 import { GrainScheduler, grainOffsetSec, scanAdvanceUnit, clampGrainSize } from "./grains";
@@ -578,5 +578,99 @@ describe("Routing note events to players", () => {
     // measurement mid-batch, which would smear a chord across a tick.
     expect(audioReads).toBeLessThanOrEqual(4);
     expect(player.ons).toHaveLength(3);
+  });
+});
+
+describe("Grain scanning past the ends", () => {
+  const settings = { sizeSec: 0.1, spacingSec: 0.1, position: 0, jitter: 0, freeze: false };
+
+  it("wraps a backwards scan round to the end of the buffer", () => {
+    const scheduler = new GrainScheduler(() => {}, () => 0.5);
+    scheduler.start(0, 0);
+    scheduler.advance(0, 1, { ...settings, stretch: -1 }, 0);
+    // One grain, then a step of a tenth backwards from the start.
+    expect(scheduler.position).toBeCloseTo(0.9, 9);
+  });
+
+  it("returns the scan to the start when its step is not a number", () => {
+    const scheduler = new GrainScheduler(() => {}, () => 0.5);
+    scheduler.start(0, 0.5);
+    scheduler.advance(0, 1, { ...settings, stretch: Number.NaN }, 0);
+    expect(scheduler.position).toBe(0);
+  });
+});
+
+describe("The players when their sample is missing or their loop is stretched", () => {
+  const spec = (moduleType: string, overrides: Partial<AudioNodeSpec> = {}): AudioNodeSpec => ({
+    nodeId: "p1", moduleType, structure: {}, parameters: {}, bypass: false, wet: 1, ...overrides,
+  });
+
+  /** A pool the test can empty mid-play, and wakes it runs by hand. */
+  const rig = (moduleType: string, overrides: Partial<AudioNodeSpec> = {}) => {
+    const context = new FakeAudioContext();
+    const pool = new Map([["kick", buffer(0.5)]]);
+    const wakes: (() => void)[] = [];
+    let cancels = 0;
+    const player = createPlayer(context, spec(moduleType, overrides), 0, {
+      samples: (id) => pool.get(id),
+      schedule: (_ms, task) => { wakes.push(task); return () => { cancels += 1; }; },
+      random: () => 0.5,
+    }, () => "linear");
+    return { context, player, pool, tick: () => wakes.forEach((wake) => wake()), cancels: () => cancels };
+  };
+
+  it("plays nothing from a looper whose sample is not in the pool", () => {
+    const { context, player } = rig("m.looper", { structure: { "asset-id": "absent" } });
+    player.noteOn(60, 127, 0);
+    expect(sources(context)).toHaveLength(0);
+  });
+
+  it("stops placing a stretched loop's grains once its sample leaves the pool", () => {
+    const { context, player, pool, tick } = rig("m.looper", {
+      structure: { "asset-id": "kick" },
+      parameters: { "time-stretch": 1 },
+    });
+    player.noteOn(60, 127, 0);
+    pool.clear();
+    tick();
+    expect(sources(context)).toHaveLength(0);
+  });
+
+  it("stops a granular cloud's grains once its sample leaves the pool", () => {
+    const { context, player, pool, tick } = rig("m.granular", { structure: { "asset-id": "kick" } });
+    player.noteOn(60, 127, 0);
+    pool.clear();
+    tick();
+    expect(sources(context)).toHaveLength(0);
+  });
+
+  it("ends a stretched loop's wake when a new note restarts it, and when the module goes", () => {
+    const { player, cancels } = rig("m.looper", {
+      structure: { "asset-id": "kick" },
+      parameters: { "time-stretch": 1 },
+    });
+    player.noteOn(60, 127, 0);
+    player.noteOn(62, 127, 1);
+    expect(cancels()).toBe(1);
+    player.dispose();
+    expect(cancels()).toBe(2);
+  });
+
+  it("wakes a stretched loop on its own timer when none is injected", () => {
+    vi.useFakeTimers();
+    try {
+      const context = new FakeAudioContext();
+      const player = createPlayer(context, spec("m.looper", {
+        structure: { "asset-id": "kick" },
+        parameters: { "time-stretch": 1 },
+      }), 0, { samples: () => buffer(0.5), random: () => 0.5 }, () => "linear");
+      player.noteOn(60, 127, 0);
+      expect(sources(context)).toHaveLength(0);
+      vi.advanceTimersByTime(200);
+      expect(sources(context).length).toBeGreaterThan(0);
+      player.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
