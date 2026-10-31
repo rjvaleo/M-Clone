@@ -34,7 +34,10 @@ build for your own hosting), with `SHA256SUMS.txt`.
 ![Vitest](https://img.shields.io/badge/Vitest-2.1.9-6E9F18?logo=vitest&logoColor=white)
 ![Node](https://img.shields.io/badge/local_verification-Node_24.18.0-339933?logo=node.js&logoColor=white)
 ![npm](https://img.shields.io/badge/npm-package_tooling-CB3837?logo=npm&logoColor=white)
-![Web Audio API](https://img.shields.io/badge/Web_Audio_API-timestamped_synthesis-8A2BE2)
+![Rust engine](https://img.shields.io/badge/idMLab_engine-Rust_%E2%86%92_WebAssembly_AudioWorklet-000000?logo=rust&logoColor=white)
+![WebAssembly](https://img.shields.io/badge/WebAssembly-default_audio_backend-654FF0?logo=webassembly&logoColor=white)
+![prism-fx](https://img.shields.io/badge/prism--fx-86_shared_effects-8957e5)
+![Web Audio API](https://img.shields.io/badge/Web_Audio_API-timestamped_synthesis_%2B_idMLab_fallback-8A2BE2)
 ![Web MIDI API](https://img.shields.io/badge/Web_MIDI_API-live_input_%2B_timestamped_output-0A7EA4)
 ![HTML5](https://img.shields.io/badge/HTML5-semantic_UI-E34F26?logo=html5&logoColor=white)
 ![CSS3](https://img.shields.io/badge/CSS3-responsive_vector_UI-1572B6?logo=css&logoColor=white)
@@ -54,7 +57,7 @@ build for your own hosting), with `SHA256SUMS.txt`.
 ### Roadmap candidates and targets
 
 ![Tauri candidate](https://img.shields.io/badge/Tauri-native_shell_candidate-24C8DB?logo=tauri&logoColor=white)
-![Rust candidate](https://img.shields.io/badge/Rust-native_adapter_candidate-000000?logo=rust&logoColor=white)
+![Rust native](https://img.shields.io/badge/Rust-native_app_candidate-000000?logo=rust&logoColor=white)
 ![WAM exploratory](https://img.shields.io/badge/Web_Audio_Modules-hosting_exploratory-5C2D91)
 ![Platforms planned](https://img.shields.io/badge/targets-macOS_%7C_Windows_%7C_iOS_%7C_Android-607D8B)
 ![Editions](https://img.shields.io/badge/editions-Classic_%7C_Studio_%7C_idMLab-7B1FA2)
@@ -226,6 +229,29 @@ Their dedicated editor has a reference-derived Classic view and a right-click
 Modern view that exposes all three variables and all twelve Voice grids at once.
 Time Distortion, Grid conducting, Robot Conducting, and assigned external MIDI
 Conducting are active performance paths.
+
+### idMLab
+
+The modular rack, on the Rust engine. Screenshots taken from the running app on
+31 October 2026, Thin Ring kit, dark theme.
+
+![The default patch: four note streams through Note Order, Step Notes, Note
+Density, Transposition and Velocity Range.](docs/screenshots/idmlab/canvas.png)
+
+*The default patch.*
+
+| | |
+|---|---|
+| ![The M Rack template](docs/screenshots/idmlab/m-rack.png) | ![The Drum Machine template](docs/screenshots/idmlab/drum-machine.png) |
+| *File › M Rack: M's windows as modules.* | *File › Drum Machine: Drum Sequencer into Percussion.* |
+| ![The add-module menu, searching "prism"](docs/screenshots/idmlab/add-menu.png) | ![The Grain Engine](docs/screenshots/idmlab/grain-engine.png) |
+| *Right-click to add a module; the prism effects among them.* | *The Grain Engine: MultiGrainLive's five engines.* |
+| ![Hyperprism Chorus](docs/screenshots/idmlab/prism-hyperprism-chorus.png) | ![Convolution](docs/screenshots/idmlab/prism-convolution.png) |
+| *A Hyperprism effect, with its X/Y pad.* | *Convolution, a prism effect that takes a sound.* |
+| ![The synth](docs/screenshots/idmlab/synth.png) | ![The Drum Sequencer](docs/screenshots/idmlab/drum-sequencer.png) |
+| *The synth: three oscillators, filter, envelopes, three LFOs, tape delay, scale-sequencer presets.* | *The Drum Sequencer: per-step velocity, chance, flam and ratchet.* |
+| ![The LFO](docs/screenshots/idmlab/lfo.png) | ![The Mixer](docs/screenshots/idmlab/audio-mixer.png) |
+| *The LFO: press Map, then click any knob.* | *The Mixer: eight channels, two aux sends.* |
 
 ## Run it
 
