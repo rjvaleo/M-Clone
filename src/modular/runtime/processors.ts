@@ -1335,4 +1335,6 @@ export const PROCESSOR_FACTORIES: Record<
   "m.granular": (build) => new MidiOutputProcessor(build, "granular"),
   "m.grain-engine": (build) => new MidiOutputProcessor(build, "grain-engine"),
   "m.synth": (build) => new MidiOutputProcessor(build, "synth"),
+  // The gate ADSR takes notes as an instrument does: they open and close it.
+  "m.adsr": (build) => new MidiOutputProcessor(build, "adsr"),
 };
