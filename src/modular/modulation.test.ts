@@ -158,9 +158,7 @@ describe("Tempo sync", () => {
     const { DELAY_NOTES } = await import("./audio/synthLaws");
     for (const note of DELAY_NOTES) {
       const same = SYNC_NOTES.find((n) => n.label === note.label);
-      // The delay's "1/4T" is 1.333 beats, a half-note triplet's length; a
-      // quarter-note triplet is two thirds of a beat. Sync keeps the true one.
-      if (!same || note.label === "1/4T") continue;
+      if (!same) continue;
       expect(same.beats).toBeCloseTo(note.beats, 4);
     }
   });

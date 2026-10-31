@@ -521,7 +521,7 @@ describe("Classic: one filter for every note", () => {
 
 describe("Reading the scale sequencer's controls", () => {
   it("takes a choice as the plan sends it, or as a document names it", () => {
-    expect(readSynthSettings({ "delay-note": 5 }, {}).delay.beats).toBe(1);
+    expect(readSynthSettings({ "delay-note": 6 }, {}).delay.beats).toBe(1);
     expect(readSynthSettings({ "delay-note": "1/4" }, {}).delay.beats).toBe(1);
     expect(readSynthSettings({ "delay-note": 99 }, {}).delay.beats).toBe(0.5);
     expect(readSynthSettings({ "delay-note": 1.5 }, {}).delay.beats).toBe(0.5);
