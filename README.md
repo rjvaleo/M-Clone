@@ -7,16 +7,18 @@
 [![Launch M-Clone](https://img.shields.io/badge/Launch_M--Clone-GitHub_Pages-222222?logo=github)](https://rjvaleo.github.io/M-Clone/)
 
 > **Alpha — 0.8.0.** M Classic Web is feature-complete against the M 2.7 manual
-> audit apart from documented exclusions, and every gate below is green. It is
-> not a 1.0: the role-specific Classic audio rack, release hardening, and
-> hardware/browser MIDI certification are still open. The interface and the
+> audit apart from documented exclusions, and every gate below was green at its
+> tag. It is not a 1.0: the role-specific Classic audio rack, release
+> hardening, and hardware/browser MIDI certification are still open. The interface and the
 > `.mclone` document format may change before 1.0. See
 > [`CHANGELOG.md`](CHANGELOG.md) for what this build includes, what it excludes,
 > and its known limitations.
 
 **Live web app:** [Launch M-Clone on GitHub Pages](https://rjvaleo.github.io/M-Clone/).
 Every push to `master` is tested, compiled, and deployed automatically by
-GitHub Actions.
+GitHub Actions. The deploy stops at the coverage gate while `npm run coverage`
+is below its thresholds, as it is on 31 October 2026, so the live app is the
+last build that passed (7 August 2026).
 
 **Downloads:** [the latest release](https://github.com/rjvaleo/M-Clone/releases/latest)
 ships a self-contained `m-clone-<version>-standalone.html` (open it directly in a
@@ -38,8 +40,8 @@ build for your own hosting), with `SHA256SUMS.txt`.
 ![CSS3](https://img.shields.io/badge/CSS3-responsive_vector_UI-1572B6?logo=css&logoColor=white)
 
 ![TDD](https://img.shields.io/badge/practice-TDD-2E7D32)
-![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25_lines%20%7C%20branches%20%7C%20functions-brightgreen)
-![Tests](https://img.shields.io/badge/tests-758_passing-brightgreen)
+![Engine coverage](https://img.shields.io/badge/engine%2Fstate_coverage-100%25_lines%20%7C%2099.9%25_branches%20%7C%2099.7%25_functions-brightgreen)
+![Tests](https://img.shields.io/badge/tests-3272_passing-brightgreen)
 ![Typecheck](https://img.shields.io/badge/TypeScript_typecheck-passing-brightgreen)
 ![Production build](https://img.shields.io/badge/production_build-passing-brightgreen)
 ![Architecture](https://img.shields.io/badge/architecture-pure_engine_%2B_platform_adapters-44546A)
@@ -88,9 +90,19 @@ but it represents the complete musical project—not merely a graph. Legacy
 the complete build — every feature, the shared primitives they reuse, the wave
 order, the gates, and the decisions of record. The many separate roadmap,
 status, spec and next-steps documents that used to live here were folded into it
-on 2026-08-05 and removed; they remain in git history.
+on 2026-08-05 and removed; they remain in git history. Since then
+[`docs/SOUND-PORT-PLAN.md`](docs/SOUND-PORT-PLAN.md) (23 October 2026, built)
+planned the audio work, and kept the Web Audio engine as a fallback where the
+master plan dropped it.
 
 - [`CHANGELOG.md`](CHANGELOG.md) — released versions and what each one included.
+- [`IDMLAB_TECH_SPEC.md`](IDMLAB_TECH_SPEC.md) — what "built" means, as
+  requirements a test can check.
+- [`docs/OPEN-ISSUES.md`](docs/OPEN-ISSUES.md) — faults found and not yet fixed.
+- [`REFERENCES.md`](REFERENCES.md) — index of the source material.
+- [`MODULAR_STATUS.md`](MODULAR_STATUS.md),
+  [`MODULAR_AV_SALVAGE_PLAN.md`](MODULAR_AV_SALVAGE_PLAN.md) — dated records
+  from August 2026, back in the tree after a merge.
 - [`reference/README.md`](reference/README.md) — provenance of the manual,
   screenshots and mockups.
 - [`reference/panels/CATALOG.md`](reference/panels/CATALOG.md) — the hardware
@@ -296,7 +308,17 @@ npm run build     # typecheck + production build
 npm run build:pages # typechecked GitHub Pages build in dist-pages/
 npm run build:single # self-contained dist-single/index.html
 npm run preview   # preview the normal production build
+npm run build:engine # Rust engine and its worklets into public/ (gitignored)
+npm run verify:wasm  # build the .wasm and check it in Node
+npm run test:manual  # M 2.7 manual-conformance suite
+npm run spec:audit   # tech-spec requirement ids against the tests
 ```
+
+`build:engine` needs Rust with the `wasm32-unknown-unknown` target and RJ's
+`prism-fx` repository cloned into a folder named `prism-fx` beside this one.
+Without its output idMLab falls back to the Web Audio engine; with it, Rust is
+the default and `?engine=web-audio` asks for the fallback. The Pages and
+release workflows do not run it.
 
 ## Layout
 
@@ -338,7 +360,10 @@ reference/         original M manual, screenshots, layout mockup
 ```
 
 Included engine and state logic are held at **100% statement/line/branch/function
-coverage** by Vitest's V8 provider. Browser runtime and Web MIDI behavior also
+coverage** by Vitest's V8 provider, apart from `src/engine/outputs/canvas.ts`
+(82% of branches, 80% of functions on 31 October 2026). The same gate covers
+`src/modular`, and as a whole it fails: 99.25% of lines and statements, 96.72%
+of functions, 96.83% of branches. Browser runtime and Web MIDI behavior also
 have fake-clock/fake-scheduler/fake-port tests, while their browser-only adapter
 code is excluded from the Node coverage threshold. The browser scheduler wakes
 on the main thread with a bounded adaptive horizon; see the reliability

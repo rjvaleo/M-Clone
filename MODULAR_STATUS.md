@@ -7,6 +7,14 @@
 **Last commit:** `61974e3` (`Rename Modular docs to idMLab`), published to
 `origin/modular`. Everything described below is committed.
 
+**Status (31 October 2026):** a dated record, kept as history.
+[`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md) replaced it on 2026-08-05;
+this file came back in a later merge. The audio work since is recorded in
+[`docs/SOUND-PORT-PLAN.md`](docs/SOUND-PORT-PLAN.md). Lists, counts and
+limitations below are as of 3 August unless a *Since* note says otherwise. Of
+the plans it links to, only `MODULAR_AV_SALVAGE_PLAN.md` is still in the tree;
+the rest were deleted on 2026-08-05 and are in git history.
+
 The application is named **idMLab**. Internal identifiers — module type ids such as
 `m.pattern-editor`, the `.mmod` extension, `src/modular/`, CSS `mm-` prefixes — keep
 their original spelling on purpose; renaming them would churn every file for a
@@ -151,13 +159,19 @@ Velocity Range and Legato Processor.
 16. **Pattern Editor** — the compound described below: a clock in, fully formed notes out.
 17. **MIDI Output** — utility face with destination/channel/latency/program controls.
 
+*Since:* the registry holds 164 modules (`src/modular/registry/registry.ts`):
+78 of idMLab's own, among them the M node, the M Lab modules, the drum
+sequencer, the Grain Engine and the LFO, envelope follower and ADSR, plus 86
+prism effects.
+
 Fourteen **audio modules** over one `input → dry/wet → output` shell — Audio
 Output, Gain, Delay, Reverb, EQ, Compressor, Limiter, Bit Crusher, Blackhole,
 DP/4 Reverb, DP/4 Non Lin, the DP/4+ machine, Stereo Widener and Mixer — with
 the mix as an equal-power crossfade.
 
 Four **instruments** — the Percussion, Looper and Granular sample players and
-the Synth — driven by note events through the shared voice bank.
+the Synth — driven by note events through the shared voice bank. *Since:* a
+fifth, the Grain Engine (`m.grain-engine`).
 
 ### Stereo
 
@@ -178,7 +192,8 @@ The rack is stereo throughout rather than mono arriving on two wires:
   feature, and a true bypass is `mix = 0` like everything else in the rack.
 - **Mixer** (`m.audio-mixer`) — four independent inputs through the DP/4's
   per-port wiring, each with level, pan, mute and solo. Mute is a ramp on a
-  channel that stays wired, for the same reason bypass is.
+  channel that stays wired, for the same reason bypass is. *Since:* eight
+  channels and two aux sends with returns, on both backends.
 
 `EffectContext` gained `createStereoPanner`, `createChannelSplitter` and
 `createChannelMerger`, and `AudioNodeLike.connect` gained the two optional
@@ -284,7 +299,9 @@ Three changes on the way in:
 
 Nothing consumes it yet. It is the intended pitch source for the synth
 ([MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md)) and for the `scale-context-in`
-port Transposition has always declared with nothing to feed it.
+port Transposition has always declared with nothing to feed it. *Since:* Scale
+Context, Scale Quantizer and Chord Tones read it (`runtime/processors.ts`), and
+the Web Audio synth voice takes its `rootHzForMidi`.
 
 ## Coverage
 
@@ -308,7 +325,8 @@ asserted nothing at all.
 
 ## Verification baseline
 
-- `npm test -- --run`: **1,794 tests passed across 125 files**.
+- `npm test -- --run`: **1,794 tests passed across 125 files** (3,272 across
+  208 on 31 October 2026).
 - `npm run typecheck`: passed.
 - `npm run build`: passed.
 - `npm run coverage`: **passes**, for the first time since `72085dc`. That
@@ -335,15 +353,15 @@ asserted nothing at all.
 5. Stream materialization and expand command are implemented, but stream-level scoped snapshots and parity trace assertions between compact and expanded forms are still pending. The Pattern Editor has no expand command at all — it is materialized at compile time only.
 6. Save and Open for `.mmod` and `.mmodpack` are implemented; import, autosave, and recovery UI remain pending.
 7. Standard M import exists only as a documented mapping; no importer transaction or fixture conversion exists yet.
-8. Port connection uses click-output/click-input. The planned drag-cable workflow, compatible-port highlighting, keyboard connection flow, and filtered module creation are still pending.
+8. Port connection uses click-output/click-input. The planned drag-cable workflow, compatible-port highlighting, keyboard connection flow, and filtered module creation are still pending. *Since:* a cable can also be dragged from either end (`beginCableDrag` in `ModularApp.tsx`), and the port it would land on is marked.
 9. Two clicks on a Cyclic ruler within one tick clobber each other, because the second reads a stale node. Separated by a re-render they behave correctly.
 10. Pan, zoom, hand mode, and theme persist in browser-local workspace preferences; broader scene-level view states are not implemented.
-11. Snapshots, macros, conducting, slideshow, performance view, timeline, and visualizer remain planned work. **idMLab still cannot generate a pitch** — there is no oscillator in `src/modular`, only sample players. Stage F, the synth and its 8 x 12 modulation matrix, is planned in [MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md) with the PWM generator built.
+11. Snapshots, macros, conducting, slideshow, performance view, timeline, and visualizer remain planned work. **idMLab still cannot generate a pitch** — there is no oscillator in `src/modular`, only sample players. Stage F, the synth and its 8 x 12 modulation matrix, is planned in [MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md) with the PWM generator built. *Since:* the synth is built (`m.synth`, Rust kind 3, matrix in `rust/dsp-core/src/modmatrix.rs`), and the Grain Engine plays notes at pitch.
 12. The development server at `http://127.0.0.1:5173/` belongs to the current local task session and should not be treated as a deployment.
 
 ## Build record and remaining work
 
-The authoritative forward sequence is [MODULAR_NEXT_STEPS.md](MODULAR_NEXT_STEPS.md).
+The authoritative forward sequence was [MODULAR_NEXT_STEPS.md](MODULAR_NEXT_STEPS.md); since 2026-08-05 it is [`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md).
 The sections below retain the completed build record and detail for remaining
 module, canvas, import, and product work; their historical numbering is not the
 current priority order.
@@ -413,6 +431,10 @@ Implement each with a content-sized face and the shared preset pad:
 3. Sound/Program Choice.
 4. Scale Context and quantizer helpers.
 
+*Since:* all four are registered (`registry/classicModules.ts`). Scale Context,
+Scale Quantizer and Chord Tones run; Time Distortion, Orchestration and Sound
+Choice have faces and no processor yet.
+
 Do not reintroduce the removed four-lane rack prototype.
 
 ### 5. Finish Phase 3 canvas behavior
@@ -436,7 +458,7 @@ Do not reintroduce the removed four-lane rack prototype.
 
 - Generic snapshots and morphing.
 - Macros, conducting, Pattern Group, and slideshow sequencing using stable parameter IDs.
-- MIDI input/monitor and the built-in synth (salvage plan Stage F). The audio graph, effects, and sample players are built.
+- MIDI input/monitor and the built-in synth (salvage plan Stage F). The audio graph, effects, and sample players are built. *Since:* the synth is built; MIDI Input and MIDI Monitor have faces and no processor.
 - Performance capture, Timeline, Visualizer, and AV render path in the later planned phases.
 
 ## Resume rule

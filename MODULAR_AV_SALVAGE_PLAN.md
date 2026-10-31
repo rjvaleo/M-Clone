@@ -3,8 +3,10 @@
 **Date:** 2026-08-03
 **Source:** `~/Documents/GitHub/Modular AV Perforamnce` (3,490 lines JS, 11 tests, all passing)
 **Target branch:** `modular`
-**Status:** Stages A (part), B, C, D, E and G ported; F planned in
-[MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md)
+**Status:** Stages A to H built. F was planned in
+[MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md) (deleted 2026-08-05, in git
+history) and is built in Rust: `m.synth`, with the 8 × 12 matrix in
+`rust/dsp-core/src/modmatrix.rs`
 
 ---
 
@@ -169,7 +171,11 @@ real port geometry (`ui/portGeometry.ts`, with a `ResizeObserver` on node faces)
 and wheel zoom has been redesigned — eased toward a target, delta-mode normalised,
 with the dot grid painted inside the transform so it scales with the modules.
 Drag-to-patch is still not implemented; click-to-patch remains the only way to
-connect.
+connect. *Since:* drag-to-patch is built, from either end, beside
+click-to-patch (`beginCableDrag` in `ModularApp.tsx`), and the port a cable
+would land on is marked. Below `INTERACTION_ZOOM_FLOOR` (0.35, not 0.6;
+`ui/portGeometry.ts`) the canvas takes `is-too-small` and a cable cannot be
+started.
 
 The only stage that needed nothing else first, and it closes three open defects.
 
@@ -302,7 +308,9 @@ increments; nobody has reported hearing them.
 **Status: planned in detail, one piece built.** The plan is
 [MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md); the PWM generator is in
 `dsp.ts` and the tuning library that will feed the oscillators is in
-`src/modular/tuning/`.
+`src/modular/tuning/`. *Since:* built, on both backends — `m.synth`, Rust
+`ModuleKind::Synth` (3) with `modmatrix.rs`; its parity with the scale
+sequencer is step 6 of [docs/SOUND-PORT-PLAN.md](docs/SOUND-PORT-PLAN.md).
 
 Last, because it is the largest and because the 8 × 12 matrix wants the
 parameter and preset contracts already settled. The matrix is also a natural

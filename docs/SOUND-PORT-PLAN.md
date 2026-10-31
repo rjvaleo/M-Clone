@@ -1,8 +1,8 @@
 # MultiGrainLive's sound, effects and synths in idMLab
 
-*23 October 2026. Agreed with RJ. Updated 31 October 2026: steps 1–4 and 6
-built and merged; step 5's effects are in prism-fx and offered in idMLab,
-and MultiGrainLive has yet to switch to them (see step 5).*
+*23 October 2026. Agreed with RJ. Updated 31 October 2026: the whole plan is
+built. Steps 1–4 and 6 are merged; step 5's effects are in prism-fx, offered
+in idMLab, and MultiGrainLive runs on them (see step 5).*
 
 Bring MultiGrainLive's whole sound engine and every effect into idMLab, add
 modulators that can be mapped to any knob, port the scale-sequencer synth in
@@ -47,7 +47,7 @@ full, and add drum step programming. Automation is not ported.
      the DP/4 reverb fed the sum and read out wide from their tanks' even and
      odd lines, the mid exactly what they made before;
    - the bridge wires each document port to its own engine ports (the
-     mixer's four stereo channels, the DP/4's four mono ins and outs);
+     mixer's stereo channels, the DP/4's four mono ins and outs);
    - the mixer (16), the widener (17) and the four-unit DP/4 (18) are ported,
      so no audio module renders silence on Rust. The DP/4's feedback send
      also ducks while the pair is over its limiter, where the Web Audio
@@ -66,8 +66,8 @@ full, and add drum step programming. Automation is not ported.
      catalogue against its kernel run alone, sample for sample.
    - `rust/prism-gen` writes `src/modular/registry/prismCatalog.generated.ts`
      (`npm run gen:prism`, run by `build:wasm`); its test fails while that
-     file is behind the crate. `prismModules.ts` turns it into the sixteen
-     `m.prism-*` modules, faces in the originals' groups, and the bridge's
+     file is behind the crate. `prismModules.ts` turns it into the `m.prism-*`
+     modules (sixteen then, 86 since step 5), faces in the originals' groups, and the bridge's
      tables. Nothing in idMLab restates a range.
    - A choice travels as its option's index; an effect's own `mix` is the
      plan's wet; a sound (Convolution's impulse, Spectral Dynamics' threshold
@@ -202,10 +202,17 @@ full, and add drum step programming. Automation is not ported.
    - Each is held to golden renders recorded from MultiGrainLive's `fx`
      crate, bit for bit. idMLab's catalogue (`prismCatalog.generated.ts`)
      carries 86 effects, and each has a panel.
-   **Not done:** MultiGrainLive switching to them. On `open-world` its `fx`
-   crate still runs its own `dattorro.rs`, `reverb.rs`, `phaser.rs`, `eq.rs`
-   and `comp.rs`; only `shape.rs` and `prism.rs` call into prism-fx. That
-   work is in MultiGrainLive's repository.
+   **MultiGrainLive switched** (its repository, `rjvaleo/__Audio-Edit---Tag`,
+   PR #13, merged into `open-world`). It builds all 33 shape kinds, its EQ,
+   compressor, gain and channel maximizer from prism-fx, bit for bit against
+   its own (`core/crates/fx/tests/prism_parity.rs`, and the rack tests in
+   `core/crates/server/src/rack.rs`). It keeps its own effect in two cases: a
+   gain past ±24 dB (only a hand-edited document has one), and an EQ whose
+   high-pass is parked below 10 Hz, prism's floor. That is every new EQ, since
+   its high-pass starts at 0 Hz, until the high-pass is set to 10 Hz or more.
+   Its old DSP files stay as the parity reference. prism-fx gained
+   `Kernel::has_mono` / `tick_mono` and `Kernel::telemetry` for this
+   (`rjvaleo/hyper-efx` PR #1, merged into main as `9b413d4`).
 6. **Synth parity and drums** (independent of 4–5; can run in parallel).
    - Synth: three LFOs with the original's targets, pulse width, filter
      envelope amount and key follow as the original, ping-pong delay with tape
