@@ -1385,7 +1385,7 @@ describe("Tempo sync, the envelope follower and the gate ADSR", () => {
     expect(MODULE_KINDS["m.env-follower"]).toBe(22);
     expect(MODULE_KINDS["m.adsr"]).toBe(23);
     expect(PARAM_INDICES["m.env-follower"]).toEqual({ "attack-seconds": 0, "release-seconds": 1, amount: 2 });
-    expect(PARAM_INDICES["m.adsr"]).toEqual({ "attack-ms": 0, "decay-ms": 1, sustain: 2, "release-ms": 3, amount: 4 });
+    expect(PARAM_INDICES["m.adsr"]).toEqual({ "attack-ms": 0, "decay-ms": 1, sustain: 2, "release-ms": 3, amount: 4, polarity: 5, velocity: 6 });
     const engine = new FakeEngine();
     const rack = new WasmRack(engine, 48000);
     rack.update({
