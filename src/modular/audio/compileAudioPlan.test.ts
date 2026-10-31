@@ -244,7 +244,7 @@ describe("Compiling the envelope follower and the gate ADSR", () => {
         targets: [{ nodeId: "d", parameterId: "feedback" }],
       } },
       { id: "a", type: "m.adsr", parameters: {
-        "attack-ms": 5, "decay-ms": 80, sustain: 0.3, "release-ms": 900, amount: 1,
+        "attack-ms": 5, "decay-ms": 80, sustain: 0.3, "release-ms": 900, amount: 1, polarity: "Both", velocity: 0.5,
         targets: [{ nodeId: "d", parameterId: "delay-seconds" }],
       } },
     ],
@@ -259,7 +259,8 @@ describe("Compiling the envelope follower and the gate ADSR", () => {
     expect(plan.nodes.e).toBeUndefined();
     expect(plan.nodes.a).toBeUndefined();
     expect(plan.modulators?.map((m) => [m.nodeId, m.moduleType, m.parameters])).toEqual([
-      ["a", "m.adsr", { "attack-ms": 5, "decay-ms": 80, sustain: 0.3, "release-ms": 900, amount: 1 }],
+      // Polarity travels as its place: Up 0, Down 1, Both 2.
+      ["a", "m.adsr", { "attack-ms": 5, "decay-ms": 80, sustain: 0.3, "release-ms": 900, amount: 1, polarity: 2, velocity: 0.5 }],
       ["e", "m.env-follower", { "attack-seconds": 0.01, "release-seconds": 0.4, amount: 0.7 }],
     ]);
   });
@@ -302,5 +303,22 @@ describe("A patch saved before the new modulators", () => {
     expect(plan.modulators?.[0].parameters).toMatchObject({ rate: 2.5, amount: 0.3, sync: 0 });
     expect(plan.modulations?.map((m) => [m.from, m.to.parameterId])).toEqual([["l", "feedback"]]);
     expect(plan.modulatorConnections).toBeUndefined();
+  });
+});
+
+describe("The modulators' ranges", () => {
+  it("lets the envelope follower release over seconds, for slow swells", () => {
+    const release = moduleRegistry.get("m.env-follower")!.parameters.find((p) => p.id === "release-seconds")!;
+    expect(release.maximum).toBe(4);
+    expect(release.defaultValue).toBe(0.25);
+  });
+
+  it("gives the ADSR a polarity, Up by default, and a velocity amount, off by default", () => {
+    const params = moduleRegistry.get("m.adsr")!.parameters;
+    const polarity = params.find((p) => p.id === "polarity")!;
+    expect(polarity.options).toEqual(["Up", "Down", "Both"]);
+    expect(polarity.defaultValue).toBe("Up");
+    const velocity = params.find((p) => p.id === "velocity")!;
+    expect([velocity.minimum, velocity.maximum, velocity.defaultValue]).toEqual([0, 1, 0]);
   });
 });

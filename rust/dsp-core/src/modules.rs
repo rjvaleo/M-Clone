@@ -28,7 +28,7 @@ use crate::osc::Wave;
 use crate::delay::DelayLine;
 use crate::dp4::{Dp4Algorithm, Dp4Reverb, NonLin, NonLinVariant, NONLIN_TAPS};
 use crate::dynamics::{DynamicsMode, EnvelopeFollower, GainComputer};
-use crate::envelope::Adsr;
+use crate::envelope::LinearEnvelope;
 use crate::fdn::{Fdn, MixMatrix};
 use crate::filter::{Biquad, BiquadKind, OnePole};
 use crate::grain::{GrainCloud, GrainSettings};
@@ -3089,12 +3089,20 @@ impl Module for EnvelopeFollowerModule {
 /// `m.adsr` — an ADSR on a gate, as a modulator. Notes open the gate: each
 /// note-on starts the attack (from wherever the envelope is), decay and
 /// sustain follow, and the release plays out once the last held note lets go.
-/// The envelope is `Adsr`, its times in milliseconds as the synth's are; its
-/// one output is the envelope scaled by its amount, unipolar.
+/// The envelope is the synth's (`LinearEnvelope`: straight lines, as the browser
+/// ramps them), its times in milliseconds as the synth's are. Velocity sets the
+/// peak by the synth's squared law, as much as `VELOCITY` says; the output is the
+/// envelope scaled by its amount, up, down or both ways by `POLARITY`.
 pub struct GateAdsrModule {
-    adsr: Adsr,
+    env: LinearEnvelope,
     held: [bool; 128],
     holding: usize,
+    /// The peak this gate opened to: 1, or the velocity's share of it.
+    peak: f32,
+    /// A note-on's velocity, or a release, waiting for the next sample, where the
+    /// settings it opens or closes with have been read.
+    opening: Option<f32>,
+    closing: bool,
 }
 
 impl GateAdsrModule {
@@ -3103,41 +3111,68 @@ impl GateAdsrModule {
     pub const SUSTAIN: usize = 2;
     pub const RELEASE_MS: usize = 3;
     pub const AMOUNT: usize = 4;
-    pub const PARAM_COUNT: usize = 5;
+    /// Up (0): the envelope. Down (1): its negative. Both (2): centred, −amount at rest to +amount at the top.
+    pub const POLARITY: usize = 5;
+    /// How much velocity sets the peak, by the synth's squared law; 0 ignores it.
+    pub const VELOCITY: usize = 6;
+    pub const PARAM_COUNT: usize = 7;
 
     pub fn new(sample_rate: f32) -> Self {
-        Self { adsr: Adsr::new(sample_rate), held: [false; 128], holding: 0 }
+        Self {
+            env: LinearEnvelope::new(sample_rate),
+            held: [false; 128],
+            holding: 0,
+            peak: 1.0,
+            opening: None,
+            closing: false,
+        }
     }
 }
 
 impl Module for GateAdsrModule {
     fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
-        // Cheap enough to set every sample, and a routed knob moves them.
-        self.adsr.set_attack(ports.param(Self::ATTACK_MS) / 1000.0);
-        self.adsr.set_decay(ports.param(Self::DECAY_MS) / 1000.0);
-        self.adsr.set_sustain(ports.param(Self::SUSTAIN));
-        self.adsr.set_release(ports.param(Self::RELEASE_MS) / 1000.0);
-        let value = self.adsr.next();
-        ports.output(0, value * ports.param(Self::AMOUNT));
+        // The synth's envelope: straight lines, as the browser ramps them. A note
+        // reads the stage times when it opens or closes the gate, as the synth's do.
+        if let Some(v) = self.opening.take() {
+            let sense = clamp(ports.param(Self::VELOCITY), 0.0, 1.0);
+            self.peak = 1.0 - sense + sense * v * v;
+            let sustain = clamp(ports.param(Self::SUSTAIN), 0.0, 1.0) * self.peak;
+            let from = self.env.value();
+            self.env.trigger(from, self.peak, sustain, ports.param(Self::ATTACK_MS) / 1000.0, ports.param(Self::DECAY_MS) / 1000.0);
+        } else if self.closing {
+            self.env.release(0.0, ports.param(Self::RELEASE_MS) / 1000.0);
+        }
+        self.closing = false;
+        let env = self.env.next();
+        let amount = ports.param(Self::AMOUNT);
+        let value = match ports.param(Self::POLARITY).round() as i32 {
+            1 => -env,
+            2 => 2.0 * env - 1.0,
+            _ => env,
+        };
+        ports.output(0, value * amount);
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
-        self.adsr.set_sample_rate(sample_rate);
+        self.env = LinearEnvelope::new(sample_rate);
     }
 
     fn reset(&mut self) {
-        self.adsr.kill();
+        self.env.kill();
         self.held = [false; 128];
         self.holding = 0;
+        self.opening = None;
+        self.closing = false;
     }
 
-    fn note_on(&mut self, note: u8, _velocity: f32, _detune_cents: f32) {
+    fn note_on(&mut self, note: u8, velocity: f32, _detune_cents: f32) {
         let slot = &mut self.held[(note & 0x7f) as usize];
         if !*slot {
             *slot = true;
             self.holding += 1;
         }
-        self.adsr.gate_on();
+        self.opening = Some(if velocity.is_finite() { clamp(velocity, 0.0, 1.0) } else { 0.0 });
+        self.closing = false;
     }
 
     fn note_off(&mut self, note: u8) {
@@ -3148,20 +3183,19 @@ impl Module for GateAdsrModule {
         *slot = false;
         self.holding -= 1;
         if self.holding == 0 {
-            self.adsr.gate_off();
+            self.closing = true;
         }
     }
 
     fn all_notes_off(&mut self) {
         self.held = [false; 128];
         self.holding = 0;
-        self.adsr.gate_off();
+        self.closing = true;
     }
 
     fn input_count(&self) -> usize { 0 }
     fn output_count(&self) -> usize { 1 }
     fn param_count(&self) -> usize { Self::PARAM_COUNT }
-
     fn param_default(&self, index: usize) -> f32 {
         match index {
             Self::ATTACK_MS => 10.0,
@@ -5346,6 +5380,22 @@ mod tests {
     }
 
     #[test]
+    fn the_envelope_follower_takes_a_release_of_seconds() {
+        let mut engine = Engine::new(RATE);
+        let follower = engine.add(ModuleKind::EnvelopeFollower.build());
+        let tone = engine.add(ModuleKind::HostInput.build());
+        engine.connect(PortRef { module: tone, port: 0 }, PortRef { module: follower, port: 0 });
+        engine.set_param(follower, EnvelopeFollowerModule::AMOUNT, 1.0);
+        engine.set_param(follower, EnvelopeFollowerModule::RELEASE_SECONDS, 3.0);
+        for _ in 0..(RATE as usize / 10) { engine.set_param(tone, HostInput::SAMPLE, 1.0); engine.process(); }
+        let top = engine.output_of(follower, 0);
+        for _ in 0..(RATE as usize) { engine.set_param(tone, HostInput::SAMPLE, 0.0); engine.process(); }
+        // One second into a three-second release it has fallen by about a third of e-folds, not to nothing.
+        let after = engine.output_of(follower, 0);
+        assert!(after > top * 0.5, "a 3 s release still holds most of it after 1 s: {after} of {top}");
+    }
+
+    #[test]
     fn the_envelope_follower_hears_the_louder_side() {
         let mut engine = Engine::new(RATE);
         let left = engine.add(ModuleKind::HostInput.build());
@@ -5406,7 +5456,7 @@ mod tests {
         assert_eq!(adsr.param_default(GateAdsrModule::AMOUNT), 0.5);
     }
 
-    fn gate_adsr(attack: f32, decay: f32, sustain: f32, release: f32, amount: f32) -> (Engine, u32, Adsr) {
+    fn gate_adsr(attack: f32, decay: f32, sustain: f32, release: f32, amount: f32) -> (Engine, u32, LinearEnvelope) {
         let mut engine = Engine::new(RATE);
         let module = engine.add(ModuleKind::GateAdsr.build());
         engine.set_param(module, GateAdsrModule::ATTACK_MS, attack);
@@ -5414,35 +5464,90 @@ mod tests {
         engine.set_param(module, GateAdsrModule::SUSTAIN, sustain);
         engine.set_param(module, GateAdsrModule::RELEASE_MS, release);
         engine.set_param(module, GateAdsrModule::AMOUNT, amount);
-        let mut alone = Adsr::new(RATE);
-        alone.set_attack(attack / 1000.0);
-        alone.set_decay(decay / 1000.0);
-        alone.set_sustain(sustain);
-        alone.set_release(release / 1000.0);
-        (engine, module, alone)
+        (engine, module, LinearEnvelope::new(RATE))
     }
 
     #[test]
-    fn the_gate_adsr_is_the_adsr_from_note_on_and_releases_from_note_off() {
+    fn the_gate_adsr_is_the_synths_straight_line_envelope() {
+        // The synth's shape (`LinearEnvelope`, the browser's ramps), not the curved `Adsr`.
         let (mut engine, module, mut alone) = gate_adsr(20.0, 100.0, 0.4, 300.0, 0.9);
         let mut top = 0.0f32;
         for n in 0..40_000 {
             if n == 1_000 {
                 engine.note_on(module, 60, 1.0, 0.0);
-                alone.gate_on();
+                alone.trigger(0.0, 1.0, 0.4, 0.020, 0.100);
             }
             if n == 15_000 {
                 engine.note_off(module, 60);
-                alone.gate_off();
+                alone.release(0.0, 0.300);
             }
             engine.process();
             let want = alone.next() * 0.9;
             assert_eq!(engine.output_of(module, 0), want, "sample {n}");
             top = top.max(want);
         }
-        // It rose to its amount, held at sustain, and came back to rest.
         assert!((top - 0.9).abs() < 1e-6, "{top}");
         assert_eq!(engine.output_of(module, 0), 0.0);
+        // Halfway up the attack it is halfway: a straight line, not a curve.
+        let (mut engine, module, _) = gate_adsr(10.0, 100.0, 0.4, 300.0, 1.0);
+        engine.note_on(module, 60, 1.0, 0.0);
+        // The first sample is the ramp's start, so n samples in it stands at (n − 1) of the attack's.
+        let attack = RATE / 100.0;
+        for n in 1..=(attack as usize) {
+            engine.process();
+            let want = (n - 1) as f32 / attack;
+            assert!((engine.output_of(module, 0) - want).abs() < 1e-5, "sample {n}: {}", engine.output_of(module, 0));
+        }
+    }
+
+    #[test]
+    fn a_retriggered_gate_adsr_climbs_from_where_it_is() {
+        let (mut engine, module, mut alone) = gate_adsr(10.0, 50.0, 0.5, 200.0, 1.0);
+        engine.note_on(module, 60, 1.0, 0.0);
+        alone.trigger(0.0, 1.0, 0.5, 0.010, 0.050);
+        for _ in 0..5_000 { engine.process(); alone.next(); }
+        engine.note_on(module, 64, 1.0, 0.0);
+        alone.trigger(alone.value(), 1.0, 0.5, 0.010, 0.050);
+        for n in 0..5_000 {
+            engine.process();
+            assert_eq!(engine.output_of(module, 0), alone.next(), "sample {n}");
+        }
+    }
+
+    #[test]
+    fn the_gate_adsr_swings_up_down_or_both_ways() {
+        // Polarity: Up (0) is the envelope; Down (1) its negative; Both (2) centred,
+        // from −amount at rest to +amount at the top.
+        let at = |polarity: f32, samples: usize, held: bool| {
+            let (mut engine, module, _) = gate_adsr(1.0, 1.0, 1.0, 1.0, 0.8);
+            engine.set_param(module, GateAdsrModule::POLARITY, polarity);
+            if held { engine.note_on(module, 60, 1.0, 0.0); }
+            for _ in 0..samples { engine.process() }
+            engine.output_of(module, 0)
+        };
+        assert_eq!(GateAdsrModule::new(RATE).param_default(GateAdsrModule::POLARITY), 0.0);
+        assert!((at(0.0, 2_000, true) - 0.8).abs() < 1e-6);
+        assert!((at(1.0, 2_000, true) + 0.8).abs() < 1e-6);
+        assert!((at(2.0, 2_000, true) - 0.8).abs() < 1e-6);
+        assert_eq!(at(0.0, 100, false), 0.0);
+        assert_eq!(at(1.0, 100, false), 0.0);
+        assert!((at(2.0, 100, false) + 0.8).abs() < 1e-6, "both ways rests at −amount");
+    }
+
+    #[test]
+    fn velocity_scales_the_gate_adsr_by_the_synths_squared_law() {
+        // Velocity 0 (the default) ignores it, as before; at 1 the peak is velocity², as the synth's.
+        let held = |sense: f32, velocity: f32| {
+            let (mut engine, module, _) = gate_adsr(1.0, 1.0, 0.5, 1.0, 1.0);
+            engine.set_param(module, GateAdsrModule::VELOCITY, sense);
+            engine.note_on(module, 60, velocity, 0.0);
+            for _ in 0..2_000 { engine.process() }
+            engine.output_of(module, 0)
+        };
+        assert_eq!(GateAdsrModule::new(RATE).param_default(GateAdsrModule::VELOCITY), 0.0);
+        assert!((held(0.0, 0.5) - 0.5).abs() < 1e-6);
+        assert!((held(1.0, 0.5) - 0.5 * 0.25).abs() < 1e-6);
+        assert!((held(0.5, 0.5) - 0.5 * (0.5 + 0.5 * 0.25)).abs() < 1e-6);
     }
 
     #[test]

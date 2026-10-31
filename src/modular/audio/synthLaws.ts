@@ -197,17 +197,18 @@ export const modulatedPulseWidth = (width: number, swing: number): number =>
 /**
  * The delay's note values, in beats, as the original's menu has them.
  *
- * Literal, including `1.33333` under the label "1/4T" — a half-note triplet
- * in fact, but that is the time the original plays.
+ * Literal, but for "1/4T": the original played 1.33333 beats under it, a
+ * half-note triplet's length. RJ had it made a true quarter-note triplet
+ * (31 Oct 2026), so it moved into length order between 1/8 and D 1/8.
  */
 export const DELAY_NOTES = [
   { label: "1/32", beats: 0.125 },
   { label: "1/16", beats: 0.25 },
   { label: "1/8T", beats: 0.33333 },
   { label: "1/8", beats: 0.5 },
+  { label: "1/4T", beats: 0.66667 },
   { label: "D 1/8", beats: 0.75 },
   { label: "1/4", beats: 1 },
-  { label: "1/4T", beats: 1.33333 },
   { label: "D 1/4", beats: 1.5 },
   { label: "1/2", beats: 2 },
   { label: "D 1/2", beats: 3 },
