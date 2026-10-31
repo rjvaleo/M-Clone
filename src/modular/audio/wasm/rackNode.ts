@@ -11,7 +11,8 @@
 // from putting message traffic on the audio path.
 
 import type { AudioPlan } from "../audioPlan";
-import type { RackMessage, RackReport, ScheduledEvent } from "./rackProtocol";
+import type { GrainBuildResult, RackMessage, RackReply, RackReport, ScheduledEvent } from "./rackProtocol";
+import { resultTransfers, type BuilderMessage } from "./grainBuilder";
 import type { SampleSource } from "./sampleTransfer";
 
 /** Which audio backend a session runs on. */
@@ -35,9 +36,16 @@ export const preferredEngine = (search: string): RackEngineChoice => {
 export interface RackNodeLike {
   readonly port: {
     postMessage(message: RackMessage, transfer?: Transferable[]): void;
-    onmessage?: ((event: { data: RackReport }) => void) | null;
+    onmessage?: ((event: { data: RackReply }) => void) | null;
   };
   disconnect(): void;
+}
+
+/** Just enough of a `Worker` running `grainWorker.ts`. */
+export interface BuilderWorkerLike {
+  postMessage(message: BuilderMessage, transfer?: Transferable[]): void;
+  onmessage?: ((event: { data: GrainBuildResult }) => void) | null;
+  terminate(): void;
 }
 
 export class WasmRackNode {
@@ -58,12 +66,30 @@ export class WasmRackNode {
   }
   private lastReport: RackReport | null = null;
 
-  constructor(private readonly node: RackNodeLike) {
+  /**
+   * `builder` makes the Grain Engine's slow builds: the worklet asks, this
+   * passes the request on, and the answer goes back down. Without one the
+   * requests go unanswered and a Grain Engine plays on without its map or
+   * separation (the hybrid as a grain cloud), which is what MultiGrainLive
+   * plays while its own build runs.
+   */
+  constructor(
+    private readonly node: RackNodeLike,
+    private readonly builder?: BuilderWorkerLike,
+  ) {
     // Assigning `onmessage` also starts the port, which is why there is no
     // separate `start()` here.
     node.port.onmessage = (event) => {
-      if (event.data?.type === "report") this.lastReport = event.data;
+      const data = event.data;
+      if (data?.type === "report") this.lastReport = data;
+      else if (data?.type === "grain-build") this.builder?.postMessage({ type: "build", request: data });
     };
+    if (builder) {
+      builder.onmessage = (event) => {
+        if (this.disposed) return;
+        this.node.port.postMessage(event.data, resultTransfers(event.data));
+      };
+    }
   }
 
   /** Hand the worklet a new plan, if it is actually new. */
@@ -86,6 +112,15 @@ export class WasmRackNode {
    */
   loadSample(slot: number, source: SampleSource): void {
     if (this.disposed) return;
+    // The builder holds the same samples under the same slots. Its copy goes
+    // first, because the worklet's transfer detaches the originals.
+    if (this.builder) {
+      const copies = source.channels.map((channel) => channel.slice());
+      this.builder.postMessage(
+        { type: "sample", slot, channels: copies, sampleRate: source.sampleRate },
+        copies.map((channel) => channel.buffer),
+      );
+    }
     const channels = [...source.channels];
     this.node.port.postMessage(
       { type: "sample", slot, channels, sampleRate: source.sampleRate },
@@ -145,5 +180,6 @@ export class WasmRackNode {
     if (this.disposed) return;
     this.disposed = true;
     this.node.disconnect();
+    this.builder?.terminate();
   }
 }
