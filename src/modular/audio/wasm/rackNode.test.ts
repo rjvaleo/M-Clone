@@ -378,3 +378,23 @@ describe("The cloud pad's grains", () => {
     expect(new WasmRackNode(new FakeNode()).canBuildGrains).toBe(false);
   });
 });
+
+describe("The cloud pad's grains, with no one to ask", () => {
+  const ask = { type: "grains" as const, id: 2, nodeId: "g", slot: 0, params: new Float32Array(62), cap: 8_000 };
+
+  it("asks nothing of a rack with no builder", () => {
+    const node = new FakeNode();
+    const rack = new WasmRackNode(node);
+    expect(() => rack.requestGrains(ask)).not.toThrow();
+    expect(node.port.sent).toEqual([]);
+  });
+
+  it("asks nothing once the rack is disposed", () => {
+    const builder = new FakeBuilder();
+    const rack = new WasmRackNode(new FakeNode(), builder);
+    rack.dispose();
+    rack.requestGrains(ask);
+    expect(builder.sent).toEqual([]);
+    expect(rack.canBuildGrains).toBe(false);
+  });
+});

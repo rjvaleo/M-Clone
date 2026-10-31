@@ -106,3 +106,19 @@ describe("pattern edits", () => {
     expect(setStepValue([0.5], 3, 0.2, 0)).toEqual([0.5, 0, 0, 0.2]);
   });
 });
+
+describe("edges of the steps in play and the pattern edits", () => {
+  it("an empty pattern plays nothing", () => {
+    expect(activeSteps(0, 0, [])).toEqual([]);
+  });
+
+  it("<< and >> leave a single step, or none, as it is", () => {
+    expect(shiftSteps([7, 8, 9], 1, -1)).toEqual([7, 8, 9]);
+    expect(shiftSteps([], 4, 1)).toEqual([]);
+  });
+
+  it("1/x leaves rests alone, and steps past the end untouched", () => {
+    expect(invertPitches([[], []], 2)).toEqual([[], []]);
+    expect(invertPitches([[60], [64], [90]], 2)).toEqual([[64], [60], [90]]);
+  });
+});

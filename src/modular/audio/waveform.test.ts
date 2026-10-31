@@ -93,3 +93,10 @@ describe("Drawing a thumbnail", () => {
     expect(peakToUnit(999)).toBe(1);
   });
 });
+
+describe("Waveform peaks from a damaged decode", () => {
+  it("draws an infinite sample as nothing rather than as full scale", () => {
+    const broken = Float32Array.from([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0.5, -0.5]);
+    expect(computePeaks([broken], 2)).toEqual([0, 0, Math.round(-0.5 * PEAK_SCALE), Math.round(0.5 * PEAK_SCALE)]);
+  });
+});

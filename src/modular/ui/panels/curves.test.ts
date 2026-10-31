@@ -636,3 +636,11 @@ describe("The convolution's window", () => {
     expect(lengthUsed(100, FS, 0)).toBe(1);
   });
 });
+
+describe("A modulated delay with no stereo setting", () => {
+  it("sweeps both sides together", () => {
+    const p = { delayMs: 14, depthMs: 7, rateHz: 0.5 };
+    expect(modDelaySweep(p, 0.5, 1, FS)).toBe(modDelaySweep(p, 0.5, 0, FS));
+    expect(modDelaySweep(p, 0.5, 1, FS)).toBeCloseTo(14 + 7 * Math.sin(Math.PI * 0.5), 9);
+  });
+});

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyGraph, type GraphDocument } from "../model/graph";
 import { createNode } from "../registry/registry";
 import { variableLinkUpdates, variablesStateOf, quantizeMorph } from "./links";
-import { activate } from "./variables";
+import { activate, defaultVariables } from "./variables";
 
 const canvas = (types: [string, string][]): GraphDocument => {
   const graph = emptyGraph();
@@ -36,5 +36,12 @@ describe("position links from M Variables", () => {
     expect(quantizeMorph("now")).toBe("immediate");
     expect(quantizeMorph("beat")).toBe("next-beat");
     expect(quantizeMorph("bar")).toBe("next-bar");
+  });
+});
+
+describe("M Variables' state from its parameters", () => {
+  it("fills anything not stored from the defaults", () => {
+    const node = { ...createNode("m.lab-variables", "vars", { x: 0, y: 0 }), parameters: {} };
+    expect(variablesStateOf(node)).toEqual(defaultVariables());
   });
 });

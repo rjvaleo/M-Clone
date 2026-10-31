@@ -33,6 +33,7 @@ export default defineConfig({
         "src/engine/types.ts",
         "src/engine/outputs/types.ts",
         "src/modular/audio/nodes.ts",
+        "src/modular/registry/prismTypes.ts",
         // Browser-only wiring that cannot run under Node.
         "src/engine/runtime.ts",
         "src/engine/outputs/synth.ts",
@@ -43,6 +44,9 @@ export default defineConfig({
         // covered, and the WASM below it is covered by `cargo test` plus
         // `rust/wasm/verify.mjs`.
         "src/modular/audio/wasm/rackWorklet.ts",
+        // The grain builder's worker, thin for the same reason: its decisions
+        // are `wasm/grainBuilder.ts`, which is covered.
+        "src/modular/audio/wasm/grainWorker.ts",
       ],
       thresholds: {
         /*

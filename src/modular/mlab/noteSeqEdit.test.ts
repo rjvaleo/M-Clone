@@ -4,10 +4,16 @@ import { Rng } from "../../engine/rng";
 import {
   RATE_OPTIONS,
   applyMaterial,
+  cellLengthInPlay,
   cellsInPlay,
   currentMaterial,
+  groupIndex,
   normGates,
+  patternInPlay,
+  patternsOf,
   randomizeLane,
+  rateOf,
+  setRate,
   setWarpStep,
   setWarpLength,
   warpInPlay,
@@ -16,9 +22,13 @@ import {
   setEndStep,
   shiftAll,
   toggleNoteIn,
+  zeroGates,
   zeroPitches,
+  zeroPitchesIn,
 } from "./noteSeqEdit";
 import type { VoicePattern } from "./model";
+import { MAX_CYCLE_CELLS, defaultCells, defaultNoteSeqPatterns } from "./noteSeq";
+import { defaultWarpBanks } from "./warpSteps";
 
 const params = (values: Record<string, unknown> = {}) =>
   createNode("m.lab-noteseq", "ns", { x: 0, y: 0 }, values as never).parameters;
@@ -99,5 +109,56 @@ describe("editing a NoteSeq from its face", () => {
     expect(warpInPlay({ ...next, "warp-position": 0 } as never).offsets[3]).toBe(0);
     expect(warpInPlay({ ...next, ...setWarpLength(next, 6) }).length).toBe(6);
     expect(warpInPlay({ ...p, ...setWarpStep(p, 0, 0.3) }).offsets[0]).toBe(0);
+  });
+});
+
+describe("editing a NoteSeq whose parameters are missing or short", () => {
+  it("falls back to M's defaults for anything not stored", () => {
+    expect(groupIndex({})).toBe(0);
+    expect(patternsOf({})).toEqual(defaultNoteSeqPatterns());
+    expect(patternInPlay({ patterns: [], group: 3 })).toEqual(defaultNoteSeqPatterns()[0]);
+    expect(cellsInPlay({ "cycle-positions": {} }, "accent")).toEqual(defaultCells().accent[0]);
+    expect(cellsInPlay({ cells: {} }, "legato")).toEqual(defaultCells().legato[0]);
+    expect(cellLengthInPlay({ "cycle-lengths": {} }, "rhythm")).toBe(MAX_CYCLE_CELLS);
+    expect(warpInPlay({})).toEqual(defaultWarpBanks()[0]);
+    expect(warpInPlay({ warp: [] })).toEqual(defaultWarpBanks()[0]);
+  });
+
+  it("reads the key and scale, C major when neither is set", () => {
+    expect(currentMaterial({})).toMatchObject({ root: 0, scale: "major" });
+    expect(currentMaterial({ key: 2, scale: "minor" })).toMatchObject({ root: 2, scale: "minor" });
+  });
+
+  it("the scrambled list grows to a note past its end, and a second click removes it", () => {
+    const p = { patterns: [{ steps: [[60]], scrambled: [[60]], length: 1 }] } as never;
+    const added = { ...(p as object), ...toggleNoteIn(p, "scram", 2, 70) } as never;
+    expect(group(added).scrambled).toEqual([[60], [], [70]]);
+    expect(group({ ...(p as object), ...toggleNoteIn(p, "scram", 0, 60) } as never).scrambled).toEqual([[]]);
+  });
+
+  it("∅ on a pattern of rests changes nothing; ∅ and ZeroGate on the face", () => {
+    const rests = { steps: [[], []], scrambled: [[], []], length: 2 };
+    expect(zeroPitches(rests)).toBe(rests);
+    const unison = group({ ...params(), ...zeroPitchesIn(params()) } as never);
+    expect(unison.steps.slice(0, 8).every((s) => s[0] === 60)).toBe(true);
+    expect(cellsInPlay({ ...params(), ...zeroGates(params()) }, "legato").every((c) => c === 0)).toBe(true);
+  });
+
+  it("reads and writes the Rate as M's time base, 1/8 when unset", () => {
+    expect(rateOf({})).toBe("1/8");
+    expect(rateOf({ "rate-num": 3, "rate-den": 16 })).toBe("3/16");
+    expect(setRate("1/12")).toEqual({ "rate-num": 1, "rate-den": 12 });
+  });
+
+  it("the dice on the Warp lane keep step 1 fixed and fill a short bank out to its length", () => {
+    const p = { warp: [{ offsets: [0, 0], length: 4, denominator: 16 }] } as never;
+    const bank = warpInPlay({ ...(p as object), ...randomizeLane(p, "warp", "all", new Rng(7)) } as never);
+    expect(bank.offsets).toHaveLength(4);
+    expect(bank.offsets[0]).toBe(0);
+    for (const offset of bank.offsets.slice(1)) {
+      expect(Math.abs(offset)).toBeLessThanOrEqual(0.25);
+      expect(Number(offset.toFixed(2))).toBe(offset);
+    }
+    expect(bank.offsets.slice(1).some((offset) => offset !== 0)).toBe(true);
   });
 });

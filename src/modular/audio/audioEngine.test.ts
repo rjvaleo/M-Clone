@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AudioEngine, EffectModuleFactory } from "./audioEngine";
 import { ManualTransitionScheduler } from "./transitions";
 import { FakeAudioContext } from "./testing/fakeContext";
 import { createNode, moduleRegistry } from "../registry/registry";
 import { emptyGraph, type GraphDocument } from "../model/graph";
+import { grainCloud } from "./grainClouds";
+import type { RuntimeEvent } from "../runtime/eventqueue";
 
 const patch = (): GraphDocument => {
   const document = emptyGraph();
@@ -390,5 +392,213 @@ describe("Audio engine scope tap", () => {
     (other.context as unknown as { createAnalyser?: unknown }).createAnalyser = undefined;
     other.engine.update(synthPatch());
     expect(other.engine.readScope("syn", new Float32Array(8))).toBe(false);
+  });
+});
+
+describe("Audio engine, the paths a session rarely takes", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const synthPatch = (): GraphDocument => {
+    const document = emptyGraph();
+    document.nodes.syn = createNode("m.synth", "syn", { x: 0, y: 0 });
+    document.nodes.out = createNode("m.audio-output", "out", { x: 0, y: 0 });
+    document.edges.e1 = {
+      id: "e1", from: { nodeId: "syn", portId: "audio-out" }, to: { nodeId: "out", portId: "audio-in" }, enabled: true,
+    };
+    return document;
+  };
+
+  const grainPatch = (assetId: string): GraphDocument => {
+    const document = emptyGraph();
+    document.nodes.ge = createNode("m.grain-engine", "ge", { x: 0, y: 0 });
+    document.nodes.ge.parameters["asset-id"] = assetId;
+    return document;
+  };
+
+  /** A rack whose context also hosts the grain builder, with both faked out. */
+  const builderRig = () => {
+    const base = rustRig();
+    const toBuilder: { type: string; id?: number; nodeId?: string }[] = [];
+    const builder = {
+      postMessage: (message: { type: string }) => toBuilder.push(message),
+      onmessage: null as ((event: { data: unknown }) => void) | null,
+      terminate: () => {},
+    };
+    const attach = () =>
+      base.engine.useRustEngine({
+        compileModule: async () => ({}) as WebAssembly.Module,
+        createNode: () => base.node,
+        createBuilder: () => builder,
+      });
+    return { ...base, builder, toBuilder, attach };
+  };
+
+  const noteEvent = (type: "note-on" | "note-off", portId: string): RuntimeEvent => ({
+    type, portId, atTick: 0, atSec: 0, sequence: 0, channel: 0, note: 60, detuneCents: 0,
+    velocity: 100, program: 0, controller: 0, value: 0, noteId: 1, stepSec: 0,
+  }) as RuntimeEvent;
+
+  it("runs its transitions on a real timer when no scheduler is given", () => {
+    vi.useFakeTimers();
+    const context = new FakeAudioContext();
+    const engine = new AudioEngine(context, moduleRegistry, { starterKit: false });
+    engine.update(patch());
+    const document = patch();
+    document.nodes.rev.parameters["pre-delay-ms"] = 999;
+    engine.update(document);
+    vi.runAllTimers();
+    expect(engine.liveNodeCount).toBeGreaterThanOrEqual(2);
+    engine.dispose();
+  });
+
+  it("hands a granular player the injected wake rather than a timer", () => {
+    const schedulePlayerWake = vi.fn(() => () => {});
+    const engine = new AudioEngine(new FakeAudioContext(), moduleRegistry, {
+      scheduler: new ManualTransitionScheduler(), schedulePlayerWake,
+    });
+    const document = emptyGraph();
+    document.nodes.gr = createNode("m.granular", "gr", { x: 0, y: 0 });
+    engine.update(document);
+    expect(engine.playOnNode("gr", { type: "note-on", note: 60, velocity: 100, atSec: 0 })).toBe(true);
+    expect(schedulePlayerWake).toHaveBeenCalled();
+  });
+
+  it("follows the transport's tempo only for a real, new tempo, and only once there is a patch", () => {
+    const { engine } = rig();
+    const compiled = () => engine.currentPlan.generation;
+    engine.setTempo(90);
+    expect(compiled()).toBe(0);
+    engine.update(synthPatch());
+    const before = compiled();
+    engine.setTempo(Number.NaN);
+    engine.setTempo(0);
+    engine.setTempo(90);
+    expect(compiled()).toBe(before);
+    engine.setTempo(140);
+    expect(compiled()).toBe(before + 1);
+  });
+
+  it("plays and silences a node through the rack once it is attached", async () => {
+    const { engine, posted, attach, context } = rustRig();
+    await attach();
+    context.currentTime = 2;
+    expect(engine.playOnNode("syn", { type: "note-on", note: 60, velocity: 127, atSec: 1 })).toBe(true);
+    expect(engine.playOnNode("syn", { type: "note-off", note: 60, velocity: 0, atSec: 3 })).toBe(true);
+    expect(engine.silenceNode("syn")).toBe(true);
+    const scheduled = posted.filter((message) => message.type === "schedule") as unknown as
+      { atSec: number; events: { type: string }[] }[];
+    expect(scheduled.map((message) => [message.atSec, message.events[0]!.type])).toEqual([
+      [2, "note-on"], [3, "note-off"], [2, "all-notes-off"],
+    ]);
+  });
+
+  it("resolves the runtime's notes to rack players once attached, and to graph nodes before", async () => {
+    const { engine, posted, attach } = rustRig();
+    engine.update(synthPatch());
+    engine.notes.send([noteEvent("note-on", "syn")], 1);
+    expect(engine.notes.deliveredCount).toBe(1);
+    expect(posted.some((message) => message.type === "schedule")).toBe(false);
+    await attach();
+    engine.notes.send([noteEvent("note-off", "syn")], 1);
+    expect(engine.notes.deliveredCount).toBe(2);
+    expect(posted.some((message) => message.type === "schedule")).toBe(true);
+  });
+
+  it("has no rack player, and sends no samples, while no rack is attached", () => {
+    const { engine } = rig();
+    const reach = engine as unknown as {
+      rackPlayerFor(id: string): unknown;
+      sendSamples(plan: unknown): void;
+    };
+    expect(reach.rackPlayerFor("syn")).toBeUndefined();
+    expect(() => reach.sendSamples(engine.currentPlan)).not.toThrow();
+  });
+
+  it("skips a sample that is not decoded yet, and one with no slot left for it", async () => {
+    const { engine, posted, attach } = rustRig();
+    await attach();
+    engine.update(grainPatch("not-in-the-pool"));
+    expect(posted.some((message) => message.type === "sample")).toBe(false);
+    // Fill every slot the rack has, so the next real sample finds none free.
+    const slots = (engine as unknown as { rackSlots: { slotFor(id: string): number | undefined } }).rackSlots;
+    for (let i = 0; i < 256; i += 1) slots.slotFor(`filler-${i}`);
+    engine.update(grainPatch(engine.library.list()[0]!.id));
+    expect(posted.some((message) => message.type === "sample")).toBe(false);
+    expect(posted.some((message) => message.type === "sample-map")).toBe(false);
+  });
+
+  it("asks the builder for a Grain Engine's grains and hands them to the cloud pad", async () => {
+    vi.useFakeTimers();
+    const { engine, attach, builder, toBuilder } = builderRig();
+    await attach();
+    const assetId = engine.library.list()[0]!.id;
+    engine.update(grainPatch(assetId));
+    vi.runAllTimers();
+    const request = toBuilder.find((message) => message.type === "grains")!;
+    expect(request).toMatchObject({ nodeId: "ge", slot: 0 });
+    const data = new Float32Array([0, 1, 0]);
+    builder.onmessage?.({ data: { type: "grains", id: request.id, nodeId: "ge", data } });
+    expect(grainCloud("ge")).toMatchObject({ total: 1, count: 0 });
+  });
+
+  it("asks for grains already on attach when a patch was built first", async () => {
+    vi.useFakeTimers();
+    const { engine, attach, toBuilder } = builderRig();
+    engine.update(grainPatch(engine.library.list()[0]!.id));
+    await attach();
+    vi.runAllTimers();
+    expect(toBuilder.filter((message) => message.type === "grains")).toHaveLength(1);
+  });
+
+  it("asks for no grains from a sample the rack does not hold, or one that has left the pool", async () => {
+    vi.useFakeTimers();
+    const { engine, attach, toBuilder } = builderRig();
+    await attach();
+    engine.update(grainPatch("not-in-the-pool"));
+    vi.runAllTimers();
+    expect(toBuilder.some((message) => message.type === "grains")).toBe(false);
+    const assetId = engine.library.list()[0]!.id;
+    engine.update(grainPatch(assetId));
+    engine.library.remove(assetId);
+    const document = grainPatch(assetId);
+    document.nodes.ge.parameters["level"] = 0.3;
+    engine.update(document);
+    vi.runAllTimers();
+    // The buffer left before the throttled request went out, so nothing is asked for.
+    expect(toBuilder.filter((message) => message.type === "grains")).toHaveLength(0);
+  });
+
+  it("stops decoding a drop once disposed, keeping only the file already in flight", async () => {
+    const { engine } = rig();
+    const pending = engine.addFiles([
+      { name: "a.wav", bytes: new Uint8Array([10, 20, 30, 40, 50]) },
+      { name: "b.wav", bytes: new Uint8Array([11, 21, 31, 41, 51]) },
+    ]);
+    engine.dispose();
+    const result = await pending;
+    expect(result.added.map((record) => record.name)).toEqual(["a.wav"]);
+  });
+
+  it("reports a pack blob that does not decode, and stops loading a pack once disposed", async () => {
+    const { engine } = rig();
+    const records = [
+      { id: "bad", name: "bad.wav" },
+      { id: "good", name: "good.wav" },
+    ] as unknown as Parameters<AudioEngine["loadPack"]>[0];
+    const blobs = [
+      { id: "bad", bytes: new Uint8Array([1, 2]) },
+      { id: "good", bytes: new Uint8Array([10, 20, 30, 40, 50]) },
+    ];
+    const result = await engine.loadPack(records, blobs);
+    expect(result.failed.map((failure) => failure.name)).toEqual(["bad.wav"]);
+    expect(result.loaded).toBe(1);
+
+    const other = rig();
+    const pending = other.engine.loadPack(records, blobs);
+    other.engine.dispose();
+    const stopped = await pending;
+    expect(stopped.loaded + stopped.failed.length).toBe(1);
   });
 });

@@ -163,3 +163,19 @@ describe("faders side by side, swept in one drag", () => {
     expect(faderUnder(70, 50, 160, 100, 4, -24, 24, 1)).toEqual({ index: 1, value: 0 });
   });
 });
+
+describe("Numerology step values, the remaining formats", () => {
+  it("prints a range that is one value as that value", () => {
+    expect(formatLaneValue({ min: 2, max: 2 }, "level")).toBe("2");
+  });
+
+  it("prints a ratio whole when it is whole, and trims a trailing zero otherwise", () => {
+    expect(formatLaneValue(2, "ratio")).toBe("2");
+    expect(formatLaneValue(1.5, "ratio")).toBe("1.5");
+    expect(formatLaneValue(1.25, "ratio")).toBe("1.25");
+  });
+
+  it("prints a plain number to two places", () => {
+    expect(formatLaneValue(3.14159, "number")).toBe("3.14");
+  });
+});

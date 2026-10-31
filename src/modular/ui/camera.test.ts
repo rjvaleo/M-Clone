@@ -77,3 +77,23 @@ describe("the canvas camera, as ComfyUI's works", () => {
     expect(screenToCanvas(camera, 400, 200)).toEqual({ x: 500, y: 300 });
   });
 });
+
+describe("the canvas camera, given what it cannot use", () => {
+  it("reads a zoom that is not a number as 100%", () => {
+    expect(clampCameraZoom(Number.NaN)).toBe(1);
+  });
+
+  it("does not zoom for a wheel event with no vertical movement", () => {
+    expect(wheelZoomFactor({ deltaY: 0, deltaMode: 0, ctrlKey: false })).toBe(1);
+    expect(wheelZoomFactor({ deltaY: Number.NaN, deltaMode: 0, ctrlKey: false })).toBe(1);
+  });
+
+  it("counts a page-mode wheel event as a whole notch", () => {
+    expect(wheelZoomFactor({ deltaY: -1, deltaMode: 2, ctrlKey: false })).toBeCloseTo(WHEEL_NOTCH_FACTOR);
+  });
+
+  it("fits nothing, or only unplaced boxes, at 100% from the origin", () => {
+    expect(fitToBoxes([], { width: 800, height: 600 })).toEqual({ left: 0, top: 0, zoom: 1 });
+    expect(fitToBoxes([{ x: Number.NaN, y: 0, width: 10, height: 10 }], { width: 800, height: 600 })).toEqual({ left: 0, top: 0, zoom: 1 });
+  });
+});

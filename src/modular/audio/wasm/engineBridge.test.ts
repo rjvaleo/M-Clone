@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { REPORT_INTERVAL_QUANTA } from "./rackProtocol";
 import { moduleRegistry } from "../../registry/registry";
-import { WasmRack, MODULE_KINDS, PARAMS_HANDLED_ELSEWHERE, ENGINE_ONLY_PARAMS, NOT_YET_IN_RUST, PARAM_INDICES, NO_MODULE, variantOf, type EngineExports } from "./engineBridge";
+import { WasmRack, MODULE_KINDS, PARAMS_HANDLED_ELSEWHERE, ENGINE_ONLY_PARAMS, NOT_YET_IN_RUST, PARAM_INDICES, NO_MODULE, HOST_INPUT_KIND, variantOf, type EngineExports } from "./engineBridge";
 import type { AudioPlan, AudioNodeSpec } from "../audioPlan";
 
 /**
@@ -1567,5 +1567,67 @@ describe("The Grain Engine's slow builds, made off the audio thread", () => {
     rack.update(grainPlan());
     expect(rack.takeBuildRequests()).toEqual([]);
     expect(() => rack.acceptBuild({ type: "grain-built", nodeId: "g", seq: 1, map: null })).not.toThrow();
+  });
+
+  it("asks nothing for a Grain Engine with no sample, and only Grain Engines are asked", () => {
+    const engine = new DeferringEngine();
+    const rack = new WasmRack(engine, 48000, { deferBuilds: true });
+    rack.update(plan([node("x", "m.audio-gain"), node("g", "m.grain-engine")]));
+    engine.request = { seq: 2, flags: 1 };
+    expect(rack.takeBuildRequests()).toEqual([]);
+    rack.setSampleMap({ loop: 5 });
+    rack.update(plan([node("x", "m.audio-gain"), node("g", "m.grain-engine", {}, { structure: { "asset-id": "loop" } as never })], [], 2));
+    expect(rack.takeBuildRequests().map((r) => [r.nodeId, r.sample])).toEqual([["g", 5]]);
+  });
+});
+
+describe("The bridge at its edges", () => {
+  it("plays without the host feed when the engine refuses its input module", () => {
+    const engine = new FakeEngine();
+    engine.unknownKinds.add(HOST_INPUT_KIND);
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("g", "m.audio-gain"), node("out", "m.audio-output")], [wire("g", "out")]));
+    const [g, out] = ["g", "out"].map((id) => rack.moduleIdOf(id)!);
+    // The gain hears nothing: no cable from a host input that does not exist.
+    expect(engine.of("connect")).toEqual([`connect:${g}:0→${out}:0`, `connect:${g}:1→${out}:1`]);
+    expect(engine.of("io")).toEqual([`io:${NO_MODULE},${out}`]);
+  });
+
+  it("points the host at nothing once the Audio Output goes", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(simplePlan());
+    const out = rack.moduleIdOf("out")!;
+    rack.update(plan([node("g", "m.audio-gain", { gain: 0.5 })], [], 2));
+    expect(engine.of("io").slice(-2)).toEqual([`io:0,${out}`, `io:0,${NO_MODULE}`]);
+  });
+
+  it("brings a bypassed module back in", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("g", "m.audio-gain", {}, { bypass: true })]));
+    rack.update(plan([node("g", "m.audio-gain", {}, { bypass: false })], [], 2));
+    const g = rack.moduleIdOf("g")!;
+    expect(engine.of("bypass")).toEqual([`bypass:${g}=1`, `bypass:${g}=0`]);
+  });
+
+  it("reports where each Grain Engine's play head is", () => {
+    const engine = new FakeEngine();
+    engine.telemetry = 0.25;
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("g", "m.grain-engine"), node("x", "m.audio-gain")]));
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.heads).toEqual({ g: 0.25 });
+  });
+
+  it("routes nothing to a knob on a module that was never built", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update({
+      ...plan([node("d", "m.audio-delay")]),
+      modulators: [node("l", "m.lfo", { rate: 2 })],
+      modulations: [{ from: "l", to: { nodeId: "ghost", parameterId: "feedback" }, scale: 1, min: 0, max: 1 }],
+    });
+    expect(engine.of("route")).toEqual([]);
   });
 });

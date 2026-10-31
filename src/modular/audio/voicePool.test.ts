@@ -130,3 +130,30 @@ describe("Voice pooling", () => {
     expect(instance.activeCount).toBe(1);
   });
 });
+
+describe("Voice stealing out of order", () => {
+  it("steals the note that started first, not the one leased first", () => {
+    // Notes can be leased out of time order — a late event scheduled into the
+    // past — and the steal must still go by when each one started.
+    const stolen: number[] = [];
+    const { instance } = pool(2, (lease) => stolen.push(lease.startedAtSec));
+    instance.acquire(5);
+    instance.acquire(1);
+    instance.acquire(6);
+    expect(stolen).toEqual([1]);
+    expect(instance.activeLeases().map((lease) => lease.startedAtSec)).toEqual([5, 6]);
+  });
+});
+
+describe("A pool with no usable capacity", () => {
+  it("still hands out a voice, building one rather than failing", () => {
+    // A capacity that is not a number never admits building, so the first
+    // acquire finds nothing idle and nothing to steal; after that it steals.
+    const { instance, created } = pool(Number.NaN);
+    expect(instance.acquire(0).voice).toBe(created[0]);
+    expect(instance.constructed).toBe(1);
+    expect(instance.stolen).toBe(0);
+    expect(instance.acquire(1).voice).toBe(created[0]);
+    expect(instance.stolen).toBe(1);
+  });
+});

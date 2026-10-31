@@ -142,3 +142,11 @@ describe("snapToChord", () => {
     expect(Number.isFinite(snapped.detuneCents)).toBe(true);
   });
 });
+
+describe("snapToChord with a shape it does not know", () => {
+  it("falls back to the triad", () => {
+    for (const note of [61, 62, 65, 69, 71]) {
+      expect(snapToChord(note, major(), 0, "ninth" as ChordShape)).toEqual(snapToChord(note, major(), 0, "triad"));
+    }
+  });
+});

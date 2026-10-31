@@ -74,3 +74,29 @@ describe("Cloud presets, as MultiGrainLive's", () => {
     expect(back.reverse).toBe(true);
   });
 });
+
+describe("The cloud pad and its presets, given what they cannot use", () => {
+  it("holds a silent engine's sweep at its home, and draws no spray for a file with no length", () => {
+    const geo = cloudGeometry({ scan: 1, position: 0.2, "position-jitter": 400 }, 0, 200, 120, Number.NaN);
+    expect(geo.sweep).toBe(0);
+    expect(geo.head).toBeCloseTo(0.2, 12);
+    expect(geo.halfW).toBe(0);
+  });
+
+  it("reads a store that holds no clouds, or nonsense, as empty", () => {
+    for (const stored of ["null", "[1,2]", "7", "{not json"]) {
+      const store = memory();
+      store.setItem("idmlab.grain-clouds", stored);
+      expect(listClouds(store), stored).toEqual([]);
+    }
+  });
+
+  it("keeps no name when the store refuses to save, and forgets nothing when it refuses to delete", () => {
+    const store = memory();
+    saveCloud(store, "Wash", { layers: 8 });
+    const refusing = { getItem: store.getItem, setItem: () => { throw new Error("quota"); } };
+    expect(saveCloud(refusing, "Mist", { layers: 2 })).toBeNull();
+    expect(() => deleteCloud(refusing, "Wash")).not.toThrow();
+    expect(listClouds(store)).toEqual(["Wash"]);
+  });
+});

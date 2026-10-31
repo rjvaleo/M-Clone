@@ -117,3 +117,20 @@ describe("Evolve: X, Y and Z (manual p51–52)", () => {
     expect(new Set(dims("z"))).toEqual(new Set(["velocity"]));
   });
 });
+
+describe("Generate: a pattern of rests", () => {
+  const rests = (): SeqMaterial => ({ ...material(), pattern: { steps: [[], [], [], []], scrambled: [[], [], [], []], length: 4 } });
+
+  it("RndFew leaves rests as rests", () => {
+    expect(generate("rnd-few", rests(), new Rng(3), { preserveRests: false }).pattern.steps).toEqual([[], [], [], []]);
+  });
+
+  it("RndAll fills every step with a scale note within an octave of middle C", () => {
+    const notes = generate("rnd-all", rests(), new Rng(3), { preserveRests: false }).pattern.steps.flat();
+    expect(notes).toHaveLength(4);
+    for (const note of notes) {
+      expect(snapToScale(note, 0, "major")).toBe(note);
+      expect(Math.abs(note - 60)).toBeLessThanOrEqual(12);
+    }
+  });
+});

@@ -345,3 +345,56 @@ describe("The modulators' ranges", () => {
     expect([velocity.minimum, velocity.maximum, velocity.defaultValue]).toEqual([0, 1, 0]);
   });
 });
+
+describe("Compiling the audio subgraph's edge cases", () => {
+  it("connects nothing along a cable that does not carry audio", () => {
+    const document = graphWith(
+      [
+        { id: "syn", type: "m.synth" },
+        { id: "out", type: "m.audio-output" },
+        { id: "adsr", type: "m.adsr" },
+      ],
+      [
+        { id: "e1", from: ["syn", "notes-in"], to: ["out", "audio-in"] },
+        { id: "e2", from: ["syn", "notes-in"], to: ["adsr", "notes-in"] },
+      ],
+    );
+    const plan = compileAudioPlan(document, moduleRegistry);
+    expect(plan.connections).toEqual([]);
+    expect(plan.modulators?.map((m) => m.nodeId)).toEqual(["adsr"]);
+    expect(plan.modulatorConnections).toBeUndefined();
+  });
+
+  it("builds no modulator the registry does not describe", () => {
+    const registry = new Map(moduleRegistry);
+    registry.delete("m.lfo");
+    const plan = compileAudioPlan(graphWith([{ id: "lfo", type: "m.lfo" }]), registry);
+    expect(plan.modulators).toEqual([]);
+  });
+
+  it("drops a choice whose descriptor lists no options, rather than inventing an index", () => {
+    const registry = new Map(moduleRegistry);
+    const lfo = registry.get("m.lfo")!;
+    const delay = registry.get("m.audio-delay")!;
+    const shape = lfo.parameters.find((p) => p.id === "shape")!;
+    const bare = { ...shape, options: undefined };
+    registry.set("m.lfo", { ...lfo, parameters: lfo.parameters.map((p) => (p.id === "shape" ? bare : p)) });
+    registry.set("m.audio-delay", { ...delay, parameters: [...delay.parameters, { ...bare, id: "mode" }] });
+    const plan = compileAudioPlan(
+      graphWith([{ id: "lfo", type: "m.lfo" }, { id: "delay", type: "m.audio-delay" }]),
+      registry,
+    );
+    expect(plan.modulators?.[0]?.parameters).not.toHaveProperty("shape");
+    expect(plan.nodes.delay!.parameters).not.toHaveProperty("mode");
+  });
+
+  it("routes no LFO to a knob that is a switch rather than a number", () => {
+    const document = graphWith([
+      { id: "gr", type: "m.granular" },
+      { id: "lfo", type: "m.lfo", parameters: { targets: [{ nodeId: "gr", parameterId: "freeze" }] } },
+    ]);
+    const plan = compileAudioPlan(document, moduleRegistry);
+    expect(plan.nodes.gr!.parameters).toHaveProperty("freeze");
+    expect(plan.modulations).toEqual([]);
+  });
+});

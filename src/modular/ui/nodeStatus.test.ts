@@ -59,3 +59,10 @@ describe("statusLevel", () => {
     expect(statusLevel("Step 4", 8)).toBeCloseTo(0.5);
   });
 });
+
+describe("a count too large to be a number", () => {
+  it("reads as no count at all", () => {
+    // 1 followed by 400 zeroes is past the largest double: Number() makes it Infinity.
+    expect(statusLevel(`1${"0".repeat(400)} voices`, 8)).toBe(0);
+  });
+});

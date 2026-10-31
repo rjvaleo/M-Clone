@@ -136,3 +136,13 @@ describe("runtime bridge", () => {
     expect(command).toHaveBeenCalledWith("co", "sync");
   });
 });
+
+describe("M Conductor's pause", () => {
+  it("pauses the transport and says so", () => {
+    const runtime = runtimeStub();
+    const result = executeRuntimeCommand(runtime, node("co", "m.lab-conductor"), "pause", "Pause");
+    expect(runtime.pause).toHaveBeenCalledTimes(1);
+    expect(runtime.stop).not.toHaveBeenCalled();
+    expect(result.message).toBe("co: Pause");
+  });
+});

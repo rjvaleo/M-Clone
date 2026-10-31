@@ -275,3 +275,72 @@ describe("Panic and teardown", () => {
     expect(adapter.liveNodeCount).toBe(0);
   });
 });
+
+describe("A diff naming what the adapter does not hold", () => {
+  it("removes, unwires, wires and moves nothing for nodes and cables it never built", () => {
+    const { factory, adapter, applyPlan } = rig();
+    const only = plan([spec("a")]);
+    applyPlan(only);
+    const before = adapter.stats();
+    adapter.apply({
+      added: [],
+      removed: ["ghost"],
+      rebuilt: [],
+      connected: [cable("a", "ghost")],
+      disconnected: [cable("a", "ghost")],
+      parameters: [],
+      bypass: [{ nodeId: "ghost", bypass: true }],
+      wet: [],
+    }, only);
+    expect(adapter.stats()).toEqual(before);
+    expect(adapter.retiringCount).toBe(0);
+    expect(factory.built[0].output.connections).toEqual([]);
+  });
+});
+
+describe("Bypass switched back", () => {
+  it("fades the node back up to full", () => {
+    const { factory, applyPlan } = rig();
+    const first = plan([spec("a")]);
+    applyPlan(first);
+    const bypassed = plan([spec("a", { bypass: true })]);
+    applyPlan(bypassed, first);
+    applyPlan(plan([spec("a")]), bypassed);
+    const a = factory.built[0];
+    expect(a.bypassed).toBe(false);
+    const ramps = a.level.ramps();
+    expect(ramps[ramps.length - 1]?.value).toBe(1);
+  });
+});
+
+describe("Panic and late timers", () => {
+  it("holds a node still fading out, as well as the live ones", () => {
+    const { factory, adapter, applyPlan } = rig();
+    const first = plan([spec("a")]);
+    applyPlan(first);
+    applyPlan(plan([]), first);
+    adapter.panic();
+    const lastTwo = factory.built[0].level.calls.slice(-2).map((call) => call.method);
+    expect(lastTwo).toEqual(["cancel", "setValueAtTime"]);
+  });
+
+  it("disposes a retired node once, even when its timer fires after teardown", () => {
+    // A scheduler whose cancel cannot reach a timer already queued: the late
+    // task must find the node gone rather than dispose it a second time.
+    const factory = new FakeFactory();
+    const tasks: (() => void)[] = [];
+    const adapter = new AudioGraphAdapter(factory, {
+      now: () => 0,
+      after: (_delay, task) => { tasks.push(task); },
+      cancelAll: () => {},
+    });
+    const first = plan([spec("a")]);
+    adapter.apply(diffAudioPlans(emptyAudioPlan(), first), first);
+    adapter.apply(diffAudioPlans(first, plan([])), plan([]));
+    adapter.dispose();
+    const disposed = adapter.stats().disposed;
+    for (const task of tasks) task();
+    expect(adapter.stats().disposed).toBe(disposed);
+    expect(factory.undisposed).toHaveLength(0);
+  });
+});

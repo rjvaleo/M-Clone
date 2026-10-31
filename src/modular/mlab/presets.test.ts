@@ -54,3 +54,21 @@ describe("a module's preset manager", () => {
     expect(recallSlot(presets, 6)).toBeNull();
   });
 });
+
+describe("a module's preset manager: empty places", () => {
+  it("renaming or deleting an empty place changes nothing", () => {
+    const presets = storePreset([], 1, "Verse", { tempo: 90 });
+    expect(renamePreset(presets, 0, "Intro")).toBe(presets);
+    expect(deletePreset(presets, 5)).toBe(presets);
+  });
+
+  it("a move drops the empty places it leaves at the end", () => {
+    const presets = [{ name: "A", values: {} }, { name: "B", values: {} }, null];
+    expect(movePreset(presets, 1, 0).map((p) => p?.name)).toEqual(["B", "A"]);
+  });
+
+  it("has no free number once all 99 are used", () => {
+    const full = Array.from({ length: MAX_PRESETS }, (_, i) => ({ name: `P${i + 1}`, values: {} }));
+    expect(firstFree(full)).toBe(-1);
+  });
+});

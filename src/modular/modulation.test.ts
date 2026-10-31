@@ -218,3 +218,44 @@ describe("The envelope follower and the gate ADSR as modulators", () => {
     }
   });
 });
+
+describe("Modulation's fallbacks", () => {
+  it("gives a quarter's beats to a name that is not a note value", () => {
+    expect(lfoRateHz({ rate: 3, sync: true, note: "1/5" }, 120)).toBe(2);
+    expect(lfoRateHz({ rate: 3, sync: true, note: undefined }, 60)).toBe(1);
+  });
+
+  it("reads no targets from a document whose targets are not a list", () => {
+    const graph = graphWith([{ id: "lfo", type: LFO_TYPE, parameters: { targets: "osc|freq" } }]);
+    expect(targetsOf(graph.nodes.lfo!)).toEqual([]);
+  });
+
+  it("wears the first colour when its own is not one of the palette", () => {
+    const graph = graphWith([
+      { id: "lfo", type: LFO_TYPE, parameters: { color: "Plaid", targets: [{ nodeId: "osc", parameterId: "freq" }] } },
+      { id: "osc", type: LFO_TYPE },
+    ]);
+    expect(mappingsByTarget(graph).get("osc|freq")).toEqual([{ lfoNodeId: "lfo", color: LFO_COLORS[0].value }]);
+  });
+
+  it("starts again at the first colour once every colour is worn", () => {
+    const graph = graphWith(LFO_COLORS.map((c, i) => ({ id: `l${i}`, type: LFO_TYPE, parameters: { color: c.name } })));
+    expect(nextLfoColor(graph)).toBe(LFO_COLORS[0].name);
+  });
+
+  it("plays the falling saw and both halves of the square", () => {
+    expect(shapeValue(3, 0.25)).toBe(0.5);
+    expect(shapeValue(4, 0.25)).toBe(1);
+    expect(shapeValue(4, 0.75)).toBe(-1);
+  });
+
+  it("falls back to the defaults for a rate or amount that is not a finite number", () => {
+    const graph = graphWith([
+      { id: "lfo", type: LFO_TYPE, parameters: { rate: "fast", amount: Number.NaN, sync: false } },
+      { id: "env", type: ENV_FOLLOWER_TYPE, parameters: { amount: null } },
+    ]);
+    const states = lfoStates(graph);
+    expect(states.get("lfo")).toMatchObject({ rate: 1, amount: 0.5 });
+    expect(states.get("env")).toEqual({ rate: 0, shape: -1, amount: 0.5 });
+  });
+});

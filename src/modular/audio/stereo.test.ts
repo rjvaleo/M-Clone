@@ -598,3 +598,20 @@ describe("The mixer's sends and returns, as the Rust mixer has them", () => {
     near(main("audio-in-6", [0.1, 0]), [0, 0]);
   });
 });
+
+describe("The mixer's ports and controls it does not have", () => {
+  it("leaves a send on a channel past the eighth alone", () => {
+    const context = new FakeAudioContext();
+    const core = createMixer(context, spec("m.audio-mixer", { parameters: { "level-1": 1 } }), 0);
+    core.setParameter("send-a-9", 1, 1);
+    near(apply(transfer(core.inputFor("audio-in-1"), core.outputFor("send-a-out")), [0.4, 0.4]), [0, 0]);
+  });
+
+  it("has an extra output only for each send, through the rack's wrapper too", () => {
+    const context = new FakeAudioContext();
+    const built = EFFECT_BUILDERS["m.audio-mixer"](context, spec("m.audio-mixer"));
+    expect(built.outputFor?.("send-a-out")).toBeDefined();
+    expect(built.outputFor?.("send-b-out")).not.toBe(built.outputFor?.("send-a-out"));
+    expect(built.outputFor?.("audio-out")).toBeUndefined();
+  });
+});

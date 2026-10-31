@@ -119,3 +119,15 @@ describe("The meter animator", () => {
     g.cancelAnimationFrame = caf;
   });
 });
+
+describe("The meter animator, given reports and bars without names", () => {
+  it("takes a report with no levels as nothing heard, and leaves a bar with no node dark", () => {
+    const named = new FakeElement({ levelNode: "n", levelSide: "in" });
+    const unnamed = new FakeElement({ levelSide: "out" });
+    const animator = new MeterAnimator(() => room([named, unnamed]), () => ({ report: { quanta: 1 } }));
+    animator.tick(1);
+    expect(named.dataset.live).toBe("off");
+    expect(unnamed.dataset.live).toBe("off");
+    expect(unnamed.style.values.get("--pnl-level")).toBe("0");
+  });
+});

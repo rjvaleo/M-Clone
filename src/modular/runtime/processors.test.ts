@@ -1322,3 +1322,49 @@ describe("Musical constants", () => {
     expect(PPQN).toBe(960);
   });
 });
+
+describe("Harmony processors at their limits", () => {
+  const notes = (values: number[]) =>
+    values.map((note) => ({ kind: "note-event" as const, atTick: 0, durationTicks: 120, note, velocity: 90, channel: 1 }));
+
+  it("Scale Context reads a root it does not know as C, and sends nothing once its budget is spent", () => {
+    const bus = new MessageBus();
+    const read = collector(bus, "sc", "scale-out");
+    const processor = new ScaleContextProcessor(build("sc", bus, { root: "H", scale: "ionian-major" }));
+    bus.beginNode("sc", 64);
+    processor.process(window(0, 480));
+    expect(read().map((m) => m.controlValue)).toEqual([0]);
+    expect(processor.status().notes).toBe("C D E F G A B");
+    const spent = new MessageBus();
+    const none = collector(spent, "sc", "scale-out");
+    const starved = new ScaleContextProcessor(build("sc", spent, { root: "D", scale: "ionian-major" }));
+    spent.beginNode("sc", 0);
+    starved.process(window(0, 480));
+    expect(none()).toEqual([]);
+    expect(spent.overruns).toEqual(["sc"]);
+  });
+
+  it("Scale Quantizer snaps to the nearest when no direction is set, and stops at its budget", () => {
+    const bus = new MessageBus();
+    const read = collector(bus, "sq", "notes-out");
+    const processor = new ScaleQuantizerProcessor(build("sq", bus, { root: "C", scale: "ionian-major" }));
+    feed(bus, "sq", "notes-in", notes([61, 66, 68]));
+    bus.beginNode("sq", 2);
+    processor.process(window(0, 480));
+    // 61 ties down to 60; 66 ties down to 65; 68 never goes out.
+    expect(read().map((m) => m.note)).toEqual([60, 65]);
+    expect(bus.overruns).toEqual(["sq"]);
+  });
+
+  it("Chord Quantizer snaps to the triad when no chord is set, and stops at its budget", () => {
+    const bus = new MessageBus();
+    const read = collector(bus, "cq", "notes-out");
+    const processor = new ChordQuantizerProcessor(build("cq", bus, { root: "C", scale: "ionian-major" }));
+    feed(bus, "cq", "notes-in", notes([62, 71, 65]));
+    bus.beginNode("cq", 2);
+    processor.process(window(0, 480));
+    // B is the seventh, not a triad tone: it moves.
+    expect(read().map((m) => m.note)).toEqual([60, 72]);
+    expect(bus.overruns).toEqual(["cq"]);
+  });
+});

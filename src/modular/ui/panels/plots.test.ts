@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ParameterDescriptor } from "../../model/graph";
 import { moduleRegistry } from "../../registry/registry";
 import { gateSteady, musicalResponse, pnRms } from "./curves";
 import { DISPLAY_RATE, PLOT_KINDS, hz, kernelValues, place, plotFor, secs, type Plot } from "./plots";
@@ -227,5 +228,39 @@ describe("The displays' numbers and scales", () => {
     expect(plot("mod-sweep", { rateHz: 0.55 }).panes[0].x.ticks.map((t) => t.label)).toEqual(["0", "1s", "2s", "3s"]);
     expect(plot("allpass-train").panes[0].x.ticks.map((t) => t.label)).toEqual(["0", "50ms", "100ms", "150ms", "200ms"]);
     expect(plot("trem-cycle", { rateHz: 4 }).panes[0].x.ticks[4].label).toBe("250ms");
+  });
+});
+
+describe("Every display, at the edges of what it is given", () => {
+  it("reads a choice with no options as its first", () => {
+    const choice = { id: "pick", label: "Pick", kind: "enum", defaultValue: "a" } as unknown as ParameterDescriptor;
+    expect(kernelValues([choice], { pick: "b" })).toEqual({ pick: 0 });
+  });
+
+  it("signs a level above 0 dB, writes a level of nothing as −∞, and 0 dB bare", () => {
+    expect(plot("regalia-response", { gainDb: 6 }).top).toBe("1.00 KHZ · BW 200 HZ · Q 5.00 · +6.0 DB");
+    expect(plot("gate-curve", { thresholdDb: -Infinity }).top).toBe("THRESHOLD −∞ DB · DEPTH 100%");
+    expect(plot("regalia-response", { gainDb: 0 }).top).toBe("1.00 KHZ · BW 200 HZ · Q 5.00 · 0.0 DB");
+  });
+
+  it("says a swept delay swept fast enough stops the read", () => {
+    // 20 ms at 10 Hz: the delay grows faster than time passes on the slow side.
+    expect(plot("mod-sweep", { depthMs: 20, rateHz: 10 }).top).toBe("PITCH +1409.0 / STOPS CENTS");
+  });
+
+  it("marks a long sweep's delay every 10 ms, and gives one it cannot measure the shortest scale", () => {
+    expect(plot("mod-sweep", { delayMs: 30 }).panes[0].y.ticks.map((t) => t.at)).toEqual([0, 10, 20, 30, 40]);
+    expect(plot("mod-sweep", { delayMs: Number.NaN }).panes[0].y).toMatchObject({ min: 0, max: 5 });
+  });
+
+  it("gives a rotor that never moves its line a 10 ms scale", () => {
+    // A one-sample base and no depth: each side reads the sample just written.
+    const still = plot("rotor", { depthMs: 0, baseMs: 1000 / DISPLAY_RATE });
+    expect(still.top).toBe("TURN 833 MS · 0.0/0.0 CENTS");
+    expect(still.panes[0].y.max).toBe(10);
+  });
+
+  it("holds a span longer than any round one at the longest", () => {
+    expect(plot("doppler-path", { velocityMps: 0.01 }).panes[0].x.max).toBe(30);
   });
 });

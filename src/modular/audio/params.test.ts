@@ -193,3 +193,12 @@ describe("The ban on direct parameter assignment", () => {
     expect(sources).toContain("./params.ts");
   });
 });
+
+describe("A smoothing policy the table does not list", () => {
+  it("steps rather than ramping over a made-up time", () => {
+    const param = new FakeParam(0);
+    rampParam(param, 0.7, 2, "glide" as unknown as "linear");
+    expect(param.names()).toEqual(["cancelScheduledValues", "setValueAtTime", "setValueAtTime"]);
+    expect(param.calls[2]).toEqual(["setValueAtTime", 0.7, 2]);
+  });
+});

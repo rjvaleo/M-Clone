@@ -77,3 +77,28 @@ describe("A control's travel", () => {
     expect(padPoint(5000, 7.5, x, y)).toEqual([0.25, 0.25]);
   });
 });
+
+describe("MultiGrainLive's logarithmic slider, a range of ticks", () => {
+  it("lands each tick on min·(max/min)^(tick/log), rounded where its handler rounds", () => {
+    // Four ticks from 1 to 10 000: one per decade.
+    expect(fromFraction(0.5, 1, 10_000, { log: 4 })).toBeCloseTo(100, 9);
+    // 0.6 of four ticks is the nearest tick, 2.4 → 2.
+    expect(fromFraction(0.6, 1, 10_000, { log: 4 })).toBeCloseTo(100, 9);
+    expect(fromFraction(1 / 3, 1, 8, { log: 3, round: true })).toBe(2);
+    expect(fromFraction(0.5, 1, 10, { log: 1, round: true })).toBe(10);
+    expect(toFraction(100, 1, 10_000, { log: 4 })).toBeCloseTo(0.5, 12);
+  });
+
+  it("runs straight when its range reaches zero", () => {
+    expect(fromFraction(0.5, 0, 100, { log: 4 })).toBe(50);
+  });
+
+  it("drags from tick to tick, never snapped to the step", () => {
+    // Half the travel up from the bottom: two decades.
+    expect(dragValue(1, 75, { min: 1, max: 10_000, travel: { log: 4 }, step: 7 })).toBeCloseTo(100, 9);
+  });
+
+  it("leaves a pad axis with no step unsnapped", () => {
+    expect(padValues(0.3, 0.5, { min: 0, max: 1 }, { min: 0, max: 1, step: 0 })).toEqual([0.3, 0.5]);
+  });
+});
