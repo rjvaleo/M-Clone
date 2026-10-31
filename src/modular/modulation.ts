@@ -14,6 +14,40 @@ import type { GraphDocument, JsonValue, NodeInstance } from "./model/graph";
 
 
 export const LFO_TYPE = "m.lfo";
+/** The envelope of whatever is patched into it. */
+export const ENV_FOLLOWER_TYPE = "m.env-follower";
+/** An attack/decay/sustain/release envelope, opened by notes. */
+export const ADSR_TYPE = "m.adsr";
+
+/** Every module that moves knobs. Each keeps its knobs in `targets` and wears a colour. */
+export const MODULATOR_TYPE_LIST = [LFO_TYPE, ENV_FOLLOWER_TYPE, ADSR_TYPE] as const;
+export const isModulator = (moduleType: string): boolean =>
+  (MODULATOR_TYPE_LIST as readonly string[]).includes(moduleType);
+
+/**
+ * The note values a synced LFO can take, shortest first: each of 1/32 to 1/1
+ * as a triplet, straight and dotted. `beats` is in quarter notes, so one cycle
+ * lasts `beats` beats. The labels are the synth delay's (`DELAY_NOTES`), and
+ * where both have a value the lengths agree; the triplets are exact here.
+ */
+export const SYNC_NOTES: readonly { label: string; beats: number }[] = [
+  ["1/32", 0.125], ["1/16", 0.25], ["1/8", 0.5], ["1/4", 1], ["1/2", 2], ["1/1", 4],
+].flatMap(([label, beats]) => [
+  { label: `${label}T`, beats: (beats as number) * 2 / 3 },
+  { label: label as string, beats: beats as number },
+  { label: `D ${label}`, beats: (beats as number) * 1.5 },
+]);
+
+/** The beats of a note value, or a quarter's for a name that is not one. */
+export const syncBeats = (note: unknown): number =>
+  SYNC_NOTES.find((n) => n.label === note)?.beats ?? 1;
+
+/**
+ * An LFO's rate in hertz: its Rate knob, or with Sync on its note value at the
+ * transport's tempo — the rate `Lfo::set_rate_synced` plays.
+ */
+export const lfoRateHz = (lfo: { rate: number; sync: boolean; note: unknown }, tempoBpm: number): number =>
+  lfo.sync ? tempoBpm / 60 / syncBeats(lfo.note) : lfo.rate;
 
 /** In the order of `LfoShape` in rust/dsp-core/src/lfo.rs: the index is the wire value. */
 export const LFO_SHAPES = ["Sine", "Triangle", "Saw up", "Saw down", "Square", "S&H", "Smooth random"] as const;
@@ -53,16 +87,17 @@ export const withTarget = (targets: readonly ModTarget[], target: ModTarget): Mo
 export const withoutTarget = (targets: readonly ModTarget[], target: ModTarget): ModTarget[] =>
   targets.filter((t) => targetKey(t) !== targetKey(target));
 
+/** A modulator's colour, on itself and on every knob it moves. */
 export const lfoColor = (node: NodeInstance): string =>
   (LFO_COLORS.find((c) => c.name === node.parameters.color) ?? LFO_COLORS[0]).value;
 
 export type Mapping = { lfoNodeId: string; color: string };
 
-/** Every knob some LFO moves, keyed by `targetKey`, with the LFOs in document order. */
+/** Every knob some modulator moves, keyed by `targetKey`, with the modulators in document order. */
 export function mappingsByTarget(graph: GraphDocument): Map<string, Mapping[]> {
   const map = new Map<string, Mapping[]>();
   for (const node of Object.values(graph.nodes)) {
-    if (node.moduleType !== LFO_TYPE) continue;
+    if (!isModulator(node.moduleType)) continue;
     for (const target of targetsOf(node)) {
       if (!graph.nodes[target.nodeId]) continue;
       const key = targetKey(target);
@@ -72,10 +107,10 @@ export function mappingsByTarget(graph: GraphDocument): Map<string, Mapping[]> {
   return map;
 }
 
-/** The first colour no LFO in the document wears, so a new one stands apart. */
+/** The first colour no modulator in the document wears, so a new one stands apart. */
 export function nextLfoColor(graph: GraphDocument): string {
   const worn = new Set(Object.values(graph.nodes)
-    .filter((node) => node.moduleType === LFO_TYPE)
+    .filter((node) => isModulator(node.moduleType))
     .map((node) => node.parameters.color));
   return (LFO_COLORS.find((c) => !worn.has(c.name)) ?? LFO_COLORS[0]).name;
 }
@@ -127,17 +162,30 @@ export function liveLfoValue(
   return shaped === null ? report.value : shaped * lfo.amount;
 }
 
-/** Every LFO's rate, shape (as its wire index) and amount, for drawing it live. */
-export function lfoStates(graph: GraphDocument): Map<string, { rate: number; shape: number; amount: number }> {
+/**
+ * Every modulator's rate, shape (as its wire index) and amount, for drawing it
+ * live. A synced LFO's rate is its note at `tempoBpm`. The envelope follower
+ * and the ADSR follow sound and notes no face can predict, so they carry shape
+ * −1: `liveLfoValue` holds what the rack last reported for them.
+ */
+export function lfoStates(graph: GraphDocument, tempoBpm = 120): Map<string, { rate: number; shape: number; amount: number }> {
   const states = new Map<string, { rate: number; shape: number; amount: number }>();
   for (const node of Object.values(graph.nodes)) {
-    if (node.moduleType !== LFO_TYPE) continue;
+    if (!isModulator(node.moduleType)) continue;
     const number = (id: string, fallback: number) => {
       const value = node.parameters[id];
       return typeof value === "number" && Number.isFinite(value) ? value : fallback;
     };
+    if (node.moduleType !== LFO_TYPE) {
+      states.set(node.id, { rate: 0, shape: -1, amount: number("amount", 0.5) });
+      continue;
+    }
     const shape = LFO_SHAPES.indexOf(node.parameters.shape as (typeof LFO_SHAPES)[number]);
-    states.set(node.id, { rate: number("rate", 1), shape: Math.max(0, shape), amount: number("amount", 0.5) });
+    const rate = lfoRateHz(
+      { rate: number("rate", 1), sync: node.parameters.sync === true, note: node.parameters.note },
+      tempoBpm,
+    );
+    states.set(node.id, { rate, shape: Math.max(0, shape), amount: number("amount", 0.5) });
   }
   return states;
 }

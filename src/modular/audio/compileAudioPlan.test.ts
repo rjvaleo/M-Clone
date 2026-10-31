@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MODULATOR_TYPES } from "../registry/modulatorModules";
 import { compileAudioPlan, audioOutputNodeIds, hasAudioPorts } from "./compileAudioPlan";
 import { diffAudioPlans, isTopologyChange } from "./audioPlan";
 import { createNode, moduleRegistry } from "../registry/registry";
@@ -130,6 +131,9 @@ describe("Compiling the audio subgraph", () => {
     const orphaned: string[] = [];
     for (const descriptor of moduleRegistry.values()) {
       if (!hasAudioPorts(moduleRegistry, descriptor.type)) continue;
+      // The envelope follower listens to audio but is a modulator: it travels
+      // in `modulators`, and the bridge's parameter contract covers it there.
+      if (MODULATOR_TYPES.has(descriptor.type)) continue;
       const node = createNode(descriptor.type, "n", { x: 0, y: 0 });
       const document = emptyGraph();
       document.nodes.n = node;
@@ -200,7 +204,8 @@ describe("Compiling the LFOs", () => {
     const plan = compileAudioPlan(graph(), moduleRegistry);
     expect(plan.nodes.l).toBeUndefined();
     expect(plan.modulators?.map((m) => [m.nodeId, m.parameters])).toEqual([
-      ["l", { rate: 3, shape: 4, amount: 0.4, phase: 90 }],
+      // Sync off, as every LFO saved before it was: the rate is the knob's.
+      ["l", { rate: 3, shape: 4, amount: 0.4, phase: 90, sync: 0, beats: 1, bpm: 120 }],
     ]);
   });
 
@@ -216,5 +221,86 @@ describe("Compiling the LFOs", () => {
       min: feedback.minimum,
       max: feedback.maximum,
     }]);
+  });
+});
+
+describe("Compiling tempo sync", () => {
+  it("carries the note as beats and the transport's tempo", () => {
+    const graph = graphWith([{ id: "l", type: "m.lfo", parameters: { sync: true, note: "D 1/8" } }]);
+    const plan = compileAudioPlan(graph, moduleRegistry, { tempoBpm: 96 });
+    expect(plan.modulators?.[0].parameters).toMatchObject({ sync: 1, beats: 0.75, bpm: 96 });
+    expect(plan.modulators?.[0].parameters).not.toHaveProperty("note");
+  });
+});
+
+describe("Compiling the envelope follower and the gate ADSR", () => {
+  const graph = () => graphWith(
+    [
+      { id: "src", type: "m.audio-gain" },
+      { id: "d", type: "m.audio-delay" },
+      { id: "out", type: "m.audio-output" },
+      { id: "e", type: "m.env-follower", parameters: {
+        "attack-seconds": 0.01, "release-seconds": 0.4, amount: 0.7,
+        targets: [{ nodeId: "d", parameterId: "feedback" }],
+      } },
+      { id: "a", type: "m.adsr", parameters: {
+        "attack-ms": 5, "decay-ms": 80, sustain: 0.3, "release-ms": 900, amount: 1,
+        targets: [{ nodeId: "d", parameterId: "delay-seconds" }],
+      } },
+    ],
+    [
+      { id: "c1", from: ["src", "audio-out"], to: ["e", "audio-in"] },
+      { id: "c2", from: ["src", "audio-out"], to: ["d", "audio-in"] },
+    ],
+  );
+
+  it("carries both as modulators, never as audio nodes a Web Audio backend would build", () => {
+    const plan = compileAudioPlan(graph(), moduleRegistry);
+    expect(plan.nodes.e).toBeUndefined();
+    expect(plan.nodes.a).toBeUndefined();
+    expect(plan.modulators?.map((m) => [m.nodeId, m.moduleType, m.parameters])).toEqual([
+      ["a", "m.adsr", { "attack-ms": 5, "decay-ms": 80, sustain: 0.3, "release-ms": 900, amount: 1 }],
+      ["e", "m.env-follower", { "attack-seconds": 0.01, "release-seconds": 0.4, amount: 0.7 }],
+    ]);
+  });
+
+  it("puts the follower's input cable with the modulators, apart from the audio graph", () => {
+    const plan = compileAudioPlan(graph(), moduleRegistry);
+    expect(plan.connections).toEqual([
+      { from: { nodeId: "src", portId: "audio-out" }, to: { nodeId: "d", portId: "audio-in" } },
+    ]);
+    expect(plan.modulatorConnections).toEqual([
+      { from: { nodeId: "src", portId: "audio-out" }, to: { nodeId: "e", portId: "audio-in" } },
+    ]);
+  });
+
+  it("routes each over half the knob's range, as the LFO is routed", () => {
+    const plan = compileAudioPlan(graph(), moduleRegistry);
+    const knob = (id: string) => moduleRegistry.get("m.audio-delay")!.parameters.find((p) => p.id === id)!;
+    expect(plan.modulations).toEqual([
+      { from: "a", to: { nodeId: "d", parameterId: "delay-seconds" }, scale: (knob("delay-seconds").maximum! - knob("delay-seconds").minimum!) / 2, min: knob("delay-seconds").minimum, max: knob("delay-seconds").maximum },
+      { from: "e", to: { nodeId: "d", parameterId: "feedback" }, scale: (knob("feedback").maximum! - knob("feedback").minimum!) / 2, min: knob("feedback").minimum, max: knob("feedback").maximum },
+    ]);
+  });
+});
+
+describe("A patch saved before the new modulators", () => {
+  it("loads, and its LFO plays its own rate with its routes as before", async () => {
+    const { createModularDocument, decodeModularDocument, encodeModularDocument } = await import("../document/document");
+    const graph = graphWith([
+      { id: "d", type: "m.audio-delay" },
+      { id: "l", type: "m.lfo", parameters: { rate: 2.5, amount: 0.3, targets: [{ nodeId: "d", parameterId: "feedback" }] } },
+    ]);
+    // As it was saved then: an LFO had no Sync and no Note.
+    delete graph.nodes.l.parameters.sync;
+    delete graph.nodes.l.parameters.note;
+    const saved = JSON.parse(JSON.stringify(encodeModularDocument(createModularDocument(graph))));
+    const loaded = decodeModularDocument(saved);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const plan = compileAudioPlan(loaded.document.graph, moduleRegistry, { tempoBpm: 174 });
+    expect(plan.modulators?.[0].parameters).toMatchObject({ rate: 2.5, amount: 0.3, sync: 0 });
+    expect(plan.modulations?.map((m) => [m.from, m.to.parameterId])).toEqual([["l", "feedback"]]);
+    expect(plan.modulatorConnections).toBeUndefined();
   });
 });
