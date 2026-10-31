@@ -31,7 +31,10 @@ fn limiter_never_exceeds_its_ceiling() { … }
 ```
 
 A requirement with no citing test is an unmet requirement. `npm run spec:audit`
-scans for IDs defined here and absent from the suites, and fails the build.
+scans for IDs defined here and absent from the suites and reports them; it fails
+only on an id a test cites that this document does not define.
+`npm run spec:strict` also fails on every uncited requirement. At 31 October
+2026 the audit reports 17 of 378 requirements cited (4.5 %).
 
 ### 0.3 Units and tolerances
 
@@ -94,7 +97,11 @@ Hold in every wave, asserted by dedicated tests rather than by inspection.
 
 ## 2. Host boundary
 
-`src/modular/audio/` retains exactly three uses of Web Audio.
+`src/modular/audio/` is to retain exactly three uses of Web Audio. Not yet: the
+Rust rack is the default backend, and the Web Audio graph in
+`src/modular/audio/` (`nodes.ts`, `effects.ts`, `mixer.ts`, `masterChain.ts`
+and their siblings) remains as the fallback a page asks for with
+`?engine=web-audio` (`src/modular/audio/wasm/rackNode.ts`).
 
 | ID | Requirement |
 |---|---|
@@ -345,7 +352,7 @@ through `asModuleId`.
 | Export | Signature | Notes |
 |---|---|---|
 | `input_ptr` | `() -> *mut f32` | `QUANTUM` floats |
-| `output_ptr` | `() -> *mut f32` | `QUANTUM × 2` floats once stereo lands |
+| `output_ptr` | `() -> *mut f32` | `QUANTUM × 2` floats |
 | `process_quantum` | `()` | `process_range(0, QUANTUM)` |
 | `process_range` | `(start: u32, len: u32)` | Renders nothing when `start + len > QUANTUM` |
 
@@ -361,6 +368,14 @@ through `asModuleId`.
 | `set_sample_slot` | `(module, slot, sample: u32)` | — |
 | `telemetry_ptr` | `() -> *mut f32` | P7 |
 | `telemetry_drain` | `() -> u32` | Floats written; resets the ring |
+
+Not yet exported: `telemetry_ptr` and `telemetry_drain`; today
+`module_telemetry(module) -> f32` reads one value per module. `rust/wasm/src/lib.rs`
+exports 53 functions, and these tables have no row yet for `connect_param`,
+`disconnect_param`, `module_output`, `module_telemetry`, `set_metered`,
+`module_level`, `clear_levels`, `note_on_with_step`, `set_slot_shape`, or the
+Grain Engine's off-thread build and grain-job calls (`set_deferred_builds`,
+`build_request_*`, `built_*`, `accept_*`, `job_*`).
 
 | ID | Requirement |
 |---|---|
@@ -813,14 +828,18 @@ every saved patch.
 
 | # | Kind | # | Kind |
 |---|---|---|---|
-| 0 | HostInput | 8 | Reverb |
-| 1 | Gain | 9 | Eq |
-| 2 | AudioOutput | 10 | Compressor |
-| 3 | Synth | 11 | Limiter |
-| 4 | Blackhole | 12 | Bitcrusher |
-| 5 | Dp4Reverb | 13 | Percussion |
-| 6 | Dp4NonLin | 14 | Looper |
-| 7 | Delay | 15 | Granular |
+| 0 | HostInput | 12 | Bitcrusher |
+| 1 | Gain | 13 | Percussion |
+| 2 | AudioOutput | 14 | Looper |
+| 3 | Synth | 15 | Granular |
+| 4 | Blackhole | 16 | Mixer |
+| 5 | Dp4Reverb | 17 | Widener |
+| 6 | Dp4NonLin | 18 | Dp4Machine |
+| 7 | Delay | 19 | Prism |
+| 8 | Reverb | 20 | Lfo |
+| 9 | Eq | 21 | GrainEngine |
+| 10 | Compressor | 22 | EnvelopeFollower |
+| 11 | Limiter | 23 | GateAdsr |
 
 | ID | Requirement |
 |---|---|
@@ -838,10 +857,16 @@ Topology choices that allocate at construction. They ride in on
 | `m.audio-dp4-reverb` | `algorithm` | small-plate · large-plate · small-room · large-room · hall |
 | `m.audio-dp4-nonlin` | `variant` | non-lin-1 · non-lin-2 · non-lin-3 |
 | `m.looper` | `time-stretch` | false · true |
+| `m.audio-dp4` | `source-config`, `ab-routing`, `cd-routing`, `abcd-routing`, `unit-a…d-algorithm` | packed into one number, laid out as `Dp4Machine::variant` |
+| `m.prism-*` | — | the effect's prism-fx `code` |
 | `m.audio-reverb` | `algorithm` | algorithmic · convolution |
 | `m.audio-saturation` | `character` | tube · tape · clip · fold |
 | `m.audio-modulation` | `mode` | chorus · flanger · phaser |
 | `m.audio-compressor` | `mode` | compressor · limiter |
+
+The last four rows are not built: `m.audio-saturation` and
+`m.audio-modulation` do not exist, and neither `m.audio-reverb` (an FDN, with
+no convolver) nor `m.audio-compressor` declares the field.
 
 | ID | Requirement |
 |---|---|
@@ -854,64 +879,79 @@ Topology choices that allocate at construction. They ride in on
 Every effect additionally carries `mix`, `level`, `mute` as its last three
 indices. Ranges are the contract; defaults are the shipped values.
 
-**`m.audio-gain`** — `gain` 0–4 ×, default 1.
+**`m.audio-gain`** — `gain` 0–2 ×, default 1.
 
-**`m.audio-output`** — `volume` 0–1, default 0.8.
+**`m.audio-output`** — `volume` 0–1.5, default 0.8.
 
-**`m.audio-delay`** — `delay-seconds` 0–2 s def 0.25 · `feedback` 0–0.95 def 0.3
-· `max-delay-seconds` *structural* 0.1–8 s def 2.
+**`m.audio-delay`** — `delay-seconds` 0.001–8 s def 0.3 · `feedback` 0–0.95 def
+0.4 · `max-delay-seconds` *structural* 0.05–8 s def 2.
 
-**`m.audio-reverb`** — `tail-seconds` 0.1–20 def 2 · `damping-hz` 200–20000 def
-6000 · `decay-rate` 0.1–10 def 2 · `algorithm` *structural*.
+**`m.audio-reverb`** — `damping-hz` 200–20000 def 8000 · `tail-seconds`
+*structural* 0.05–8 s def 1.8 · `decay-rate` *structural* 0.1–20 def 2.5 ·
+`impulse-seed` *structural* 1–9999 def 1, inert since the Rust reverb is an FDN.
 
-**`m.audio-eq`** — per band ×4: `frequency` 20–20000 Hz · `gain-db` −24…+24 dB
-· `q` 0.1–18 · `type` *structural* enum.
+**`m.audio-eq`** — three bands: `low-gain-db` −24…+24 dB · `low-frequency`
+40–1000 Hz def 200 · `mid-gain-db` −24…+24 dB · `mid-frequency` 200–8000 Hz def
+1000 · `mid-q` 0.1–18 def 1 · `high-gain-db` −24…+24 dB · `high-frequency`
+1000–16000 Hz def 5000. Gains default to 0 dB.
 
-**`m.audio-compressor`** — `threshold-db` −60…0 def −24 · `ratio` 1–20 def 4 ·
-`knee-db` 0–40 def 30 · `attack-seconds` 0.0001–1 def 0.003 ·
-`release-seconds` 0.005–5 def 0.25 · `makeup-gain` 0–4 def 1 · `mode`
-*structural*.
+**`m.audio-compressor`** — `threshold-db` −60…0 def −24 · `ratio` 1–20 def 12 ·
+`knee-db` 0–40 def 30 · `attack-seconds` 0–1 def 0.003 ·
+`release-seconds` 0–1 def 0.25 · `makeup-gain` 0–4 def 1.
 
 **`m.audio-limiter`** — `ceiling-db` −24…0 def −0.1 · `release-seconds`
-0.001–1 def 0.05.
+0.01–1 def 0.1.
 
-**`m.audio-bitcrusher`** — `bit-depth` 1–16 def 8 · `tone-hz` 200–20000 def 8000
-· `sample-rate-hz` 500–48000 def 48000 · `noise-floor` 0–1 def 0 · `dither`
-boolean def false · `output-level` 0–4 def 1.
+**`m.audio-bitcrusher`** — `bit-depth` *structural* 1–16 def 8 · `tone-hz`
+200–20000 def 8000.
 
-**`m.audio-blackhole`** — `gravity` 0–1 · `size` 0–1 · `pre-delay-seconds` 0–0.5
-· `low-level-db` −60…+12 · `high-level-db` −60…+12 · `mod-depth` 0–1 ·
-`mod-rate` 0.01–10 Hz · `feedback` 0–1 · `resonance` 0–1 · `line-count`
-*structural*.
+**`m.audio-blackhole`** — `gravity` −1…+1 def 0.5 · `size` 0–1 ·
+`pre-delay-seconds` 0–2 · `low-level-db` −24…+12 · `high-level-db` −24…+12 ·
+`mod-depth` 0–1 · `mod-rate` 0–1 · `feedback` 0–1 · `resonance` 0–1 ·
+`line-count` *structural* 4–8 def 8.
 
-**`m.audio-dp4-reverb`** — `decay-seconds` · `pre-delay-seconds` · `lf-decay` ·
-`hf-damping` · `hf-bandwidth` · `diffusion-1` · `diffusion-2` ·
-`decay-definition` · `detune-rate` · `detune-depth` · `primary-send` ·
-`ref-1-level` · `ref-1-send` · `ref-2-level` · `ref-2-send` · `early-refs` ·
-`algorithm` *structural*.
+**`m.audio-dp4-reverb`** — `decay-seconds` 0.2–250 s def 2 ·
+`pre-delay-seconds` 0–0.5 s · `lf-decay` −1…+1 · `hf-damping` · `hf-bandwidth` ·
+`diffusion-1` · `diffusion-2` · `decay-definition` · `detune-rate` ·
+`detune-depth` · `primary-send` −1…+1 · `ref-1-level` · `ref-1-send` ·
+`ref-2-level` · `ref-2-send` · `early-refs`, the unmarked ones 0–1 ·
+`algorithm` *structural* def large-plate.
 
 **`m.audio-dp4-nonlin`** — `envelope-1` … `envelope-9` · `hf-damping` ·
-`hf-bandwidth` · `diffusion-1` · `diffusion-2` · `density-1` · `density-2` ·
-`variant` *structural*. Carries no feedback path by design.
+`hf-bandwidth` · `diffusion-1` · `diffusion-2` · `density-1` · `density-2`, all
+0–1 · `variant` *structural* def non-lin-1. Carries no feedback path by design.
 
-**`m.synth`** — `level` · per oscillator ×3: `wave` *structural* enum,
-`semitones` −24…+24, `detune` −50…+50 cents, `level` 0–1, `width` 0–1 ·
-`cutoff` 20–20000 Hz · `resonance` 0–1 · `filter-amount` −8…+8 octaves ·
-`key-follow` 0–1 · amp ADSR · filter ADSR · per LFO ×2: `shape` *structural*,
-`trigger` *structural*, `rate` 0.01–50 Hz, `depth` 0–1, `phase` 0–360° ·
-`pan` −1…+1 · `volume` 0–1 · `mod-wheel` 0–1 · `max-voices` 1–64 def 16 ·
-`matrix` *structural* json.
+**`m.synth`** — per oscillator ×3: `wave` *structural* enum (sawtooth · square ·
+triangle · sine · pulse), `detune` −2400…+2400 ¢, `level` 0–1, `width`
+0.05–0.95 · `cutoff` 20–20000 Hz def 2000 · `resonance` 0.1–30 Q ·
+`filter-amount` −8…+8 octaves · `filter-env` −1…+1 · `key-follow` 0–1 · amp
+ADSR · filter ADSR (attack and decay 0–4000 ms, release 0–8000 ms, sustain 0–1)
+· per LFO ×3 (`lfo-a`, `lfo-b`, `lfo-c`): `rate` 0.05–20 Hz, `depth` 0–1,
+`wave` *structural*, `target` *structural* · `delay-note` *structural* ·
+`delay-feedback` 0–0.95 · `delay-wet` 0–1 · `delay-spread` 0–1 · `delay-hicut`
+200–20000 Hz · `tape` *structural* · `tempo` 20–300 BPM · `level` 0–2 · `pan`
+−1…+1 · `volume` 0–1 · `max-voices` 1–32 def 16 · `classic` boolean · `matrix`
+*structural* json. The Rust voice also has per-oscillator `semitones`, two
+LFOs of its own (`shape`, `trigger`, `rate`, `depth`, `phase`) and `mod-wheel`,
+which no face turns yet (`ENGINE_ONLY_PARAMS` in
+`src/modular/audio/wasm/engineBridge.ts`).
 
-**`m.percussion`** — `pitch-semitones` −24…+24 · `decay-seconds` 0.01–10 ·
-`slots` *structural* json.
+**`m.percussion`** — `level` 0–2 · `pan` −1…+1 · `pitch-semitones` −24…+24 ·
+`decay-seconds` 0.02–4 s def 0.5 · `slots` *structural* json.
 
-**`m.looper`** — `rate` 0.05–4 × · `pitch-shift` −24…+24 st · `loop-start` 0–1 ·
-`loop-end` 0–1 · `loop` *structural* · `reverse` *structural* · `gate`
-*structural* · `time-stretch` *structural* · `asset-id` *structural*.
+**`m.looper`** — `level` 0–2 · `pan` −1…+1 · `rate` 0.05–4 × · `pitch-shift`
+−24…+24 st · `loop-start` 0–1 · `loop-end` 0–1 · `loop` *structural* · `reverse`
+*structural* · `gate` *structural* · `time-stretch` *structural* · `asset-id`
+*structural*.
 
-**`m.granular`** — `grain-size` 0.005–2 s · `grain-spacing` 0.005–1 s ·
-`position` 0–1 · `jitter` 0–1 · `stretch` 0.05–8 × · `freeze` *structural* ·
-`free-run` boolean · `asset-id` *structural*.
+**`m.granular`** — `level` 0–2 · `pan` −1…+1 · `grain-size` 0.005–2 s ·
+`grain-spacing` 0.005–1 s · `position` 0–1 · `jitter` 0–1 · `stretch` 0.05–8 × ·
+`freeze` *structural* · `free-run` boolean · `asset-id` *structural*.
+
+No table here yet, against R-CAT-42: `m.audio-mixer` (eight channels, two
+sends), `m.audio-widener`, `m.audio-dp4`, the 86 `m.prism-*` effects (whose
+ranges are generated into `src/modular/registry/prismCatalog.generated.ts`),
+`m.grain-engine`, and the modulators `m.lfo`, `m.env-follower` and `m.adsr`.
 
 | ID | Requirement |
 |---|---|
@@ -993,7 +1033,7 @@ npm run coverage        # 100% statements · lines · functions on .ts
 cargo test --manifest-path rust/Cargo.toml
 npm run verify:wasm     # against the real .wasm
 npm run build
-npm run spec:audit      # every R- id has a citing test
+npm run spec:audit      # no test cites an id this spec does not define
 ```
 
 ### 12.2 Test layers
@@ -1228,7 +1268,8 @@ Each is one module, complete, playable on drop.
 
 Our DP/4+ clone reproduces the ENSONIQ DP/4+ (Reference Manual v2.0, 199 pages)
 as a module family. Ported today: five reverb algorithms and three Non-Lin
-variants — 8 of 46.
+variants — 8 of 46. The four-unit machine is `m.audio-dp4` (`Dp4Machine` in
+`rust/dsp-core/src/modules.rs`), whose units each load one of the five reverbs.
 
 ### 16.1 The unit and config model
 
@@ -1436,6 +1477,11 @@ means to verify it. This is the list to check a build against.
 | C-09 | One `ParameterAddress` for every value, used by every subsystem | R-ID-01 |
 | C-10 | Structure rebuilds, parameters ramp; declared, never inferred | R-PARAM-01…03 |
 
+C-01 to C-03 do not hold yet. The Rust rack (`rust/dsp-core` through
+`rust/wasm`) is the default backend, but the Web Audio graph in
+`src/modular/audio/` is still a second backend, chosen with `?engine=web-audio`
+(`src/modular/audio/wasm/rackNode.ts`).
+
 ### C.2 Real-time — measurable
 
 | # | Constraint | Verify |
@@ -1507,7 +1553,7 @@ means to verify it. This is the list to check a build against.
 |---|---|---|
 | C-51 | Tests first | review |
 | C-52 | 100 % statements, lines, functions on `.ts` | `npm run coverage` |
-| C-53 | Every requirement here is cited by a test | `npm run spec:audit` |
+| C-53 | Every requirement here is cited by a test | `npm run spec:strict` |
 | C-54 | Browser verification before a wave closes | commit record |
 | C-55 | Every module has a golden audio fixture | R-VERIFY-01 |
 | C-56 | Fixtures regenerate only alongside an explaining commit | R-VERIFY-02 |
@@ -1524,6 +1570,6 @@ them.
 | C-59 | v8 coverage cannot see into WASM; Rust carries its own gate | Two gates, both green, neither replacing the other |
 | C-60 | Two toolchains in CI | The engine requires it |
 | C-61 | A bad sample in Rust is not a DevTools breakpoint | Offset by the fake-context discipline ported into the crate |
-| C-62 | Fonts are catalogued, not shipped | Licensing |
+| C-62 | Fonts in `fonts/` are catalogued, not shipped. What ships: HomeVideo, Barlow Condensed and IBM Plex Sans Condensed in `public/fonts/`, each with its licence, and BitPap in `src/modular/ui/n4/fonts/`, whose licence `fonts/CATALOG.md` records as unknown | Licensing |
 | C-63 | DP/4+ Decay Definition currently sits outside the tank | `Fdn` lacks the hook; close at moderate settings, thinner at extremes |
-| C-64 | Choke groups are absent from the Rust engine today | Wave 0 must not ship this as a silent regression |
+| C-64 | Choke groups in the Rust engine reach only within one kit (`set_slot_shape`, `rust/dsp-core/src/sampler.rs`), not across sources as R-P15-02 asks | Wave 0 must not ship this as a silent regression |

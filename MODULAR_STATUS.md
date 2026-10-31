@@ -298,7 +298,7 @@ Three changes on the way in:
   so degree −1 read as −1 rather than as the seventh below.
 
 Nothing consumes it yet. It is the intended pitch source for the synth
-([MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md)) and for the `scale-context-in`
+(`MODULAR_SYNTH_PLAN.md`, in git history) and for the `scale-context-in`
 port Transposition has always declared with nothing to feed it. *Since:* Scale
 Context, Scale Quantizer and Chord Tones read it (`runtime/processors.ts`), and
 the Web Audio synth voice takes its `rootHzForMidi`.
@@ -356,12 +356,12 @@ asserted nothing at all.
 8. Port connection uses click-output/click-input. The planned drag-cable workflow, compatible-port highlighting, keyboard connection flow, and filtered module creation are still pending. *Since:* a cable can also be dragged from either end (`beginCableDrag` in `ModularApp.tsx`), and the port it would land on is marked.
 9. Two clicks on a Cyclic ruler within one tick clobber each other, because the second reads a stale node. Separated by a re-render they behave correctly.
 10. Pan, zoom, hand mode, and theme persist in browser-local workspace preferences; broader scene-level view states are not implemented.
-11. Snapshots, macros, conducting, slideshow, performance view, timeline, and visualizer remain planned work. **idMLab still cannot generate a pitch** — there is no oscillator in `src/modular`, only sample players. Stage F, the synth and its 8 x 12 modulation matrix, is planned in [MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md) with the PWM generator built. *Since:* the synth is built (`m.synth`, Rust kind 3, matrix in `rust/dsp-core/src/modmatrix.rs`), and the Grain Engine plays notes at pitch.
+11. Snapshots, macros, conducting, slideshow, performance view, timeline, and visualizer remain planned work. **idMLab still cannot generate a pitch** — there is no oscillator in `src/modular`, only sample players. Stage F, the synth and its 8 x 12 modulation matrix, is planned in `MODULAR_SYNTH_PLAN.md` with the PWM generator built. *Since:* the synth is built (`m.synth`, Rust kind 3, matrix in `rust/dsp-core/src/modmatrix.rs`), and the Grain Engine plays notes at pitch.
 12. The development server at `http://127.0.0.1:5173/` belongs to the current local task session and should not be treated as a deployment.
 
 ## Build record and remaining work
 
-The authoritative forward sequence was [MODULAR_NEXT_STEPS.md](MODULAR_NEXT_STEPS.md); since 2026-08-05 it is [`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md).
+The authoritative forward sequence was `MODULAR_NEXT_STEPS.md` (in git history); since 2026-08-05 it is [`IDMLAB_MASTER_PLAN.md`](IDMLAB_MASTER_PLAN.md).
 The sections below retain the completed build record and detail for remaining
 module, canvas, import, and product work; their historical numbering is not the
 current priority order.
@@ -405,8 +405,8 @@ parameter survives compilation — the class of bug, not the instance.
 
 The module audit, port standard, and the decision to assemble a complete note as
 a **Stream** compound (`m.stream`) are recorded in
-[MODULAR_MODULE_MAP.md](MODULAR_MODULE_MAP.md) and
-[MODULAR_STREAM_PLAN.md](MODULAR_STREAM_PLAN.md). The port standard, migration,
+`MODULAR_MODULE_MAP.md` and
+`MODULAR_STREAM_PLAN.md` (both in git history). The port standard, migration,
 control-tick contract, cyclic and shaping processors, Stream materialization,
 canvas expansion, and runtime bridge are implemented. Compact-versus-expanded
 trace equivalence and Stream-scoped snapshots remain open.

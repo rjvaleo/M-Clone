@@ -1,15 +1,31 @@
 # `rust/` — the portable DSP core
 
-**Status:** standing on its own. Builds, tests, and is **not yet wired into the app.**
-57 tests passing, clippy clean, no dependencies. Verified on real hardware
-(aarch64-apple-darwin, Rust 1.97.1) and on `wasm32-unknown-unknown` — see
-[The WASM number](#the-wasm-number).
+**Status:** idMLab's default audio engine. `dsp-core` compiled to WebAssembly
+(`wasm/`, the `idmlab-engine` cdylib) runs the whole rack in one AudioWorklet;
+`?engine=web-audio` asks for the browser's nodes instead, and a build without
+the `.wasm` falls back to them by itself. About 450 `#[test]`s across the
+workspace (31 October 2026).
 
-Architecture, wave order and gates: [`IDMLAB_MASTER_PLAN.md`](../IDMLAB_MASTER_PLAN.md).
+Three crates:
+
+| Crate | What it is |
+|---|---|
+| `dsp-core` | The engine, every module, and the DSP under them |
+| `wasm` | The `cdylib` the worklet loads: the engine behind a plain ABI, no `wasm-bindgen` |
+| `prism-gen` | Writes `src/modular/registry/prismCatalog.generated.ts` from the prism-fx catalogue |
+
+No dependencies but two of RJ's own, by path: `prism-fx` (the 86 effects
+shared with MultiGrainLive) and `prism-grain` (its sound engine, the Grain
+Engine here), from the `prism-fx` repository cloned beside this one. Neither
+has dependencies of its own.
+
+Architecture: [`IDMLAB_MASTER_PLAN.md`](../IDMLAB_MASTER_PLAN.md) and, for the
+audio since October, [`docs/SOUND-PORT-PLAN.md`](../docs/SOUND-PORT-PLAN.md).
 
 ```
-cargo test  --manifest-path rust/dsp-core/Cargo.toml
-cargo clippy --manifest-path rust/dsp-core/Cargo.toml --all-targets
+cargo test --manifest-path rust/Cargo.toml
+npm run build:engine   # the .wasm and the worklets into public/
+npm run verify:wasm    # build the .wasm and drive it from Node
 ```
 
 ## Why this exists
@@ -37,15 +53,24 @@ topology and no sidechain; the six variants the DP/4 needs are forty lines here.
 
 ## Layout
 
+`dsp-core/src`:
+
 | Module | Contents |
 |---|---|
 | `lib.rs` | `flush`, `Smoothed`, `Rng`, `log_map`, the three rules |
+| `engine.rs` | `Engine`, `Module`, `Frame` — the rack itself, and parameter modulation routes |
+| `modules.rs` | The rack's production modules, `ModuleKind` and their wire numbers; `PrismModule` and `GrainEngineModule` among them |
 | `delay.rs` | `DelayLine` (Hermite), `Allpass`, `DiffuserChain` |
 | `filter.rs` | `OnePole`, `Biquad` (RBJ, with a real shelf slope) |
 | `fdn.rs` | `Fdn` — Hadamard/Householder, Jot two-band decay, level normalisation |
 | `dynamics.rs` | `EnvelopeFollower`, `GainComputer`, `HysteresisGate` |
-| `reverb.rs` | `Blackhole` |
-| `engine.rs` | `Engine`, `Module`, `Frame` — the rack itself |
+| `reverb.rs` | `Blackhole` and its `Gravity` |
+| `dp4.rs` | The ENSONIQ DP/4+ reverbs (`Dp4Reverb`, its algorithm profiles) and Non Lin; the four-unit `Dp4Machine` is in `modules.rs` |
+| `osc.rs`, `voice.rs`, `bank.rs`, `envelope.rs`, `lfo.rs`, `modmatrix.rs` | The synth: oscillators, one voice, the voice pool, ADSR, LFOs, the 8 × 12 matrix |
+| `tape.rs` | The scale sequencer's ping-pong delay and tape transport |
+| `webaudio.rs` | Web Audio's own maths, so the Rust synth sounds as the browser does |
+| `sampler.rs`, `samples.rs` | Sample playback (percussion kit, looper) and the bank of host-supplied audio |
+| `grain.rs`, `grain_jobs.rs` | Granular scanning on the audio thread; the cloud pad's grains, built off it |
 
 ## The rack engine
 
@@ -83,6 +108,9 @@ loudness, plus a `tanh` ceiling for the extremes that remain legitimate.
 
 ## The WASM number
 
+*A measurement from before the rack was wired in, kept as the reason for the
+decision; the shipped module is the whole rack and much larger.*
+
 Measured 2026-08-04 on aarch64-apple-darwin, Rust 1.97.1, release profile with
 fat LTO. The module is a `cdylib` shell exporting one `Blackhole` behind a
 128-sample quantum — no `wasm-bindgen`, so the size is DSP rather than bindings —
@@ -107,15 +135,7 @@ it by the order of magnitude that would change the decision.
 
 ## Not done yet
 
-- **The crate has no `cdylib`.** It builds for `wasm32-unknown-unknown` as an
-  `.rlib`, which proves the code is portable but produces nothing loadable. The
-  measurement above used a throwaway shell crate. Step 5 needs a real one — a
-  thin `wasm/` member exporting the engine over a shared buffer.
-- **Not wired to the app.** `src/modular/audio/` still uses its Web Audio node
-  graph. Migration path is in `docs/` — the `EffectContext` seam is where a
-  WASM-backed implementation slots in without touching the registry or the UI.
-- **DP/4 tanks not ported.** Only `Blackhole` is here. The plate/room/hall
-  profiles and Non Lin live in `src/modular/audio/dp4.ts` and port onto `Fdn`
-  and `DiffuserChain` directly.
-- **No `assert_no_alloc` gate.** The crate allocates only in `new`, but nothing
-  enforces it yet.
+- **No `assert_no_alloc` gate.** Modules allocate only in `new`, and builds
+  that do (the Grain Engine's maps) run off the audio thread, but nothing in
+  `dsp-core` enforces it. prism-fx's own effects are held to it by its
+  counting allocator.

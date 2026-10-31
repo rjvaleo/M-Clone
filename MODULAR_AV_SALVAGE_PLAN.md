@@ -4,7 +4,7 @@
 **Source:** `~/Documents/GitHub/Modular AV Perforamnce` (3,490 lines JS, 11 tests, all passing)
 **Target branch:** `modular`
 **Status:** Stages A to H built. F was planned in
-[MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md) (deleted 2026-08-05, in git
+`MODULAR_SYNTH_PLAN.md` (deleted 2026-08-05, in git
 history) and is built in Rust: `m.synth`, with the 8 × 12 matrix in
 `rust/dsp-core/src/modmatrix.rs`
 
@@ -306,7 +306,7 @@ increments; nobody has reported hearing them.
 ### Stage F — Synth and modulation matrix
 
 **Status: planned in detail, one piece built.** The plan is
-[MODULAR_SYNTH_PLAN.md](MODULAR_SYNTH_PLAN.md); the PWM generator is in
+`MODULAR_SYNTH_PLAN.md` (in git history); the PWM generator is in
 `dsp.ts` and the tuning library that will feed the oscillators is in
 `src/modular/tuning/`. *Since:* built, on both backends — `m.synth`, Rust
 `ModuleKind::Synth` (3) with `modmatrix.rs`; its parity with the scale
