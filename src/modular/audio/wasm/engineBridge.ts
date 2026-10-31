@@ -30,7 +30,16 @@ import { isModulator } from "../../modulation";
 import { planSampleRefs } from "./sampleSync";
 import { transferSample, type SampleSource } from "./sampleTransfer";
 import { NoteSchedule } from "./noteSchedule";
-import { REPORT_INTERVAL_QUANTA, type RackReport, type ScheduledEvent } from "./rackProtocol";
+import {
+  REPORT_INTERVAL_QUANTA,
+  type GrainBuildRequest,
+  type GrainBuildResult,
+  type RackReport,
+  type ScheduledEvent,
+} from "./rackProtocol";
+
+/** The module whose slow builds go to a worker; see `WasmRack.takeBuildRequests`. */
+export const GRAIN_ENGINE_TYPE = "m.grain-engine";
 
 /** `u32::MAX`, as it appears once JavaScript has read it back as an `i32`. */
 export const NO_MODULE = 0xffffffff;
@@ -802,6 +811,18 @@ export interface EngineExports {
   /** Render part of a quantum, so a note can start between two of them. */
   process_range(start: number, len: number): void;
   readonly memory: { readonly buffer: ArrayBuffer };
+  // Slow builds made off the audio thread (`Module::set_deferred_builds`).
+  // Optional, so a `.wasm` from before them still loads; a rack on one builds
+  // in place, as it always did.
+  set_deferred_builds?(module: number, on: number): void;
+  build_request_seq?(module: number): number;
+  build_request_flags?(module: number): number;
+  build_request_params_ptr?(module: number): number;
+  build_request_params_len?(module: number): number;
+  accept_map_alloc?(anchors: number): number;
+  accept_map?(module: number, seq: number, anchors: number, present: number): void;
+  accept_parts_alloc?(which: number, len: number): number;
+  accept_parts?(module: number, seq: number, channels: number): void;
 }
 
 /** Reinterpret an ABI return as a module id, or `undefined` if it was refused. */
@@ -944,11 +965,23 @@ export class WasmRack {
   private readonly assignedSlots = new Set<string>();
   /** Notes waiting for their frame. See `noteSchedule.ts`. */
   private readonly pending = new NoteSchedule();
+  /** Each Grain Engine's sample, by node, for the worker that builds for it. */
+  private readonly grainSamples = new Map<string, number>();
+  /** The build each Grain Engine last asked for that has been passed on. */
+  private readonly asked = new Map<string, number>();
+  private readonly deferBuilds: boolean;
 
+  /**
+   * `deferBuilds` hands the Grain Engine's slow builds to whoever reads
+   * `takeBuildRequests` — the worklet, which passes them to a worker — rather
+   * than making them on this thread. Off, the engine builds in place.
+   */
   constructor(
     private readonly engine: EngineExports,
     private readonly sampleRate: number,
+    options: { deferBuilds?: boolean } = {},
   ) {
+    this.deferBuilds = options.deferBuilds === true && engine.set_deferred_builds !== undefined;
     engine.init(sampleRate);
     // The one module no document mentions and every rack needs: without it the
     // graph has no way to hear the host, and a patch that compiles and wires
@@ -1060,6 +1093,7 @@ export class WasmRack {
       if (this.assignedSlots.has(key)) continue;
       this.assignedSlots.add(key);
       this.engine.set_sample_slot(moduleId, ref.slot, sample);
+      if (this.built.get(ref.nodeId)?.moduleType === GRAIN_ENGINE_TYPE) this.grainSamples.set(ref.nodeId, sample);
       if (shape) this.engine.set_slot_shape(moduleId, ref.slot, shape.gain, shape.pan, shape.chokeGroup);
     }
   }
@@ -1165,6 +1199,64 @@ export class WasmRack {
   }
 
   /**
+   * The slow builds Grain Engines have asked for since the last call, each
+   * once.
+   *
+   * Read straight from the engine every quantum: one call per Grain Engine,
+   * and nothing is copied unless a request is new. The worklet posts each to
+   * the main thread, which hands it to the worker.
+   */
+  takeBuildRequests(): GrainBuildRequest[] {
+    if (!this.deferBuilds) return [];
+    const requests: GrainBuildRequest[] = [];
+    for (const [nodeId, built] of this.built) {
+      if (built.moduleType !== GRAIN_ENGINE_TYPE) continue;
+      const seq = this.engine.build_request_seq!(built.moduleId) >>> 0;
+      if (seq === 0 || this.asked.get(nodeId) === seq) continue;
+      const sample = this.grainSamples.get(nodeId);
+      if (sample === undefined) continue;
+      this.asked.set(nodeId, seq);
+      const flags = this.engine.build_request_flags!(built.moduleId);
+      const params = new Float32Array(
+        this.engine.memory.buffer,
+        this.engine.build_request_params_ptr!(built.moduleId),
+        this.engine.build_request_params_len!(built.moduleId),
+      ).slice();
+      requests.push({
+        type: "grain-build", nodeId, seq, map: (flags & 1) !== 0, parts: (flags & 2) !== 0,
+        params, sample, sampleRate: this.sampleRate,
+      });
+    }
+    return requests;
+  }
+
+  /**
+   * A build the worker made, into the module that asked. A module rebuilt
+   * since, or an answer to a request since replaced, is refused by the engine.
+   */
+  acceptBuild(result: GrainBuildResult): void {
+    const built = this.built.get(result.nodeId);
+    if (!built || built.moduleType !== GRAIN_ENGINE_TYPE || !this.deferBuilds) return;
+    const id = built.moduleId;
+    if (result.map !== undefined) {
+      const map = result.map;
+      const anchors = map ? map.length / 2 : 0;
+      // Alloc first: it may grow memory, which detaches any view made before it.
+      const pointer = this.engine.accept_map_alloc!(anchors);
+      if (map) new Float64Array(this.engine.memory.buffer, pointer, map.length).set(map);
+      this.engine.accept_map!(id, result.seq, anchors, map ? 1 : 0);
+    }
+    if (result.parts) {
+      const parts = [result.parts.harmonic, result.parts.percussive, result.parts.residual];
+      parts.forEach((part, which) => {
+        const pointer = this.engine.accept_parts_alloc!(which, part.length);
+        new Float32Array(this.engine.memory.buffer, pointer, part.length).set(part);
+      });
+      this.engine.accept_parts!(id, result.seq, result.parts.channels);
+    }
+  }
+
+  /**
    * Play one scheduled event now, on the instrument it was addressed to.
    *
    * An unknown `nodeId` sounds nothing rather than falling back to broadcast.
@@ -1240,6 +1332,7 @@ export class WasmRack {
           this.unsupportedTypes.add(spec.moduleType);
           continue;
         }
+        if (this.deferBuilds && spec.moduleType === GRAIN_ENGINE_TYPE) this.engine.set_deferred_builds!(moduleId, 1);
         built = {
           moduleId,
           moduleType: spec.moduleType,

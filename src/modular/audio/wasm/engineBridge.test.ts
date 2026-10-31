@@ -1468,3 +1468,104 @@ describe("The grain engine in Rust", () => {
     expect(rack.instruments).toContain("g");
   });
 });
+
+describe("The Grain Engine's slow builds, made off the audio thread", () => {
+  /** The real ABI's build half: a request the test sets, and what was accepted. */
+  class DeferringEngine extends FakeEngine {
+    readonly deferred = new Set<number>();
+    request = { seq: 0, flags: 0 };
+    readonly requestParams = Float32Array.of(0, 2, 0, 40);
+    readonly accepted: unknown[] = [];
+    private scratch = 1024;
+    set_deferred_builds(module: number, on: number): void {
+      if (on) this.deferred.add(module);
+    }
+    build_request_seq(): number {
+      return this.request.seq;
+    }
+    build_request_flags(): number {
+      return this.request.flags;
+    }
+    build_request_params_ptr(): number {
+      new Float32Array(this.memory.buffer, 256, this.requestParams.length).set(this.requestParams);
+      return 256;
+    }
+    build_request_params_len(): number {
+      return this.requestParams.length;
+    }
+    accept_map_alloc(): number {
+      return this.scratch;
+    }
+    accept_map(module: number, seq: number, anchors: number, present: number): void {
+      const map = present ? [...new Float64Array(this.memory.buffer, this.scratch, anchors * 2)] : null;
+      this.accepted.push({ module, seq, map });
+    }
+    accept_parts_alloc(which: number): number {
+      return this.scratch + which * 64;
+    }
+    accept_parts(module: number, seq: number, channels: number): void {
+      const part = (which: number) => [...new Float32Array(this.memory.buffer, this.scratch + which * 64, 4)];
+      this.accepted.push({ module, seq, channels, parts: [part(0), part(1), part(2)] });
+    }
+  }
+
+  const grainPlan = () => plan([node("g", "m.grain-engine", { engine: 4 }, { structure: { "asset-id": "loop" } as never })]);
+
+  const deferring = () => {
+    const engine = new DeferringEngine();
+    const rack = new WasmRack(engine, 48000, { deferBuilds: true });
+    rack.setSampleMap({ loop: 9 });
+    rack.update(grainPlan());
+    return { engine, rack, id: rack.moduleIdOf("g")! };
+  };
+
+  it("turns the Grain Engine's builds over, and leaves every other module alone", () => {
+    const engine = new DeferringEngine();
+    const rack = new WasmRack(engine, 48000, { deferBuilds: true });
+    rack.update(plan([node("g", "m.grain-engine"), node("x", "m.audio-gain")]));
+    expect([...engine.deferred]).toEqual([rack.moduleIdOf("g")]);
+  });
+
+  it("builds in place, as before, unless asked to defer", () => {
+    const engine = new DeferringEngine();
+    new WasmRack(engine, 48000).update(grainPlan());
+    expect(engine.deferred.size).toBe(0);
+  });
+
+  it("passes on each request once, with the settings and sample it is for", () => {
+    const { engine, rack } = deferring();
+    expect(rack.takeBuildRequests()).toEqual([]);
+    engine.request = { seq: 2, flags: 3 };
+    const [request] = rack.takeBuildRequests();
+    expect(request).toMatchObject({ type: "grain-build", nodeId: "g", seq: 2, map: true, parts: true, sample: 9, sampleRate: 48000 });
+    expect([...request.params]).toEqual([0, 2, 0, 40]);
+    expect(rack.takeBuildRequests()).toEqual([]);
+    engine.request = { seq: 3, flags: 1 };
+    expect(rack.takeBuildRequests().map((r) => [r.seq, r.map, r.parts])).toEqual([[3, true, false]]);
+  });
+
+  it("hands a map and a separation back to the module that asked", () => {
+    const { engine, rack, id } = deferring();
+    const parts = { channels: 2, harmonic: Float32Array.of(1, 2, 3, 4), percussive: Float32Array.of(5, 6, 7, 8), residual: Float32Array.of(9, 10, 11, 12) };
+    rack.acceptBuild({ type: "grain-built", nodeId: "g", seq: 2, map: Float64Array.of(0, 0, 10, 20), parts });
+    expect(engine.accepted).toEqual([
+      { module: id, seq: 2, map: [0, 0, 10, 20] },
+      { module: id, seq: 2, channels: 2, parts: [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]] },
+    ]);
+  });
+
+  it("hands back a straight line as no map, and ignores a node that is gone", () => {
+    const { engine, rack, id } = deferring();
+    rack.acceptBuild({ type: "grain-built", nodeId: "g", seq: 4, map: null });
+    rack.acceptBuild({ type: "grain-built", nodeId: "gone", seq: 4, map: null });
+    expect(engine.accepted).toEqual([{ module: id, seq: 4, map: null }]);
+  });
+
+  it("asks nothing of a .wasm from before the build exports", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000, { deferBuilds: true });
+    rack.update(grainPlan());
+    expect(rack.takeBuildRequests()).toEqual([]);
+    expect(() => rack.acceptBuild({ type: "grain-built", nodeId: "g", seq: 1, map: null })).not.toThrow();
+  });
+});
