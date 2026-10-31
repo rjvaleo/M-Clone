@@ -485,6 +485,8 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     tone: 57,
     hits: 58,
     air: 59,
+    scale: 60,
+    "pitch-step": 61,
   },
   // `LfoModule`. Its targets are routes, not values; its colour is the face's.
   // `LfoModule`. Sync, beats and bpm follow the original four, so a patch
@@ -801,8 +803,26 @@ export interface EngineExports {
   process_quantum(): void;
   /** Render part of a quantum, so a note can start between two of them. */
   process_range(start: number, len: number): void;
+  /**
+   * Room in a module for a job's result (`dsp_core::grain_jobs`), `len`
+   * floats; 0 if it takes no such job. Can grow memory, as `sample_alloc`.
+   */
+  job_begin(module: number, kind: number, len: number): number;
+  /** The job's buffer is full; the module adopts it if it is still current. */
+  job_commit(module: number, kind: number): void;
   readonly memory: { readonly buffer: ArrayBuffer };
 }
+
+/**
+ * How many floats of a job's result are copied in per quantum: a quarter of a
+ * megabyte, a few hundredths of a millisecond of copying, so a long file's
+ * separation (three times the file, stereo) arrives over some seconds of
+ * quanta rather than as one stall.
+ */
+export const JOB_PIECE = 65_536;
+
+/** A job's result on its way into a module. */
+type JobTransfer = { nodeId: string; moduleId: number; kind: number; data: Float32Array; at: number; ptr: number };
 
 /** Reinterpret an ABI return as a module id, or `undefined` if it was refused. */
 const asModuleId = (raw: number): number | undefined => {
@@ -1104,7 +1124,54 @@ export class WasmRack {
       this.engine.process_range(offset, stop - offset);
       offset = stop;
     }
+    this.carryJob();
     this.observe();
+  }
+
+  /** Results waiting their turn, one module at a time; a newer one of a kind replaces an older. */
+  private readonly jobs: JobTransfer[] = [];
+
+  /**
+   * A Grain Engine job's result, from the worker: copied into the module a
+   * piece per quantum, then committed. The module drops it if its controls
+   * have moved on since it was made.
+   */
+  grainJob(nodeId: string, kind: number, data: Float32Array): void {
+    const moduleId = this.moduleIdOf(nodeId);
+    if (moduleId === undefined || data.length === 0) return;
+    const waiting = this.jobs.findIndex((job, i) => i > 0 && job.nodeId === nodeId && job.kind === kind);
+    if (waiting >= 0) this.jobs.splice(waiting, 1);
+    this.jobs.push({ nodeId, moduleId, kind, data, at: 0, ptr: 0 });
+  }
+
+  /** How many results are still on their way in. */
+  get jobsWaiting(): number {
+    return this.jobs.length;
+  }
+
+  private carryJob(): void {
+    const job = this.jobs[0];
+    if (!job) return;
+    // The module rebuilt or gone since it was asked for: nothing to give it to.
+    if (this.moduleIdOf(job.nodeId) !== job.moduleId) {
+      this.jobs.shift();
+      return;
+    }
+    if (job.at === 0 && job.ptr === 0) {
+      job.ptr = this.engine.job_begin(job.moduleId, job.kind, job.data.length);
+      if (job.ptr === 0) {
+        this.jobs.shift();
+        return;
+      }
+    }
+    const end = Math.min(job.data.length, job.at + JOB_PIECE);
+    // A fresh view each time: anything allocating may have grown memory.
+    new Float32Array(this.engine.memory.buffer, job.ptr, job.data.length).set(job.data.subarray(job.at, end), job.at);
+    job.at = end;
+    if (job.at >= job.data.length) {
+      this.engine.job_commit(job.moduleId, job.kind);
+      this.jobs.shift();
+    }
   }
 
   /** Loudest sample seen since the last report, and how many quanta ago. */

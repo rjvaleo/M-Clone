@@ -55,6 +55,7 @@ pub mod dynamics;
 pub mod fdn;
 pub mod filter;
 pub mod grain;
+pub mod grain_jobs;
 pub mod lfo;
 pub mod modmatrix;
 pub mod modules;
@@ -327,3 +328,6 @@ mod tests {
         assert!((sum / 20_000.0).abs() < 0.02, "biased: {}", sum / 20_000.0);
     }
 }
+
+/// The sound engine, for the shell's job calls.
+pub use prism_grain;

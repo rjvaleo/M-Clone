@@ -3298,22 +3298,33 @@ impl Module for GateAdsrModule {
 /// release fades it out. With `FREE_RUN` on one voice plays continuously,
 /// looping the file, and notes only retune it.
 ///
-/// What MultiGrainLive builds off its audio thread is built here as it builds
-/// it, from the same functions with the same arguments (its `live.rs`): the
-/// WSOLA transient map (`map_for`), each engine's extra layers (`LayerBank`)
-/// and the hybrid's separation. The sample is resampled to the rack's rate
-/// when it arrives. All of these allocate, on the audio thread: at load, and
-/// when one of the controls they hang on has held still for `SETTLE_SECONDS`
-/// (MultiGrainLive waits for the control's release; a choice of engine is
-/// acted on at once there, and here).
+/// What MultiGrainLive does off its audio thread is done off this one too.
+/// The hybrid's separation and WSOLA's transient onsets are jobs
+/// (`grain_jobs`), run in a worker on a second instance of this engine and
+/// handed in a piece at a time (`job_buffer`, `job_commit`); a result made
+/// from controls that have since moved is dropped. Until one arrives the
+/// hybrid plays with nothing separated, as MultiGrainLive's does while its
+/// separation runs, and WSOLA keeps the map it had. The anchors placed around
+/// the onsets (`map_from`) are cheap and made here, at once. Each engine's
+/// extra layers (`LayerBank`) are only allocation, and are built here: at
+/// load, at once for a change of engine, and for a change of layer count once
+/// it has held still for `SETTLE_SECONDS` (MultiGrainLive waits for the
+/// control's release). The sample is resampled to the rack's rate when it
+/// arrives.
 pub struct GrainEngineModule {
     voices: Vec<GrainVoice>,
     source: Option<prism_grain::Source>,
     sp: prism_grain::StreamParams,
-    /// The hybrid's separated source and the split it was made with.
-    parts: Option<prism_grain::decompose::Split>,
-    /// The transient map's inputs when it was last built.
+    /// Transpose, snapped to the tuning chosen (`prism_grain::tuning::quantise`).
+    transpose: f32,
+    /// What the separation the voices hold was made from.
+    parts_key: Option<[f32; 6]>,
+    /// The onsets found, and what they were found with.
+    hits: Option<([f32; 5], Vec<usize>)>,
+    /// What the transient map the voices hold was made from.
     map_key: Option<[f32; 9]>,
+    /// A job's result arriving, a piece at a time.
+    job: Option<(u32, Vec<f32>)>,
     /// The engine and layer count the voices' banks were built for.
     bank_key: Option<(prism_grain::stretch::Algorithm, u32)>,
     /// Frames since a control a rebuild hangs on last moved.
@@ -3434,7 +3445,11 @@ impl GrainEngineModule {
     pub const TONE: usize = 57;
     pub const HITS: usize = 58;
     pub const AIR: usize = 59;
-    pub const PARAM_COUNT: usize = 60;
+    // The tuning Pitch snaps to: a scale of `prism_grain::tuning::SCALES` (0
+    // for none), or with none a grid in semitones (0 for none).
+    pub const SCALE: usize = 60;
+    pub const PITCH_STEP: usize = 61;
+    pub const PARAM_COUNT: usize = 62;
     /// The frames the engine renders at a time.
     pub const BLOCK: usize = 128;
     /// The most notes sounding at once, gated.
@@ -3450,8 +3465,11 @@ impl GrainEngineModule {
             voices: (0..Self::VOICES).map(|_| GrainVoice::new(rate)).collect(),
             source: None,
             sp: prism_grain::StreamParams::new(0, rate as u32),
-            parts: None,
+            transpose: 0.0,
+            parts_key: None,
+            hits: None,
             map_key: None,
+            job: None,
             bank_key: None,
             still: 0,
             sample: None,
@@ -3491,9 +3509,31 @@ impl GrainEngineModule {
             return;
         }
         self.seen = *raw;
+        Self::stream_params(raw, &mut self.sp);
+        self.transpose = Self::transposed(raw);
+        // A new engine needs its layers before its next block, as
+        // MultiGrainLive builds them at once for a switch of engine.
+        if self.bank_key.is_some_and(|(alg, _)| alg != self.sp.algorithm) {
+            self.build_banks();
+        }
+        self.place_anchors();
+        self.still = 0;
+    }
+
+    /// Transpose, snapped as MultiGrainLive's server snaps the pitch it is
+    /// sent: to the scale's nearest degree, or to the grid.
+    pub fn transposed(raw: &[f32]) -> f32 {
+        let semitones = if raw[Self::SEMITONES].is_finite() { raw[Self::SEMITONES] } else { 0.0 };
+        let index = raw[Self::SCALE].round();
+        let scale = if index >= 1.0 { prism_grain::tuning::SCALES.get(index as usize - 1).map(|s| s.name) } else { None };
+        prism_grain::tuning::quantise(semitones, scale, clamp(raw[Self::PITCH_STEP], 0.0, 12.0))
+    }
+
+    /// The controls into the crate's parameters: everything but the source's
+    /// length and rate, and the pitch, which is each voice's.
+    pub fn stream_params(raw: &[f32], sp: &mut prism_grain::StreamParams) {
         use prism_grain::stretch::{Splice, WinShape};
         let on = |i: usize| raw[i] >= 0.5;
-        let sp = &mut self.sp;
         sp.algorithm = Self::algorithm(raw[Self::ENGINE]);
         sp.ratio = clamp(raw[Self::STRETCH], 0.01, 100.0);
         sp.window_ms = clamp(raw[Self::WINDOW_MS], 5.0, 2_000.0);
@@ -3563,38 +3603,27 @@ impl GrainEngineModule {
         h.residual_level = clamp(raw[Self::AIR], 0.0, 4.0);
         sp.cloud = on(Self::CLOUD);
         sp.cloud_mix = clamp(raw[Self::CLOUD_MIX], 0.0, 1.0);
-        // A new engine needs its layers before its next block, as
-        // MultiGrainLive builds them at once for a switch of engine.
-        if self.bank_key.is_some_and(|(alg, _)| alg != self.sp.algorithm) {
-            self.build_banks();
-        }
-        self.still = 0;
     }
 
     /// The pitch a voice renders at: Transpose, plus its note from the root.
     fn semitones(&self, offset: f32) -> f32 {
-        let transpose = if self.seen[Self::SEMITONES].is_finite() { self.seen[Self::SEMITONES] } else { 0.0 };
-        clamp(transpose + offset, -48.0, 48.0)
+        clamp(self.transpose + offset, -48.0, 48.0)
     }
 
-    /// The bank's sample, stereo and at the rack's rate.
+    /// The bank's sample, stereo and at the rack's rate. What was separated
+    /// or found in the last one goes with it.
     fn load(&mut self, sample: &crate::samples::Sample) {
-        let ratio = sample.sample_rate() / self.sample_rate;
-        let frames = ((sample.frames() as f32) / ratio).floor().max(0.0) as usize;
-        let mut samples = Vec::with_capacity(frames * 2);
-        for frame in 0..frames {
-            let at = frame as f32 * ratio;
-            let left = sample.read(0, at);
-            let right = if sample.channels() > 1 { sample.read(1, at) } else { left };
-            samples.push(left);
-            samples.push(right);
-        }
-        self.sp.in_frames = frames;
-        self.source = Some(prism_grain::Source { samples, channels: 2 });
-        self.parts = None;
+        let source = crate::grain_jobs::source_of(sample, self.sample_rate);
+        self.sp.in_frames = source.frames();
+        self.source = Some(source);
+        self.parts_key = None;
+        self.hits = None;
         self.map_key = None;
-        self.build_map();
-        self.build_parts();
+        let empty = std::sync::Arc::new(prism_grain::hstream::Parts::default());
+        for voice in &mut self.voices {
+            voice.stretcher.set_parts(std::sync::Arc::clone(&empty));
+            voice.stretcher.set_map(None);
+        }
         self.build_banks();
         self.restart_all();
     }
@@ -3607,7 +3636,8 @@ impl GrainEngineModule {
         }
     }
 
-    /// What the transient map is made from: `Rebuilds::decide`'s list.
+    /// What the transient map is made from: the onsets, and `map_for`'s
+    /// inputs (`Rebuilds::decide`'s list).
     fn map_inputs(&self) -> [f32; 9] {
         let (w, g) = (&self.sp.wsola, &self.sp.grain);
         [
@@ -3618,44 +3648,29 @@ impl GrainEngineModule {
         ]
     }
 
-    /// MultiGrainLive's `map_for`: the onset detector over the whole source,
-    /// when transients are preserved, and a straight line otherwise.
-    fn build_map(&mut self) {
+    /// The anchors around the onsets in hand, when they or what places them
+    /// has moved: `map_for` from its detector's result. A straight line while
+    /// transients are not preserved.
+    fn place_anchors(&mut self) {
         let key = self.map_inputs();
         if self.map_key == Some(key) {
             return;
         }
+        let current = crate::grain_jobs::onsets_key(&self.sp, self.loaded.unwrap_or(u32::MAX));
+        let map = if !self.sp.wsola.preserve_transients {
+            None
+        } else {
+            match &self.hits {
+                Some((found, hits)) if *found == current => crate::grain_jobs::map_from(&self.sp, hits),
+                // Not found yet for these settings: the map held stays, as
+                // MultiGrainLive's does until its detector is done.
+                _ => return,
+            }
+        };
         self.map_key = Some(key);
-        let Some(source) = self.source.as_ref() else { return };
-        let map = Self::map_for(source, &self.sp);
         for voice in &mut self.voices {
             voice.stretcher.set_map(map.clone());
         }
-    }
-
-    fn map_for(source: &prism_grain::Source, sp: &prism_grain::StreamParams) -> Option<prism_grain::transient::TimeMap> {
-        if !sp.wsola.preserve_transients {
-            return None;
-        }
-        let hop = prism_grain::grain::plan(source.frames(), sp.sample_rate, sp.ratio, sp.window_ms, &sp.grain).hop.max(1);
-        prism_grain::stream::WsolaStream::build_map(&source.samples, source.channels, sp.sample_rate, sp.ratio, hop, &sp.wsola)
-    }
-
-    /// The hybrid's separation, while the hybrid is the engine.
-    fn build_parts(&mut self) {
-        if self.sp.algorithm != prism_grain::stretch::Algorithm::Hybrid {
-            return;
-        }
-        let split = self.sp.hybrid.split();
-        if self.parts == Some(split) {
-            return;
-        }
-        let Some(source) = self.source.as_ref() else { return };
-        let parts = std::sync::Arc::new(prism_grain::hstream::Parts::separate(&source.samples, source.channels, self.sp.hybrid));
-        for voice in &mut self.voices {
-            voice.stretcher.set_parts(std::sync::Arc::clone(&parts));
-        }
-        self.parts = Some(split);
     }
 
     /// Each voice's extra layers, for the engine and count chosen.
@@ -3682,19 +3697,12 @@ impl GrainEngineModule {
             return;
         }
         self.still += 1;
-        self.build_map();
-        self.build_parts();
         self.build_banks();
     }
 
     fn render_block(&mut self, index: usize) {
         if self.source.is_none() {
             return;
-        }
-        // The hybrid chosen since the sample arrived: separated now, as
-        // MultiGrainLive starts separating the moment it is chosen.
-        if self.sp.algorithm == prism_grain::stretch::Algorithm::Hybrid && self.parts.is_none() {
-            self.build_parts();
         }
         let mut sp = self.sp;
         sp.semitones = self.semitones(self.offset(index));
@@ -3770,6 +3778,37 @@ impl Module for GrainEngineModule {
 
     fn set_sample_slot(&mut self, _slot: u32, sample: u32) {
         self.sample = Some(sample);
+    }
+
+    fn job_buffer(&mut self, kind: u32, len: usize) -> Option<&mut [f32]> {
+        if kind != crate::grain_jobs::PARTS && kind != crate::grain_jobs::ONSETS {
+            return None;
+        }
+        // One at a time: a new one replaces one half arrived.
+        self.job = Some((kind, vec![0.0; len]));
+        self.job.as_mut().map(|(_, data)| data.as_mut_slice())
+    }
+
+    fn job_commit(&mut self, kind: u32) {
+        let Some((pending, data)) = self.job.take() else { return };
+        let sample = self.loaded.unwrap_or(u32::MAX);
+        let Some((key, payload)) = crate::grain_jobs::split_key(&data) else { return };
+        if pending != kind {
+            return;
+        }
+        if kind == crate::grain_jobs::PARTS && key == crate::grain_jobs::parts_key(&self.sp, sample) {
+            let parts = std::sync::Arc::new(crate::grain_jobs::parts_from(payload, &self.sp));
+            for voice in &mut self.voices {
+                voice.stretcher.set_parts(std::sync::Arc::clone(&parts));
+            }
+            self.parts_key = Some(crate::grain_jobs::parts_key(&self.sp, sample));
+        } else if kind == crate::grain_jobs::ONSETS && key == crate::grain_jobs::onsets_key(&self.sp, sample) {
+            let mut found = [0.0; 5];
+            found.copy_from_slice(key);
+            self.hits = Some((found, crate::grain_jobs::onsets_from(payload)));
+            self.map_key = None;
+            self.place_anchors();
+        }
     }
 
     fn note_on(&mut self, note: u8, _velocity: f32, detune_cents: f32) {
@@ -6344,7 +6383,36 @@ mod tests {
         for &(index, value) in settings {
             engine.set_param(module, index, value);
         }
+        // Loaded, then given what the worker would make of it, then back to
+        // the top: the crate's render has its separation and onsets from the
+        // first frame.
+        engine.process();
+        hand_jobs(&mut engine, module, settings);
+        engine.reset();
         (engine, module)
+    }
+
+    /// The hybrid's separation and the onsets, made by `grain_jobs` from the
+    /// module's own source and handed in as the worklet hands them, in pieces.
+    fn hand_jobs(engine: &mut Engine, module: u32, settings: &[(usize, f32)]) {
+        let defaults = ModuleKind::GrainEngine.build();
+        let mut raw: Vec<f32> = (0..M::PARAM_COUNT).map(|i| defaults.param_default(i)).collect();
+        for &(index, value) in settings {
+            raw[index] = value;
+        }
+        let source = crate::grain_jobs::source_of(engine.samples_mut().get(5).unwrap(), RATE);
+        let mut sp = prism_grain::StreamParams::new(source.frames(), RATE as u32);
+        GrainEngineModule::stream_params(&raw, &mut sp);
+        for (kind, job) in [
+            (crate::grain_jobs::PARTS, crate::grain_jobs::parts_job(&source, &sp, 5)),
+            (crate::grain_jobs::ONSETS, crate::grain_jobs::onsets_job(&source, &sp, 5)),
+        ] {
+            let buffer = engine.job_buffer(module, kind, job.len()).unwrap();
+            for (at, piece) in job.chunks(4_096).enumerate() {
+                buffer[at * 4_096..at * 4_096 + piece.len()].copy_from_slice(piece);
+            }
+            engine.job_commit(module, kind);
+        }
     }
 
     fn module_render(settings: &[(usize, f32)], frames: usize) -> Vec<[f32; 2]> {
@@ -6468,6 +6536,10 @@ mod tests {
             ("spread", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::SPREAD, 31.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.freq_span = 31; }),
             ("margin", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::MARGIN, 1.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.margin = 1.0; }),
             ("resolution", vec![(M::ENGINE, HYBRID), (M::STRETCH, 1.5)], vec![(M::RESOLUTION, 1024.0)], |sp| { sp.algorithm = Algorithm::Hybrid; sp.ratio = 1.5; sp.hybrid.fft_size = 1024; }),
+            // The tuning: Pitch snapped to a scale's nearest degree, or to a grid.
+            ("scale", vec![(M::ENGINE, WSOLA), (M::SEMITONES, 3.3)], vec![(M::SCALE, 1.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.semitones = prism_grain::tuning::quantise(3.3, Some("Ionian (Major)"), 0.0); }),
+            ("scale of 53", vec![(M::ENGINE, WSOLA), (M::SEMITONES, 3.3)], vec![(M::SCALE, 41.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.semitones = prism_grain::tuning::quantise(3.3, Some(prism_grain::tuning::SCALES[40].name), 0.0); }),
+            ("pitch grid", vec![(M::ENGINE, WSOLA), (M::SEMITONES, 3.3)], vec![(M::PITCH_STEP, 1.0)], |sp| { sp.algorithm = Algorithm::Wsola; sp.semitones = 3.0; }),
         ];
         let frames = (0.6 * RATE) as usize;
         let mut unheard = Vec::new();

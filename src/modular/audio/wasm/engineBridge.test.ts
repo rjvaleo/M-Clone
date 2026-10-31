@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { REPORT_INTERVAL_QUANTA } from "./rackProtocol";
 import { moduleRegistry } from "../../registry/registry";
-import { WasmRack, MODULE_KINDS, PARAMS_HANDLED_ELSEWHERE, ENGINE_ONLY_PARAMS, NOT_YET_IN_RUST, PARAM_INDICES, NO_MODULE, variantOf, type EngineExports } from "./engineBridge";
+import { JOB_PIECE, WasmRack, MODULE_KINDS, PARAMS_HANDLED_ELSEWHERE, ENGINE_ONLY_PARAMS, NOT_YET_IN_RUST, PARAM_INDICES, NO_MODULE, variantOf, type EngineExports } from "./engineBridge";
 import type { AudioPlan, AudioNodeSpec } from "../audioPlan";
 
 /**
@@ -146,6 +146,16 @@ class FakeEngine implements EngineExports {
   sample_free(id: number): void {
     this.samplePtrs.delete(id);
     this.sampleLens.delete(id);
+  }
+  /** Jobs begun and committed, and where each one's buffer sits. */
+  readonly jobs: string[] = [];
+  jobPtr = 1024;
+  job_begin(module: number, kind: number, len: number): number {
+    this.jobs.push(`begin:${module}:${kind}:${len}`);
+    return this.jobPtr;
+  }
+  job_commit(module: number, kind: number): void {
+    this.jobs.push(`commit:${module}:${kind}`);
   }
   set_bypassed(module: number, bypassed: number): void {
     this.calls.push(`bypass:${module}=${bypassed}`);
@@ -1466,5 +1476,30 @@ describe("The grain engine in Rust", () => {
     expect([at("engine"), at("stretch"), at("root"), at("free-run"), at("level")]).toEqual([0, 2, 48, 1, 0.7]);
     expect(PARAM_INDICES["m.grain-engine"].level).toBe(21);
     expect(rack.instruments).toContain("g");
+  });
+});
+
+describe("A Grain Engine job's result", () => {
+  it("is copied in a piece per quantum, then committed, a newer one replacing one still waiting", () => {
+    const engine = new FakeEngine();
+    engine.memory = { buffer: new ArrayBuffer(4 << 20) };
+    const rack = new WasmRack(engine, 48000);
+    rack.update(plan([node("g", "m.grain-engine", {})]));
+    const g = rack.moduleIdOf("g")!;
+    const big = new Float32Array(JOB_PIECE * 2 + 10).map((_, i) => i);
+    rack.grainJob("g", 1, big);
+    rack.grainJob("g", 2, new Float32Array([1, 2, 3]));
+    rack.grainJob("g", 2, new Float32Array([4, 5, 6]));
+    rack.process(0);
+    expect(engine.jobs).toEqual([`begin:${g}:1:${big.length}`]);
+    rack.process(128);
+    rack.process(256);
+    expect(engine.jobs[engine.jobs.length - 1]).toBe(`commit:${g}:1`);
+    const written = new Float32Array(engine.memory.buffer, engine.jobPtr, big.length);
+    expect(written[JOB_PIECE * 2 + 9]).toBe(JOB_PIECE * 2 + 9);
+    rack.process(384);
+    expect(engine.jobs.slice(-2)).toEqual([`begin:${g}:2:3`, `commit:${g}:2`]);
+    expect(Array.from(new Float32Array(engine.memory.buffer, engine.jobPtr, 3))).toEqual([4, 5, 6]);
+    expect(rack.jobsWaiting).toBe(0);
   });
 });

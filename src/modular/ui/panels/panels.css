@@ -476,3 +476,56 @@
 .pnl--cabinet .pnl-display--page-nav .pnl-pages button { background: #141517; border-color: #4a463d; color: #a59d88; font-size: 10px; }
 .pnl--cabinet .pnl-display--page-nav .pnl-pages button.is-on { color: #fff4dc; }
 .pnl--cabinet .pnl-display--page-nav .pnl-pages button.is-on::after { background: #f3a43a; }
+
+/* The Grain Engine's switch row, places 3 and 4: the tuning and Keys. */
+.pnl-tuning { justify-content: space-between; }
+.pnl-tuning__caret { font-style: normal; opacity: 0.8; }
+.pnl-tuning.is-on { color: #f3a43a; border-color: #8a5a22; }
+.pnl-display--keys .pnl-keys { width: 100%; height: 100%; }
+.pnl--cabinet .pnl-keys { background: #222326; border-color: #4a463d; color: #e9e1cc; font-size: 10px; }
+.pnl--cabinet .pnl-keys.is-on { color: #f3a43a; border-color: #8a5a22; }
+.pnl-keys i { font-style: normal; opacity: 0.8; }
+.pnl-cloud__grains { position: absolute; inset: 0; pointer-events: none; }
+
+/* The scale menu: every scale grouped by family, a filter across them all. */
+.pnl-scale-pop { position: fixed; z-index: 60; width: 340px; max-height: 66vh; overflow: auto; padding: 4px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 1px; background: #1b1c1f; color: #e9e1cc; border: 1px solid #4a463d; border-radius: 6px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55); font: 12px var(--pnl-condensed, system-ui); }
+.pnl-scale-pop__head { display: flex; align-items: center; gap: 8px; padding: 3px 5px 6px; position: sticky; top: -4px; z-index: 2;
+  background: #1b1c1f; border-bottom: 1px solid #333; }
+.pnl-scale-pop__count { font-size: 11px; color: #8f8878; font-variant-numeric: tabular-nums; }
+.pnl-scale-pop__head input { flex: 1; min-width: 0; height: 20px; background: #111214; color: #e9e1cc; border: 1px solid #4a463d; border-radius: 3px; padding: 0 6px; }
+.pnl-scale-cat { display: flex; flex-direction: column; gap: 1px; }
+.pnl-scale-cat__head { text-align: left; padding: 6px 7px 3px; border: 0; background: transparent; color: #c9c1ac; font-weight: 650;
+  font-size: 11px; letter-spacing: 0.4px; cursor: pointer; border-radius: 3px; }
+.pnl-scale-cat__head:hover { background: #26272b; color: #f3a43a; }
+.pnl-scale-item { display: flex; flex-direction: column; gap: 1px; text-align: left; padding: 4px 7px 4px 15px; border: 0; border-radius: 3px;
+  background: transparent; color: #e9e1cc; cursor: pointer; }
+.pnl-scale-item:hover { background: #26272b; }
+.pnl-scale-item.is-selected { background: #2f3034; color: #f3a43a; }
+.pnl-scale-item__name { font-size: 12px; }
+.pnl-scale-item__info { font-size: 10px; color: #8f8878; }
+
+/* Keys: a piano, fixed to the bottom of the window, draggable by its header. */
+.pnl-kb { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; pointer-events: none; }
+.pnl-kb__card { pointer-events: auto; max-width: 96vw; background: #1b1c1f; color: #e9e1cc; border: 1px solid #4a463d; border-radius: 10px;
+  overflow: hidden; box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55); font: 12px var(--pnl-condensed, system-ui); }
+.pnl-kb__head { display: flex; align-items: center; gap: 10px; height: 28px; padding: 0 8px; border-bottom: 1px solid #333; cursor: grab; user-select: none; }
+.pnl-kb__head h2 { margin: 0; font-size: 13px; }
+.pnl-kb__scale { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 11px; color: #8f8878; }
+.pnl-kb__head button { height: 19px; padding: 0 7px; background: transparent; color: #e9e1cc; border: 1px solid #4a463d; border-radius: 3px; cursor: pointer; }
+.pnl-kb__body { padding: 7px; display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+.pnl-kb__piano { position: relative; height: 84px; }
+.pnl-kb-key { position: absolute; top: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px;
+  padding: 4px 1px 5px; font-family: var(--pnl-screen-font, monospace); cursor: pointer; overflow: hidden; box-sizing: border-box; }
+.pnl-kb-key--white { height: 84px; z-index: 1; border: 1px solid #555; border-radius: 0 0 5px 5px; background: #d9d3c2; color: #111; }
+.pnl-kb-key--black { height: 51px; z-index: 2; border: 1px solid #000; border-radius: 0 0 4px 4px; background: #111; color: #d9d3c2;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5); }
+.pnl-kb-key.is-on { background: #f3a43a; color: #111; }
+.pnl-kb-letter { font-size: 11px; font-weight: 700; line-height: 1.1; }
+.pnl-kb-semis { writing-mode: vertical-rl; font-size: 9px; opacity: 0.7; line-height: 1; flex: 1 1 auto; min-height: 0;
+  display: flex; align-items: flex-start; justify-content: center; letter-spacing: -0.2px; }
+.pnl-kb__legend { display: flex; align-items: center; gap: 8px; width: 100%; font-size: 11px; color: #8f8878; white-space: nowrap; }
+.pnl-kb__legend b { color: #e9e1cc; font-family: var(--pnl-screen-font, monospace); }
+.pnl-kb__hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.pnl-kb__oct.is-on { color: #f3a43a; }

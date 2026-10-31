@@ -15,6 +15,7 @@
  */
 
 import type { ModuleDescriptor, ParameterDescriptor, SignalType } from "../model/graph";
+import { GRAIN_SCALES } from "./grainTuning";
 import {
   boolParam,
   custom,
@@ -387,6 +388,11 @@ const GRAIN_ENGINE = defineModule({
     numberParam("stretch", "Stretch", 1, 0.01, 100, 0.01, "×"),
     // Continuous, as the tray's is with no tuning chosen.
     numberParam("semitones", "Pitch", 0, -48, 48, 0.001, "st"),
+    // The tuning Pitch snaps to: one of `prism_grain::tuning`'s scales, or
+    // with "free" a grid in semitones (0 for none). The scale's place here,
+    // the crate's order, is its wire value.
+    enumParam("scale", "Tuning", ["free", ...GRAIN_SCALES.map((s) => s.name)], "free"),
+    numberParam("pitch-step", "Pitch grid", 0, 0, 12, 0.5, "st"),
     numberParam("window-ms", "Window", 40, 5, 2000, 1, "ms"),
     // Grain shape.
     numberParam("position", "Position", 0, -1, 1, 0.001),
@@ -461,7 +467,7 @@ const GRAIN_ENGINE = defineModule({
   ],
   face: [
     section("sample", "Sample", [custom("asset-slot", "Sample", ["asset-id"]), param("level")]),
-    section("time", "Time and pitch", [param("engine"), param("stretch"), param("semitones"), param("window-ms")]),
+    section("time", "Time and pitch", [param("engine"), param("stretch"), param("semitones"), param("scale"), param("pitch-step"), param("window-ms")]),
     section("grain-shape", "Grain shape", [
       param("position"), param("grain-rate"), param("density"), param("layers"), param("overlap"),
       param("size-jitter"), param("position-jitter"),

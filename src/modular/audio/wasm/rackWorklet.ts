@@ -92,6 +92,9 @@ class RackProcessor extends AudioWorkletProcessor {
         case "modulation":
           this.rack.setModulation(message.nodeId, message.source, message.dest, message.amount);
           break;
+        case "grain-job":
+          this.rack.grainJob(message.nodeId, message.kind, message.data);
+          break;
       }
     };
   }

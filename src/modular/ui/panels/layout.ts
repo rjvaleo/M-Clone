@@ -12,7 +12,7 @@ import type { Readout } from "./readout";
 /** The looks a panel can wear: four new ones and the originals' own. */
 export type PanelStyle = "cabinet" | "night" | "graph" | "strip" | "soundhack" | "lexicon" | "platinum";
 
-export type ControlKind = "knob" | "hslider" | "vslider" | "switch" | "select" | "asset" | "readout" | "field" | "pad" | "reroll";
+export type ControlKind = "knob" | "hslider" | "vslider" | "switch" | "select" | "asset" | "readout" | "field" | "pad" | "reroll" | "tuning";
 
 type Box = { x: number; y: number; w: number; h: number };
 
@@ -48,6 +48,10 @@ export type PanelControl = Box & {
   detent?: number;
   /** How its value reads, where the original printed it in words ("off", "frozen"). */
   text?: (value: number) => string;
+  /** Where a value it is turned to lands, where the original snapped it (a tuning). */
+  snap?: (value: number) => number;
+  /** Further parameters this one control sets, as a tuning menu sets its grid. */
+  also?: readonly string[];
 };
 
 /** A group or display with a page is drawn on that page only; on every page otherwise. */
@@ -108,7 +112,7 @@ function allowed(parameter: ParameterDescriptor): { kinds: ControlKind[]; needs:
       return { kinds: ["switch"], needs: "a boolean needs a switch" };
     case "enum":
       return {
-        kinds: (parameter.options?.length ?? 0) === 2 ? ["select", "switch", "knob"] : ["select", "knob"],
+        kinds: (parameter.options?.length ?? 0) === 2 ? ["select", "switch", "knob"] : ["select", "knob", "tuning"],
         needs: "a choice needs a selector or a dial",
       };
     case "string":
@@ -155,6 +159,13 @@ export function validateLayout(layout: PanelLayout, module: ModuleDescriptor): s
     }
     const { kinds, needs } = allowed(parameter);
     if (!kinds.includes(control.kind)) errors.push(`${control.param}: ${needs}, not a ${control.kind}`);
+    for (const id of control.also ?? []) {
+      if (!parameters.has(id)) errors.push(`${id}: not a parameter of ${module.type}`);
+      else if (!control.alias) {
+        if (seen.has(id)) errors.push(`${id}: placed twice`);
+        seen.add(id);
+      }
+    }
     if (control.kind === "pad") {
       const y = control.paramY === undefined ? undefined : parameters.get(control.paramY);
       if (control.paramY === undefined) errors.push(`${control.param}: a pad needs a Y`);
