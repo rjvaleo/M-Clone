@@ -26,6 +26,7 @@
 import type { AudioNodeSpec, AudioPlan } from "../audioPlan";
 import { AUDIO_MIX_PARAM, AUDIO_MUTE_PARAM } from "../../registry/audioModules";
 import { PRISM_CODES, PRISM_FADE_KEY, PRISM_PARAM_INDICES, PRISM_SOUND_PARAM, PRISM_SOUND_TYPES } from "../../registry/prismModules";
+import { isModulator } from "../../modulation";
 import { planSampleRefs } from "./sampleSync";
 import { transferSample, type SampleSource } from "./sampleTransfer";
 import { NoteSchedule } from "./noteSchedule";
@@ -63,6 +64,8 @@ export const MODULE_KINDS: Readonly<Record<string, number>> = {
   "m.audio-dp4": 18,
   "m.lfo": 20,
   "m.grain-engine": 21,
+  "m.env-follower": 22,
+  "m.adsr": 23,
   // Every effect from prism-fx is one Rust module, built by its code.
   ...Object.fromEntries(Object.keys(PRISM_CODES).map((type) => [type, 19])),
 };
@@ -437,7 +440,12 @@ export const PARAM_INDICES: Readonly<Record<string, Readonly<Record<string, numb
     level: 21,
   },
   // `LfoModule`. Its targets are routes, not values; its colour is the face's.
-  "m.lfo": { rate: 0, shape: 1, amount: 2, phase: 3 },
+  // `LfoModule`. Sync, beats and bpm follow the original four, so a patch
+  // saved before them keeps its indices.
+  "m.lfo": { rate: 0, shape: 1, amount: 2, phase: 3, sync: 4, beats: 5, bpm: 6 },
+  // `EnvelopeFollowerModule` and `GateAdsrModule`.
+  "m.env-follower": { "attack-seconds": 0, "release-seconds": 1, amount: 2 },
+  "m.adsr": { "attack-ms": 0, "decay-ms": 1, sustain: 2, "release-ms": 3, amount: 4 },
   "m.granular": {
     "grain-size": 0,
     "grain-spacing": 1,
@@ -578,6 +586,15 @@ export const PARAMS_HANDLED_ELSEWHERE: Readonly<Record<string, Readonly<Record<s
     "asset-id": "audio, not a value; reaches the engine via set_sample_slot",
   },
   "m.lfo": {
+    color: "the face's, not the engine's",
+    targets: "the knobs it moves; they reach the engine as connect_param routes",
+    note: "travels as beats, beside the transport's bpm; see compileModulation",
+  },
+  "m.env-follower": {
+    color: "the face's, not the engine's",
+    targets: "the knobs it moves; they reach the engine as connect_param routes",
+  },
+  "m.adsr": {
     color: "the face's, not the engine's",
     targets: "the knobs it moves; they reach the engine as connect_param routes",
   },
@@ -1072,7 +1089,7 @@ export class WasmRack {
     };
     const lfos: Record<string, [number, number]> = {};
     for (const [nodeId, built] of this.built) {
-      if (built.moduleType !== "m.lfo") continue;
+      if (!isModulator(built.moduleType)) continue;
       lfos[nodeId] = [this.engine.module_telemetry(built.moduleId), this.engine.module_output(built.moduleId, 0)];
     }
     if (Object.keys(lfos).length > 0) report.lfos = lfos;
@@ -1214,7 +1231,8 @@ export class WasmRack {
       }
     };
 
-    for (const connection of plan.connections) {
+    // What an envelope follower listens to is wired as any cable is.
+    for (const connection of [...plan.connections, ...(plan.modulatorConnections ?? [])]) {
       // A cable to a module that was never built is dropped rather than
       // half-patched.
       const from = this.moduleIdOf(connection.from.nodeId);

@@ -1349,6 +1349,89 @@ describe("LFOs and their routes", () => {
   });
 });
 
+describe("Tempo sync, the envelope follower and the gate ADSR", () => {
+  it("sends a synced LFO its note and tempo at the indices after its phase", () => {
+    expect(PARAM_INDICES["m.lfo"]).toMatchObject({ rate: 0, shape: 1, amount: 2, phase: 3, sync: 4, beats: 5, bpm: 6 });
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update({ ...plan([]), modulators: [node("l", "m.lfo", { rate: 2, sync: 1, beats: 0.5, bpm: 128 })] });
+    const l = rack.moduleIdOf("l")!;
+    expect([4, 5, 6].map((i) => engine.params.get(`${l}.${i}`))).toEqual([1, 0.5, 128]);
+  });
+
+  it("builds the follower as kind 22 and the ADSR as kind 23, each control at its index", () => {
+    expect(MODULE_KINDS["m.env-follower"]).toBe(22);
+    expect(MODULE_KINDS["m.adsr"]).toBe(23);
+    expect(PARAM_INDICES["m.env-follower"]).toEqual({ "attack-seconds": 0, "release-seconds": 1, amount: 2 });
+    expect(PARAM_INDICES["m.adsr"]).toEqual({ "attack-ms": 0, "decay-ms": 1, sustain: 2, "release-ms": 3, amount: 4 });
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update({
+      ...plan([]),
+      modulators: [
+        node("e", "m.env-follower", { "attack-seconds": 0.02, "release-seconds": 0.5, amount: 0.6 }),
+        node("a", "m.adsr", { "attack-ms": 4, "decay-ms": 90, sustain: 0.2, "release-ms": 700, amount: 0.9 }),
+      ],
+    });
+    const [e, a] = ["e", "a"].map((id) => rack.moduleIdOf(id)!);
+    expect([engine.modules.get(e), engine.modules.get(a)]).toEqual([22, 23]);
+    expect([0, 1, 2].map((i) => engine.params.get(`${e}.${i}`))).toEqual([0.02, 0.5, 0.6]);
+    expect([0, 1, 2, 3, 4].map((i) => engine.params.get(`${a}.${i}`))).toEqual([4, 90, 0.2, 700, 0.9]);
+  });
+
+  it("patches what the follower listens to into both of its sides", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    const listen = { from: { nodeId: "g", portId: "audio-out" }, to: { nodeId: "e", portId: "audio-in" } };
+    rack.update({ ...plan([node("g", "m.audio-gain")]), modulators: [node("e", "m.env-follower")], modulatorConnections: [listen] });
+    const [g, e] = ["g", "e"].map((id) => rack.moduleIdOf(id)!);
+    expect([...engine.cables].filter((c) => c.includes(`→${e}:`)).sort()).toEqual([`${g}:0→${e}:0`, `${g}:1→${e}:1`]);
+    // And unpatches it when the cable goes.
+    rack.update({ ...plan([node("g", "m.audio-gain")], [], 2), modulators: [node("e", "m.env-follower")] });
+    expect([...engine.cables].filter((c) => c.includes(`→${e}:`))).toEqual([]);
+  });
+
+  it("plays the notes addressed to the ADSR on it, so its gate opens and closes", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update({ ...plan([]), modulators: [node("a", "m.adsr")] });
+    const a = rack.moduleIdOf("a")!;
+    rack.schedule("a", 0, [{ type: "note-on", note: 60, velocity: 1, detuneCents: 0 }]);
+    rack.schedule("a", 64 / 48000, [{ type: "note-off", note: 60 }]);
+    rack.process(0);
+    expect(engine.calls.filter((c) => c.startsWith("note"))).toEqual([`noteon:${a}.60@1+0`, `noteoff:${a}.60`]);
+  });
+
+  it("routes both to knobs as the LFO is routed", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update({
+      ...plan([node("d", "m.audio-delay", { feedback: 0.4 })]),
+      modulators: [node("e", "m.env-follower"), node("a", "m.adsr")],
+      modulations: [
+        { from: "e", to: { nodeId: "d", parameterId: "feedback" }, scale: 0.475, min: 0, max: 0.95 },
+        { from: "a", to: { nodeId: "d", parameterId: "feedback" }, scale: 0.475, min: 0, max: 0.95 },
+      ],
+    });
+    const [e, a, d] = ["e", "a", "d"].map((id) => rack.moduleIdOf(id)!);
+    const feedback = PARAM_INDICES["m.audio-delay"].feedback;
+    expect(engine.of("route").sort()).toEqual([
+      `route:${a}:0→${d}.${feedback}*0.475[0,0.95]`,
+      `route:${e}:0→${d}.${feedback}*0.475[0,0.95]`,
+    ].sort());
+  });
+
+  it("reports each modulator's output, so the knobs it moves can be drawn", () => {
+    const engine = new FakeEngine();
+    const rack = new WasmRack(engine, 48000);
+    rack.update({ ...plan([]), modulators: [node("e", "m.env-follower"), node("a", "m.adsr")] });
+    engine.telemetry = Number.NaN;
+    engine.moduleOutput = 0.25;
+    for (let i = 0; i < REPORT_INTERVAL_QUANTA; i += 1) rack.process(i * 128);
+    expect(rack.takeReport()?.lfos).toEqual({ e: [Number.NaN, 0.25], a: [Number.NaN, 0.25] });
+  });
+});
+
 describe("The grain engine in Rust", () => {
   it("builds kind 21, takes notes, and puts each control at its index", () => {
     expect(MODULE_KINDS["m.grain-engine"]).toBe(21);

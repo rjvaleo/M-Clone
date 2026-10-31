@@ -20,7 +20,7 @@
 // of whoever wrote the module.
 
 import { MODULATOR_TYPES } from "../registry/modulatorModules";
-import { targetsOf } from "../modulation";
+import { LFO_TYPE, syncBeats, targetsOf } from "../modulation";
 import { PRISM_STRUCTURE_PARAMS } from "../registry/prismModules";
 import type { GraphDocument, JsonValue } from "../model/graph";
 import type { ModuleRegistry } from "../registry/registry";
@@ -42,6 +42,8 @@ export function hasAudioPorts(registry: ModuleRegistry, moduleType: string): boo
 
 export type CompileAudioOptions = {
   generation?: number;
+  /** The transport's tempo, which a synced LFO runs at. 120 when not given. */
+  tempoBpm?: number;
 };
 
 /**
@@ -63,6 +65,9 @@ export function compileAudioPlan(
   for (const nodeId of Object.keys(graph.nodes).sort()) {
     const node = graph.nodes[nodeId];
     if (!node.enabled) continue;
+    // A modulator with an audio input (the envelope follower) is still a
+    // modulator: only an engine that modulates builds it.
+    if (MODULATOR_TYPES.has(node.moduleType)) continue;
     const descriptor = registry.get(node.moduleType);
     if (!descriptor || !hasAudioPorts(registry, node.moduleType)) continue;
 
@@ -117,12 +122,31 @@ export function compileAudioPlan(
     connections.push({ from: { ...edge.from }, to: { ...edge.to } });
   }
 
-  const { modulators, modulations } = compileModulation(graph, registry, nodes);
-  return { generation: options.generation ?? 0, nodes, connections, modulators, modulations };
+  const { modulators, modulations } = compileModulation(graph, registry, nodes, options.tempoBpm ?? 120);
+  const built = new Set(modulators.map((m) => m.nodeId));
+  const modulatorConnections: AudioConnection[] = [];
+  for (const edgeId of Object.keys(graph.edges).sort()) {
+    const edge = graph.edges[edgeId];
+    if (!edge.enabled || !nodes[edge.from.nodeId] || !built.has(edge.to.nodeId)) continue;
+    const fromDescriptor = registry.get(graph.nodes[edge.from.nodeId].moduleType);
+    const port = fromDescriptor?.ports.find((candidate) => candidate.id === edge.from.portId);
+    if (port?.signal.kind !== "audio") continue;
+    modulatorConnections.push({ from: { ...edge.from }, to: { ...edge.to } });
+  }
+  return {
+    generation: options.generation ?? 0,
+    nodes,
+    connections,
+    modulators,
+    modulations,
+    ...(modulatorConnections.length > 0 ? { modulatorConnections } : {}),
+  };
 }
 
 /**
- * The LFOs, and a route for each knob they move.
+ * The modulators, and a route for each knob they move. A synced LFO's note
+ * travels as `beats` beside the transport's `bpm`, which is what the engine's
+ * `set_rate_synced` takes.
  *
  * A knob is moved only if it is a number on a module in the plan that the plan
  * carries as a parameter: a structural value is one Web Audio rebuilds for,
@@ -132,6 +156,7 @@ function compileModulation(
   graph: GraphDocument,
   registry: ModuleRegistry,
   nodes: Readonly<Record<string, AudioNodeSpec>>,
+  tempoBpm: number,
 ): { modulators: AudioNodeSpec[]; modulations: AudioModulation[] } {
   const modulators: AudioNodeSpec[] = [];
   const modulations: AudioModulation[] = [];
@@ -144,11 +169,14 @@ function compileModulation(
     for (const parameter of descriptor.parameters) {
       const value = node.parameters[parameter.id] ?? parameter.defaultValue;
       if (typeof value === "number" && Number.isFinite(value)) parameters[parameter.id] = value;
+      else if (typeof value === "boolean") parameters[parameter.id] = value ? 1 : 0;
+      else if (parameter.id === "note") parameters.beats = syncBeats(value);
       else if (parameter.kind === "enum" && parameter.id !== "color" && typeof value === "string") {
         const index = parameter.options?.indexOf(value) ?? -1;
         if (index >= 0) parameters[parameter.id] = index;
       }
     }
+    if (node.moduleType === LFO_TYPE) parameters.bpm = tempoBpm;
     modulators.push({ nodeId, moduleType: node.moduleType, structure: {}, parameters, bypass: false, wet: 1 });
     for (const target of targetsOf(node)) {
       const spec = nodes[target.nodeId];
