@@ -241,9 +241,9 @@ describe("Every panel in the app", () => {
     expect(types.filter((type) => type.startsWith("m.prism-sh-"))).toHaveLength(9);
     expect(types.filter((type) => type.startsWith("m.prism-lxp-"))).toHaveLength(4);
     expect(types).toEqual(expect.arrayContaining([
-      "m.grain-engine", "m.prism-compressor", "m.prism-dattorro-filter-bank", "m.prism-dattorro-plate",
+      "m.grain-engine", "m.prism-compressor", "m.prism-dattorro-filter-bank", "m.prism-dattorro-plate", "m.audio-mixer",
     ]));
-    expect(types).toHaveLength(87);
+    expect(types).toHaveLength(88);
   });
 
   it("draws the last forty effects in the four new looks, each where it belongs", () => {
@@ -268,6 +268,35 @@ describe("Every panel in the app", () => {
       "page-nav", "page-title", "lxp-logo", "lxp-title", "lxp-meters", "lxp-rtv", "hp-x-axis", "hp-y-axis", "hp-values"]);
     for (const layout of PANEL_LAYOUTS) {
       for (const display of layout.displays) expect(known.has(display.kind), `${layout.moduleType}: ${display.kind}`).toBe(true);
+    }
+  });
+});
+
+describe("The mixer's panel", () => {
+  const layout = panelFor("m.audio-mixer")!;
+
+  it("is a panel of strips, one fixed width, that places every control", () => {
+    expect(layout).toBeDefined();
+    expect(layout.style).toBe("strip");
+    expect(validateLayout(layout, moduleRegistry.get("m.audio-mixer")!)).toEqual([]);
+  });
+
+  it("gives every channel the same strip, in order, then the sends' masters", () => {
+    const strips = layout.groups.filter((g) => g.id.startsWith("channel-"));
+    expect(strips.map((g) => g.label)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
+    expect(new Set(strips.map((g) => g.w)).size).toBe(1);
+    expect(strips.map((g) => g.x)).toEqual(strips.map((_, i) => i * strips[0].w));
+    const masters = layout.groups.find((g) => g.id === "sends")!;
+    expect(masters.x).toBe(strips.length * strips[0].w);
+    expect(layout.width).toBe(masters.x + masters.w);
+  });
+
+  it("draws each fader upright, and each channel's sends above its pan", () => {
+    for (let channel = 1; channel <= 8; channel += 1) {
+      const at = (param: string) => layout.controls.find((c) => c.param === param)!;
+      expect(at(`level-${channel}`).kind).toBe("vslider");
+      expect(at(`send-a-${channel}`).y).toBeLessThan(at(`pan-${channel}`).y);
+      expect(at(`send-b-${channel}`).y).toBeLessThan(at(`pan-${channel}`).y);
     }
   });
 });
