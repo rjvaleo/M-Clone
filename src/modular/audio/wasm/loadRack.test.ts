@@ -102,3 +102,40 @@ describe("loadRackNode", () => {
     expect(rack).toBeNull();
   });
 });
+
+describe("The Grain Engine's build worker, started with the rack", () => {
+  const fakeWorker = () => ({ postMessage: vi.fn(), terminate: vi.fn(), onmessage: null });
+  const withRate = { ...host(), sampleRate: 48000 };
+
+  it("hands the worker the compiled engine and the rack's rate", async () => {
+    const worker = fakeWorker();
+    const rack = await loadRackNode(withRate, {} as never, {
+      compileModule: vi.fn().mockResolvedValue(fakeModule),
+      createNode: workingNode,
+      createBuilder: () => worker,
+    });
+    expect(rack).toBeInstanceOf(WasmRackNode);
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: "init", module: fakeModule, sampleRate: 48000 });
+  });
+
+  it("still plays when no worker can be made", async () => {
+    for (const createBuilder of [() => null, () => { throw new Error("no workers here"); }]) {
+      const rack = await loadRackNode(withRate, {} as never, {
+        compileModule: vi.fn().mockResolvedValue(fakeModule),
+        createNode: workingNode,
+        createBuilder,
+      });
+      expect(rack).toBeInstanceOf(WasmRackNode);
+    }
+  });
+
+  it("starts no worker without the rack's rate to start it at", async () => {
+    const worker = fakeWorker();
+    await loadRackNode(host(), {} as never, {
+      compileModule: vi.fn().mockResolvedValue(fakeModule),
+      createNode: workingNode,
+      createBuilder: () => worker,
+    });
+    expect(worker.postMessage).not.toHaveBeenCalled();
+  });
+});

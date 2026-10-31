@@ -148,6 +148,18 @@ full, and add drum step programming. Automation is not ported.
      the control they hang on has held still for 200 ms (a change of engine
      at once). Before this, Layers did nothing past one on WSOLA, the vocoder,
      PVSOLA and the hybrid, and Preserve transients did nothing at all.
+   - **Off the audio thread** (RJ, 31 Oct 2026). The map and the separation
+     analyse the whole file, seconds on a long one, so in the app they are not
+     made in the worklet: the Grain Engine asks (`set_deferred_builds`), the
+     main thread hands the request to a worker (`grainWorker.ts`), and a second
+     instance of the engine there builds exactly what the module would have,
+     from its parameters and the same sample. The answer comes back and is
+     taken only if it is still the one asked for. Until then it plays what it
+     has, the hybrid as a grain cloud, as MultiGrainLive does while its own
+     threads work. `verify.mjs` holds that a build made this way plays sample
+     for sample as one made in place. The layer banks are still built in
+     place (they allocate, but analyse nothing), and so is the resampling of
+     a newly loaded sample.
    - Gated notes are voices of their own, up to four; free running, one voice
      plays and notes retune it. Each voice seeks at its own pitch.
    - The face: the cloud pad leads (drag inside the box to move the head,
