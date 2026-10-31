@@ -86,7 +86,7 @@ import { ModTarget } from "./ModTarget";
 import { ModulationAnimator } from "./modulationAnimator";
 import { MeterAnimator } from "./panels/meters";
 import {
-  LFO_TYPE,
+  isModulator,
   lfoStates,
   mappingsByTarget,
   nextLfoColor,
@@ -1633,8 +1633,8 @@ export function ModularApp() {
       canvas: canvasSize,
     });
     const added = createNode(moduleType, id, position);
-    // Each new LFO wears a colour no other one does, so its rings stand apart.
-    if (moduleType === LFO_TYPE) added.parameters.color = nextLfoColor(graph);
+    // Each new modulator wears a colour no other one does, so its rings stand apart.
+    if (isModulator(moduleType)) added.parameters.color = nextLfoColor(graph);
     dispatch({ type: "add-node", node: added });
     setSelectedNodeId(id);
     setSelectedEdgeId(null);
@@ -2017,6 +2017,19 @@ export function ModularApp() {
     setPlayingAsset(audioRef.current?.auditioningAssetId ?? null);
   }, []);
 
+  /** The tempo the transport plays at now: M's, or the Conductor's as it moves it. */
+  const transportTempo = useCallback((): number => {
+    const runtime = runtimeRef.current;
+    const bpm = runtime?.tempoMap.bpmAt(runtime.positionTick);
+    return bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? bpm : 120;
+  }, []);
+  // A synced LFO follows the transport's tempo. Polled rather than pushed: the
+  // Conductor and M's tempo both move it, from inside the runtime.
+  useEffect(() => {
+    const timer = window.setInterval(() => audioRef.current?.setTempo(transportTempo()), 100);
+    return () => window.clearInterval(timer);
+  }, [transportTempo]);
+
   const startAudio = useCallback((): AudioEngine | null => {
     if (audioRef.current) return audioRef.current;
     const Constructor = window.AudioContext;
@@ -2029,6 +2042,7 @@ export function ModularApp() {
       // measure the offset to audio time rather than guess it.
       runtimeNow: () => performance.now() / 1000,
     });
+    engine.setTempo(transportTempo());
     audioRef.current = engine;
     // Registered here rather than at construction: until there is an audio
     // context there is nothing for note events to be played on.
@@ -2062,7 +2076,7 @@ export function ModularApp() {
       setMessage("Audio running");
     });
     return engine;
-  }, [refreshAssets]);
+  }, [refreshAssets, transportTempo]);
 
   // M plays through this canvas: its sound joins the mix, it shares the MIDI
   // access, and each track's notes go to the modules cabled to its output.
@@ -2099,7 +2113,7 @@ export function ModularApp() {
       describe,
       startMap: (lfoNodeId) => {
         setMappingFrom(lfoNodeId);
-        setMessage(`Click the knob ${graphRef.current.nodes[lfoNodeId]?.label ?? "the LFO"} should move — Esc to stop`);
+        setMessage(`Click the knob ${graphRef.current.nodes[lfoNodeId]?.label ?? "the modulator"} should move — Esc to stop`);
       },
       cancelMap: () => {
         setMappingFrom(null);
@@ -2137,7 +2151,7 @@ export function ModularApp() {
   useEffect(() => {
     const animator = new ModulationAnimator(() => viewportRef.current, () => ({
       report: audioRef.current?.rackReport ?? null,
-      lfos: lfoStates(graphRef.current),
+      lfos: lfoStates(graphRef.current, transportTempo()),
     }));
     animator.start();
     return () => animator.stop();

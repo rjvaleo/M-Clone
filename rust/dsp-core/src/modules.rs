@@ -28,6 +28,7 @@ use crate::osc::Wave;
 use crate::delay::DelayLine;
 use crate::dp4::{Dp4Algorithm, Dp4Reverb, NonLin, NonLinVariant, NONLIN_TAPS};
 use crate::dynamics::{DynamicsMode, EnvelopeFollower, GainComputer};
+use crate::envelope::Adsr;
 use crate::fdn::{Fdn, MixMatrix};
 use crate::filter::{Biquad, BiquadKind, OnePole};
 use crate::grain::{GrainCloud, GrainSettings};
@@ -2945,6 +2946,10 @@ impl Module for PrismModule {
 /// `Engine::connect_param`, which scales it by half that knob's range. It
 /// reports its phase, so a face can draw where it is between the rack's
 /// reports.
+///
+/// With Sync on, the rate is a note value at a tempo instead — `beats` in
+/// quarter notes at `bpm` — through `Lfo::set_rate_synced`, and the Rate knob
+/// is ignored. Sync is off by default, so a patch saved before it plays as it did.
 pub struct LfoModule {
     lfo: Lfo,
     seen: [f32; Self::PARAM_COUNT],
@@ -2955,7 +2960,10 @@ impl LfoModule {
     pub const SHAPE: usize = 1;
     pub const AMOUNT: usize = 2;
     pub const PHASE: usize = 3;
-    pub const PARAM_COUNT: usize = 4;
+    pub const SYNC: usize = 4;
+    pub const BEATS: usize = 5;
+    pub const BPM: usize = 6;
+    pub const PARAM_COUNT: usize = 7;
 
     pub fn new(sample_rate: f32) -> Self {
         Self { lfo: Lfo::new(if sample_rate > 0.0 { sample_rate } else { 48_000.0 }, 0x1f0), seen: [f32::NAN; Self::PARAM_COUNT] }
@@ -2964,10 +2972,15 @@ impl LfoModule {
 
 impl Module for LfoModule {
     fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
-        let raw = [0, 1, 2, 3].map(|i| ports.param(i));
+        let raw = [0, 1, 2, 3, 4, 5, 6].map(|i| ports.param(i));
         if raw != self.seen {
-            if raw[Self::RATE] != self.seen[Self::RATE] {
-                self.lfo.set_rate_hz(raw[Self::RATE]);
+            let timing = [Self::RATE, Self::SYNC, Self::BEATS, Self::BPM];
+            if timing.iter().any(|&i| raw[i] != self.seen[i]) {
+                if raw[Self::SYNC] >= 0.5 {
+                    self.lfo.set_rate_synced(raw[Self::BPM], raw[Self::BEATS]);
+                } else {
+                    self.lfo.set_rate_hz(raw[Self::RATE]);
+                }
             }
             if raw[Self::SHAPE] != self.seen[Self::SHAPE] {
                 self.lfo.set_shape(LfoShape::from_u32(raw[Self::SHAPE].max(0.0) as u32).unwrap_or(LfoShape::Sine));
@@ -3002,6 +3015,159 @@ impl Module for LfoModule {
     fn param_default(&self, index: usize) -> f32 {
         match index {
             Self::RATE => 1.0,
+            Self::AMOUNT => 0.5,
+            Self::BEATS => 1.0,
+            Self::BPM => 120.0,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.env-follower` — the envelope of whatever is patched into it, as a
+/// modulator. The detector is the compressor's: `EnvelopeFollower` on the
+/// louder of the two sides, with the compressor's attack and release clamps.
+/// Its one output is that envelope scaled by its amount; like the LFO's, it is
+/// routed to knobs with `Engine::connect_param`.
+pub struct EnvelopeFollowerModule {
+    follower: EnvelopeFollower,
+    sample_rate: f32,
+    seen: [f32; 2],
+}
+
+impl EnvelopeFollowerModule {
+    pub const ATTACK_SECONDS: usize = 0;
+    pub const RELEASE_SECONDS: usize = 1;
+    pub const AMOUNT: usize = 2;
+    pub const PARAM_COUNT: usize = 3;
+
+    pub fn new(sample_rate: f32) -> Self {
+        Self {
+            follower: EnvelopeFollower::new(),
+            sample_rate: if sample_rate > 0.0 { sample_rate } else { 48_000.0 },
+            seen: [f32::NAN; 2],
+        }
+    }
+}
+
+impl Module for EnvelopeFollowerModule {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        let times = [ports.param(Self::ATTACK_SECONDS), ports.param(Self::RELEASE_SECONDS)];
+        if times != self.seen {
+            self.seen = times;
+            // The compressor's clamps, so the two detectors answer alike.
+            self.follower.set_times(clamp(times[0], 0.0001, 1.0), clamp(times[1], 0.001, 4.0), self.sample_rate);
+        }
+        let env = self.follower.process(louder([ports.input(0), ports.input(1)]));
+        ports.output(0, env * ports.param(Self::AMOUNT));
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        if sample_rate > 0.0 {
+            self.sample_rate = sample_rate;
+            self.seen = [f32::NAN; 2];
+        }
+    }
+
+    fn reset(&mut self) {
+        self.follower.clear();
+    }
+
+    fn input_count(&self) -> usize { 2 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::ATTACK_SECONDS => 0.003,
+            Self::RELEASE_SECONDS => 0.25,
+            Self::AMOUNT => 0.5,
+            _ => 0.0,
+        }
+    }
+}
+
+/// `m.adsr` — an ADSR on a gate, as a modulator. Notes open the gate: each
+/// note-on starts the attack (from wherever the envelope is), decay and
+/// sustain follow, and the release plays out once the last held note lets go.
+/// The envelope is `Adsr`, its times in milliseconds as the synth's are; its
+/// one output is the envelope scaled by its amount, unipolar.
+pub struct GateAdsrModule {
+    adsr: Adsr,
+    held: [bool; 128],
+    holding: usize,
+}
+
+impl GateAdsrModule {
+    pub const ATTACK_MS: usize = 0;
+    pub const DECAY_MS: usize = 1;
+    pub const SUSTAIN: usize = 2;
+    pub const RELEASE_MS: usize = 3;
+    pub const AMOUNT: usize = 4;
+    pub const PARAM_COUNT: usize = 5;
+
+    pub fn new(sample_rate: f32) -> Self {
+        Self { adsr: Adsr::new(sample_rate), held: [false; 128], holding: 0 }
+    }
+}
+
+impl Module for GateAdsrModule {
+    fn process(&mut self, _ctx: &ProcessContext, ports: &mut Ports) {
+        // Cheap enough to set every sample, and a routed knob moves them.
+        self.adsr.set_attack(ports.param(Self::ATTACK_MS) / 1000.0);
+        self.adsr.set_decay(ports.param(Self::DECAY_MS) / 1000.0);
+        self.adsr.set_sustain(ports.param(Self::SUSTAIN));
+        self.adsr.set_release(ports.param(Self::RELEASE_MS) / 1000.0);
+        let value = self.adsr.next();
+        ports.output(0, value * ports.param(Self::AMOUNT));
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.adsr.set_sample_rate(sample_rate);
+    }
+
+    fn reset(&mut self) {
+        self.adsr.kill();
+        self.held = [false; 128];
+        self.holding = 0;
+    }
+
+    fn note_on(&mut self, note: u8, _velocity: f32, _detune_cents: f32) {
+        let slot = &mut self.held[(note & 0x7f) as usize];
+        if !*slot {
+            *slot = true;
+            self.holding += 1;
+        }
+        self.adsr.gate_on();
+    }
+
+    fn note_off(&mut self, note: u8) {
+        let slot = &mut self.held[(note & 0x7f) as usize];
+        if !*slot {
+            return;
+        }
+        *slot = false;
+        self.holding -= 1;
+        if self.holding == 0 {
+            self.adsr.gate_off();
+        }
+    }
+
+    fn all_notes_off(&mut self) {
+        self.held = [false; 128];
+        self.holding = 0;
+        self.adsr.gate_off();
+    }
+
+    fn input_count(&self) -> usize { 0 }
+    fn output_count(&self) -> usize { 1 }
+    fn param_count(&self) -> usize { Self::PARAM_COUNT }
+
+    fn param_default(&self, index: usize) -> f32 {
+        match index {
+            Self::ATTACK_MS => 10.0,
+            Self::DECAY_MS => 150.0,
+            Self::SUSTAIN => 0.7,
+            Self::RELEASE_MS => 250.0,
             Self::AMOUNT => 0.5,
             _ => 0.0,
         }
@@ -3309,6 +3475,8 @@ pub enum ModuleKind {
     Prism = 19,
     Lfo = 20,
     GrainEngine = 21,
+    EnvelopeFollower = 22,
+    GateAdsr = 23,
 }
 
 impl ModuleKind {
@@ -3336,6 +3504,8 @@ impl ModuleKind {
             19 => Some(Self::Prism),
             20 => Some(Self::Lfo),
             21 => Some(Self::GrainEngine),
+            22 => Some(Self::EnvelopeFollower),
+            23 => Some(Self::GateAdsr),
             _ => None,
         }
     }
@@ -3387,6 +3557,8 @@ impl ModuleKind {
             Self::Prism => Box::new(PrismModule::new(variant, sample_rate)),
             Self::Lfo => Box::new(LfoModule::new(sample_rate)),
             Self::GrainEngine => Box::new(GrainEngineModule::new(sample_rate)),
+            Self::EnvelopeFollower => Box::new(EnvelopeFollowerModule::new(sample_rate)),
+            Self::GateAdsr => Box::new(GateAdsrModule::new(sample_rate)),
         }
     }
 
@@ -5066,6 +5238,261 @@ mod tests {
             }
         }
         assert!(seen.0 < 0.05 && seen.1 > 0.95, "{seen:?}");
+    }
+
+    // ---- tempo sync -------------------------------------------------------------
+
+    #[test]
+    fn an_lfo_left_unsynced_plays_its_rate_as_before() {
+        let lfo = ModuleKind::Lfo.build();
+        assert_eq!(lfo.param_default(LfoModule::SYNC), 0.0);
+        assert_eq!(lfo.param_default(LfoModule::BEATS), 1.0);
+        assert_eq!(lfo.param_default(LfoModule::BPM), 120.0);
+    }
+
+    /// Rising zero crossings of an LFO's output over one second.
+    fn lfo_cycles(settings: &[(usize, f32)]) -> usize {
+        let mut engine = Engine::new(RATE);
+        let lfo = engine.add(ModuleKind::Lfo.build());
+        engine.set_param(lfo, LfoModule::AMOUNT, 1.0);
+        for &(index, value) in settings {
+            engine.set_param(lfo, index, value);
+        }
+        let mut values = Vec::new();
+        for _ in 0..(1.1 * RATE) as usize {
+            engine.process();
+            values.push(engine.output_of(lfo, 0));
+        }
+        values.windows(2).filter(|w| w[0] < 0.0 && w[1] >= 0.0).count()
+    }
+
+    #[test]
+    fn a_synced_lfo_runs_at_the_tempo_and_ignores_its_rate() {
+        // An eighth at 120 BPM is a quarter of a second: four cycles a second,
+        // whatever the Rate knob says.
+        let synced = [(LfoModule::RATE, 0.3), (LfoModule::SYNC, 1.0), (LfoModule::BEATS, 0.5), (LfoModule::BPM, 120.0)];
+        assert_eq!(lfo_cycles(&synced), 4);
+        // A dotted eighth at 120 BPM: 120 / 60 / 0.75 = 2.67 Hz, so cycles
+        // begin at 0.375 s and 0.75 s inside the window, and the next at 1.125 s after it.
+        let dotted = [(LfoModule::SYNC, 1.0), (LfoModule::BEATS, 0.75), (LfoModule::BPM, 120.0)];
+        assert_eq!(lfo_cycles(&dotted), 2);
+        // Sync off again, and the rate is the knob's.
+        assert_eq!(lfo_cycles(&[(LfoModule::RATE, 3.0), (LfoModule::SYNC, 0.0), (LfoModule::BEATS, 0.5)]), 3);
+    }
+
+    #[test]
+    fn a_synced_lfo_is_the_lfos_own_synced_rate() {
+        let mut engine = Engine::new(RATE);
+        let module = engine.add(ModuleKind::Lfo.build());
+        engine.set_param(module, LfoModule::SYNC, 1.0);
+        engine.set_param(module, LfoModule::BEATS, 2.0 / 3.0);
+        engine.set_param(module, LfoModule::BPM, 97.0);
+        engine.set_param(module, LfoModule::SHAPE, 1.0);
+        let mut alone = Lfo::new(RATE, 0x1f0);
+        alone.set_shape(LfoShape::Triangle);
+        alone.set_depth(0.5);
+        alone.set_rate_synced(97.0, 2.0 / 3.0);
+        for n in 0..20_000 {
+            engine.process();
+            assert_eq!(engine.output_of(module, 0), alone.next(), "sample {n}");
+        }
+    }
+
+    // ---- the envelope follower --------------------------------------------------
+
+    #[test]
+    fn the_envelope_follower_has_its_wire_number_and_ports() {
+        assert_eq!(ModuleKind::from_u32(22), Some(ModuleKind::EnvelopeFollower));
+        let follower = ModuleKind::EnvelopeFollower.build();
+        assert_eq!(
+            (follower.input_count(), follower.output_count(), follower.param_count()),
+            (2, 1, EnvelopeFollowerModule::PARAM_COUNT),
+        );
+        assert_eq!(follower.param_default(EnvelopeFollowerModule::ATTACK_SECONDS), 0.003);
+        assert_eq!(follower.param_default(EnvelopeFollowerModule::RELEASE_SECONDS), 0.25);
+        assert_eq!(follower.param_default(EnvelopeFollowerModule::AMOUNT), 0.5);
+    }
+
+    /// A burst of sine, then silence: something with an attack and a release.
+    fn burst(n: usize) -> f32 {
+        if (2_000..14_000).contains(&n) { 0.8 * (std::f32::consts::TAU * 220.0 * n as f32 / RATE).sin() } else { 0.0 }
+    }
+
+    #[test]
+    fn the_envelope_follower_is_the_compressors_detector_times_its_amount() {
+        let mut engine = Engine::new(RATE);
+        let input = engine.add(ModuleKind::HostInput.build());
+        let module = engine.add(ModuleKind::EnvelopeFollower.build());
+        for port in 0..2 {
+            engine.connect(PortRef { module: input, port: 0 }, PortRef { module, port });
+        }
+        engine.set_param(module, EnvelopeFollowerModule::ATTACK_SECONDS, 0.01);
+        engine.set_param(module, EnvelopeFollowerModule::RELEASE_SECONDS, 0.3);
+        engine.set_param(module, EnvelopeFollowerModule::AMOUNT, 0.8);
+        let mut alone = EnvelopeFollower::new();
+        alone.set_times(0.01, 0.3, RATE);
+        // One sample of cable delay: the follower hears the host a sample late.
+        let mut heard = 0.0;
+        let mut peak = 0.0f32;
+        for n in 0..30_000 {
+            engine.set_param(input, HostInput::SAMPLE, burst(n));
+            engine.process();
+            let want = alone.process(louder([heard, heard])) * 0.8;
+            heard = burst(n);
+            assert_eq!(engine.output_of(module, 0), want, "sample {n}");
+            peak = peak.max(want);
+        }
+        assert!(peak > 0.4, "it followed the burst up: {peak}");
+    }
+
+    #[test]
+    fn the_envelope_follower_hears_the_louder_side() {
+        let mut engine = Engine::new(RATE);
+        let left = engine.add(ModuleKind::HostInput.build());
+        let right = engine.add(ModuleKind::HostInput.build());
+        let module = engine.add(ModuleKind::EnvelopeFollower.build());
+        engine.connect(PortRef { module: left, port: 0 }, PortRef { module, port: 0 });
+        engine.connect(PortRef { module: right, port: 0 }, PortRef { module, port: 1 });
+        engine.set_param(module, EnvelopeFollowerModule::AMOUNT, 1.0);
+        for _ in 0..48_000 {
+            engine.set_param(left, HostInput::SAMPLE, 0.1);
+            engine.set_param(right, HostInput::SAMPLE, -0.6);
+            engine.process();
+        }
+        assert!((engine.output_of(module, 0) - 0.6).abs() < 1e-4, "{}", engine.output_of(module, 0));
+    }
+
+    #[test]
+    fn an_envelope_follower_routed_to_a_knob_moves_the_sound() {
+        // A kick-like burst on one input opens a gain on another (a
+        // sidechained swell): silent while the burst is quiet, open while it plays.
+        let mut engine = Engine::new(RATE);
+        let key = engine.add(ModuleKind::HostInput.build());
+        let tone = engine.add(ModuleKind::HostInput.build());
+        let follower = engine.add(ModuleKind::EnvelopeFollower.build());
+        let gain = engine.add(ModuleKind::Gain.build());
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: key, port: 0 }, PortRef { module: follower, port: 0 });
+        engine.connect(PortRef { module: tone, port: 0 }, PortRef { module: gain, port: 0 });
+        engine.connect(PortRef { module: gain, port: 0 }, PortRef { module: output, port: 0 });
+        engine.set_param(gain, Gain::LEVEL, 1.0);
+        engine.set_param(gain, Gain::GAIN, 0.0);
+        engine.set_param(follower, EnvelopeFollowerModule::AMOUNT, 1.0);
+        assert!(engine.connect_param(PortRef { module: follower, port: 0 }, gain, Gain::GAIN, 1.0, 0.0, 2.0));
+        let mut quiet = 0.0f32;
+        let mut loud = 0.0f32;
+        for n in 0..30_000 {
+            engine.set_param(key, HostInput::SAMPLE, burst(n));
+            engine.set_param(tone, HostInput::SAMPLE, 0.5);
+            engine.process();
+            let v = engine.output_of(output, 0).abs();
+            // From 1 000: the gain glides from its default to the knob's 0 first.
+            if (1_000..1_900).contains(&n) { quiet = quiet.max(v) } else if (8_000..14_000).contains(&n) { loud = loud.max(v) }
+        }
+        assert!(quiet < 1e-6 && loud > 0.2, "quiet {quiet}, loud {loud}");
+    }
+
+    // ---- the ADSR on a gate -------------------------------------------------------
+
+    #[test]
+    fn the_gate_adsr_has_its_wire_number_and_one_output() {
+        assert_eq!(ModuleKind::from_u32(23), Some(ModuleKind::GateAdsr));
+        let adsr = ModuleKind::GateAdsr.build();
+        assert_eq!((adsr.input_count(), adsr.output_count(), adsr.param_count()), (0, 1, GateAdsrModule::PARAM_COUNT));
+        assert_eq!(adsr.param_default(GateAdsrModule::ATTACK_MS), 10.0);
+        assert_eq!(adsr.param_default(GateAdsrModule::DECAY_MS), 150.0);
+        assert_eq!(adsr.param_default(GateAdsrModule::SUSTAIN), 0.7);
+        assert_eq!(adsr.param_default(GateAdsrModule::RELEASE_MS), 250.0);
+        assert_eq!(adsr.param_default(GateAdsrModule::AMOUNT), 0.5);
+    }
+
+    fn gate_adsr(attack: f32, decay: f32, sustain: f32, release: f32, amount: f32) -> (Engine, u32, Adsr) {
+        let mut engine = Engine::new(RATE);
+        let module = engine.add(ModuleKind::GateAdsr.build());
+        engine.set_param(module, GateAdsrModule::ATTACK_MS, attack);
+        engine.set_param(module, GateAdsrModule::DECAY_MS, decay);
+        engine.set_param(module, GateAdsrModule::SUSTAIN, sustain);
+        engine.set_param(module, GateAdsrModule::RELEASE_MS, release);
+        engine.set_param(module, GateAdsrModule::AMOUNT, amount);
+        let mut alone = Adsr::new(RATE);
+        alone.set_attack(attack / 1000.0);
+        alone.set_decay(decay / 1000.0);
+        alone.set_sustain(sustain);
+        alone.set_release(release / 1000.0);
+        (engine, module, alone)
+    }
+
+    #[test]
+    fn the_gate_adsr_is_the_adsr_from_note_on_and_releases_from_note_off() {
+        let (mut engine, module, mut alone) = gate_adsr(20.0, 100.0, 0.4, 300.0, 0.9);
+        let mut top = 0.0f32;
+        for n in 0..40_000 {
+            if n == 1_000 {
+                engine.note_on(module, 60, 1.0, 0.0);
+                alone.gate_on();
+            }
+            if n == 15_000 {
+                engine.note_off(module, 60);
+                alone.gate_off();
+            }
+            engine.process();
+            let want = alone.next() * 0.9;
+            assert_eq!(engine.output_of(module, 0), want, "sample {n}");
+            top = top.max(want);
+        }
+        // It rose to its amount, held at sustain, and came back to rest.
+        assert!((top - 0.9).abs() < 1e-6, "{top}");
+        assert_eq!(engine.output_of(module, 0), 0.0);
+    }
+
+    #[test]
+    fn the_gate_stays_open_while_any_note_is_held() {
+        let (mut engine, module, _) = gate_adsr(1.0, 1.0, 0.5, 50.0, 1.0);
+        engine.note_on(module, 60, 1.0, 0.0);
+        engine.note_on(module, 64, 1.0, 0.0);
+        for _ in 0..2_000 { engine.process() }
+        engine.note_off(module, 60);
+        for _ in 0..10_000 { engine.process() }
+        assert!((engine.output_of(module, 0) - 0.5).abs() < 1e-6, "still at sustain");
+        engine.note_off(module, 64);
+        for _ in 0..10_000 { engine.process() }
+        assert_eq!(engine.output_of(module, 0), 0.0, "released once the last note let go");
+        // A stray note-off for a note never held does not release a held one.
+        engine.note_on(module, 67, 1.0, 0.0);
+        engine.note_off(module, 70);
+        for _ in 0..2_000 { engine.process() }
+        assert!((engine.output_of(module, 0) - 0.5).abs() < 1e-6);
+        engine.all_notes_off(module);
+        for _ in 0..10_000 { engine.process() }
+        assert_eq!(engine.output_of(module, 0), 0.0);
+    }
+
+    #[test]
+    fn a_gate_adsr_routed_to_a_knob_moves_the_sound() {
+        let (mut engine, adsr, _) = gate_adsr(5.0, 50.0, 0.5, 100.0, 1.0);
+        let tone = engine.add(ModuleKind::HostInput.build());
+        let gain = engine.add(ModuleKind::Gain.build());
+        let output = engine.add(ModuleKind::AudioOutput.build());
+        engine.connect(PortRef { module: tone, port: 0 }, PortRef { module: gain, port: 0 });
+        engine.connect(PortRef { module: gain, port: 0 }, PortRef { module: output, port: 0 });
+        engine.set_param(gain, Gain::LEVEL, 1.0);
+        engine.set_param(gain, Gain::GAIN, 0.0);
+        assert!(engine.connect_param(PortRef { module: adsr, port: 0 }, gain, Gain::GAIN, 1.0, 0.0, 2.0));
+        let mut level = |engine: &mut Engine, samples: usize| {
+            let mut v = 0.0f32;
+            for _ in 0..samples {
+                engine.set_param(tone, HostInput::SAMPLE, 0.5);
+                engine.process();
+                v = engine.output_of(output, 0);
+            }
+            v
+        };
+        assert_eq!(level(&mut engine, 1_000), 0.0, "closed before the note");
+        engine.note_on(adsr, 60, 1.0, 0.0);
+        let held = level(&mut engine, 10_000);
+        assert!((held - 0.25).abs() < 1e-5, "sustain 0.5 opens the gain to 0.5: {held}");
+        engine.note_off(adsr, 60);
+        assert!(level(&mut engine, 10_000).abs() < 1e-4, "closed after the release");
     }
 
     // ---- the grain engine ------------------------------------------------------

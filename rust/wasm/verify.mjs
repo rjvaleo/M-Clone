@@ -701,5 +701,120 @@ check("a broken patch is silent rather than a crash", outBuf[0] === 0);
   check("the closed hat chokes the open one out", after.every((x) => x === 0), `${Math.max(...after.map(Math.abs))}`);
 }
 
+// ---- the modulators: tempo sync, the envelope follower, the gate ADSR ---------
+// Each driven across the real ABI, the way the bridge drives it: built by kind,
+// set by index, routed into a knob with connect_param, notes by note_on.
+{
+  const LFO = 20, FOLLOWER = 22, ADSR = 23;
+  const L = { RATE: 0, AMOUNT: 2, SYNC: 4, BEATS: 5, BPM: 6 };
+  const F = { ATTACK: 0, RELEASE: 1, AMOUNT: 2 };
+  const A = { ATTACK_MS: 0, DECAY_MS: 1, SUSTAIN: 2, RELEASE_MS: 3, AMOUNT: 4 };
+  const quanta = (seconds) => Math.round((seconds * SAMPLE_RATE) / QUANTUM);
+
+  // A synced LFO: an eighth at 120 BPM is 4 Hz, whatever its Rate says.
+  api.init(SAMPLE_RATE);
+  const lfo = u32(api.add_module(LFO));
+  api.set_param(lfo, L.RATE, 0.3);
+  api.set_param(lfo, L.AMOUNT, 1);
+  api.set_param(lfo, L.SYNC, 1);
+  api.set_param(lfo, L.BEATS, 0.5);
+  api.set_param(lfo, L.BPM, 120);
+  const cycles = (seconds) => {
+    let rising = 0;
+    let last = api.module_output(lfo, 0);
+    for (let q = 0; q < quanta(seconds); q++) {
+      api.process_quantum();
+      const now = api.module_output(lfo, 0);
+      if (last < 0 && now >= 0) rising += 1;
+      last = now;
+    }
+    return rising;
+  };
+  // Ten seconds each, so a crossing on either edge of the window is one in forty.
+  const within = (count, want) => Math.abs(count - want) <= 1;
+  const synced = cycles(10);
+  check(`a synced LFO runs at its note and tempo (${synced} cycles in 10 s, want 40)`, within(synced, 40));
+  api.set_param(lfo, L.BPM, 60);
+  const slower = cycles(10);
+  check(`and follows the tempo (${slower} in 10 s at 60 BPM, want 20)`, within(slower, 20));
+  api.set_param(lfo, L.SYNC, 0);
+  api.set_param(lfo, L.RATE, 3);
+  const free = cycles(10);
+  check(`unsynced, it is its Rate again (${free} in 10 s, want 30)`, within(free, 30));
+
+  // The envelope follower, listening to the host and opening a gain on it.
+  api.init(SAMPLE_RATE);
+  const host = u32(api.add_module(KIND.HOST_INPUT));
+  const follower = u32(api.add_module(FOLLOWER));
+  const g = u32(api.add_module(KIND.GAIN));
+  const out = u32(api.add_module(KIND.AUDIO_OUTPUT));
+  // `init` may have grown memory, which detaches every view made before it.
+  let inBuf = new Float32Array(api.memory.buffer, api.input_ptr(), QUANTUM);
+  let outBuf = new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM);
+  check("built an envelope follower", follower !== NO_MODULE);
+  check("the follower takes the host on both sides",
+    api.connect(host, 0, follower, 0) === 1 && api.connect(host, 0, follower, 1) === 1);
+  api.connect(host, 0, g, 0);
+  api.connect(g, 0, out, 0);
+  api.set_io(host, out);
+  api.set_param(g, GAIN_PARAM.LEVEL, 1);
+  api.set_param(g, GAIN_PARAM.GAIN, 0);
+  api.set_param(follower, F.ATTACK, 0.005);
+  api.set_param(follower, F.RELEASE, 0.05);
+  api.set_param(follower, F.AMOUNT, 1);
+  check("the follower routes to a knob", api.connect_param(follower, 0, g, GAIN_PARAM.GAIN, 1, 0, 2) === 1);
+  const hold = (value, seconds) => {
+    for (let q = 0; q < quanta(seconds); q++) {
+      inBuf.fill(value);
+      api.process_quantum();
+    }
+    return outBuf[QUANTUM - 1];
+  };
+  check("silence leaves the gain shut", hold(0, 0.2) === 0);
+  const opened = hold(0.5, 0.5);
+  check(`a steady 0.5 opens it to its own envelope (${opened.toFixed(4)})`, near(opened, 0.25, 1e-3));
+  check("the follower reports that envelope", near(api.module_output(follower, 0), 0.5, 1e-3), `${api.module_output(follower, 0)}`);
+  const released = hold(0, 1);
+  check(`and it falls back when the sound stops (${released})`, Math.abs(released) < 1e-4);
+
+  // The gate ADSR, opened and closed by notes, on a gain over a steady input.
+  api.init(SAMPLE_RATE);
+  const host2 = u32(api.add_module(KIND.HOST_INPUT));
+  const adsr = u32(api.add_module(ADSR));
+  const g2 = u32(api.add_module(KIND.GAIN));
+  const out2 = u32(api.add_module(KIND.AUDIO_OUTPUT));
+  inBuf = new Float32Array(api.memory.buffer, api.input_ptr(), QUANTUM);
+  outBuf = new Float32Array(api.memory.buffer, api.output_ptr(), QUANTUM);
+  check("built a gate ADSR", adsr !== NO_MODULE);
+  api.connect(host2, 0, g2, 0);
+  api.connect(g2, 0, out2, 0);
+  api.set_io(host2, out2);
+  api.set_param(g2, GAIN_PARAM.LEVEL, 1);
+  api.set_param(g2, GAIN_PARAM.GAIN, 0);
+  api.set_param(adsr, A.ATTACK_MS, 5);
+  api.set_param(adsr, A.DECAY_MS, 50);
+  api.set_param(adsr, A.SUSTAIN, 0.5);
+  api.set_param(adsr, A.RELEASE_MS, 100);
+  api.set_param(adsr, A.AMOUNT, 1);
+  check("the ADSR routes to a knob", api.connect_param(adsr, 0, g2, GAIN_PARAM.GAIN, 1, 0, 2) === 1);
+  check("shut before a note", hold(0.5, 0.2) < 1e-4);
+  api.note_on(adsr, 60, 1, 0);
+  let peak = 0;
+  for (let q = 0; q < quanta(0.02); q++) {
+    inBuf.fill(0.5);
+    api.process_quantum();
+    peak = Math.max(peak, api.module_output(adsr, 0));
+  }
+  check(`a note over the ABI runs its attack to the top (${peak.toFixed(3)})`, peak > 0.95);
+  const sustained = hold(0.5, 0.5);
+  check(`then holds the gain at its sustain (${sustained.toFixed(4)})`, near(sustained, 0.25, 1e-3));
+  api.note_on(adsr, 64, 1, 0);
+  api.note_off(adsr, 60);
+  check("a second held note keeps the gate open", near(hold(0.5, 0.5), 0.25, 1e-3));
+  api.note_off(adsr, 64);
+  const closed = hold(0.5, 0.5);
+  check(`and the last note-off releases it (${closed})`, Math.abs(closed) < 1e-4);
+}
+
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);
