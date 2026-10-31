@@ -2,7 +2,7 @@
 
 One index for every piece of source material in the repository, grouped by
 what it is *for* rather than where it happens to sit on disk. Audited against
-the working tree on 2026-08-06.
+the working tree on 2026-10-31.
 
 Three folders already have proper catalogues, written when the material was
 ingested. This file does not repeat them — it says what each covers and points
@@ -28,14 +28,14 @@ disagree, the document wins — this is the group worth quoting in tests.
 | Source | Authority over | Size | Tracked |
 | --- | --- | ---: | :-: |
 | `reference/M27.pdf` | **M 2.7 manual, 194 pages.** The behaviour spec for the whole M rebuild: Variables, Conducting, Snapshots, and the six menus in chapters 19–22 | 2.5 MB | ✓ |
-| `reference/eventide-h90-manual-v1.12.5.pdf` | The Blackhole and DP/4 ports in `src/modular/audio/`; source of the shelf-resonance and inverse-Gravity descriptions quoted in `rust/README.md` | 10 MB | ✓ |
+| `reference/eventide-h90-manual-v1.12.5.pdf` | The Blackhole and DP/4 ports in `rust/dsp-core/src/` (`reverb.rs`, `dp4.rs`), with Web Audio fallbacks in `src/modular/audio/`; source of the shelf-resonance and inverse-Gravity descriptions quoted in `rust/README.md` | 10 MB | ✓ |
 | `reference/dp4/parameters.json` | **Machine-readable.** DP/4+ algorithm parameter names, indices and ranges, extracted from the manual — see commit `b741376` | 48 KB | ✓ |
-| `reference/emulate/Pluggo31PlugInsRef.pdf` | Cycling '74 Pluggo 3.1 plug-in reference — the same house as M, and the closest thing to a spec for the effects vocabulary being emulated | 6.6 MB | ✗ |
+| `reference/emulate/Pluggo31PlugInsRef.pdf` | Cycling '74 Pluggo 3.1 plug-in reference — the same house as M, and the closest thing to a spec for the effects vocabulary being emulated | 6.6 MB | ✓ |
 
 ### Hardware manuals — `reference/machines/`
 
 Instrument documentation, for architecture and parameter naming rather than
-exact emulation. Three files, 7.3 MB, none tracked.
+exact emulation. Three files, 7.3 MB, all tracked.
 
 | File | What it is |
 | --- | --- |
@@ -47,7 +47,7 @@ exact emulation. Three files, 7.3 MB, none tracked.
 
 | File | What it is |
 | --- | --- |
-| `Music Synthesizers - A Manual of Design and Construction`, Delton T. Horn | Ground-up synthesis design text. Circuit-level, so it explains *why* a module behaves as it does rather than specifying any product. **53 MB — the single largest file in the repository.** Untracked |
+| `Music Synthesizers - A Manual of Design and Construction`, Delton T. Horn | Ground-up synthesis design text. Circuit-level, so it explains *why* a module behaves as it does rather than specifying any product. **53 MB — the single largest file in the repository.** Tracked |
 
 ---
 
@@ -92,7 +92,7 @@ that any themeable UI kit is measured against.
 
 ### Uncatalogued — `reference/ui components/`
 
-Thirteen files, 1.8 MB, untracked. Stock and skin artwork for control
+Thirteen files, 1.8 MB, tracked. Stock and skin artwork for control
 *primitives*, as opposed to the whole-panel shots above — the raw vocabulary
 for a themeable kit.
 
@@ -109,25 +109,29 @@ for a themeable kit.
 
 ### Uncatalogued — `reference/details/`
 
-Eight files, 1.4 MB, untracked. Close-up interface crops, for texture and
+Eight files, 1.4 MB, tracked. Close-up interface crops, for texture and
 detail rather than layout.
 
 - **O3 interface** — four crops (`O3-interface-02`, `-07`, `-08`, `-23`)
-- **Sugar Bytes** — Consequence, Egoist, Looperator
+- **Sugar Bytes** — Egoist; and Consequence and Looperator, renamed in
+  `3b7ede0` to `Step-Sequencer-Controlls.jpg` and
+  `color-coded-multi-layer-ui.jpg`
 - `1702997443_IMG_2150259.jpg` — unidentified; needs a look
 
 ---
 
 ## 4. Type — `fonts/`
 
-Eighteen font files plus the DS-Digital licence text, 480 KB. Only
-`CATALOG.md` is tracked; **no font binary is committed and none is embedded in
-the app.**
+Twenty-four font files plus the HomeVideo EULA, 895 KB, all tracked. None is
+loaded from `fonts/`; the app ships its own copies — HomeVideo Regular and Bold
+in `public/fonts/` with their licence, and BitPap in `src/modular/ui/n4/fonts/`.
 
 Two kinds, both matching what the panel catalogue found on real hardware:
 **segment/LCD numerals** (DS-Digital, Digital-7, Seven Segment) for readouts,
 and **bitmap/pixel type** (1Bit, BitMap, BitPap, bitfont, OPN BitFUUL,
-ARCADECLASSIC, Gameplay, game_over, bit1) for labels.
+ARCADECLASSIC, Gameplay, game_over, bit1, basis33) for labels. Beside them,
+HomeVideo, a public-domain VHS/CRT monospace now used for the MIDI readout, and
+micrenc, a MICR cheque-encoding face.
 
 > **Licensing is the constraint, not availability.**
 > [`fonts/CATALOG.md`](fonts/CATALOG.md) reads each licence out of the font's
@@ -143,44 +147,46 @@ Written by this project rather than gathered for it.
 
 | Document | What it is | Size |
 | --- | --- | ---: |
-| `README.md` | Project entry point | 20 KB |
+| `README.md` | Project entry point | 23 KB |
 | `IDMLAB_TECH_SPEC.md` | Technical specification — "audits itself" per commit `af69fe9` | 74 KB |
 | `IDMLAB_MASTER_PLAN.md` | Product and build plan | 65 KB |
-| `CHANGELOG.md` | Release history | 8 KB |
+| `CHANGELOG.md` | Release history | 10 KB |
 | `rust/README.md` | Rust DSP core; quotes the H90 manual for Blackhole/DP-4 behaviour | — |
-| `docs/screenshots/` | Two theme captures: `m-clone-classic-theme.png`, `m-clone-red-theme.png` | — |
+| `docs/screenshots/` | Two theme captures (`m-clone-classic-theme.png`, `m-clone-red-theme.png`), `classic-m-design/` (four before/after captures), `grain-engine/` (eleven Grain Engine captures) and `idmlab/` (eleven captures of the running app, for the README) | — |
+| `docs/OPEN-ISSUES.md` | Faults found and not yet fixed | — |
+| `docs/SOUND-PORT-PLAN.md` | The plan for bringing MultiGrainLive's sound, effects and synths into idMLab | — |
+| `MODULAR_STATUS.md`, `MODULAR_AV_SALVAGE_PLAN.md` | idMLab's 2026-08-03 development checkpoint and the salvage plan from Modular AV Performance | — |
 | `kit-gallery.html` | UI kit gallery harness | 319 B |
-| `M-Clone-preview.html` | Standalone single-file build output, regenerable via `npm run build:single` | 198 KB |
+| `M-Clone-preview.html` | Standalone single-file preview; gitignored and absent from this tree. `npm run build:single` builds the single file into `dist-single/` | — |
 
 ---
 
 ## 6. Weight and git hygiene
 
-`reference/` is **91 MB**, and four PDFs are 77 MB of that. `.git` is 92 MB.
+`reference/` is **91 MB**, and the four largest items below are 77 MB of that.
+`.git` is about 175 MB.
 
 | Item | Size | Tracked |
 | --- | ---: | :-: |
-| `reference/theory/` (Horn) | 53 MB | ✗ |
+| `reference/theory/` (Horn) | 53 MB | ✓ |
 | `reference/eventide-h90-manual` | 10 MB | ✓ |
-| `reference/machines/` | 7.3 MB | ✗ |
-| `reference/emulate/` | 6.6 MB | ✗ |
+| `reference/machines/` | 7.3 MB | ✓ |
+| `reference/emulate/` | 6.6 MB | ✓ |
 | `reference/M27.pdf` | 2.5 MB | ✓ |
 
 `reference/README.md` already records why the H90 manual was kept after being
 committed to the root: rewriting history to reclaim the space would invalidate
 every existing clone. That reasoning applies with more force now.
 
-> ### Untracked and unignored
+> ### Committed, not ignored
 >
 > `reference/details/`, `reference/ui components/`, `reference/machines/`,
-> `reference/theory/`, `reference/emulate/` and `fonts/` (fonts excepting its
-> catalogue) are **untracked but not gitignored**. A `git add -A` sweeps 69 MB
-> of PDFs and unlicensed font binaries into a commit, and the Horn text alone
-> would more than double the repository.
->
-> Decide deliberately: either add them to `.gitignore` so the decision is made
-> once, or commit the ones that are genuinely needed. Leaving them in the
-> current state means the outcome depends on which `git add` someone types.
+> `reference/theory/`, `reference/emulate/` and `fonts/` were committed in
+> `78b3b04` (6 August 2026), the HomeVideo, basis33 and micrenc fonts in
+> `3b7ede0`. About 70 MB of PDFs and font binaries, the Horn text among them,
+> is now in history, and every clone carries it. Removing it would mean
+> rewriting history, which `reference/README.md` already rules out for the H90
+> manual.
 
 ---
 
