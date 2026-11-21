@@ -176,6 +176,13 @@ pub trait Module: Send {
     /// thread, never during `process`.
     fn set_sample_rate(&mut self, _sample_rate: f32) {}
 
+    /// Compute ahead whatever the module would otherwise compute the first
+    /// time a note needs it (the built-in waves' band-limited tables). Off the
+    /// audio thread; a host that can afford it calls it after
+    /// `set_sample_rate`. What the module plays is the same either way.
+    /// Default no-op.
+    fn build_tables(&mut self) {}
+
     /// Return to a known state without reallocating.
     fn reset(&mut self) {}
 

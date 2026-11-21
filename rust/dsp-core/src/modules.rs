@@ -775,6 +775,10 @@ impl Module for Synth {
         self.timed = None;
     }
 
+    fn build_tables(&mut self) {
+        self.bank.waves_mut().build_all();
+    }
+
     fn reset(&mut self) {
         self.level.reset();
         self.knob = f32::NAN;

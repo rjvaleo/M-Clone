@@ -371,6 +371,20 @@ impl BandLimitedWave {
         &self.slots[slot]
     }
 
+    /// Compute every range's table now, for a wave that keeps every range (a
+    /// built-in one), so no note has to compute one while it plays. The same
+    /// tables `ensure` would make, bit for bit: each range has its own slot
+    /// and its table depends only on the coefficients. A wave that keeps only
+    /// a few (a pulse) is left as it is.
+    pub fn build_all(&mut self, fft: &mut Ifft) {
+        if self.slots.len() != self.ranges {
+            return;
+        }
+        for range in 0..self.ranges {
+            self.ensure(range, EMPTY, fft);
+        }
+    }
+
     /// Range `range`'s table, computed if need be. For tests and inspection.
     pub fn table(&mut self, range: usize, fft: &mut Ifft) -> &[f32] {
         let slot = self.ensure(range, EMPTY, fft);

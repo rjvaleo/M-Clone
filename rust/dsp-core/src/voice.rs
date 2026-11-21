@@ -165,6 +165,15 @@ impl WaveContext {
         }
     }
 
+    /// Compute every table of the built-in waves now, off the audio thread
+    /// (see `Module::build_tables`). Without it each is made the first time a
+    /// note needs it, inside `process`.
+    pub fn build_all(&mut self) {
+        for wave in &mut self.basic {
+            wave.build_all(&mut self.fft);
+        }
+    }
+
     /// One sample of a built-in wave.
     #[inline]
     pub fn basic_sample(&mut self, osc: &mut WebOsc, shape: BasicShape, frequency: f32) -> f32 {
@@ -359,6 +368,14 @@ pub struct Voice {
     sustain: f32,
     filter_from: f32,
     sustain_offset: f32,
+    /// Kept from one sample to the next and worked out again only when what
+    /// they are made from changes (AUDIO-PLAN 2.31), by the same arithmetic,
+    /// so the sound is the same to the bit: the note's hertz, by its note;
+    /// each oscillator's detune ratio, by its cents; the pan's two gains, by
+    /// the pan. The filter keeps its own coefficients (`WebLowpass::set`).
+    hz_memo: Option<(u8, f32)>,
+    ratio_memo: [Option<(u32, f32)>; OSC_COUNT],
+    pan_memo: Option<(u32, f32, f32)>,
 }
 
 impl Voice {
@@ -394,6 +411,9 @@ impl Voice {
             sustain: 0.0,
             filter_from: 0.0,
             sustain_offset: 0.0,
+            hz_memo: None,
+            ratio_memo: [None; OSC_COUNT],
+            pan_memo: None,
         }
     }
 
