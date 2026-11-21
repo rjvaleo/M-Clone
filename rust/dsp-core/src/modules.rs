@@ -3810,7 +3810,12 @@ impl GrainEngineModule {
     fn offset(&self, index: usize) -> f32 {
         let free = self.seen[Self::FREE_RUN] >= 0.5;
         let note = if free { self.pitch_note } else { self.voices[index].note };
-        note.map(|(n, cents)| n as f32 - self.seen[Self::ROOT] + cents / 100.0).unwrap_or(0.0)
+        // A note can arrive before the first sample, when nothing has been
+        // read from the knobs yet: Root is then its default, not NaN, which
+        // would reach the stretcher's seek and stop it.
+        let root = self.seen[Self::ROOT];
+        let root = if root.is_nan() { Module::param_default(self, Self::ROOT) } else { root };
+        note.map(|(n, cents)| n as f32 - root + cents / 100.0).unwrap_or(0.0)
     }
 
     /// A voice for a new gated note: a silent one, else the oldest.
@@ -3962,7 +3967,13 @@ impl Module for GrainEngineModule {
         *self = Self::new(sample_rate);
         self.sample = sample;
         self.deferred = deferred;
-        self.sync(&seen);
+        // Before the first sample nothing has been read from the knobs, and
+        // `seen` is all NaN. Synced from that, every engine setting would be
+        // NaN, and a note before the first sample stopped the engine at the
+        // stretcher's seek. The first `process` reads them as they are.
+        if seen.iter().any(|v| !v.is_nan()) {
+            self.sync(&seen);
+        }
         self.fade.set_sample_rate(sample_rate);
     }
 
