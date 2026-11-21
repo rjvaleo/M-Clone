@@ -518,6 +518,94 @@ mod tests {
         bank
     }
 
+    /// A busy patch, hashed bit for bit: sixteen voices, three detuned
+    /// oscillators (a saw, a pulse, a square), pan still and then swept by an
+    /// LFO, the filter swept by the other, a random pitch per note. Recorded
+    /// before the per-voice values were kept between samples (AUDIO-PLAN
+    /// 2.31); it must not move.
+    #[test]
+    fn a_busy_patch_renders_its_recorded_bits() {
+        use crate::osc::Wave;
+        let mut bank = VoiceBank::new(RATE, 16, 11);
+        {
+            let s = bank.settings_mut();
+            s.waves = [Wave::Sawtooth, Wave::Pulse, Wave::Square];
+            s.detune_semis = [0.0, 7.0, -12.0];
+            s.detune_cents = [0.0, 5.0, -9.0];
+            s.levels = [0.6, 0.4, 0.3];
+            s.pulse_width = [0.5, 0.3, 0.5];
+            s.pan = -0.3;
+            s.resonance = 6.0;
+            s.lfo[0].rate_hz = 3.0;
+            s.lfo[1].rate_hz = 0.7;
+            s.matrix.set(ModSource::Lfo2, ModDest::FilterCutoff, 0.6);
+            s.matrix.set(ModSource::Random, ModDest::Osc2Pitch, 0.3);
+        }
+        let mut out = Vec::new();
+        for i in 0..16u8 {
+            if i == 8 {
+                bank.settings_mut().matrix.set(ModSource::Lfo1, ModDest::Pan, 0.8);
+            }
+            bank.note_on(36 + 3 * i, 0.5 + 0.03 * i as f32, 1.5 * i as f32);
+            out.extend(render(&mut bank, 0.01));
+        }
+        out.extend(render(&mut bank, 0.3));
+        bank.all_notes_off();
+        out.extend(render(&mut bank, 0.2));
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+        for s in &out {
+            for v in [s.left, s.right, s.classic] {
+                for b in v.to_bits().to_le_bytes() {
+                    hash = (hash ^ b as u64).wrapping_mul(0x100_0000_01b3);
+                }
+            }
+        }
+        assert!(peak(&out) > 0.01, "it is heard");
+        println!("busy patch hash {hash:#018x}");
+        assert_eq!(hash, BUSY_PATCH_HASH, "the busy patch's bits moved");
+    }
+
+    const BUSY_PATCH_HASH: u64 = 0x4a64_2eac_9a40_f89a;
+
+    /// What sixteen held voices cost, a 64-sample block at a time: the busy
+    /// patch above with its notes held. A measurement:
+    /// `--release -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn a_busy_patch_costs() {
+        use crate::osc::Wave;
+        let mut times = Vec::new();
+        for _ in 0..3 {
+            let mut bank = VoiceBank::new(RATE, 16, 11);
+            {
+                let s = bank.settings_mut();
+                s.waves = [Wave::Sawtooth, Wave::Pulse, Wave::Square];
+                s.detune_semis = [0.0, 7.0, -12.0];
+                s.detune_cents = [0.0, 5.0, -9.0];
+                s.levels = [0.6, 0.4, 0.3];
+                s.pan = -0.3;
+                s.lfo[1].rate_hz = 0.7;
+                s.matrix.set(ModSource::Lfo2, ModDest::FilterCutoff, 0.6);
+            }
+            for i in 0..16u8 {
+                bank.note_on(36 + 3 * i, 0.7, 1.5 * i as f32);
+            }
+            render(&mut bank, 0.05);
+            let mut sink = 0.0f32;
+            for _ in 0..1500 {
+                let t = std::time::Instant::now();
+                for _ in 0..64 {
+                    sink += bank.next().left;
+                }
+                times.push(t.elapsed().as_secs_f64() * 1e6);
+            }
+            std::hint::black_box(sink);
+        }
+        times.sort_by(f64::total_cmp);
+        let at = |q: f64| times[((times.len() - 1) as f64 * q) as usize];
+        println!("busy patch, 64-sample blocks: median {:.1} us, 99th percentile {:.1}, worst {:.1}", at(0.5), at(0.99), at(1.0));
+    }
+
     #[test]
     fn the_same_performance_renders_identically_every_time() {
         // §31.2's render-from-data, at the level of a whole instrument.

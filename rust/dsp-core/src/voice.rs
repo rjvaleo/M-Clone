@@ -613,7 +613,15 @@ impl Voice {
 
         // 4. Oscillators, at the frequency the browser voice sets: the note's
         //    hertz times its detune, in single precision.
-        let note_hz = web_note_hz(self.note.unwrap_or(69));
+        let note = self.note.unwrap_or(69);
+        let note_hz = match self.hz_memo {
+            Some((n, hz)) if n == note => hz,
+            _ => {
+                let hz = web_note_hz(note);
+                self.hz_memo = Some((note, hz));
+                hz
+            }
+        };
         let mut mixed = 0.0;
         for index in 0..OSC_COUNT {
             let pitch_dest = match index {
@@ -627,7 +635,16 @@ impl Voice {
                 _ => ModDest::Osc3Level,
             };
             let cents = settings.detune_semis[index] * 100.0 + settings.detune_cents[index] + self.detune_cents;
-            let mut frequency = note_hz * (cents / 1200.0).exp2();
+            let key = cents.to_bits();
+            let ratio = match self.ratio_memo[index] {
+                Some((k, ratio)) if k == key => ratio,
+                _ => {
+                    let ratio = (cents / 1200.0).exp2();
+                    self.ratio_memo[index] = Some((key, ratio));
+                    ratio
+                }
+            };
+            let mut frequency = note_hz * ratio;
             if m[pitch_dest as usize] != 0.0 {
                 frequency = apply(pitch_dest, frequency, m[pitch_dest as usize]);
             }
@@ -670,8 +687,17 @@ impl Voice {
         if m[ModDest::Pan as usize] != 0.0 {
             pan = clamp(apply(ModDest::Pan, pan, m[ModDest::Pan as usize]), -1.0, 1.0);
         }
-        let angle = (pan + 1.0) * 0.25 * core::f32::consts::PI;
-        StereoSample { left: amplitude * angle.cos(), right: amplitude * angle.sin(), classic: 0.0 }
+        let key = pan.to_bits();
+        let (gain_l, gain_r) = match self.pan_memo {
+            Some((k, l, r)) if k == key => (l, r),
+            _ => {
+                let angle = (pan + 1.0) * 0.25 * core::f32::consts::PI;
+                let (l, r) = (angle.cos(), angle.sin());
+                self.pan_memo = Some((key, l, r));
+                (l, r)
+            }
+        };
+        StereoSample { left: amplitude * gain_l, right: amplitude * gain_r, classic: 0.0 }
     }
 }
 
