@@ -47,6 +47,7 @@ pub(crate) mod testutil {
 }
 
 pub mod bank;
+pub mod chromium;
 pub mod delay;
 pub mod dp4;
 pub mod engine;

@@ -181,7 +181,7 @@ impl Ifft {
 
     /// One table: `x[k] = 2·Σ (aₙ·cos(2πnk/N) + bₙ·sin(2πnk/N))` over the
     /// partials `1 ≤ n < end`, rounded to `f32` and scaled by `scale`.
-    fn table(&mut self, real: &[f32], imag: &[f32], end: usize, scale: Option<f32>, out: &mut [f32]) {
+    pub(crate) fn table(&mut self, real: &[f32], imag: &[f32], end: usize, scale: Option<f32>, out: &mut [f32]) {
         let n = self.size;
         self.re.iter_mut().for_each(|v| *v = 0.0);
         self.im.iter_mut().for_each(|v| *v = 0.0);
