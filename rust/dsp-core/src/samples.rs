@@ -40,6 +40,25 @@ pub struct Sample {
 }
 
 impl Sample {
+    /// A sample made from its channels, each `frames` long, at `sample_rate`.
+    /// Built on the host's thread, to be handed to a bank with
+    /// [`SampleBank::put`]. None for a shape that cannot hold audio, or
+    /// channels of different lengths.
+    pub fn from_channels(sample_rate: f32, channels: &[&[f32]]) -> Option<Sample> {
+        let frames = channels.first().map_or(0, |c| c.len());
+        if channels.is_empty() || frames == 0 || !sample_rate.is_finite() || sample_rate <= 0.0 {
+            return None;
+        }
+        if channels.iter().any(|c| c.len() != frames) {
+            return None;
+        }
+        let mut data = Vec::with_capacity(channels.len() * frames);
+        for channel in channels {
+            data.extend_from_slice(channel);
+        }
+        Some(Sample { channels: channels.len(), frames, sample_rate, data })
+    }
+
     pub fn channels(&self) -> usize {
         self.channels
     }
@@ -116,6 +135,30 @@ pub struct SampleBank {
 impl SampleBank {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A bank with room for ids `0..slots`, made now, so that [`SampleBank::put`]
+    /// never has to grow it.
+    pub fn with_slots(slots: usize) -> Self {
+        let mut bank = Self::default();
+        bank.slots.resize_with(slots, || None);
+        bank
+    }
+
+    /// Put a finished sample under `id`, and give back the one it replaces,
+    /// for the host to free. Allocates and frees nothing, so the audio thread
+    /// may call it. An id past the bank's room gives the new sample back.
+    pub fn put(&mut self, id: u32, sample: Sample) -> Result<Option<Sample>, Sample> {
+        match self.slots.get_mut(id as usize) {
+            Some(slot) => Ok(slot.replace(sample)),
+            None => Err(sample),
+        }
+    }
+
+    /// Take the sample under `id` out, for the host to free. Allocates and
+    /// frees nothing.
+    pub fn take(&mut self, id: u32) -> Option<Sample> {
+        self.slots.get_mut(id as usize).and_then(|slot| slot.take())
     }
 
     /// How many slots are occupied.
@@ -200,6 +243,45 @@ pub const MAX_PLAYBACK_RATE: f32 = 16.0;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_sample_made_from_its_channels_reads_as_one_written_after_allocating() {
+        let left = [0.1f32, 0.2, 0.3, 0.4];
+        let right = [-0.5f32, -0.6, -0.7, -0.8];
+        let made = Sample::from_channels(44_100.0, &[&left, &right]).unwrap();
+        let mut bank = SampleBank::new();
+        assert!(bank.allocate(0, 2, 4, 44_100.0));
+        let data = bank.get_mut(0).unwrap().data_mut();
+        data[..4].copy_from_slice(&left);
+        data[4..].copy_from_slice(&right);
+        let written = bank.get(0).unwrap();
+        assert_eq!((made.channels(), made.frames(), made.sample_rate()), (2, 4, 44_100.0));
+        for channel in 0..2 {
+            for frame in 0..4 {
+                assert_eq!(made.frame(channel, frame).to_bits(), written.frame(channel, frame).to_bits());
+            }
+        }
+        assert!(Sample::from_channels(48_000.0, &[&left, &right[..3]]).is_none(), "uneven channels");
+        assert!(Sample::from_channels(48_000.0, &[]).is_none(), "no channels");
+    }
+
+    #[test]
+    fn put_swaps_a_sample_in_and_gives_back_the_old_one() {
+        let one = Sample::from_channels(48_000.0, &[&[1.0f32; 8]]).unwrap();
+        let two = Sample::from_channels(48_000.0, &[&[2.0f32; 8]]).unwrap();
+        let mut bank = SampleBank::with_slots(4);
+        assert!(matches!(bank.put(3, one), Ok(None)));
+        let old = match bank.put(3, two) { Ok(Some(old)) => old, _ => panic!("the first comes back") };
+        assert_eq!(old.frame(0, 0), 1.0);
+        assert_eq!(bank.get(3).unwrap().frame(0, 0), 2.0);
+        let past = Sample::from_channels(48_000.0, &[&[3.0f32; 8]]).unwrap();
+        match bank.put(4, past) {
+            Err(back) => assert_eq!(back.frame(0, 0), 3.0),
+            Ok(_) => panic!("past the room it comes back"),
+        }
+        assert_eq!(bank.take(3).unwrap().frame(0, 0), 2.0);
+        assert!(bank.get(3).is_none());
+    }
+
     use super::*;
 
     /// A bank holding one ramp, so a read's value states its own position.
