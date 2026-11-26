@@ -651,6 +651,13 @@ impl Graph {
         self.param(node, k).cancel_and_hold_at_time(t, now);
     }
 
+    /// `setValueCurveAtTime`. Copies the curve (allocating the first time a
+    /// parameter's slot is used).
+    pub fn set_value_curve_at_time(&mut self, node: NodeId, k: u8, curve: &[f32], start: f64, duration: f64) {
+        let now = self.now();
+        self.param(node, k).set_value_curve_at_time(curve, start, duration, now);
+    }
+
     // ── Connections ─────────────────────────────────────────────────────────
 
     fn link(&mut self, from: NodeId, to: NodeId, slot: u8) -> bool {
@@ -1882,7 +1889,8 @@ fn krate(wave: &Wave, dest: &mut [f32], vri: f64, frequency: f32, detune: f32, s
             }
             k += 4;
         }
-        let mut v_index = vri + k as f64 * incr as f64;
+        // `virtual_read_index += k * incr`: a count times a float, in float.
+        let mut v_index = vri + (k as f32 * incr) as f64;
         v_index = wrap(v_index, size as f64, inv);
         if k < n {
             // ProcessKRateScalar.
@@ -1897,7 +1905,9 @@ fn krate(wave: &Wave, dest: &mut [f32], vri: f64, frequency: f32, detune: f32, s
                 v_index = wrap(v_index, size as f64, inv);
             }
         }
-        vri += n as f64 * incr as f64;
+        // `virtual_read_index += n * incr`: in float too (exact for 128,
+        // not for a source that starts or stops inside the quantum).
+        vri += (n as f32 * incr) as f64;
         vri = wrap(vri, size as f64, inv);
     } else {
         for slot in dest.iter_mut() {

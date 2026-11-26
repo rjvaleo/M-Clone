@@ -4,8 +4,10 @@
 //! loops: the SSE ones are for x86).
 //!
 //! What the graph adds is the sum of whatever is connected to the parameter;
-//! see `graph.rs`. Value curves (`setValueCurveAtTime`) are not ported: no
-//! instrument here uses them.
+//! see `graph.rs`. Value curves (`setValueCurveAtTime`) are held in two
+//! curve slots a parameter owns: a curve is copied in when it is set (that
+//! allocates, once per slot), and a cancelled curve keeps its slot while the
+//! next one fills the other.
 
 use super::fdlibm;
 use super::QUANTUM;
@@ -53,6 +55,10 @@ enum Kind {
     Exponential,
     SetTarget,
     Cancel,
+    /// `kSetValueCurve`.
+    Curve,
+    /// `kSetValueCurveEnd`.
+    CurveEnd,
     /// "No next event" (`kLastType`).
     Last,
 }
@@ -76,11 +82,30 @@ struct Event {
     has_default_cancelled_value: bool,
     /// In Chromium's `new_events_`: not yet clamped to the current time.
     new: bool,
+    /// A curve's length in seconds, its slot, `(N - 1) / duration`, and its
+    /// last value.
+    duration: f64,
+    curve: u8,
+    curve_points_per_second: f64,
+    curve_end_value: f32,
 }
 
 impl Event {
     const fn new(kind: Kind, value: f32, time: f64) -> Self {
-        Self { kind, value, time, time_constant: 0.0, initial_value: 0.0, saved: None, has_default_cancelled_value: false, new: true }
+        Self {
+            kind,
+            value,
+            time,
+            time_constant: 0.0,
+            initial_value: 0.0,
+            saved: None,
+            has_default_cancelled_value: false,
+            new: true,
+            duration: 0.0,
+            curve: 0,
+            curve_points_per_second: 0.0,
+            curve_end_value: 0.0,
+        }
     }
 }
 
@@ -115,6 +140,19 @@ pub struct Param {
     min: f32,
     max: f32,
     rate: Rate,
+    /// The curves of `setValueCurveAtTime`, by slot.
+    curves: [Vec<f32>; 2],
+}
+
+/// `ValueCurveAtTime`.
+fn value_curve_at_time(t: f64, time1: f64, duration: f64, curve: &[f32]) -> f32 {
+    let curve_index = (curve.len() - 1) as f64 / duration * (t - time1);
+    let k = (curve_index as usize).min(curve.len() - 1);
+    let k1 = (k + 1).min(curve.len() - 1);
+    let c0 = curve[k];
+    let c1 = curve[k1];
+    let delta = (curve_index - k as f64).min(1.0);
+    (c0 as f64 + (c1 - c0) as f64 * delta) as f32
 }
 
 impl Param {
@@ -127,6 +165,7 @@ impl Param {
             min,
             max,
             rate,
+            curves: [Vec::new(), Vec::new()],
         }
     }
 
@@ -217,6 +256,28 @@ impl Param {
         }
     }
 
+    /// `setValueCurveAtTime`: the curve, and a `kSetValueCurveEnd` at its end
+    /// so what follows starts from its last value. Copies the curve into a
+    /// slot no live event holds.
+    pub fn set_value_curve_at_time(&mut self, curve: &[f32], start_time: f64, duration: f64, now: Clock) {
+        if !(start_time >= 0.0) || !(duration > 0.0) || curve.len() < 2 {
+            return;
+        }
+        let start_time = start_time.max(now.time());
+        let held = |slot: u8, events: &[Event]| events.iter().any(|e| e.kind == Kind::Curve && e.curve == slot);
+        let slot: u8 = if held(0, &self.events[..self.len]) { 1 } else { 0 };
+        let c = &mut self.curves[slot as usize];
+        c.clear();
+        c.extend_from_slice(curve);
+        let mut e = Event::new(Kind::Curve, 0.0, start_time);
+        e.duration = duration;
+        e.curve = slot;
+        e.curve_points_per_second = (curve.len() - 1) as f64 / duration;
+        e.curve_end_value = curve[curve.len() - 1];
+        self.insert(e, now);
+        self.insert(Event::new(Kind::CurveEnd, curve[curve.len() - 1], start_time + duration), now);
+    }
+
     pub fn cancel_scheduled_values(&mut self, time: f64, now: Clock) {
         if !(time >= 0.0) {
             return;
@@ -244,6 +305,7 @@ impl Param {
         }
         let event = self.events[cancelled];
         let mut new_event = None;
+        let mut new_set_value = None;
         match event.kind {
             Kind::Linear | Kind::Exponential => {
                 let mut e = Event::new(Kind::Cancel, 0.0, cancel_time);
@@ -256,6 +318,22 @@ impl Param {
                     new_event = Some(Event::new(Kind::Cancel, 0.0, cancel_time));
                 }
             }
+            Kind::Curve => {
+                if event.time < cancel_time {
+                    if cancel_time > event.time + event.duration {
+                        cancelled += 1;
+                    } else {
+                        let new_duration = cancel_time - event.time;
+                        let end_value = value_curve_at_time(cancel_time, event.time, event.duration, &self.curves[event.curve as usize]);
+                        let mut e = event;
+                        e.duration = new_duration;
+                        e.curve_end_value = end_value;
+                        e.saved = None;
+                        new_event = Some(e);
+                        new_set_value = Some(Event::new(Kind::SetValue, end_value, event.time + new_duration));
+                    }
+                }
+            }
             _ => {}
         }
         if cancelled < self.len {
@@ -263,6 +341,9 @@ impl Param {
         }
         if let Some(e) = new_event {
             self.insert(e, now);
+            if let Some(s) = new_set_value {
+                self.insert(s, now);
+            }
         }
     }
 
@@ -325,7 +406,7 @@ impl Param {
         }
         let event = &self.events[i];
         let event_frame = event.time * sample_rate;
-        event.kind == Kind::SetValue && event_frame <= current_frame && current_frame < event_frame + 1.0
+        matches!(event.kind, Kind::SetValue | Kind::CurveEnd) && event_frame <= current_frame && current_frame < event_frame + 1.0
     }
 
     // ── The audio thread's calls ────────────────────────────────────────────
@@ -342,7 +423,7 @@ impl Param {
         let sr = now.sample_rate;
         let end = (current_frame + QUANTUM as u64) as f64 / sr;
         let first = &self.events[0];
-        if first.time > end && matches!(first.kind, Kind::SetTarget | Kind::SetValue) {
+        if first.time > end && matches!(first.kind, Kind::SetTarget | Kind::SetValue | Kind::Curve) {
             return false;
         }
         if self.len >= 2 {
@@ -540,7 +621,7 @@ impl Param {
                 }
             } else {
                 match event.kind {
-                    Kind::SetValue | Kind::Linear | Kind::Exponential => {
+                    Kind::SetValue | Kind::CurveEnd | Kind::Linear | Kind::Exponential => {
                         current_frame = fill_to_end;
                         value = event.value;
                         values[write_index..fill_to].iter_mut().for_each(|v| *v = value);
@@ -595,6 +676,50 @@ impl Param {
                                 value = values[write_index - 1];
                             }
                             current_frame = fill_to_end;
+                        }
+                    }
+                    Kind::Curve => {
+                        // ProcessSetValueCurve, the scalar loop (arm64).
+                        let curve = &self.curves[event.curve as usize];
+                        let duration = event.duration;
+                        let points_per_frame = event.curve_points_per_second / sample_rate;
+                        if curve.is_empty() || duration <= 0.0 || sample_rate <= 0.0 {
+                            current_frame = fill_to_end;
+                            values[write_index..fill_to].iter_mut().for_each(|v| *v = value);
+                            write_index = fill_to;
+                        } else {
+                            let next_event_fill_to = fill_to;
+                            let curve_end_frame = (sample_rate * (time1 + duration)).ceil();
+                            let fill_to_end_c = if (end_frame as f64) > curve_end_frame { curve_end_frame as u64 } else { end_frame };
+                            let mut fill_to_c = if fill_to_end_c < start_frame { 0 } else { (fill_to_end_c - start_frame) as usize };
+                            fill_to_c = fill_to_c.min(size);
+                            let mut virtual_index = 0.0f64;
+                            if time1 < current_frame as f64 / sample_rate {
+                                let frame_offset = current_frame as f64 - time1 * sample_rate;
+                                virtual_index = points_per_frame * frame_offset;
+                            }
+                            value = event.curve_end_value;
+                            let mut k = 0usize;
+                            if fill_to_c > write_index {
+                                for slot in values[write_index..fill_to_c].iter_mut() {
+                                    let current = virtual_index + k as f64 * points_per_frame;
+                                    let i0 = if current < curve.len() as f64 { current as usize } else { curve.len() - 1 };
+                                    let i1 = (i0 + 1).min(curve.len() - 1);
+                                    let c0 = curve[i0];
+                                    let c1 = curve[i1];
+                                    let delta = (current - i0 as f64).min(1.0);
+                                    k += 1;
+                                    value = (c0 as f64 + (c1 - c0) as f64 * delta) as f32;
+                                    *slot = value;
+                                }
+                                write_index = fill_to_c;
+                            }
+                            if write_index < next_event_fill_to {
+                                value = event.curve_end_value;
+                                values[write_index..next_event_fill_to].iter_mut().for_each(|v| *v = value);
+                                write_index = next_event_fill_to;
+                            }
+                            current_frame += next_event_fill_to as u64;
                         }
                     }
                     Kind::Last => {}
@@ -687,7 +812,7 @@ impl Param {
             if let Some(saved) = next.saved {
                 let current = self.events[i];
                 match current.kind {
-                    Kind::Cancel | Kind::Linear | Kind::Exponential | Kind::SetValue => {
+                    Kind::Cancel | Kind::Linear | Kind::Exponential | Kind::SetValue | Kind::CurveEnd => {
                         time2 = next.time;
                         next_kind = saved.kind;
                         if next.has_default_cancelled_value {
