@@ -710,6 +710,20 @@ impl Graph {
         self.param(node, k).set_value_curve_at_time(curve, start, duration, now);
     }
 
+    /// Room for value curves of up to `len` points on a parameter (see
+    /// [`Param::reserve_curves`]). Off the audio thread.
+    pub fn reserve_value_curves(&mut self, node: NodeId, k: u8, len: usize) {
+        self.param(node, k).reserve_curves(len);
+    }
+
+    /// `osc.type = …` on an oscillator already made: it plays `wave` from
+    /// its next quantum, its phase kept.
+    pub fn set_oscillator_wave(&mut self, node: NodeId, wave: WaveId) {
+        if let Kind::Osc { wave: w, .. } = &mut self.nodes[node.0 as usize].kind {
+            *w = wave.0;
+        }
+    }
+
     // ── Connections ─────────────────────────────────────────────────────────
 
     fn link(&mut self, from: NodeId, to: NodeId, slot: u8) -> bool {

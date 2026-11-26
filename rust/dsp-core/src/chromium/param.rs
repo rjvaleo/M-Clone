@@ -278,6 +278,14 @@ impl Param {
         self.insert(Event::new(Kind::CurveEnd, curve[curve.len() - 1], start_time + duration), now);
     }
 
+    /// Room in both curve slots for curves of up to `len` points, so setting
+    /// one later does not allocate. Off the audio thread.
+    pub fn reserve_curves(&mut self, len: usize) {
+        for c in self.curves.iter_mut() {
+            c.reserve(len.saturating_sub(c.len()));
+        }
+    }
+
     pub fn cancel_scheduled_values(&mut self, time: f64, now: Clock) {
         if !(time >= 0.0) {
             return;
