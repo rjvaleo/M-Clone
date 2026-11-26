@@ -21,7 +21,7 @@ use super::QUANTUM;
 
 const Q: usize = QUANTUM;
 const NONE: u32 = u32::MAX;
-const MAX_PARAMS: usize = 4;
+const MAX_PARAMS: usize = 5;
 /// `kMaxTailTime` of a biquad.
 const MAX_TAIL_TIME: f64 = 30.0;
 
@@ -43,6 +43,7 @@ pub enum FilterType {
     Lowpass,
     Highpass,
     Bandpass,
+    Allpass,
 }
 
 /// The parameters of each node, by number.
@@ -58,6 +59,11 @@ pub mod params {
     pub const DELAY_TIME: u8 = 0;
     pub const PLAYBACK_RATE: u8 = 0;
     pub const DETUNE_BUFFER: u8 = 1;
+    pub const THRESHOLD: u8 = 0;
+    pub const KNEE: u8 = 1;
+    pub const RATIO: u8 = 2;
+    pub const ATTACK: u8 = 3;
+    pub const RELEASE: u8 = 4;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,6 +145,10 @@ enum Kind {
     Biquad(u32),
     Delay(u32),
     Shaper(u32),
+    /// A `ConvolverNode` (its reverb, once it has a response).
+    Convolver(u32),
+    /// A `DynamicsCompressorNode`.
+    Compressor(u32),
     /// Audio the host hands in, a quantum at a time.
     Input,
     Panner,
@@ -300,6 +310,8 @@ pub struct Graph {
     /// Biquad kernels, one per biquad node, from a pool.
     biquads: Vec<BiquadState>,
     free_biquads: Vec<u32>,
+    convolvers: Vec<Option<Box<super::convolver::Reverb>>>,
+    compressors: Vec<Box<super::compressor::Compressor>>,
 }
 
 impl Graph {
@@ -343,6 +355,8 @@ impl Graph {
             detune: [0.0; Q],
             biquads: Vec::new(),
             free_biquads: Vec::new(),
+            convolvers: Vec::new(),
+            compressors: Vec::new(),
             delays: Vec::new(),
             shapers: Vec::new(),
             inputs: Vec::new(),
@@ -520,6 +534,44 @@ impl Graph {
         if let Kind::Shaper(w) = self.nodes[node.0 as usize].kind {
             self.shapers[w as usize].set_curve(curve);
         }
+    }
+
+    /// `createConvolver()`, with no response yet (its output silent).
+    pub fn convolver(&mut self) -> Option<NodeId> {
+        let c = self.convolvers.len() as u32;
+        let node = self.make(Kind::Convolver(c), &[], Mode::ClampedMax, 2)?;
+        self.convolvers.push(None);
+        Some(node)
+    }
+
+    /// `convolver.buffer = …`: the impulse response, one or two channels,
+    /// normalised as `normalize` says. Allocates: off the audio thread.
+    pub fn set_convolver_buffer(&mut self, node: NodeId, channels: &[&[f32]], normalize: bool) {
+        if let Kind::Convolver(c) = self.nodes[node.0 as usize].kind {
+            let r = super::convolver::Reverb::new(channels, self.sample_rate, Q, normalize);
+            self.convolvers[c as usize] = Some(Box::new(r));
+            self.update_channels(node.0 as usize);
+        }
+    }
+
+    /// `createDynamicsCompressor()`: threshold, knee, ratio, attack and
+    /// release ([`params::THRESHOLD`]…), k-rate, at Chromium's defaults.
+    pub fn compressor(&mut self) -> Option<NodeId> {
+        let c = self.compressors.len() as u32;
+        let node = self.make(
+            Kind::Compressor(c),
+            &[
+                (-24.0, -100.0, 0.0, Rate::Control),
+                (30.0, 0.0, 40.0, Rate::Control),
+                (12.0, 1.0, 20.0, Rate::Control),
+                (0.003, 0.0, 1.0, Rate::Control),
+                (0.25, 0.0, 1.0, Rate::Control),
+            ],
+            Mode::ClampedMax,
+            2,
+        )?;
+        self.compressors.push(Box::new(super::compressor::Compressor::new(self.sample_rate)));
+        Some(node)
     }
 
     /// A node the host feeds two channels of audio into, a quantum at a time
@@ -829,7 +881,7 @@ impl Graph {
     // ── A node's life (audio_handler.cc, deferred_task_handler.cc) ──────────
 
     fn requires_tail(&self, i: usize) -> bool {
-        matches!(self.nodes[i].kind, Kind::Biquad(_) | Kind::Delay(_) | Kind::Shaper(_))
+        matches!(self.nodes[i].kind, Kind::Biquad(_) | Kind::Delay(_) | Kind::Shaper(_) | Kind::Convolver(_) | Kind::Compressor(_))
     }
 
     /// `TailTime() + LatencyTime()`.
@@ -838,6 +890,8 @@ impl Graph {
             Kind::Biquad(b) => self.biquads[b as usize].tail_time,
             Kind::Delay(d) => self.delays[d as usize].max_time,
             Kind::Shaper(w) => self.shapers[w as usize].tail_time + self.shapers[w as usize].latency,
+            Kind::Convolver(c) => self.convolvers.get(c as usize).and_then(|r| r.as_ref()).map_or(0.0, |r| r.length() as f64 / self.sample_rate as f64),
+            Kind::Compressor(c) => self.compressors[c as usize].tail_and_latency(),
             _ => 0.0,
         }
     }
@@ -1002,6 +1056,8 @@ impl Graph {
             Kind::Buffer { buffer, .. } => self.buffers.get(buffer as usize).map(|b| b.channels.len().clamp(1, 2)).unwrap_or(1),
             Kind::Panner => 2,
             Kind::Input => 2,
+            Kind::Compressor(_) => 2,
+            Kind::Convolver(c) => self.convolvers.get(c as usize).and_then(|r| r.as_ref()).map_or(n.in_channels, |r| r.output_channels(n.in_channels)),
             _ => n.in_channels,
         }
     }
@@ -1247,6 +1303,11 @@ impl Graph {
                     self.sample_accurate_values(i, k);
                 }
             }
+            Kind::Compressor(_) => {
+                for k in 0..5 {
+                    self.sample_accurate_values(i, k);
+                }
+            }
             _ => {}
         }
     }
@@ -1260,6 +1321,8 @@ impl Graph {
             Kind::Biquad(_) => self.process_biquad(i, input_connected),
             Kind::Delay(_) => self.process_delay(i, input_connected),
             Kind::Shaper(_) => self.process_shaper(i, input_connected),
+            Kind::Convolver(_) => self.process_convolver(i, input_connected),
+            Kind::Compressor(_) => self.process_compressor(i, input_connected),
             Kind::Input => {
                 let k = self.nodes[i].params[0] as usize;
                 self.buses[i] = self.inputs[k];
@@ -2060,6 +2123,23 @@ fn set_params(b: &mut BiquadState, n: usize, frequency: f64, q: f64) {
                 set_normalized(b, n, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
             }
         }
+        FilterType::Allpass => {
+            // SetAllpassParams.
+            let frequency = frequency.clamp(0.0, 1.0);
+            let q = q.max(0.0);
+            if frequency > 0.0 && frequency < 1.0 {
+                if q > 0.0 {
+                    let w0 = PI * frequency;
+                    let alpha = fdlibm::sin(w0) / (2.0 * q);
+                    let k = fdlibm::cos(w0);
+                    set_normalized(b, n, 1.0 - alpha, -2.0 * k, 1.0 + alpha, 1.0 + alpha, -2.0 * k, 1.0 - alpha);
+                } else {
+                    set_normalized(b, n, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+                }
+            } else {
+                set_normalized(b, n, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+            }
+        }
     }
 }
 
@@ -2472,6 +2552,41 @@ impl Graph {
             self.delays[d].process_arate(c, &input, &mut times, &mut out);
             self.buses[i].data[c] = out;
         }
+    }
+
+    fn process_convolver(&mut self, i: usize, input_connected: bool) {
+        let Kind::Convolver(c) = self.nodes[i].kind else { return };
+        if !input_connected {
+            self.input.zero();
+        }
+        let out_ch = self.buses[i].channels;
+        let Some(r) = self.convolvers[c as usize].as_mut() else {
+            self.buses[i].zero();
+            return;
+        };
+        let input = self.input;
+        let ins: [&[f32]; 2] = [&input.data[0], &input.data[1]];
+        let ni = input.channels.clamp(1, 2);
+        let out = &mut self.buses[i];
+        let (l, rr) = out.data.split_at_mut(1);
+        let mut outs: [&mut [f32]; 2] = [&mut l[0], &mut rr[0]];
+        r.process(&ins[..ni], &mut outs[..out_ch]);
+    }
+
+    fn process_compressor(&mut self, i: usize, input_connected: bool) {
+        let Kind::Compressor(c) = self.nodes[i].kind else { return };
+        if !input_connected {
+            self.input.zero();
+        }
+        let threshold = self.final_value(i, 0);
+        let knee = self.final_value(i, 1);
+        let ratio = self.final_value(i, 2);
+        let attack = self.final_value(i, 3);
+        let release = self.final_value(i, 4);
+        let input = self.input;
+        let ni = input.channels.clamp(1, 2);
+        let out = &mut self.buses[i];
+        self.compressors[c as usize].process([&input.data[0], &input.data[1]], ni, &mut out.data, Q, threshold, knee, ratio, attack, release);
     }
 
     fn process_shaper(&mut self, i: usize, input_connected: bool) {

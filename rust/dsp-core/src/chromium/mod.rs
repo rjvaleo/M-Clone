@@ -23,6 +23,9 @@
 //! FFT — the difference is measured and said where it arises.
 
 pub mod apple;
+pub mod compressor;
+pub mod convolver;
+pub mod vdsp;
 mod conv_order;
 mod apple_tables;
 pub mod fdlibm;

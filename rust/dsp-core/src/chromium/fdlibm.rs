@@ -620,3 +620,65 @@ mod tests {
         }
     }
 }
+
+/// `asin`, Chromium's fdlibm (`third_party/fdlibm/ieee754.cc`).
+pub fn asin(x: f64) -> f64 {
+    const ONE: f64 = 1.00000000000000000000e+00;
+    const HUGE: f64 = 1.000e+300;
+    const PIO2_HI: f64 = 1.57079632679489655800e+00;
+    const PIO2_LO: f64 = 6.12323399573676603587e-17;
+    const PIO4_HI: f64 = 7.85398163397448278999e-01;
+    const PS0: f64 = 1.66666666666666657415e-01;
+    const PS1: f64 = -3.25565818622400915405e-01;
+    const PS2: f64 = 2.01212532134862925881e-01;
+    const PS3: f64 = -4.00555345006794114027e-02;
+    const PS4: f64 = 7.91534994289814532176e-04;
+    const PS5: f64 = 3.47933107596021167570e-05;
+    const QS1: f64 = -2.40339491173441421878e+00;
+    const QS2: f64 = 2.02094576023350569471e+00;
+    const QS3: f64 = -6.88283971605453293030e-01;
+    const QS4: f64 = 7.70381505559019352791e-02;
+    let mut t = 0.0;
+    let hx = (x.to_bits() >> 32) as i32;
+    let ix = hx & 0x7FFF_FFFF;
+    if ix >= 0x3FF0_0000 {
+        let lx = x.to_bits() as u32;
+        if ((ix - 0x3FF0_0000) as u32 | lx) == 0 {
+            return x * PIO2_HI + x * PIO2_LO;
+        }
+        return f64::NAN;
+    } else if ix < 0x3FE0_0000 {
+        if ix < 0x3E40_0000 {
+            if HUGE + x > ONE {
+                return x;
+            }
+        } else {
+            t = x * x;
+        }
+        let p = t * (PS0 + t * (PS1 + t * (PS2 + t * (PS3 + t * (PS4 + t * PS5)))));
+        let q = ONE + t * (QS1 + t * (QS2 + t * (QS3 + t * QS4)));
+        let w = p / q;
+        return x + x * w;
+    }
+    let w = ONE - x.abs();
+    let t = w * 0.5;
+    let mut p = t * (PS0 + t * (PS1 + t * (PS2 + t * (PS3 + t * (PS4 + t * PS5)))));
+    let mut q = ONE + t * (QS1 + t * (QS2 + t * (QS3 + t * QS4)));
+    let s = t.sqrt();
+    let t = if ix >= 0x3FEF_3333 {
+        let w = p / q;
+        PIO2_HI - (2.0 * (s + s * w) - PIO2_LO)
+    } else {
+        let w = f64::from_bits(s.to_bits() & 0xFFFF_FFFF_0000_0000);
+        let c = (t - w * w) / (s + w);
+        let r = p / q;
+        p = 2.0 * s * r - (PIO2_LO - 2.0 * c);
+        q = PIO4_HI - 2.0 * w;
+        PIO4_HI - (p - q)
+    };
+    if hx > 0 {
+        t
+    } else {
+        -t
+    }
+}
